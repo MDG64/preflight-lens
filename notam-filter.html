@@ -13872,9 +13872,9 @@ function renderInfo(icao) {
         });
       }
     }
-    // Cadrage « un seul terrain » : ~0,6° de latitude de haut (≈ 65 km), assez
-    // serré pour situer l'aérodrome, assez large pour voir ses voisins.
-    const FOCUS_LAT_SPAN = 0.6;
+    // Cadrage « un seul terrain » : ~1,2° de latitude de haut (≈ 130 km), assez
+    // large pour voir les terrains voisins autour de l'aérodrome centré.
+    const FOCUS_LAT_SPAN = 1.2;
     function openMap(focusIcao) {
       if (!BORDERS) return;                          // frontières indispensables pour dessiner le fond
       $("#mapOv").hidden = false;
