@@ -217,6 +217,26 @@ test("un REIL hors service est ambre, en départ ET en approche", async () => {
   assert.equal(classifyNotam("QMRLC", "RWY 35 CLSD, REIL RELOCATED").severity, "critical");
 });
 
+test("les activités annoncées — drones et feux d'artifice — sont de l'Information", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réels R2211/26 (QWULW) et D3872/26 (QWZLW) : ressortaient Caution
+  // ambre, la condition « LW » étant inconnue de CONDITION_SEVERITY. Une
+  // activité annoncée se note, elle ne ferme rien.
+  assert.equal(classifyNotam("QWULW",
+    "UNMANNED ACFT WILL TAKE PLACE WI COORD 280340N 0163025W - 280403N 0162959W").severity, "info");
+  assert.equal(classifyNotam("QWZLW",
+    "FIREWORKS DISPLAY AT COORD 280229N 0163914W LAS GALLETAS/ ARONA").severity, "info");
+  // Sans Q-code exploitable, le texte prend le relais.
+  assert.equal(classifyNotam("QXXXX", "DRONE OPS WI 2NM RADIUS OF AD, SFC-400FT AGL").severity, "info");
+  assert.equal(classifyNotam(null, "FIREWORKS DISPLAY OVER THE HARBOUR").severity, "info");
+  // Mais une fermeture qui cite l'activité comme CAUSE reste critique : le
+  // mot « DRONE » ne doit pas dépouiller un « RWY CLSD ».
+  assert.equal(classifyNotam("QMRLC", "RWY 07/25 CLSD DUE TO DRONE ACTIVITY").severity, "critical");
+  // Et « TWR UNMANNED » (tour non tenue) n'est pas un NOTAM de drone : seul
+  // « UNMANNED ACFT/AIRCRAFT » compte, jamais le mot nu.
+  assert.notEqual(classifyNotam("QSTAH", "TWR UNMANNED DLY 2200-0600").severity, "info");
+});
+
 test("une annulation qui recopie son en-tête n'est jamais soumise au LLM", () => {
   // Ces NOTAMC ONT un item E) — il recopie l'en-tête, mot pour mot. Le filtre
   // `n.e` de proposeUnclassified() les laissait donc passer : 5 appels LLM sur

@@ -4372,8 +4372,14 @@ body .stat .k{
         if (WEAK_KEYWORDS[c].some(k => t.includes(k))) found.add(c);
       return found;
     }
-    // Mots-clés grues / mâts / obstacles -> toujours Information
-    const INFO_TEXT_RE = /\b(CRANE|CRANES|MAST|MASTS|MASTING|OBST|OBSTACLE|OBSTACLES)\b/;
+    // Mots-clés grues / mâts / obstacles -> toujours Information.
+    // S'y ajoutent les activités annoncées — drones et feux d'artifice — pour
+    // les NOTAM sans Q-code exploitable (QXXXX, fréquent côté US) : pendant
+    // textuel des sujets WU/WZ passés en Information dans severity(). Formes
+    // volontairement précises : « UNMANNED ACFT/AIRCRAFT » et non « UNMANNED »
+    // nu, qui attraperait « TWR UNMANNED » (tour non tenue, un vrai sujet
+    // opérationnel qui n'a rien d'informatif).
+    const INFO_TEXT_RE = /\b(CRANE|CRANES|MAST|MASTS|MASTING|OBST|OBSTACLE|OBSTACLES|UNMANNED\s+(?:ACFT|AIRCRAFT)|UAS|UAV|DRONE|DRONES|FIREWORK|FIREWORKS)\b/;
     // Mots-clés hélicoptères -> sévérité plafonnée à Caution
     const HELI_TEXT_RE = /\b(HEL|HELI|HELIPAD|HELIPADS|HELIPORT|HELIDECK|HELICOPTER|HELICOPTERS|HLS|FATO|TLOF)\b/;
     /* Feux d'identification d'extrémité de piste (REIL / RWY END ID LGT) hors
@@ -4399,6 +4405,18 @@ body .stat .k{
       // même U/S, CLSD, withdrawn... (tour, mât, grue, bâtiment... l'obstacle reste
       // signalé mais n'appelle pas d'action opérationnelle immédiate).
       if (subj === "OB" || subj === "OL") return "info";
+      // Activités annoncées : drones (code Q « WU » unmanned aircraft) et
+      // aéromodélisme / feux d'artifice (« WZ » model flying, le code que les
+      // AIS emploient aussi pour les FIREWORKS) -> toujours Information. Le
+      // NOTAM signale une activité à connaître, pas une fermeture ni une
+      // restriction d'accès — rien n'y appelle le rouge Critical. Cas réels
+      // R2211/26 (QWULW « UNMANNED ACFT WILL TAKE PLACE WI COORD… ») et
+      // D3872/26 (QWZLW « FIREWORKS DISPLAY AT COORD… LAS GALLETAS/ARONA »),
+      // tous deux ressortis Caution ambre faute de condition « LW » connue de
+      // CONDITION_SEVERITY. Une interdiction d'espace liée à ces activités
+      // porte un sujet R… (zone réglementée/dangereuse), pas WU/WZ — elle
+      // garde donc son régime commun.
+      if (subj === "WU" || subj === "WZ") return "info";
       // Signal de fermeture/interdiction ACTIVE : mot de fermeture (CRITICAL_TEXT)
       // OU "PROHIBITED" sans condition de type/envergure (hasRestrictCond, plus bas)
       // — une interdiction TOTALE, pas une simple restriction partielle. Calculé
