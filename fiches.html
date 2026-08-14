@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fiches approche</title>
+<!-- ============================================================
+  fiches.html — déposer une fiche d'approche photographiée dans
+  OneDrive\Documents\Fiches approche, depuis le téléphone.
+
+  Une seule page, aucune dépendance réseau hors Microsoft : MSAL est
+  auto-hébergé dans vendor/ (même geste que le retrait de Google Fonts),
+  l'authentification et l'envoi parlent à login.microsoftonline.com et
+  graph.microsoft.com, c'est tout. Aucun secret ici : l'ID d'application
+  est PUBLIC par construction (SPA + PKCE), il vit dans localStorage et
+  se saisit une fois à la première ouverture.
+
+  L'envoi passe TOUJOURS par une session de téléversement Graph, même
+  pour un petit fichier : un seul chemin de code, une vraie barre de
+  progression, et des fragments de 5 Mio — multiple obligatoire de
+  320 Kio, Graph refuse le reste.
+  ============================================================ -->
+<link rel="manifest" href="fiches.webmanifest">
+<link rel="icon" href="fiches-icon-192-v1.png">
+<link rel="apple-touch-icon" href="fiches-icon-180-v1.png">
+<meta name="theme-color" content="#16324f">
+<script src="vendor/msal-browser-2.38.1.min.js"></script>
+<style>
+  @font-face {
+    font-family: 'IBM Plex Sans';
+    src: url('fonts/ibm-plex-sans-v23-latin-wght.woff2') format('woff2');
+    font-weight: 100 700; font-display: swap;
+  }
+  :root {
+    --fond: #0d1117; --carte: #161b26; --bord: #2b3444;
+    --texte: #e6e8ee; --sourd: #9aa4b2;
+    --accent: #2f81f7; --ok: #2ea06c; --alerte: #d4544a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--fond); color: var(--texte);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    display: flex; flex-direction: column;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    max-width: 520px; margin: 0 auto;
+  }
+  header { display: flex; align-items: center; gap: 10px; padding: 4px 0 14px; }
+  header img { width: 34px; height: 34px; border-radius: 8px; }
+  header h1 { font-size: 19px; font-weight: 600; flex: 1; }
+  header button { background: none; border: none; color: var(--sourd); font-size: 20px; padding: 6px; cursor: pointer; }
+  main { flex: 1; display: flex; flex-direction: column; }
+  .ecran { display: none; flex: 1; flex-direction: column; gap: 14px; }
+  .ecran.actif { display: flex; }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 16px; }
+  p.note { color: var(--sourd); font-size: 14px; line-height: 1.45; }
+  label { font-size: 13px; color: var(--sourd); display: block; margin-bottom: 5px; }
+  input[type=text] {
+    width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--bord);
+    background: var(--fond); color: var(--texte); font-size: 16px;
+    font-family: inherit;
+  }
+  input.icao { text-transform: uppercase; letter-spacing: .2em; font-size: 20px; text-align: center; }
+  button.principal {
+    width: 100%; padding: 16px; border: none; border-radius: 12px;
+    background: var(--accent); color: #fff; font-size: 17px; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+  }
+  button.principal:disabled { opacity: .5; }
+  button.discret {
+    width: 100%; padding: 13px; border-radius: 12px; font-family: inherit;
+    background: none; border: 1px solid var(--bord); color: var(--texte); font-size: 15px; cursor: pointer;
+  }
+  button.camera {
+    width: 100%; padding: 34px 16px; border: 2px dashed var(--bord); border-radius: 16px;
+    background: var(--carte); color: var(--texte); font-size: 18px; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+  }
+  button.camera span { display: block; font-size: 42px; margin-bottom: 8px; }
+  .apercu-photo { width: 100%; border-radius: 12px; border: 1px solid var(--bord); max-height: 52vh; object-fit: contain; background: #000; }
+  .barre { height: 10px; border-radius: 5px; background: var(--bord); overflow: hidden; }
+  .barre > div { height: 100%; width: 0%; background: var(--accent); transition: width .2s; }
+  .succes { color: var(--ok); font-size: 17px; font-weight: 600; }
+  .erreur { background: #3a1f1f; border: 1px solid var(--alerte); border-radius: 10px; padding: 12px; font-size: 14px; line-height: 1.4; display: none; }
+  .erreur.actif { display: block; }
+  ul.journal { list-style: none; font-size: 13px; color: var(--sourd); display: flex; flex-direction: column; gap: 4px; }
+  ul.journal li::before { content: '✓ '; color: var(--ok); }
+  footer { text-align: center; color: var(--sourd); font-size: 12px; padding-top: 12px; }
+  .pile { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+</style>
+</head>
+<body>
+<header>
+  <img src="fiches-icon-192-v1.png" alt="">
+  <h1>Fiches approche</h1>
+  <button id="btn-reglages" title="Réglages" aria-label="Réglages">⚙</button>
+</header>
+<main>
+
+  <!-- Première ouverture : l'ID d'application, saisi une fois. -->
+  <section class="ecran" id="ecran-config">
+    <div class="carte">
+      <p class="note">Colle ici l'<b>ID d'application (client)</b> créé sur
+      portal.azure.com, et le dossier OneDrive de destination. À faire une
+      seule fois sur cet appareil.</p>
+    </div>
+    <div>
+      <label for="cfg-client">ID d'application (client)</label>
+      <input type="text" id="cfg-client" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+    </div>
+    <div>
+      <label for="cfg-dossier">Dossier OneDrive</label>
+      <input type="text" id="cfg-dossier" value="Documents/Fiches approche" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="erreur" id="err-config"></div>
+    <div class="pile">
+      <button class="principal" id="btn-config">Enregistrer</button>
+      <button class="discret" id="btn-deconnecter" hidden>Se déconnecter de ce compte Microsoft</button>
+    </div>
+  </section>
+
+  <!-- Pas de session : un seul geste possible. -->
+  <section class="ecran" id="ecran-connexion">
+    <div class="carte">
+      <p class="note">Connecte-toi avec le compte Microsoft de ton OneDrive
+      (celui qui synchronise le PC). L'autorisation demandée : lire et
+      écrire tes fichiers — elle sert uniquement à déposer les photos.</p>
+    </div>
+    <div class="erreur" id="err-connexion"></div>
+    <div class="pile">
+      <button class="principal" id="btn-connexion">Se connecter</button>
+    </div>
+  </section>
+
+  <!-- L'écran de tous les jours : ouvrir la caméra. -->
+  <section class="ecran" id="ecran-principal">
+    <button class="camera" id="btn-camera"><span>📷</span>Photographier une fiche</button>
+    <div>
+      <label for="icao">Terrain (OACI, facultatif — nomme le fichier)</label>
+      <input type="text" id="icao" class="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="erreur" id="err-principal"></div>
+    <ul class="journal" id="journal"></ul>
+    <!-- capture="environment" ouvre directement la caméra arrière sur
+         téléphone ; sur un ordinateur, l'attribut est ignoré et un
+         sélecteur de fichier apparaît — les deux conviennent. -->
+    <input type="file" id="fichier" accept="image/*" capture="environment" hidden>
+  </section>
+
+  <!-- La confirmation demandée : on voit ce qu'on envoie. -->
+  <section class="ecran" id="ecran-apercu">
+    <img class="apercu-photo" id="apercu" alt="Aperçu de la fiche">
+    <p class="note" id="apercu-detail"></p>
+    <div class="erreur" id="err-apercu"></div>
+    <div class="pile">
+      <button class="principal" id="btn-envoyer">✓ Envoyer dans le dossier</button>
+      <button class="discret" id="btn-reprendre">↺ Reprendre la photo</button>
+    </div>
+  </section>
+
+  <!-- L'envoi, fragment par fragment. -->
+  <section class="ecran" id="ecran-envoi">
+    <div class="carte">
+      <p class="note" id="envoi-detail">Envoi…</p>
+    </div>
+    <div class="barre"><div id="progression"></div></div>
+  </section>
+
+  <!-- C'est fait. -->
+  <section class="ecran" id="ecran-fait">
+    <div class="carte">
+      <p class="succes">✓ Déposée dans le dossier</p>
+      <p class="note" id="fait-detail"></p>
+    </div>
+    <div class="pile">
+      <button class="principal" id="btn-encore">📷 Photographier la suivante</button>
+    </div>
+  </section>
+
+</main>
+<footer id="pied"></footer>
+
+<script>
+'use strict';
+/* ---------- configuration locale ---------- */
+const CFG = {
+  get client() { return localStorage.getItem('fa_client_id') || ''; },
+  set client(v) { localStorage.setItem('fa_client_id', v); },
+  get dossier() { return localStorage.getItem('fa_dossier') || 'Documents/Fiches approche'; },
+  set dossier(v) { localStorage.setItem('fa_dossier', v); }
+};
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SCOPES = ['Files.ReadWrite'];
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+/* Fragments : multiple OBLIGATOIRE de 320 Kio, Graph rejette le reste.
+   16 × 320 Kio = 5 Mio — une photo de téléphone part en 1 à 3 fragments. */
+const FRAGMENT = 16 * 320 * 1024;
+
+const $ = id => document.getElementById(id);
+const ecrans = [...document.querySelectorAll('.ecran')];
+function montrer(id) {
+  ecrans.forEach(e => e.classList.toggle('actif', e.id === id));
+  document.querySelectorAll('.erreur').forEach(e => e.classList.remove('actif'));
+}
+function erreur(id, msg) {
+  const e = $(id); e.textContent = msg; e.classList.add('actif');
+}
+
+/* ---------- MSAL : session Microsoft ---------- */
+let msalApp = null;
+function initMsal() {
+  msalApp = new msal.PublicClientApplication({
+    auth: {
+      clientId: CFG.client,
+      authority: 'https://login.microsoftonline.com/consumers',
+      redirectUri: location.origin + location.pathname,
+      navigateToLoginRequestUrl: false
+    },
+    cache: { cacheLocation: 'localStorage' }
+  });
+}
+function compte() {
+  const a = msalApp.getAllAccounts();
+  return a.length ? a[0] : null;
+}
+/* Jeton : silencieux d'abord ; s'il faut une interaction, on repart en
+   redirection — au retour, handleRedirectPromise reprend la main. */
+async function jeton() {
+  const req = { scopes: SCOPES, account: compte() };
+  try { return (await msalApp.acquireTokenSilent(req)).accessToken; }
+  catch (e) {
+    if (e instanceof msal.InteractionRequiredAuthError) {
+      await msalApp.acquireTokenRedirect(req); // quitte la page
+      return new Promise(() => {});            // jamais résolu : on navigue
+    }
+    throw e;
+  }
+}
+
+/* ---------- démarrage ---------- */
+async function demarrer() {
+  $('pied').textContent = 'v1 · ' + (CFG.dossier || '');
+  if (!GUID.test(CFG.client)) { montrer('ecran-config'); return; }
+  initMsal();
+  try {
+    const retour = await msalApp.handleRedirectPromise();
+    if (retour && retour.account) msalApp.setActiveAccount(retour.account);
+  } catch (e) {
+    montrer('ecran-connexion');
+    erreur('err-connexion', 'Connexion refusée ou interrompue : ' + (e.errorMessage || e.message));
+    return;
+  }
+  montrer(compte() ? 'ecran-principal' : 'ecran-connexion');
+}
+
+/* ---------- écrans ---------- */
+$('btn-config').onclick = () => {
+  const id = $('cfg-client').value.trim();
+  const dossier = $('cfg-dossier').value.trim().replace(/^\/+|\/+$/g, '');
+  if (!GUID.test(id)) { erreur('err-config', 'Cet ID n\'a pas la forme attendue (GUID de 36 caractères, visible sur la page de l\'application dans le portail Azure).'); return; }
+  if (!dossier) { erreur('err-config', 'Le dossier de destination est vide.'); return; }
+  CFG.client = id; CFG.dossier = dossier;
+  location.reload();   // repart proprement avec la nouvelle configuration
+};
+
+$('btn-reglages').onclick = () => {
+  $('cfg-client').value = CFG.client;
+  $('cfg-dossier').value = CFG.dossier;
+  $('btn-deconnecter').hidden = !(msalApp && compte());
+  montrer('ecran-config');
+};
+
+$('btn-deconnecter').onclick = () => msalApp.logoutRedirect({ postLogoutRedirectUri: location.origin + location.pathname });
+
+$('btn-connexion').onclick = () => msalApp.loginRedirect({ scopes: SCOPES });
+
+/* ---------- prise de vue et confirmation ---------- */
+let photo = null;     // le Blob en attente d'envoi
+$('btn-camera').onclick = () => $('fichier').click();
+$('fichier').onchange = () => {
+  const f = $('fichier').files[0];
+  if (!f) return;
+  photo = f;
+  $('apercu').src = URL.createObjectURL(f);
+  $('apercu-detail').textContent =
+    `${nomDeFichier(f)} · ${(f.size / 1048576).toFixed(1)} Mo → ${CFG.dossier}`;
+  montrer('ecran-apercu');
+  $('fichier').value = '';   // permet de reprendre la même fiche
+};
+$('btn-reprendre').onclick = () => { photo = null; montrer('ecran-principal'); $('btn-camera').click(); };
+$('btn-encore').onclick = () => { montrer('ecran-principal'); $('btn-camera').click(); };
+
+function nomDeFichier(f) {
+  const icao = $('icao').value.trim().toUpperCase();
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const ts = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp' }[f.type] || 'jpg';
+  return `${/^[A-Z]{4}$/.test(icao) ? icao : 'fiche'}_${ts}.${ext}`;
+}
+
+/* ---------- l'envoi ---------- */
+$('btn-envoyer').onclick = async () => {
+  if (!photo) return;
+  if (!navigator.onLine) { erreur('err-apercu', 'Pas de réseau — la photo reste à l\'écran, réessaie une fois connecté.'); return; }
+  const nom = nomDeFichier(photo);
+  montrer('ecran-envoi');
+  $('envoi-detail').textContent = `Envoi de ${nom}…`;
+  try {
+    const item = await envoyer(photo, nom, pct => { $('progression').style.width = pct + '%'; });
+    $('journal').insertAdjacentHTML('afterbegin', `<li>${item.name}</li>`);
+    $('fait-detail').textContent = `${item.name} — OneDrive/${CFG.dossier}. Le PC la verra à sa prochaine synchronisation.`;
+    $('icao').value = '';
+    photo = null;
+    montrer('ecran-fait');
+  } catch (e) {
+    montrer('ecran-apercu');
+    erreur('err-apercu', 'Échec de l\'envoi : ' + e.message + ' — la photo est toujours là, réessaie.');
+  }
+};
+
+/* Une session de téléversement, puis les fragments. La session Graph est
+   pré-autorisée : les PUT de fragments se font SANS en-tête Authorization
+   (en ajouter un les fait échouer). Un 401 à l'ouverture = jeton périmé :
+   on en reprend un en silence et on retente une fois. */
+async function envoyer(blob, nom, surProgres, deuxieme) {
+  const tk = await jeton();
+  const chemin = [...CFG.dossier.split('/'), nom].map(encodeURIComponent).join('/');
+  const r = await fetch(`${GRAPH}/me/drive/root:/${chemin}:/createUploadSession`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'rename', name: nom } })
+  });
+  if (r.status === 401 && !deuxieme) return envoyer(blob, nom, surProgres, true);
+  if (!r.ok) throw new Error(await messageGraph(r));
+  const session = await r.json();
+
+  let envoye = 0;
+  while (envoye < blob.size) {
+    const fin = Math.min(envoye + FRAGMENT, blob.size);
+    const rep = await fetch(session.uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Range': `bytes ${envoye}-${fin - 1}/${blob.size}`
+      },
+      body: blob.slice(envoye, fin)
+    });
+    if (!rep.ok) throw new Error(await messageGraph(rep));
+    envoye = fin;
+    surProgres(Math.round(100 * envoye / blob.size));
+    if (rep.status === 200 || rep.status === 201) return rep.json();   // dernier fragment
+  }
+  throw new Error('session terminée sans réponse finale');
+}
+
+async function messageGraph(r) {
+  let detail = '';
+  try { detail = (await r.json()).error.message; } catch { /* corps illisible */ }
+  return `HTTP ${r.status}${detail ? ' — ' + detail : ''}`;
+}
+
+demarrer();
+</script>
+</body>
+</html>
