@@ -8,23 +8,21 @@
   fiches.html — déposer une fiche d'approche photographiée dans
   OneDrive\Documents\Fiches approche, depuis le téléphone.
 
-  Une seule page, aucune dépendance réseau hors Microsoft : MSAL est
-  auto-hébergé dans vendor/ (même geste que le retrait de Google Fonts),
-  l'authentification et l'envoi parlent à login.microsoftonline.com et
-  graph.microsoft.com, c'est tout. Aucun secret ici : l'ID d'application
-  est PUBLIC par construction (SPA + PKCE), il vit dans localStorage et
-  se saisit une fois à la première ouverture.
+  Le trajet : la photo part vers le proxy Railway (POST /api/fiches,
+  volume persistant), et c'est le PC qui la tire dans le dossier OneDrive
+  toutes les dix minutes (aero-db/tirer-fiches.js) avant de la supprimer
+  du relais. Pas de compte, pas d'OAuth : un compte Microsoft personnel
+  ne peut pas déclarer d'application (tenant grand public), la voie
+  Graph est donc fermée sans abonnement Azure — constat du 2026-08-14.
 
-  L'envoi passe TOUJOURS par une session de téléversement Graph, même
-  pour un petit fichier : un seul chemin de code, une vraie barre de
-  progression, et des fragments de 5 Mio — multiple obligatoire de
-  320 Kio, Graph refuse le reste.
+  Le jeton (FICHES_TOKEN, le même que sur Railway) se colle une fois à
+  la première ouverture et vit dans localStorage. Il voyage en en-tête,
+  jamais dans l'URL.
   ============================================================ -->
 <link rel="manifest" href="fiches.webmanifest">
 <link rel="icon" href="fiches-icon-192-v1.png">
 <link rel="apple-touch-icon" href="fiches-icon-180-v1.png">
 <meta name="theme-color" content="#16324f">
-<script src="vendor/msal-browser-2.38.1.min.js"></script>
 <style>
   @font-face {
     font-family: 'IBM Plex Sans';
@@ -55,7 +53,7 @@
   .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 16px; }
   p.note { color: var(--sourd); font-size: 14px; line-height: 1.45; }
   label { font-size: 13px; color: var(--sourd); display: block; margin-bottom: 5px; }
-  input[type=text] {
+  input[type=text], input[type=password] {
     width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--bord);
     background: var(--fond); color: var(--texte); font-size: 16px;
     font-family: inherit;
@@ -97,38 +95,24 @@
 </header>
 <main>
 
-  <!-- Première ouverture : l'ID d'application, saisi une fois. -->
+  <!-- Première ouverture : le jeton, saisi une fois. -->
   <section class="ecran" id="ecran-config">
     <div class="carte">
-      <p class="note">Colle ici l'<b>ID d'application (client)</b> créé sur
-      portal.azure.com, et le dossier OneDrive de destination. À faire une
-      seule fois sur cet appareil.</p>
+      <p class="note">Colle ici le <b>jeton de dépôt</b> (le même que la
+      variable <b>FICHES_TOKEN</b> du serveur). À faire une seule fois sur
+      cet appareil.</p>
     </div>
     <div>
-      <label for="cfg-client">ID d'application (client)</label>
-      <input type="text" id="cfg-client" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+      <label for="cfg-jeton">Jeton de dépôt</label>
+      <input type="password" id="cfg-jeton" autocomplete="off" spellcheck="false">
     </div>
     <div>
-      <label for="cfg-dossier">Dossier OneDrive</label>
-      <input type="text" id="cfg-dossier" value="Documents/Fiches approche" autocomplete="off" spellcheck="false">
+      <label for="cfg-serveur">Serveur relais</label>
+      <input type="text" id="cfg-serveur" autocomplete="off" spellcheck="false">
     </div>
     <div class="erreur" id="err-config"></div>
     <div class="pile">
       <button class="principal" id="btn-config">Enregistrer</button>
-      <button class="discret" id="btn-deconnecter" hidden>Se déconnecter de ce compte Microsoft</button>
-    </div>
-  </section>
-
-  <!-- Pas de session : un seul geste possible. -->
-  <section class="ecran" id="ecran-connexion">
-    <div class="carte">
-      <p class="note">Connecte-toi avec le compte Microsoft de ton OneDrive
-      (celui qui synchronise le PC). L'autorisation demandée : lire et
-      écrire tes fichiers — elle sert uniquement à déposer les photos.</p>
-    </div>
-    <div class="erreur" id="err-connexion"></div>
-    <div class="pile">
-      <button class="principal" id="btn-connexion">Se connecter</button>
     </div>
   </section>
 
@@ -158,7 +142,7 @@
     </div>
   </section>
 
-  <!-- L'envoi, fragment par fragment. -->
+  <!-- L'envoi. -->
   <section class="ecran" id="ecran-envoi">
     <div class="carte">
       <p class="note" id="envoi-detail">Envoi…</p>
@@ -169,7 +153,7 @@
   <!-- C'est fait. -->
   <section class="ecran" id="ecran-fait">
     <div class="carte">
-      <p class="succes">✓ Déposée dans le dossier</p>
+      <p class="succes">✓ Fiche déposée</p>
       <p class="note" id="fait-detail"></p>
     </div>
     <div class="pile">
@@ -183,18 +167,13 @@
 <script>
 'use strict';
 /* ---------- configuration locale ---------- */
+const SERVEUR_DEFAUT = 'https://notam-proxy-production.up.railway.app';
 const CFG = {
-  get client() { return localStorage.getItem('fa_client_id') || ''; },
-  set client(v) { localStorage.setItem('fa_client_id', v); },
-  get dossier() { return localStorage.getItem('fa_dossier') || 'Documents/Fiches approche'; },
-  set dossier(v) { localStorage.setItem('fa_dossier', v); }
+  get jeton() { return localStorage.getItem('fa_jeton') || ''; },
+  set jeton(v) { localStorage.setItem('fa_jeton', v); },
+  get serveur() { return localStorage.getItem('fa_serveur') || SERVEUR_DEFAUT; },
+  set serveur(v) { localStorage.setItem('fa_serveur', v); }
 };
-const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SCOPES = ['Files.ReadWrite'];
-const GRAPH = 'https://graph.microsoft.com/v1.0';
-/* Fragments : multiple OBLIGATOIRE de 320 Kio, Graph rejette le reste.
-   16 × 320 Kio = 5 Mio — une photo de téléphone part en 1 à 3 fragments. */
-const FRAGMENT = 16 * 320 * 1024;
 
 const $ = id => document.getElementById(id);
 const ecrans = [...document.querySelectorAll('.ecran')];
@@ -206,73 +185,27 @@ function erreur(id, msg) {
   const e = $(id); e.textContent = msg; e.classList.add('actif');
 }
 
-/* ---------- MSAL : session Microsoft ---------- */
-let msalApp = null;
-function initMsal() {
-  msalApp = new msal.PublicClientApplication({
-    auth: {
-      clientId: CFG.client,
-      authority: 'https://login.microsoftonline.com/consumers',
-      redirectUri: location.origin + location.pathname,
-      navigateToLoginRequestUrl: false
-    },
-    cache: { cacheLocation: 'localStorage' }
-  });
-}
-function compte() {
-  const a = msalApp.getAllAccounts();
-  return a.length ? a[0] : null;
-}
-/* Jeton : silencieux d'abord ; s'il faut une interaction, on repart en
-   redirection — au retour, handleRedirectPromise reprend la main. */
-async function jeton() {
-  const req = { scopes: SCOPES, account: compte() };
-  try { return (await msalApp.acquireTokenSilent(req)).accessToken; }
-  catch (e) {
-    if (e instanceof msal.InteractionRequiredAuthError) {
-      await msalApp.acquireTokenRedirect(req); // quitte la page
-      return new Promise(() => {});            // jamais résolu : on navigue
-    }
-    throw e;
-  }
-}
-
 /* ---------- démarrage ---------- */
-async function demarrer() {
-  $('pied').textContent = 'v1 · ' + (CFG.dossier || '');
-  if (!GUID.test(CFG.client)) { montrer('ecran-config'); return; }
-  initMsal();
-  try {
-    const retour = await msalApp.handleRedirectPromise();
-    if (retour && retour.account) msalApp.setActiveAccount(retour.account);
-  } catch (e) {
-    montrer('ecran-connexion');
-    erreur('err-connexion', 'Connexion refusée ou interrompue : ' + (e.errorMessage || e.message));
-    return;
-  }
-  montrer(compte() ? 'ecran-principal' : 'ecran-connexion');
+function demarrer() {
+  $('pied').textContent = 'v2 · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
+  montrer(CFG.jeton ? 'ecran-principal' : 'ecran-config');
 }
 
 /* ---------- écrans ---------- */
 $('btn-config').onclick = () => {
-  const id = $('cfg-client').value.trim();
-  const dossier = $('cfg-dossier').value.trim().replace(/^\/+|\/+$/g, '');
-  if (!GUID.test(id)) { erreur('err-config', 'Cet ID n\'a pas la forme attendue (GUID de 36 caractères, visible sur la page de l\'application dans le portail Azure).'); return; }
-  if (!dossier) { erreur('err-config', 'Le dossier de destination est vide.'); return; }
-  CFG.client = id; CFG.dossier = dossier;
-  location.reload();   // repart proprement avec la nouvelle configuration
+  const jeton = $('cfg-jeton').value.trim();
+  const serveur = $('cfg-serveur').value.trim().replace(/\/+$/, '') || SERVEUR_DEFAUT;
+  if (jeton.length < 16) { erreur('err-config', 'Ce jeton est trop court pour être le bon (au moins 16 caractères).'); return; }
+  if (!/^https?:\/\//.test(serveur)) { erreur('err-config', 'Le serveur doit commencer par https://'); return; }
+  CFG.jeton = jeton; CFG.serveur = serveur;
+  demarrer();
 };
 
 $('btn-reglages').onclick = () => {
-  $('cfg-client').value = CFG.client;
-  $('cfg-dossier').value = CFG.dossier;
-  $('btn-deconnecter').hidden = !(msalApp && compte());
+  $('cfg-jeton').value = CFG.jeton;
+  $('cfg-serveur').value = CFG.serveur;
   montrer('ecran-config');
 };
-
-$('btn-deconnecter').onclick = () => msalApp.logoutRedirect({ postLogoutRedirectUri: location.origin + location.pathname });
-
-$('btn-connexion').onclick = () => msalApp.loginRedirect({ scopes: SCOPES });
 
 /* ---------- prise de vue et confirmation ---------- */
 let photo = null;     // le Blob en attente d'envoi
@@ -283,7 +216,7 @@ $('fichier').onchange = () => {
   photo = f;
   $('apercu').src = URL.createObjectURL(f);
   $('apercu-detail').textContent =
-    `${nomDeFichier(f)} · ${(f.size / 1048576).toFixed(1)} Mo → ${CFG.dossier}`;
+    `${nomDeFichier(f)} · ${(f.size / 1048576).toFixed(1)} Mo`;
   montrer('ecran-apercu');
   $('fichier').value = '';   // permet de reprendre la même fiche
 };
@@ -300,64 +233,52 @@ function nomDeFichier(f) {
 }
 
 /* ---------- l'envoi ---------- */
-$('btn-envoyer').onclick = async () => {
+$('btn-envoyer').onclick = () => {
   if (!photo) return;
   if (!navigator.onLine) { erreur('err-apercu', 'Pas de réseau — la photo reste à l\'écran, réessaie une fois connecté.'); return; }
   const nom = nomDeFichier(photo);
   montrer('ecran-envoi');
   $('envoi-detail').textContent = `Envoi de ${nom}…`;
-  try {
-    const item = await envoyer(photo, nom, pct => { $('progression').style.width = pct + '%'; });
-    $('journal').insertAdjacentHTML('afterbegin', `<li>${item.name}</li>`);
-    $('fait-detail').textContent = `${item.name} — OneDrive/${CFG.dossier}. Le PC la verra à sa prochaine synchronisation.`;
-    $('icao').value = '';
-    photo = null;
-    montrer('ecran-fait');
-  } catch (e) {
+  $('progression').style.width = '0%';
+
+  /* XMLHttpRequest plutôt que fetch : c'est lui qui sait dire où en est
+     l'ENVOI (upload.onprogress), et une photo sur réseau mobile mérite
+     une vraie barre. */
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', CFG.serveur + '/api/fiches');
+  xhr.setRequestHeader('x-fiches-token', CFG.jeton);
+  xhr.setRequestHeader('x-fiches-nom', nom);
+  xhr.setRequestHeader('Content-Type', photo.type || 'application/octet-stream');
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) $('progression').style.width = Math.round(100 * e.loaded / e.total) + '%';
+  };
+  xhr.onerror = () => rate('Le serveur relais est injoignable — réseau coupé ou serveur arrêté.');
+  xhr.ontimeout = () => rate('L\'envoi a pris trop de temps — réseau trop faible, réessaie.');
+  xhr.timeout = 120000;
+  xhr.onload = () => {
+    if (xhr.status === 201) {
+      let final = nom;
+      try { final = JSON.parse(xhr.responseText).nom; } catch { /* on garde le nom local */ }
+      $('journal').insertAdjacentHTML('afterbegin', `<li>${final}</li>`);
+      $('fait-detail').textContent = `${final} — le PC la rangera dans OneDrive/Documents/Fiches approche d'ici une dizaine de minutes.`;
+      $('icao').value = '';
+      photo = null;
+      montrer('ecran-fait');
+    } else if (xhr.status === 403) {
+      rate('Jeton refusé — vérifie-le dans ⚙, il doit être identique à FICHES_TOKEN sur le serveur.');
+    } else {
+      let detail = '';
+      try { detail = ' — ' + JSON.parse(xhr.responseText).error; } catch { /* corps illisible */ }
+      rate(`HTTP ${xhr.status}${detail}`);
+    }
+  };
+  xhr.send(photo);
+
+  function rate(msg) {
     montrer('ecran-apercu');
-    erreur('err-apercu', 'Échec de l\'envoi : ' + e.message + ' — la photo est toujours là, réessaie.');
+    erreur('err-apercu', 'Échec de l\'envoi : ' + msg + ' La photo est toujours là.');
   }
 };
-
-/* Une session de téléversement, puis les fragments. La session Graph est
-   pré-autorisée : les PUT de fragments se font SANS en-tête Authorization
-   (en ajouter un les fait échouer). Un 401 à l'ouverture = jeton périmé :
-   on en reprend un en silence et on retente une fois. */
-async function envoyer(blob, nom, surProgres, deuxieme) {
-  const tk = await jeton();
-  const chemin = [...CFG.dossier.split('/'), nom].map(encodeURIComponent).join('/');
-  const r = await fetch(`${GRAPH}/me/drive/root:/${chemin}:/createUploadSession`, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'rename', name: nom } })
-  });
-  if (r.status === 401 && !deuxieme) return envoyer(blob, nom, surProgres, true);
-  if (!r.ok) throw new Error(await messageGraph(r));
-  const session = await r.json();
-
-  let envoye = 0;
-  while (envoye < blob.size) {
-    const fin = Math.min(envoye + FRAGMENT, blob.size);
-    const rep = await fetch(session.uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Range': `bytes ${envoye}-${fin - 1}/${blob.size}`
-      },
-      body: blob.slice(envoye, fin)
-    });
-    if (!rep.ok) throw new Error(await messageGraph(rep));
-    envoye = fin;
-    surProgres(Math.round(100 * envoye / blob.size));
-    if (rep.status === 200 || rep.status === 201) return rep.json();   // dernier fragment
-  }
-  throw new Error('session terminée sans réponse finale');
-}
-
-async function messageGraph(r) {
-  let detail = '';
-  try { detail = (await r.json()).error.message; } catch { /* corps illisible */ }
-  return `HTTP ${r.status}${detail ? ' — ' + detail : ''}`;
-}
 
 demarrer();
 </script>
