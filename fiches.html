@@ -107,8 +107,8 @@
       <input type="password" id="cfg-jeton" autocomplete="off" spellcheck="false">
     </div>
     <div>
-      <label for="cfg-serveur">Serveur relais</label>
-      <input type="text" id="cfg-serveur" autocomplete="off" spellcheck="false">
+      <label for="cfg-serveur">Serveur relais (laisser tel quel, sauf test)</label>
+      <input type="text" id="cfg-serveur" placeholder="https://notam-proxy-production.up.railway.app" autocomplete="off" spellcheck="false">
     </div>
     <div class="erreur" id="err-config"></div>
     <div class="pile">
@@ -187,7 +187,10 @@ function erreur(id, msg) {
 
 /* ---------- démarrage ---------- */
 function demarrer() {
-  $('pied').textContent = 'v2 · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
+  $('pied').textContent = 'v2.1 · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
+  // Le serveur par défaut se montre dès la première ouverture : un champ
+  // vide faisait croire qu'il y avait quelque chose à trouver soi-même.
+  $('cfg-serveur').value = CFG.serveur;
   montrer(CFG.jeton ? 'ecran-principal' : 'ecran-config');
 }
 
