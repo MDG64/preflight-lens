@@ -7,7 +7,7 @@
   <!-- Pas de référencement tant que l'app n'est pas sur les stores (2026-08-04).
        N'interdit PAS l'accès : voir robots.txt. À retirer à la publication. -->
   <meta name="robots" content="noindex, nofollow">
-  <title>Notam Lens — EUR / AFI</title>
+  <title>BriefZip — EUR / AFI</title>
   <!-- Polices auto-hébergées (2026-08-06), plus de Google Fonts : chaque
        chargement distant transmettait l'IP de l'utilisateur à Google, ce que
        l'art. 8.5 de legal.html (« ni traceur tiers ») interdisait de fait —
@@ -38,7 +38,7 @@
   <!-- Libellé sous l'icône sur iOS. Il doit répéter le short_name du manifeste
        (que Safari ignore) : il disait encore "NOTAM Filter", l'app s'installait
        donc sous deux noms différents selon la plateforme. -->
-  <meta name="apple-mobile-web-app-title" content="Notam Lens">
+  <meta name="apple-mobile-web-app-title" content="BriefZip">
   <meta name="theme-color" content="#0d1117">
   <style>
     :root {
@@ -3598,15 +3598,12 @@ body.light .stat.on {
       color: var(--gold)
     }
 
-    .home-entry .scratch {
-      width: 100%
-    }
-
-    .home-entry .scratch input {
-      width: 100%;
-      font-size: 24px;
-      letter-spacing: .24em;
-      padding: 14px 12px 14px 10px
+    /* La case ICAO ne s'étire plus sur toute la largeur : c'est la même
+       saisie que FROM / TO / ALT — quatre lettres — et elle prend donc le
+       même gabarit qu'elles. Le conteneur passe en flex pour que la case
+       se règle sur son contenu au lieu de remplir la ligne. */
+    .home-entry {
+      display: flex
     }
 
     .home-route {
@@ -3616,6 +3613,7 @@ body.light .stat.on {
       flex-wrap: wrap
     }
 
+    .home-entry .scratch input,
     .home-route .scratch input {
       width: 78px;
       font-size: 18px;
@@ -4204,7 +4202,7 @@ body .stat .k{
     <div class="home-inner">
       <div class="home-head">
         <span class="beacon" aria-hidden="true"></span>
-        <span class="home-brand">Notam <b>Lens</b></span>
+        <span class="home-brand">Brief<b>Zip</b></span>
         <div class="hdr-actions">
           <button class="help-btn" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         </div>
@@ -4267,7 +4265,7 @@ body .stat .k{
             <line x1="35.7" y1="36.7" x2="40" y2="41" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
           </svg>
           <span class="hc-name">NOTAM</span>
-          <span class="hc-sub">Notam Lens</span>
+          <span class="hc-sub">BY FLIGHT PHASE</span>
         </button>
       </div>
     </div>
@@ -4645,7 +4643,7 @@ body .stat .k{
         <div class="hd-sec">Legal</div>
         <div class="hd-note">
           <a href="./legal.html">Legal notice, Terms of Use &amp; Privacy Policy</a><br>
-          Using this Service implies acceptance of those Terms. Notam Lens is a
+          Using this Service implies acceptance of those Terms. BriefZip is a
           decision-support tool and does <b>not</b> replace the official pre-flight briefing.<br>
           <!-- Identité de la copie qui tourne : à citer dans tout signalement.
                Rempli par JS (voir APP_VERSION), jamais en dur dans le HTML. -->
@@ -12251,7 +12249,7 @@ E) ${e}`;
       if (!el) return;
       const t = Date.parse(document.lastModified);
       const build = isNaN(t) ? "—" : new Date(t).toISOString().slice(0, 16).replace("T", " ") + "Z";
-      el.textContent = "Notam Lens v" + APP_VERSION + " · build " + build;
+      el.textContent = "BriefZip v" + APP_VERSION + " · build " + build;
     })();
 
     // Récupère les NOTAM bruts (tableau de chaînes ICAO) pour un code OACI.
@@ -15819,7 +15817,7 @@ window.addEventListener("scroll", hidePop, true);
     // NOTAM du terrain de DÉPART, et les codes de l'arrivée et de l'alternate
     // s'alignent à côté du code station en onglets : un clic recharge la page
     // sur ce terrain (voir renderStRoute). Sans route : terrain de la case
-    // ICAO ; case vide : on ouvre simplement Notam Lens (sa case attend) ;
+    // ICAO ; case vide : on ouvre simplement la page NOTAM (sa case attend) ;
     // saisie partielle : on la signale plutôt que de la perdre.
     let notamRoute = [];                  // [{icao, role}] — contexte route de la page NOTAM
     function renderStRoute() {
