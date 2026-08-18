@@ -3621,6 +3621,32 @@ body.light .stat.on {
       padding: 11px 6px 11px 4px
     }
 
+    /* Étoile de favori DANS chaque case (ICAO, FROM, TO, ALT) : on peut
+       favoriser un code dès la saisie, sans passer par la page NOTAM. Taille
+       resserrée pour tenir dans des cases déjà étroites (78 px d'entrée) —
+       le `.starbtn` par défaut (23px) est celui, plus large, de la bannière
+       station.
+
+       Elle s'efface en `visibility` et non en `display` tant que la case ne
+       porte pas un code complet : invisible, elle garde quand même sa place,
+       sinon les quatre cases changeraient de largeur au fil de la saisie —
+       elles doivent rester d'un même gabarit, remplies ou vides. */
+    /* Le rembourrage vertical n'écarte rien : il étire la CIBLE TACTILE sur
+       presque toute la hauteur de la case (~42 px sur 46) sans changer la
+       taille apparente du glyphe. Une étoile de 20 px de haut se rate au
+       doigt, et c'est une app qu'on manipule en vol. */
+    .home-star {
+      font-size: 16px;
+      padding: 13px 9px 13px 3px;
+      border-radius: 0;
+      flex: none;
+      visibility: hidden
+    }
+
+    .home-star.live {
+      visibility: visible
+    }
+
     .home-chips {
       border-radius: var(--radius);
       border: 1px solid var(--line)
@@ -4210,6 +4236,8 @@ body .stat .k{
             <label for="hIcao">ICAO</label>
             <input id="hIcao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
               aria-label="Aerodrome ICAO code">
+            <button class="starbtn home-star" id="hIcaoStar" type="button" aria-pressed="false"
+              aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hIcaoSuggest" hidden></div>
           </div>
         </div>
@@ -4220,14 +4248,20 @@ body .stat .k{
         <div class="home-route">
           <div class="scratch rf-anchor"><label for="hFrom">FROM</label>
             <input id="hFrom" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+            <button class="starbtn home-star" id="hFromStar" type="button" aria-pressed="false"
+              aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hFromSuggest" hidden></div>
           </div>
           <div class="scratch rf-anchor"><label for="hTo">TO</label>
             <input id="hTo" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+            <button class="starbtn home-star" id="hToStar" type="button" aria-pressed="false"
+              aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hToSuggest" hidden></div>
           </div>
           <div class="scratch rf-anchor"><label for="hAlt">ALT</label>
             <input id="hAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+            <button class="starbtn home-star" id="hAltStar" type="button" aria-pressed="false"
+              aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hAltSuggest" hidden></div>
           </div>
         </div>
@@ -12707,11 +12741,19 @@ function renderInfo(icao) {
       s.setAttribute("aria-pressed", fav);
       s.setAttribute("aria-label", fav ? "Remove from favorites" : "Add to favorites");
     }
-    function toggleFav() {
-      if (!currentIcao) return;
-      favs = favs.includes(currentIcao) ? favs.filter(c => c !== currentIcao) : [...favs, currentIcao];
-      saveFavs(favs); updateStar(); updateFavCount(); renderChips();
+    // Bascule UN code ICAO dans les favoris — source commune à l'étoile de la
+    // bannière station (toujours currentIcao) et à celles des cases de
+    // l'accueil (ICAO/FROM/TO/ALT, un code chacune, voir renderHomeStars plus
+    // bas). Chaque vue qui liste ou reflète les favoris se rafraîchit d'ici.
+    function toggleFavCode(code) {
+      if (!/^[A-Z]{4}$/.test(code)) return;
+      favs = favs.includes(code) ? favs.filter(c => c !== code) : [...favs, code];
+      saveFavs(favs);
+      updateFavCount(); renderChips();
+      if (code === currentIcao) updateStar();
+      renderHomeStars(); renderHomeChips();
     }
+    function toggleFav() { if (currentIcao) toggleFavCode(currentIcao); }
 
     /* ---- autocomplétion (à partir de 2 lettres) : logique partagée --------- */
     // Calcule la liste des codes ICAO suggérés pour une saisie q (2+ lettres) :
@@ -13574,6 +13616,7 @@ function renderInfo(icao) {
         const mir = RMIRROR[fieldId]; if (mir) $(mir).value = r.dataset.code;
         box.hidden = true;
         refreshGo();
+        renderHomeStars();          // le code choisi peut être FROM/TO/ALT lui-même ou son miroir
         const nx = RNEXT[fieldId];
         if (nx) $(nx).focus(); else $("#" + fieldId).blur();
       });
@@ -13584,6 +13627,7 @@ function renderInfo(icao) {
         const mir = RMIRROR[e.target.id]; if (mir) $(mir).value = e.target.value;
         refreshGo();
         renderRouteSuggest(e.target.id, e.target.value);
+        renderHomeStars();
         const nx = RNEXT[e.target.id];
         if (nx && e.target.value.length >= 4) $(nx).focus();
       });
@@ -13600,7 +13644,7 @@ function renderInfo(icao) {
       curRoute = null;
       userAdded = [];
       $("#rFrom").value = ""; $("#rTo").value = ""; $("#rAlt").value = "";
-      syncRouteMirror();                       // l'accueil reflète l'effacement
+      syncRouteMirror(); renderHomeStars();    // l'accueil reflète l'effacement
       $("#routeStatus").textContent = "";
       renderApGrid({});
       refreshGo(); refreshMapBtn();
@@ -13609,7 +13653,7 @@ function renderInfo(icao) {
     $("#swapBtn").onclick = () => {
       const f = $("#rFrom").value; $("#rFrom").value = $("#rTo").value; $("#rTo").value = f;
       $("#rAlt").value = "";        // la double flèche efface aussi le champ ALT
-      syncRouteMirror();                       // l'accueil reflète l'échange
+      syncRouteMirror(); renderHomeStars();    // l'accueil reflète l'échange
       refreshGo();
     };
     document.querySelectorAll("#rfRwySeg .rf-pill").forEach(b => {
@@ -15748,7 +15792,7 @@ window.addEventListener("scroll", hidePop, true);
     function renderHomeChips() {
       const wrap = $("#homeChips");
       if (!favs.length) {
-        wrap.innerHTML = `<span class="hint">No favorites yet — open NOTAM, load an aerodrome, then tap the ☆ star next to its code.</span>`;
+        wrap.innerHTML = `<span class="hint">No favorites yet — type an ICAO code above, then tap the ☆ star inside its box.</span>`;
         return;
       }
       const cur = ($("#hIcao").value || "").toUpperCase();
@@ -15760,17 +15804,46 @@ window.addEventListener("scroll", hidePop, true);
       wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => {
         $("#hIcao").value = b.dataset.code;
         $("#hIcao").closest(".scratch").classList.remove("need");
-        renderHomeChips();
+        renderHomeChips(); renderHomeStars();
       });
     }
     function openHome() {
       syncRouteMirror();          // l'écran Route a pu changer la route entre-temps
       renderHomeChips();          // ... et la liste des favoris a pu bouger
+      renderHomeStars();
       $("#homeScreen").hidden = false;
     }
     function closeHome() { $("#homeScreen").hidden = true; }
     $("#homeBtn").onclick = openHome;
     $("#homeThemeBtn").onclick = () => $("#themeBtn").click();
+
+    /* ---- étoiles de favori DANS les cases ICAO / FROM / TO / ALT ----
+       Chaque case porte SON étoile : on peut favoriser un code dès la
+       saisie, sans passer par la page NOTAM. `#hIcao` traduit l'IATA comme
+       homeCode() ; les cases de route restent en 4 lettres strictes, comme
+       le reste de la saisie de route (voir rVal / routeInputsValid). */
+    function homeFieldCode(id) {
+      if (id === "#hIcao") return homeCode();
+      const v = ($(id).value || "").toUpperCase().trim();
+      return /^[A-Z]{4}$/.test(v) ? v : "";
+    }
+    function renderHomeStars() {
+      ["#hIcao", "#hFrom", "#hTo", "#hAlt"].forEach(id => {
+        const btn = $(id + "Star");
+        const code = homeFieldCode(id);
+        const fav = code && favs.includes(code);
+        btn.classList.toggle("live", !!code);   // invisible sans code, mais la place reste prise
+        btn.disabled = !code;
+        btn.textContent = fav ? "★" : "☆";
+        btn.classList.toggle("on", !!fav);
+        btn.setAttribute("aria-pressed", String(!!fav));
+        btn.setAttribute("aria-label", fav ? "Remove from favorites" : "Add to favorites");
+      });
+    }
+    $("#hIcaoStar").onclick = () => toggleFavCode(homeFieldCode("#hIcao"));
+    $("#hFromStar").onclick = () => toggleFavCode(homeFieldCode("#hFrom"));
+    $("#hToStar").onclick = () => toggleFavCode(homeFieldCode("#hTo"));
+    $("#hAltStar").onclick = () => toggleFavCode(homeFieldCode("#hAlt"));
 
     /* ---- case ICAO de l'accueil : mêmes suggestions que la 1re page,
        mais un clic REMPLIT la case (le choix Weather / NOTAM reste à faire). */
@@ -15790,14 +15863,14 @@ window.addEventListener("scroll", hidePop, true);
         e.preventDefault();
         $("#hIcao").value = r.dataset.code;
         box.hidden = true;
-        renderHomeChips();
+        renderHomeChips(); renderHomeStars();
       });
     }
     $("#hIcao").addEventListener("input", e => {
       e.target.value = e.target.value.toUpperCase();
       e.target.closest(".scratch").classList.remove("need");
       renderHomeSuggest(e.target.value);
-      renderHomeChips();
+      renderHomeChips(); renderHomeStars();
     });
     $("#hIcao").addEventListener("focus", e => renderHomeSuggest(e.target.value));
     $("#hIcao").addEventListener("blur", () => setTimeout(() => { $("#hIcaoSuggest").hidden = true; }, 150));
