@@ -287,6 +287,13 @@
       font-size: 19px
     }
 
+    /* Le ⌂ ouvre la barre : rien à sa gauche que la balise, donc pas de marge
+       d'écart à reprendre. Sur téléphone il quitte cette place pour rejoindre
+       le globe (voir le bloc 560px). */
+    #homeBtn {
+      margin-left: 0
+    }
+
     .brand-title {
       flex: 1 1 100%;
       margin: 8px 0 0;
@@ -3491,6 +3498,43 @@
         font-size: 14px
       }
 
+      /* Au doigt, le ⌂ va se prendre avec les autres pastilles, contre le bord
+         droit, juste à gauche du globe : deux départs — l'accueil et la carte —
+         rangés ensemble, et la gauche de la barre rendue aux cases ICAO.
+         `display:contents` efface la boîte du groupe pour que ses trois
+         boutons et le ⌂ deviennent des éléments de la barre : on peut alors
+         les ordonner entre eux. Le `margin-left:auto` du groupe passe au ⌂,
+         qui ouvre désormais la série et la pousse à droite. */
+      .hdr-actions {
+        display: contents
+      }
+
+      #homeBtn {
+        order: 8;
+        margin-left: auto
+      }
+
+      .hdr-actions .stationmapbtn {
+        order: 9
+      }
+
+      #themeBtn {
+        order: 10
+      }
+
+      #helpBtn {
+        order: 11
+      }
+
+      /* Même pastille que le globe. Le ⌂ est un caractère, pas un émoji : il
+         ne remplit pas son cadratin, d'où une taille de police plus grande
+         pour un dessin de même hauteur à l'œil. */
+      #homeBtn.help-btn {
+        width: 29px;
+        height: 29px;
+        font-size: 20px
+      }
+
       .planbtn svg {
         width: 63px;
         height: 26px
@@ -3498,6 +3542,27 @@
 
       .hdr-actions {
         gap: 5px
+      }
+
+      /* Les cases de route se rangent sur la ligne de la case ICAO, à côté
+         d'elle : c'est la même famille d'objets, elles se lisent d'un seul
+         balayage. Pour cela elles maigrissent — étiquette et code d'un cran
+         plus petits, marges resserrées — au lieu de déborder sur une
+         deuxième ligne qui repousserait tout l'écran vers le bas. */
+      .st-route {
+        gap: 5px
+      }
+
+      .st-chip .l {
+        font-size: 8px;
+        letter-spacing: .10em;
+        padding-left: 7px
+      }
+
+      .st-chip .v {
+        font-size: 14px;
+        letter-spacing: .10em;
+        padding: 9px 7px 9px 5px
       }
 
       .routebtn {
@@ -4255,8 +4320,7 @@ body .stat .k{
   <header>
     <div class="bar">
       <span class="beacon" aria-hidden="true"></span>
-      <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page"
-        style="margin-left:0">⌂</button>
+      <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page">⌂</button>
       <div class="entry">
         <div class="scratch">
           <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
