@@ -14589,6 +14589,13 @@ function renderInfo(icao) {
       const dotCol = icao => mapMode === "wx"
         ? WXPAL[mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0)]
         : (savedSet.has(icao) ? GREEN : RED);
+      // Rayon commun à tous les points de la carte. En vue Weather il vaut
+      // pour tout le monde, route comprise : la carte météo ne dit qu'une
+      // chose, la couleur du dernier relevé, et un point plus gros ferait
+      // lire une différence de nature là où il n'y a qu'un rôle de vol.
+      // En vue NOTAM la route reprend son cran d'avance — c'est elle qu'on
+      // est venu vérifier, et sa couverture se cherche des yeux.
+      const WORLD_DOT_R = 4.5;
       {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
         const minRwy = v.scale < 6 ? 3000 : v.scale < 11 ? 2400 : v.scale < 18 ? 2000 : 0;
@@ -14596,7 +14603,7 @@ function renderInfo(icao) {
         // Pastilles franches : c'est la couleur du point qui porte la météo (ou
         // la couverture NOTAM) au premier coup d'œil, avant même de lire un
         // code. Le liseré sous le point sépare deux voisins qui se touchent.
-        const dotR = 4.5 * dpr, placed = [];
+        const dotR = WORLD_DOT_R * dpr, placed = [];
         const labelGap = dotR + 4 * dpr;   // écart point -> capsule, suit le rayon
         // anti-collision avec les libellés de villes du fond : on reprojette leurs boîtes
         // (calculées dans le référentiel du canvas de fond) dans le référentiel écran courant
@@ -14685,11 +14692,13 @@ function renderInfo(icao) {
         const depArr = a.role !== "alt";
         const col = dotCol(a.icao);
         ctx.fillStyle = col;
-        // La route reste au-dessus de la couche mondiale : ses points gardent
-        // un cran d'avance sur les 4,5 px de celle-ci.
-        const dotR = (depArr ? 8 : 6.5) * dpr;
+        // En vue NOTAM, la route garde un cran d'avance sur les 4,5 px de la
+        // couche mondiale ; en vue Weather elle rentre dans le rang, liseré
+        // compris — sans quoi le point resterait plus épais que ses voisins.
+        const wxView = mapMode === "wx";
+        const dotR = (wxView ? WORLD_DOT_R : (depArr ? 8 : 6.5)) * dpr;
         ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
-        ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = 1.8 * dpr; ctx.stroke();
+        ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = (wxView ? 1.2 : 1.8) * dpr; ctx.stroke();
         let boxX = x, boxY = y, boxW = 0, boxH = 0;
         {
           // taille FIXE, alignée sur les plus petites capsules (couche mondiale, 11px)
