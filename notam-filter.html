@@ -14596,10 +14596,12 @@ function renderInfo(icao) {
       // En vue NOTAM la route reprend son cran d'avance — c'est elle qu'on
       // est venu vérifier, et sa couverture se cherche des yeux.
       const WORLD_DOT_R = 4.5;
+      // Seuil d'apparition des codes OACI, commun aux deux couches : au dézoom
+      // la carte ne montre que des couleurs, les codes viennent avec le détail.
+      const showLabels = v.scale > 58;   // 2 crans de molette plus tôt que 81 (chaque cran = ×1.18)
       {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
         const minRwy = v.scale < 6 ? 3000 : v.scale < 11 ? 2400 : v.scale < 18 ? 2000 : 0;
-        const showLabels = v.scale > 58;   // 2 crans de molette plus tôt que 81 (chaque cran = ×1.18)
         // Pastilles franches : c'est la couleur du point qui porte la météo (ou
         // la couverture NOTAM) au premier coup d'œil, avant même de lire un
         // code. Le liseré sous le point sépare deux voisins qui se touchent.
@@ -14684,8 +14686,11 @@ function renderInfo(icao) {
       ctx.textBaseline = "middle";
       const st = (activeRoute() || {}).status || {};
       mapHitboxes = [];
-      // Les codes OACI de la route restent affichés à tout niveau de zoom :
-      // c'est elle qu'on vient lire, ses étiquettes ne disparaissent jamais.
+      // En vue NOTAM, les codes OACI de la route restent affichés à tout
+      // niveau de zoom : c'est elle qu'on vient lire. En vue Weather ils
+      // suivent le seuil commun — la carte météo se lit d'abord en couleurs,
+      // et un code posé sur la route seule, quand aucun voisin n'en porte,
+      // désigne un terrain au lieu de laisser voir le temps qu'il fait.
       for (const a of ((curRoute && curRoute.ok) ? curRoute.airports : [])) {
         const x = X(a.lon), y = Y(a.lat);
         if (x < -40 * dpr || x > cv.width + 40 * dpr || y < -20 * dpr || y > cv.height + 20 * dpr) continue;
@@ -14700,7 +14705,7 @@ function renderInfo(icao) {
         ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
         ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = (wxView ? 1.2 : 1.8) * dpr; ctx.stroke();
         let boxX = x, boxY = y, boxW = 0, boxH = 0;
-        {
+        if (!wxView || showLabels) {
           // taille FIXE, alignée sur les plus petites capsules (couche mondiale, 11px)
           const labelPx = 11;
           const lr = labelPx / 12;                      // ratio par rapport à la taille de référence (12px)
