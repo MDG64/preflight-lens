@@ -14598,7 +14598,11 @@ function renderInfo(icao) {
       const WORLD_DOT_R = 4.5;
       // Seuil d'apparition des codes OACI, commun aux deux couches : au dézoom
       // la carte ne montre que des couleurs, les codes viennent avec le détail.
-      const showLabels = v.scale > 58;   // 2 crans de molette plus tôt que 81 (chaque cran = ×1.18)
+      // En vue Weather le seuil recule de deux crans de molette de plus : là, la
+      // couleur du point EST l'information, et une nuée de codes la recouvre
+      // tant qu'on n'a pas zoomé sur une région. En vue NOTAM les codes sont ce
+      // qu'on cherche des yeux, ils gardent leur seuil.
+      const showLabels = v.scale > (mapMode === "wx" ? 58 * 1.18 ** 2 : 58);   // un cran de molette = ×1.18
       {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
         const minRwy = v.scale < 6 ? 3000 : v.scale < 11 ? 2400 : v.scale < 18 ? 2000 : 0;
