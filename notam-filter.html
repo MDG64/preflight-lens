@@ -3066,8 +3066,9 @@
     .mapwx.open { transform: translateX(0) }
 
     /* Pendant le glissement, le panneau suit le doigt : plus de transition,
-       sinon il traîne d'un cinquième de seconde derrière lui. */
-    .mapwx.drag { transition: none }
+       sinon il traîne d'un cinquième de seconde derrière lui. Et plus de
+       sélection — le même geste à la souris surlignerait le relevé. */
+    .mapwx.drag { transition: none; user-select: none }
 
     .mapwx[hidden] { display: none }
 
@@ -15141,7 +15142,7 @@ function renderInfo(icao) {
       let pid = null, x0 = 0, y0 = 0, dx = 0, taken = false;
       el.addEventListener("pointerdown", e => {
         e.stopPropagation();                   // même règle que #mapTools
-        if (pid !== null || e.pointerType === "mouse") return;
+        if (pid !== null) return;
         pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; dx = 0; taken = false;
       });
       el.addEventListener("pointermove", e => {
@@ -15149,9 +15150,11 @@ function renderInfo(icao) {
         dx = e.clientX - x0;
         if (!taken) {
           if (Math.abs(dx) < GRAB_PX && Math.abs(e.clientY - y0) < GRAB_PX) return;
-          /* Verticale la plus forte, ou départ vers la droite : c'est un
-             défilement, on rend la main pour de bon. */
-          if (dx > 0 || Math.abs(e.clientY - y0) > Math.abs(dx)) { pid = null; return; }
+          /* Nettement plus vertical qu'horizontal, ou départ vers la
+             droite : c'est un défilement (ou une sélection), on rend la main
+             pour de bon. Le facteur 1.5 pardonne le doigt qui part en arc —
+             un glissement de fermeture n'est jamais parfaitement droit. */
+          if (dx > 0 || Math.abs(e.clientY - y0) > Math.abs(dx) * 1.5) { pid = null; return; }
           taken = true;
           el.classList.add("drag");
           /* La capture garde les mouvements pour nous si le doigt sort du
