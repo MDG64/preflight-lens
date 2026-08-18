@@ -3621,12 +3621,6 @@ body.light .stat.on {
       padding: 11px 6px 11px 4px
     }
 
-    /* Le globe de l'accueil est toujours actif : pas de version grisée. */
-    .home-route .earthbtn {
-      opacity: 1;
-      filter: none
-    }
-
     .home-chips {
       border-radius: var(--radius);
       border: 1px solid var(--line)
@@ -4204,6 +4198,7 @@ body .stat .k{
         <span class="beacon" aria-hidden="true"></span>
         <span class="home-brand">Brief<b>Zip</b></span>
         <div class="hdr-actions">
+          <button class="help-btn" id="homeMapBtn" aria-label="Show map" title="Map">🌐</button>
           <button class="help-btn" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         </div>
       </div>
@@ -4235,7 +4230,6 @@ body .stat .k{
             <input id="hAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
             <div class="suggest" id="hAltSuggest" hidden></div>
           </div>
-          <button class="earthbtn" id="homeMapBtn" aria-label="Show map" title="Map">🌐</button>
         </div>
       </div>
 
