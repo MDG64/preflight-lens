@@ -472,7 +472,73 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      margin: 18px 0 0
+      margin: 18px 0 0;
+      flex-wrap: wrap
+    }
+
+    /* Onglets de route à côté du code station : les terrains de la route
+       saisie sur l'accueil, un clic recharge la page sur ce terrain. Les
+       rôles gardent les couleurs de la page Weather (DEP/DEST/ALT). */
+    .st-route {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: none
+    }
+
+    .st-chip {
+      font: 600 12px/1 var(--mono);
+      letter-spacing: .1em;
+      padding: 6px 9px;
+      border: 1px solid var(--line2);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color .15s, color .15s, background .15s, box-shadow .15s
+    }
+
+    .st-chip:hover {
+      background: var(--panel2);
+      color: var(--text)
+    }
+
+    .st-chip.dep.on,
+    .st-chip.dep:hover {
+      border-color: var(--green)
+    }
+
+    .st-chip.arr.on,
+    .st-chip.arr:hover {
+      border-color: var(--cyan)
+    }
+
+    .st-chip.alt.on,
+    .st-chip.alt:hover {
+      border-color: var(--amber)
+    }
+
+    .st-chip.on {
+      color: var(--text);
+      background: transparent;
+      cursor: default
+    }
+
+    .st-chip.dep.on {
+      box-shadow: 0 0 0 1px var(--green)
+    }
+
+    .st-chip.arr.on {
+      box-shadow: 0 0 0 1px var(--cyan)
+    }
+
+    .st-chip.alt.on {
+      box-shadow: 0 0 0 1px var(--amber)
+    }
+
+    .st-chip:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
     }
 
     /* Les actions du terrain (info, plan) sont poussées contre le bord droit :
@@ -4027,6 +4093,7 @@ body .stat .k{
       <span class="stationcode" id="stationCode">—</span>
       <button class="starbtn" id="star" aria-pressed="false" aria-label="Add to favorites"
         title="Add / remove from favorites">☆</button>
+      <div class="st-route" id="stRoute" hidden></div>
       <span class="stationname" id="stationName"></span>
       <div class="station-actions">
         <button class="help-btn" id="infoBtn" aria-label="Airport info" title="Airport info" style="border:none;background:transparent;padding:0">
@@ -4309,9 +4376,10 @@ body .stat .k{
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn">⌂</span></div>
           <div class="hd-arr">→</div>
-          <div class="hd-desc">Back to the <b>start page</b> — ICAO + route entry, favorites, and two shortcuts:
-            <b>Weather</b> opens the METAR/TAF page of the whole route (DEP · DEST · ALT) when one is entered,
-            else of the aerodrome typed; <b>NOTAM</b> opens the NOTAM list of the aerodrome typed.</div>
+          <div class="hd-desc">Back to the <b>start page</b> — ICAO + route entry, favorites, and two shortcuts.
+            With a route entered, <b>Weather</b> opens the METAR/TAF page of the whole route (DEP · DEST · ALT)
+            and <b>NOTAM</b> opens the departure's NOTAMs with the route's codes as tabs next to the station code
+            — tap one to reload the page on that aerodrome. Without a route, both use the aerodrome typed.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-icao"><span class="l">ICAO</span><span class="v">LFBO</span></span></div>
@@ -12622,6 +12690,7 @@ function renderInfo(icao) {
       $("#stationName").textContent = full;
       $("#stationName").title = full;      // tronqué à l'écran, entier au survol
       updateStar();
+      renderStRoute();                     // onglets de route : l'actif suit le terrain affiché
       // Le bloc « plan » vit dans le second <script>, analysé après celui-ci.
       // Au chargement, showStation() restaure le dernier terrain AVANT que
       // updatePlanBtn n'existe : on garde donc l'appel conditionnel.
@@ -15734,15 +15803,40 @@ window.addEventListener("scroll", hidePop, true);
     });
 
     /* ---- les deux cartes ---- */
-    // NOTAM : directement la liste du terrain saisi. Sans code exploitable,
-    // deux cas — case vide : on ouvre simplement Notam Lens (sa propre case
-    // ICAO attend) ; saisie partielle : on la signale plutôt que de la perdre.
+    // NOTAM : la ROUTE prime, comme pour Weather — la page s'ouvre sur les
+    // NOTAM du terrain de DÉPART, et les codes de l'arrivée et de l'alternate
+    // s'alignent à côté du code station en onglets : un clic recharge la page
+    // sur ce terrain (voir renderStRoute). Sans route : terrain de la case
+    // ICAO ; case vide : on ouvre simplement Notam Lens (sa case attend) ;
+    // saisie partielle : on la signale plutôt que de la perdre.
+    let notamRoute = [];                  // [{icao, role}] — contexte route de la page NOTAM
+    function renderStRoute() {
+      const el = $("#stRoute");
+      if (!notamRoute.length) { el.hidden = true; el.innerHTML = ""; return; }
+      el.hidden = false;
+      el.innerHTML = notamRoute.map(a => {
+        const m = AIRPORTS[a.icao];
+        return `<button class="st-chip ${a.role}${a.icao === currentIcao ? " on" : ""}" data-code="${a.icao}"
+      title="${wxRoleLabel(a.role)}${m ? " — " + m.city : ""}">${a.icao}</button>`;
+      }).join("");
+      el.querySelectorAll(".st-chip").forEach(b => b.onclick = () => {
+        if (b.dataset.code !== currentIcao) load(b.dataset.code);
+      });
+    }
     $("#homeNotamCard").onclick = () => {
+      const route = homeRouteCodes();
+      if (route.length >= 2) {
+        notamRoute = route;
+        closeHome();
+        load(route[0].icao);              // le départ d'abord
+        return;
+      }
+      notamRoute = [];
       const c = homeCode();
       if (!c && ($("#hIcao").value || "").trim()) { needHomeIcao(); return; }
       closeHome();
       if (c) load(c);
-      else $("#icao").focus();
+      else { $("#icao").focus(); renderStRoute(); }
     };
     // Weather : la ROUTE prime quand elle est complète (FROM + TO valides) —
     // la page météo aligne alors DEP, DEST et ALT. Sinon, terrain de la case
