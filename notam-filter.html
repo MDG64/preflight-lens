@@ -3759,6 +3759,23 @@ body.light .stat.on {
       flex: none
     }
 
+    .wx-home {
+      min-height: 34px;
+      flex: none
+    }
+
+    /* L'en-tête météo porte désormais Home, le titre, les codes, Refresh et
+       les deux actions globales : il doit pouvoir passer à la ligne sur un
+       téléphone plutôt que de déborder. Le nom du terrain, seul élément
+       élastique, cède la place en premier. */
+    .wx-inner .route-head {
+      flex-wrap: wrap
+    }
+
+    .wx-inner .route-head .hdr-actions {
+      margin-left: auto
+    }
+
     .wx-status {
       margin-top: 8px;
       font: 500 12px/1.4 var(--sans);
@@ -4225,7 +4242,7 @@ body .stat .k{
         <span class="home-brand">Preflight <b>Lens</b></span>
         <div class="hdr-actions">
           <button class="help-btn" id="homeMapBtn" aria-label="Show map" title="Map">🌐</button>
-          <button class="help-btn" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+          <button class="help-btn theme-mirror" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         </div>
       </div>
 
@@ -4303,11 +4320,15 @@ body .stat .k{
   <div class="wx-screen" id="wxScreen" hidden>
     <div class="wx-inner">
       <div class="route-head">
-        <button class="modal-x" id="wxClose" aria-label="Back" style="position:static">←</button>
+        <button class="btn wx-home" id="wxHome" aria-label="Start page" title="Start page">⌂ Home</button>
         <span class="route-title">Weather</span>
         <span class="wx-code" id="wxCode">—</span>
         <span class="wx-name" id="wxName"></span>
         <button class="btn wx-refresh" id="wxRefresh">↻ Refresh</button>
+        <div class="hdr-actions">
+          <button class="help-btn" id="wxMapBtn" aria-label="Show map" title="Map">🌐</button>
+          <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+        </div>
       </div>
       <div class="wx-status" id="wxStatus"></div>
       <div id="wxBody"></div>
@@ -13096,8 +13117,14 @@ function renderInfo(icao) {
       const b = $("#themeBtn");
       if (b) { b.textContent = t === "light" ? "☾" : "☀"; b.title = t === "light" ? "Night mode" : "Day mode"; }
       // L'accueil a son propre commutateur : même glyphe, même sens.
-      const hb = $("#homeThemeBtn");
-      if (hb) { hb.textContent = t === "light" ? "☾" : "☀"; hb.title = t === "light" ? "Night mode" : "Day mode"; }
+      // Les écrans pleine page (accueil, weather) ont leur propre commutateur,
+      // qui n'est qu'un renvoi vers celui du bandeau : ils portent tous
+      // .theme-mirror et affichent donc le même glyphe, quel que soit celui
+      // sur lequel on a cliqué.
+      document.querySelectorAll(".theme-mirror").forEach(b => {
+        b.textContent = t === "light" ? "☾" : "☀";
+        b.title = t === "light" ? "Night mode" : "Day mode";
+      });
       // Le fond vectoriel a ses propres couleurs : on lui repasse le style.
       // try/catch et non `typeof GL` : GL est un `const` déclaré plus bas, donc
       // en zone morte temporelle au premier applyTheme() — et `typeof` sur une
@@ -15945,7 +15972,7 @@ window.addEventListener("scroll", hidePop, true);
        complète (FROM + TO valides) — sans téléchargement de NOTAMs, ça reste
        le geste GO de la page Route. Sinon, carte centrée sur le terrain de la
        case ICAO, ou vue monde. */
-    $("#homeMapBtn").onclick = async () => {
+    async function openHomeMap() {
       const dep = rVal("#hFrom"), arr = rVal("#hTo"), alt = rVal("#hAlt");
       if (dep.length === 4 && arr.length === 4 && dep !== arr) {
         try { await loadGeoData(); } catch (e) { }
@@ -15955,7 +15982,8 @@ window.addEventListener("scroll", hidePop, true);
         }
       }
       openMapOverlay(homeCode() || null);
-    };
+    }
+    $("#homeMapBtn").onclick = openHomeMap;
 
     /* ============================================================
        PAGE WEATHER — METAR + TAF du terrain, via le proxy (l'AWC
@@ -16096,11 +16124,19 @@ window.addEventListener("scroll", hidePop, true);
       await refreshWx();
     }
     $("#wxRefresh").onclick = () => refreshWx();
-    $("#wxClose").onclick = () => {
+    // Retour à la première page. L'accueil vit DERRIÈRE la page météo (z 50
+    // contre 52), donc la masquer suffirait à le redécouvrir — on appelle
+    // quand même openHome() : il rafraîchit favoris, étoiles et miroir de
+    // route, et il ramène l'accueil même si on est arrivé ici autrement.
+    function closeWx() {
       $("#wxScreen").hidden = true;
       wxToken++;                                 // coupe les requêtes en cours
       if (wxTicker) { clearInterval(wxTicker); wxTicker = null; }
-    };
+      openHome();
+    }
+    $("#wxHome").onclick = closeWx;
+    $("#wxMapBtn").onclick = openHomeMap;
+    $("#wxThemeBtn").onclick = () => $("#themeBtn").click();
 
     /* ---- démarrage ---- */
     updateFavCount(); buildSeg(); setTab("fav");
