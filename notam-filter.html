@@ -472,13 +472,12 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      margin: 18px 0 0;
-      flex-wrap: wrap
+      margin: 18px 0 0
     }
 
-    /* Onglets de route à côté du code station : les terrains de la route
-       saisie sur l'accueil, un clic recharge la page sur ce terrain. Les
-       rôles gardent les couleurs de la page Weather (DEP/DEST/ALT). */
+    /* Onglets de route dans le bandeau, à côté de la case ICAO : les terrains
+       de la route saisie sur l'accueil, un clic recharge la page sur ce
+       terrain. Rôles aux couleurs de la page Weather (DEP/DEST/ALT). */
     .st-route {
       display: flex;
       align-items: center;
@@ -539,6 +538,18 @@
     .st-chip:focus-visible {
       outline: 2px solid var(--cyan);
       outline-offset: 2px
+    }
+
+    /* Le bandeau est dense et passe à la ligne sur mobile : les puces s'y
+       resserrent, et la barre ne coupe jamais un code en deux. */
+    .bar .st-route {
+      gap: 5px;
+      flex-wrap: wrap
+    }
+
+    .bar .st-chip {
+      padding: 8px 8px;
+      font-size: 11px
     }
 
     /* Les actions du terrain (info, plan) sont poussées contre le bord droit :
@@ -4071,6 +4082,7 @@ body .stat .k{
         </div>
         <div class="suggest" id="suggest" hidden></div>
       </div>
+      <div class="st-route" id="stRoute" hidden></div>
       <button class="stationmapbtn" id="stationMapBtn" aria-label="Show route map"
         title="Show route map">🌐</button>
       <button class="routebtn" id="routeBtn">Route</button>
@@ -4093,7 +4105,6 @@ body .stat .k{
       <span class="stationcode" id="stationCode">—</span>
       <button class="starbtn" id="star" aria-pressed="false" aria-label="Add to favorites"
         title="Add / remove from favorites">☆</button>
-      <div class="st-route" id="stRoute" hidden></div>
       <span class="stationname" id="stationName"></span>
       <div class="station-actions">
         <button class="help-btn" id="infoBtn" aria-label="Airport info" title="Airport info" style="border:none;background:transparent;padding:0">
