@@ -3443,6 +3443,17 @@
       box-shadow: 0 2px 10px rgba(0, 0, 0, .25)
     }
 
+    /* Jour/nuit sur la carte : même pastille que le retour, à l'autre bord.
+       La carte est l'écran où le contraste se règle vraiment — plein soleil
+       contre vision nocturne — et y arriver ne doit pas demander de la
+       refermer. Le glyphe est un peu plus petit que la flèche, qui remplit
+       moins son cercle. */
+    .map-theme {
+      left: auto;
+      right: 14px;
+      font-size: 17px
+    }
+
     @media (max-width:560px) {
       .brand-title {
         font-size: 13px;
@@ -4475,6 +4486,7 @@ body .stat .k{
   <!-- ================= OVERLAY CARTE ================= -->
   <div class="map-ov" id="mapOv" hidden>
     <button class="map-x" id="mapClose" aria-label="Back">←</button>
+    <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
     <!-- Fond vectoriel MapLibre SOUS le canvas. Le canvas garde tout le dessin
          de l'app (route, terrains, capsules) et laisse passer les gestes vers
          MapLibre, qui gère glisser/zoom/inertie. Si MapLibre ne démarre pas, ce
@@ -14517,7 +14529,11 @@ function renderInfo(icao) {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
         const minRwy = v.scale < 6 ? 3000 : v.scale < 11 ? 2400 : v.scale < 18 ? 2000 : 0;
         const showLabels = v.scale > 58;   // 2 crans de molette plus tôt que 81 (chaque cran = ×1.18)
-        const dotR = 3 * dpr, placed = [];
+        // Pastilles franches : c'est la couleur du point qui porte la météo (ou
+        // la couverture NOTAM) au premier coup d'œil, avant même de lire un
+        // code. Le liseré sous le point sépare deux voisins qui se touchent.
+        const dotR = 4.5 * dpr, placed = [];
+        const labelGap = dotR + 4 * dpr;   // écart point -> capsule, suit le rayon
         // anti-collision avec les libellés de villes du fond : on reprojette leurs boîtes
         // (calculées dans le référentiel du canvas de fond) dans le référentiel écran courant
         // via la même transformation (zr, dx, dy) que celle utilisée pour recoller le fond.
@@ -14536,16 +14552,16 @@ function renderInfo(icao) {
           ctx.fillStyle = dotCol(a.icao);
           ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
           ctx.strokeStyle = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
-          ctx.lineWidth = 1 * dpr; ctx.stroke();
-          const boxH = 14 * dpr, lx = x + 7 * dpr; let boxW = 0, labelBX = lx, labelBY = y - boxH / 2;
+          ctx.lineWidth = 1.2 * dpr; ctx.stroke();
+          const boxH = 14 * dpr, lx = x + labelGap; let boxW = 0, labelBX = lx, labelBY = y - boxH / 2;
           if (showLabels) {
             const w = ctx.measureText(a.icao).width;
             const pad = 6 * dpr, bw = w + pad * 2;
             // le point reste toujours affiché ; on cherche une position libre pour le libellé
             // (droite, gauche, au-dessus, en-dessous) avant de forcer l'affichage en dernier recours.
             const candidates = [
-              [x + 7 * dpr, y - boxH / 2],
-              [x - bw - 7 * dpr, y - boxH / 2],
+              [x + labelGap, y - boxH / 2],
+              [x - bw - labelGap, y - boxH / 2],
               [x - bw / 2, y - dotR - boxH - 2 * dpr],
               [x - bw / 2, y + dotR + 2 * dpr],
             ];
@@ -14605,9 +14621,11 @@ function renderInfo(icao) {
         const depArr = a.role !== "alt";
         const col = dotCol(a.icao);
         ctx.fillStyle = col;
-        const dotR = (depArr ? 6 : 4.5) * dpr;
+        // La route reste au-dessus de la couche mondiale : ses points gardent
+        // un cran d'avance sur les 4,5 px de celle-ci.
+        const dotR = (depArr ? 8 : 6.5) * dpr;
         ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
-        ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = 1.6 * dpr; ctx.stroke();
+        ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = 1.8 * dpr; ctx.stroke();
         let boxX = x, boxY = y, boxW = 0, boxH = 0;
         {
           // taille FIXE, alignée sur les plus petites capsules (couche mondiale, 11px)
@@ -14616,7 +14634,7 @@ function renderInfo(icao) {
           ctx.font = (depArr ? "700 " : "600 ") + (labelPx * dpr) + "px 'IBM Plex Mono',monospace";
           const w = ctx.measureText(a.icao).width;
           const pad = 6 * dpr, bh = 14 * dpr;
-          boxX = x + 9 * lr * dpr; boxY = y - bh / 2; boxW = w + pad * 2; boxH = bh;
+          boxX = x + dotR + 3 * dpr; boxY = y - bh / 2; boxW = w + pad * 2; boxH = bh;
           // étiquette « pastille » arrondie (style capsule) : fond = couleur du point, texte foncé
           const rr = boxH / 2;
           ctx.lineJoin = "round";
@@ -14853,6 +14871,10 @@ function renderInfo(icao) {
     }
     $("#mapBtn").onclick = () => openMapOverlay();
     $("#mapClose").onclick = () => { $("#mapOv").hidden = true; };
+    // Renvoi vers le commutateur du bandeau, comme l'accueil et la page
+    // weather : c'est lui qui mémorise le thème, restyle le fond vectoriel et
+    // redessine la carte ouverte.
+    $("#mapThemeBtn").onclick = () => $("#themeBtn").click();
     (() => { // interactions carte : molette / glisser / pincer / clic sur un terrain
       const cv = $("#routeMap");
       const kx = () => Math.cos(mapView.cy * Math.PI / 180);
