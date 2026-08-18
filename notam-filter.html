@@ -128,9 +128,14 @@
       color: #9aa6b0;
     }
 
-    body.light .scratch {
+    body.light .scratch,
+    body.light .st-chip {
       background: #f4f7f9;
       box-shadow: none;
+    }
+
+    body.light .st-chip:hover {
+      background: #e9eff3;
     }
 
     body.light .btn {
@@ -475,81 +480,77 @@
       margin: 18px 0 0
     }
 
-    /* Onglets de route dans le bandeau, à côté de la case ICAO : les terrains
-       de la route saisie sur l'accueil, un clic recharge la page sur ce
-       terrain. Rôles aux couleurs de la page Weather (DEP/DEST/ALT). */
+    /* Terrains de la route, dans le bandeau à côté de la case ICAO. Ils en
+       reprennent la FORME exacte — même cadre, même étiquette, même typo —
+       pour que les cases se lisent comme un seul jeu ; seule la couleur de
+       l'étiquette distingue le rôle (celles de la page Weather). Le terrain
+       affiché n'a pas sa case ici : son code est déjà dans la case ICAO,
+       juste à gauche. */
     .st-route {
       display: flex;
-      align-items: center;
-      gap: 6px;
-      flex: none
+      align-items: stretch;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: none;
+      /* Les cases se calent sur la hauteur de la ligne du bandeau — donc sur
+         la case ICAO, l'élément le plus haut. Recopier sa hauteur en dur
+         raterait : un <input> a un plancher de hauteur propre au navigateur
+         (46 px ici pour 41 px demandés), et il varie d'un moteur à l'autre. */
+      align-self: stretch
+    }
+
+    /* `hidden` ne suffit pas : une règle d'auteur `display:flex` l'emporte
+       toujours sur le [hidden] de la feuille du navigateur. */
+    .st-route[hidden] {
+      display: none
     }
 
     .st-chip {
-      font: 600 12px/1 var(--mono);
-      letter-spacing: .1em;
-      padding: 6px 9px;
+      display: flex;
+      align-items: center;
+      padding: 0;
+      background: #06101a;
       border: 1px solid var(--line2);
-      border-radius: 6px;
-      background: var(--panel);
-      color: var(--muted);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03);
       cursor: pointer;
-      transition: border-color .15s, color .15s, background .15s, box-shadow .15s
+      transition: border-color .15s, background .15s
+    }
+
+    .st-chip .l {
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .18em;
+      color: var(--muted);
+      padding: 0 0 0 12px
+    }
+
+    .st-chip.dep .l {
+      color: var(--green)
+    }
+
+    .st-chip.arr .l {
+      color: var(--cyan)
+    }
+
+    .st-chip.alt .l {
+      color: var(--amber)
+    }
+
+    .st-chip .v {
+      font: 600 19px/1 var(--mono);
+      letter-spacing: .18em;
+      color: var(--cyan);
+      padding: 11px 12px 11px 8px
     }
 
     .st-chip:hover {
-      background: var(--panel2);
-      color: var(--text)
-    }
-
-    .st-chip.dep.on,
-    .st-chip.dep:hover {
-      border-color: var(--green)
-    }
-
-    .st-chip.arr.on,
-    .st-chip.arr:hover {
       border-color: var(--cyan)
-    }
-
-    .st-chip.alt.on,
-    .st-chip.alt:hover {
-      border-color: var(--amber)
-    }
-
-    .st-chip.on {
-      color: var(--text);
-      background: transparent;
-      cursor: default
-    }
-
-    .st-chip.dep.on {
-      box-shadow: 0 0 0 1px var(--green)
-    }
-
-    .st-chip.arr.on {
-      box-shadow: 0 0 0 1px var(--cyan)
-    }
-
-    .st-chip.alt.on {
-      box-shadow: 0 0 0 1px var(--amber)
     }
 
     .st-chip:focus-visible {
       outline: 2px solid var(--cyan);
       outline-offset: 2px
-    }
-
-    /* Le bandeau est dense et passe à la ligne sur mobile : les puces s'y
-       resserrent, et la barre ne coupe jamais un code en deux. */
-    .bar .st-route {
-      gap: 5px;
-      flex-wrap: wrap
-    }
-
-    .bar .st-chip {
-      padding: 8px 8px;
-      font-size: 11px
     }
 
     /* Les actions du terrain (info, plan) sont poussées contre le bord droit :
@@ -4389,8 +4390,8 @@ body .stat .k{
           <div class="hd-arr">→</div>
           <div class="hd-desc">Back to the <b>start page</b> — ICAO + route entry, favorites, and two shortcuts.
             With a route entered, <b>Weather</b> opens the METAR/TAF page of the whole route (DEP · DEST · ALT)
-            and <b>NOTAM</b> opens the departure's NOTAMs with the route's codes as tabs next to the station code
-            — tap one to reload the page on that aerodrome. Without a route, both use the aerodrome typed.</div>
+            and <b>NOTAM</b> opens the departure's NOTAMs, the route's other aerodromes sitting next to the ICAO
+            box — tap one to reload the page on it. Without a route, both use the aerodrome typed.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-icao"><span class="l">ICAO</span><span class="v">LFBO</span></span></div>
@@ -15823,16 +15824,21 @@ window.addEventListener("scroll", hidePop, true);
     let notamRoute = [];                  // [{icao, role}] — contexte route de la page NOTAM
     function renderStRoute() {
       const el = $("#stRoute");
-      if (!notamRoute.length) { el.hidden = true; el.innerHTML = ""; return; }
+      // Le terrain affiché ne prend pas de case : son code est déjà dans la
+      // case ICAO à gauche, le répéter n'apprendrait rien. Une route de trois
+      // terrains montre donc toujours trois cases en tout, quelle que soit
+      // celle qu'on regarde.
+      const others = notamRoute.filter(a => a.icao !== currentIcao);
+      if (!others.length) { el.hidden = true; el.innerHTML = ""; return; }
       el.hidden = false;
-      el.innerHTML = notamRoute.map(a => {
+      el.innerHTML = others.map(a => {
         const m = AIRPORTS[a.icao];
-        return `<button class="st-chip ${a.role}${a.icao === currentIcao ? " on" : ""}" data-code="${a.icao}"
-      title="${wxRoleLabel(a.role)}${m ? " — " + m.city : ""}">${a.icao}</button>`;
+        const role = wxRoleLabel(a.role);
+        return `<button class="st-chip ${a.role}" data-code="${a.icao}"
+      title="${role}${m ? " — " + m.city : ""}" aria-label="Show NOTAMs for ${a.icao}"
+      ><span class="l">${role}</span><span class="v">${a.icao}</span></button>`;
       }).join("");
-      el.querySelectorAll(".st-chip").forEach(b => b.onclick = () => {
-        if (b.dataset.code !== currentIcao) load(b.dataset.code);
-      });
+      el.querySelectorAll(".st-chip").forEach(b => b.onclick = () => load(b.dataset.code));
     }
     $("#homeNotamCard").onclick = () => {
       const route = homeRouteCodes();
