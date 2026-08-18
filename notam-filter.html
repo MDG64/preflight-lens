@@ -3033,6 +3033,150 @@
       color: inherit
     }
 
+    /* Bas-gauche : le curseur de vue (Weather ⇄ NOTAM) empilé sur la légende
+       qu'il pilote — repris de la carte de Weather Lens : même geste, même
+       code couleur, on bascule et on lit le sens des couleurs au même
+       endroit. Posé au-dessus de l'attribution OSM. */
+    .map-tools {
+      position: absolute;
+      left: 8px;
+      bottom: 30px;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 7px;
+      max-width: min(320px, calc(100% - 16px));
+    }
+
+    .map-mode {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      cursor: pointer;
+      user-select: none;
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: var(--radius);
+      padding: 7px 12px;
+    }
+
+    .map-mode input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0
+    }
+
+    /* Le rail à deux positions : le rond glisse du libellé actif vers l'autre.
+       Toujours plein — il dit une position, pas un état allumé/éteint. */
+    .map-mode .rd {
+      position: relative;
+      width: 30px;
+      height: 16px;
+      border-radius: 999px;
+      flex: none;
+      border: 1.5px solid var(--line2);
+    }
+
+    .map-mode .rd::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 1.5px;
+      transform: translate(0, -50%);
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--green);
+      transition: transform .16s ease;
+    }
+
+    .map-mode input:checked~.rd::after {
+      transform: translate(14px, -50%)
+    }
+
+    .map-mode:hover .rd {
+      border-color: var(--muted)
+    }
+
+    .map-mode input:focus-visible~.rd {
+      outline: 2px solid var(--green);
+      outline-offset: 2px
+    }
+
+    .map-mode .lb {
+      font: 600 10.5px/1 var(--sans);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #mapOv:not(.notam-mode) .map-mode .lb.wx,
+    #mapOv.notam-mode .map-mode .lb.nt {
+      color: var(--text)
+    }
+
+    .map-legend {
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: var(--radius);
+      padding: 9px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .mleg {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font: 12px/1.35 var(--sans);
+      color: var(--text)
+    }
+
+    .mleg .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex: none
+    }
+
+    .mleg .dot.mred {
+      background: var(--red)
+    }
+
+    .mleg .dot.mamber {
+      background: var(--amber)
+    }
+
+    .mleg .dot.mgreen {
+      background: var(--green)
+    }
+
+    .mleg .dot.mgrey {
+      background: var(--muted2)
+    }
+
+    .mleg.src {
+      color: var(--muted2);
+      font-size: 10px;
+      margin-top: 3px
+    }
+
+    /* Chaque vue n'affiche que les lignes qu'elle explique. */
+    .mleg.nt {
+      display: none
+    }
+
+    #mapOv.notam-mode .mleg.nt {
+      display: flex
+    }
+
+    #mapOv.notam-mode .mleg.wx {
+      display: none
+    }
+
     .map-toast {
       position: absolute;
       left: 50%;
@@ -4338,6 +4482,26 @@ body .stat .k{
     <div id="routeMapGL">
       <canvas id="routeMap"></canvas>
       <div id="routeMapAttr" hidden>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+      <!-- Curseur de vue + légende. Weather : chaque point prend la couleur de
+           la carte de Weather Lens (météo du dernier METAR, route seulement).
+           NOTAM : vert/rouge selon la couverture hors ligne, comme avant. -->
+      <div class="map-tools" id="mapTools">
+        <label class="map-mode" title="Switch the dots between weather colours and NOTAM download state">
+          <span class="lb wx">Weather</span>
+          <input type="checkbox" id="mapModeChk">
+          <span class="rd" aria-hidden="true"></span>
+          <span class="lb nt">NOTAM</span>
+        </label>
+        <div class="map-legend">
+          <span class="mleg wx"><i class="dot mred"></i>VIS ≤ 600 m or ceiling ≤ 300 ft</span>
+          <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 700 ft</span>
+          <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 700 ft</span>
+          <span class="mleg wx"><i class="dot mgrey"></i>No data — weather is fetched for the route only</span>
+          <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
+          <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
+          <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -14265,12 +14429,7 @@ function renderInfo(icao) {
       // `scale` de l'app (px CSS par degré de latitude) déduit du zoom MapLibre,
       // pour que TOUS les seuils existants (v.scale > 58, minRwy...) restent vrais.
       scale() { return 1.4222 * Math.pow(2, this.map.getZoom()) / Math.cos(_rad(this.map.getCenter().lat)); },
-      setTheme(light) { if (this.map) this.map.setStyle(glStyle(light, this.offline)); },
-      fit(lons, lats) {
-        if (!this.map) return;
-        this.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
-          { padding: 64, duration: 0, maxZoom: 11 });
-      }
+      setTheme(light) { if (this.map) this.map.setStyle(glStyle(light, this.offline)); }
     };
 
     function drawMap() {
@@ -14340,14 +14499,23 @@ function renderInfo(icao) {
       }
 
       // --- couche mondiale des aérodromes (sous la route) ---
-      // Point VERT = NOTAM en cache offline (savedSet), ROUGE = non sauvegardé. Aucune sévérité.
+      // Couleur selon le curseur de vue : NOTAM = vert en cache offline
+      // (savedSet), rouge non sauvegardé, aucune sévérité ; Weather = la
+      // palette de la carte de Weather Lens (gris quand la météo n'a pas été
+      // interrogée — tout ce qui n'est pas la route).
       // Densité progressive : au dézoom seuls les grands terrains ; les petits apparaissent au zoom.
       mapWorldHits = [];
+      const GREEN = "#34d39a", RED = light ? "#e5484d" : "#ff5d6c";
+      const WXPAL = light
+        ? ["#9aa6b0", "#12936a", "#cf7a12", "#e5484d"]    // gris, vert, ambre, rouge — thème jour
+        : ["#5e656c", "#34d39a", "#f6b23e", "#ff5d6c"];   // idem, thème nuit — valeurs de Weather Lens
+      const dotCol = icao => mapMode === "wx"
+        ? WXPAL[mapWxCatOf(icao)]
+        : (savedSet.has(icao) ? GREEN : RED);
       {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
         const minRwy = v.scale < 6 ? 3000 : v.scale < 11 ? 2400 : v.scale < 18 ? 2000 : 0;
         const showLabels = v.scale > 58;   // 2 crans de molette plus tôt que 81 (chaque cran = ×1.18)
-        const GREEN = "#34d39a", RED = light ? "#e5484d" : "#ff5d6c";
         const dotR = 3 * dpr, placed = [];
         // anti-collision avec les libellés de villes du fond : on reprojette leurs boîtes
         // (calculées dans le référentiel du canvas de fond) dans le référentiel écran courant
@@ -14364,7 +14532,7 @@ function renderInfo(icao) {
           const x = X(a.lon), y = Y(a.lat);
           if (x < -30 * dpr || x > cv.width + 30 * dpr || y < -20 * dpr || y > cv.height + 20 * dpr) continue;
           const saved = savedSet.has(a.icao);
-          ctx.fillStyle = saved ? GREEN : RED;
+          ctx.fillStyle = dotCol(a.icao);
           ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
           ctx.strokeStyle = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
           ctx.lineWidth = 1 * dpr; ctx.stroke();
@@ -14393,7 +14561,7 @@ function renderInfo(icao) {
             const bx = chosen[0], by = chosen[1], cy = (chosen[1] + chosen[3]) / 2;
             labelBX = bx; labelBY = by; boxW = bw;
             // étiquette « pastille » arrondie (style capsule) : fond = couleur du point, texte foncé
-            const col = saved ? GREEN : RED, rr = boxH / 2;
+            const col = dotCol(a.icao), rr = boxH / 2;
             ctx.beginPath();
             if (ctx.roundRect) ctx.roundRect(bx, by, bw, boxH, rr);
             else { ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + boxH, rr); ctx.arcTo(bx + bw, by + boxH, bx, by + boxH, rr); ctx.arcTo(bx, by + boxH, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); }
@@ -14428,20 +14596,19 @@ function renderInfo(icao) {
       ctx.textBaseline = "middle";
       const st = (activeRoute() || {}).status || {};
       mapHitboxes = [];
-      const GREEN = "#34d39a", RED = light ? "#e5484d" : "#ff5d6c";
-      const showRouteLabels = v.scale > 58;   // même seuil que la couche mondiale : point seul au dézoom, code ICAO au zoom
+      // Les codes OACI de la route restent affichés à tout niveau de zoom :
+      // c'est elle qu'on vient lire, ses étiquettes ne disparaissent jamais.
       for (const a of ((curRoute && curRoute.ok) ? curRoute.airports : [])) {
         const x = X(a.lon), y = Y(a.lat);
         if (x < -40 * dpr || x > cv.width + 40 * dpr || y < -20 * dpr || y > cv.height + 20 * dpr) continue;
         const depArr = a.role !== "alt";
-        const saved = savedSet.has(a.icao);          // 2 couleurs : vert = sauvegardé hors-ligne, rouge = non
-        const col = saved ? GREEN : RED;
+        const col = dotCol(a.icao);
         ctx.fillStyle = col;
         const dotR = (depArr ? 6 : 4.5) * dpr;
         ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
         ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = 1.6 * dpr; ctx.stroke();
         let boxX = x, boxY = y, boxW = 0, boxH = 0;
-        if (showRouteLabels) {
+        {
           // taille FIXE, alignée sur les plus petites capsules (couche mondiale, 11px)
           const labelPx = 11;
           const lr = labelPx / 12;                      // ratio par rapport à la taille de référence (12px)
@@ -14468,26 +14635,143 @@ function renderInfo(icao) {
         });
       }
     }
-    // Cadrage « un seul terrain » : ~1,2° de latitude de haut (≈ 130 km), assez
-    // large pour voir les terrains voisins autour de l'aérodrome centré.
-    const FOCUS_LAT_SPAN = 1.2;
+    /* ---- vue weather : les couleurs de la carte de Weather Lens ----
+       Le proxy ne sert qu'un terrain à la fois (/api/wx/:icao) : on interroge
+       les terrains de la route (et celui qu'on centre), le reste du monde
+       reste gris « pas de données » — la légende le dit. VIS et plafond sont
+       relevés du METAR brut ; décodage repris du serveur Weather Lens
+       (wx-map.js), pour que la même couleur dise la même chose dans les
+       deux apps :
+         rouge  VIS ≤ 600 m ou plafond ≤ 300 ft
+         ambre  VIS ≤ 2 000 m ou plafond ≤ 700 ft
+         vert   au-dessus des deux
+         gris   pas de METAR exploitable, ou trop vieux */
+    const MAP_WX_MAX_AGE = 210 * 60e3;   // au-delà, l'observation ne décrit plus le présent : gris
+    const MAP_WX_TTL = 5 * 60e3;         // fraîcheur d'un relevé déjà chargé — aligné sur le cache du proxy
+    let mapMode = "wx", mapWxTargets = [];
+    const mapWx = new Map();             // icao -> { vis, ceil, t: heure du METAR, at: heure du fetch }
+
+    // Décodage minimal : seuls les groupes qui portent sur les deux seuils de
+    // la carte sont lus. Le corps s'arrête à TEMPO/BECMG/RMK — les groupes
+    // d'évolution portent leurs propres visibilités, pas l'instant présent.
+    function wxVisCeil(raw) {
+      const toks = String(raw || "").toUpperCase().replace(/=/g, " ").split(/\s+/).filter(Boolean);
+      let vis = null;      // mètres — minimum de tous les groupes rencontrés
+      let ceil = null;     // ft — plus basse couche BKN/OVC/VV
+      let skyKnown = false;
+      const seeVis = m2 => { vis = vis == null ? m2 : Math.min(vis, m2); };
+      const seeCeil = ft => { ceil = ceil == null ? ft : Math.min(ceil, ft); skyKnown = true; };
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "RMK" || t === "TEMPO" || t === "BECMG" || t === "NOSIG") break;
+        let m;
+        if (t === "CAVOK") { seeVis(10000); skyKnown = true; continue; }
+        // visibilité métrique, éventuellement directionnelle (« 1200NE ») : le
+        // minimum de tous les groupes est la visibilité qui intéresse la carte
+        if ((m = t.match(/^(\d{4})(NDV|N|NE|E|SE|S|SW|W|NW)?$/))) {
+          seeVis(m[1] === "9999" ? 10000 : parseInt(m[1], 10));
+          continue;
+        }
+        // milles US : « 7SM », « P6SM », « M1/4SM », « 1/2SM », « 1 3/4SM »
+        if ((m = t.match(/^[MP]?(\d{1,2})?(?:\/(\d{1,2}))?SM$/)) && (m[1] || m[2])) {
+          let sm = m[2] ? parseInt(m[1] || "0", 10) / parseInt(m[2], 10) : parseInt(m[1], 10);
+          if (m[2] && /^\d{1,2}$/.test(toks[i - 1] || "")) sm += parseInt(toks[i - 1], 10);
+          seeVis(Math.round(sm * 1609.344));
+          continue;
+        }
+        if ((m = t.match(/^(FEW|SCT|BKN|OVC)(\d{3})/))) {
+          skyKnown = true;
+          if (t.startsWith("BKN") || t.startsWith("OVC")) seeCeil(parseInt(m[2], 10) * 100);
+          continue;
+        }
+        if ((m = t.match(/^VV(\d{3})$/))) { seeCeil(parseInt(m[1], 10) * 100); continue; }
+        if (t === "SKC" || t === "CLR" || t === "NSC" || t === "NCD") { skyKnown = true; continue; }
+      }
+      // ciel décrit sans couche BKN/OVC/VV : plafond « au-dessus de tous les
+      // seuils » ; ciel jamais décrit (AUTO mutilé, //////) : inconnu
+      if (ceil == null && skyKnown) ceil = Infinity;
+      return { vis, ceil };
+    }
+
+    function wxCategorize(vis, ceil) {
+      const hasVis = Number.isFinite(vis);
+      const hasCeil = ceil != null;
+      if (!hasVis && !hasCeil) return 0;
+      if ((hasVis && vis <= 600) || (hasCeil && ceil <= 300)) return 3;
+      if ((hasVis && vis <= 2000) || (hasCeil && ceil <= 700)) return 2;
+      return 1;
+    }
+
+    function mapWxIngest(icao, d, at) {
+      const m = d && d.metar;
+      const vc = m && m.raw ? wxVisCeil(m.raw) : { vis: null, ceil: null };
+      mapWx.set(icao, { vis: vc.vis, ceil: vc.ceil, t: m ? (Date.parse(m.time || "") || 0) : 0, at });
+    }
+
+    function mapWxCatOf(icao) {
+      const e = mapWx.get(icao);
+      if (!e || !e.t || Date.now() - e.t > MAP_WX_MAX_AGE) return 0;
+      return wxCategorize(e.vis, e.ceil);
+    }
+
+    // Sème depuis la dernière copie locale (partagée avec la page Weather),
+    // puis rafraîchit par le proxy ce qui est périmé. Chaque réponse nourrit
+    // aussi la copie locale : la page Weather en profitera hors ligne.
+    async function mapWxRefresh() {
+      const jobs = [];
+      for (const icao of mapWxTargets) {
+        if (!mapWx.has(icao)) { const c = wxLoad(icao); if (c) mapWxIngest(icao, c, 0); }
+        const e = mapWx.get(icao);
+        if (e && Date.now() - e.at < MAP_WX_TTL) continue;
+        jobs.push(fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(icao)}`)
+          .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+          .then(d => { if (d && !d.error) { wxStore(icao, d); mapWxIngest(icao, d, Date.now()); } })
+          .catch(() => { }));   // hors ligne : la copie semée reste, le point dit ce qu'on sait
+      }
+      if (!jobs.length) return;
+      await Promise.allSettled(jobs);
+      if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
+    }
+
+    // Le curseur : position gauche = vue weather, droite = vue notam. La
+    // légende suit par la classe du conteneur, les couleurs au prochain dessin.
+    function setMapMode(mode) {
+      mapMode = mode;
+      $("#mapModeChk").checked = mode === "notam";
+      $("#mapOv").classList.toggle("notam-mode", mode === "notam");
+    }
+    $("#mapModeChk").onchange = e => {
+      setMapMode(e.target.checked ? "notam" : "wx");
+      if (mapMode === "wx") mapWxRefresh();
+      drawMap();
+    };
+    // Le bloc curseur+légende vit dans le conteneur qui écoute les clics de la
+    // carte : on coupe la propagation pour qu'un réglage ne charge pas le
+    // terrain qui se trouverait dessous.
+    $("#mapTools").addEventListener("pointerdown", e => e.stopPropagation());
+
+    // Cadrage d'ouverture « l'équivalent d'un pays » : ~8° de latitude
+    // (≈ 900 km du haut en bas de l'écran) autour de ce qu'on vient voir —
+    // assez dézoomé pour situer la route ou le terrain dans son pays, assez
+    // près pour lire les codes OACI d'emblée.
+    const OPEN_LAT_SPAN = 8;
     function openMap(focusIcao) {
       if (!BORDERS) return;                          // frontières indispensables pour dessiner le fond
       $("#mapOv").hidden = false;
       const cv = $("#routeMap"), r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
       _bg = null;   // invalide le cache du fond (taille/route peut avoir changé)
-      // Terrain à cadrer, quand la carte est ouverte depuis la 1re page : la route
-      // reste tracée, seule la vue initiale change.
+      const routeOk = !!(curRoute && curRoute.ok);
+      // pré-calcul des tracés great-circle : indépendants de la vue, calculés une seule fois ici
+      routeTracks = routeOk ? curRoute.segs.map(([d1, d2]) => gcTrack(GEO[d1], GEO[d2])) : [];
       const focus = (focusIcao && GEO && GEO[focusIcao]) ? GEO[focusIcao] : null;
-      if (focus) {
-        routeTracks = (curRoute && curRoute.ok) ? curRoute.segs.map(([d1, d2]) => gcTrack(GEO[d1], GEO[d2])) : [];
-        const scale = Math.max(3, (r.height * 0.9) / FOCUS_LAT_SPAN);
-        mapView = { cx: focus.lon, cy: focus.lat, scale, dpr };
-      } else if (curRoute && curRoute.ok) {
-        // pré-calcul des tracés great-circle : indépendants de la vue, calculés une seule fois ici
-        routeTracks = curRoute.segs.map(([d1, d2]) => gcTrack(GEO[d1], GEO[d2]));
-        // vue initiale : dézoomée pour montrer toute la route (bounding box de tous les terrains)
+      const countryScale = (r.height * 0.9) / OPEN_LAT_SPAN;
+      let world = false;
+      if (routeOk && (!focus || curRoute.airports.some(a => a.icao === focus.icao))) {
+        // vue initiale : la route entière (bounding box de tous les terrains),
+        // sans jamais serrer plus près que l'équivalent d'un pays — une
+        // navette LFPO → LFPG s'ouvre sur un bon tiers de France, pas sur
+        // deux pistes bord à bord.
         const pts = curRoute.airports;
         const lats = pts.map(a => a.lat), lons = pts.map(a => a.lon);
         const minLat = Math.min(...lats), maxLat = Math.max(...lats);
@@ -14497,30 +14781,36 @@ function renderInfo(icao) {
         const latSpan = Math.max(maxLat - minLat, 0.4);
         const lonSpan = Math.max((maxLon - minLon) * kx0, 0.4);
         const PAD = 0.78;                            // marge pour libellés et bords d'écran
-        const scale = Math.max(3, Math.min((r.height * PAD) / latSpan, (r.width * PAD) / lonSpan));
+        const scale = Math.max(3, Math.min((r.height * PAD) / latSpan, (r.width * PAD) / lonSpan, countryScale));
         mapView = { cx, cy, scale, dpr };
+      } else if (focus) {
+        // terrain seul (ou étranger à la route) : centré, à l'échelle d'un pays
+        mapView = { cx: focus.lon, cy: focus.lat, scale: Math.max(3, countryScale), dpr };
       } else {
         // aucune route : vue monde par défaut (carte consultable seule)
-        routeTracks = [];
         const cy = 25, cx = 10, kx0 = Math.cos(cy * Math.PI / 180);
         const scale = Math.max(1, Math.min((r.height * 0.9) / 150, (r.width * 0.9) / (330 * kx0)));
         mapView = { cx, cy, scale, dpr };
+        world = true;
       }
       rebuildSavedSet();          // couleurs vert/rouge à jour à l'ouverture
+      // La carte s'ouvre en vue weather ; la météo de la route arrive en
+      // asynchrone et recolore les points au fil des réponses.
+      setMapMode("wx");
+      mapWxTargets = routeOk ? curRoute.airports.map(a => a.icao) : [];
+      if (focus && !mapWxTargets.includes(focus.icao)) mapWxTargets.push(focus.icao);
+      mapWxRefresh();
       // MapLibre disponible : c'est LUI qui cadre, mapView suivra au 1er rendu.
       if (GL.active && GL.map) {
         $("#routeMapGL").classList.add("gl");
         $("#routeMapAttr").hidden = false;
         GL.map.resize();
-        if (focus) {
-          // même cadrage que le canvas : on convertit le scale de l'app en zoom MapLibre
-          const zoom = Math.log2(mapView.scale * Math.cos(focus.lat * Math.PI / 180) / 1.4222);
-          GL.map.jumpTo({ center: [focus.lon, focus.lat], zoom: Math.min(Math.max(zoom, 1), 13) });
-        } else if (curRoute && curRoute.ok) {
-          const pts = curRoute.airports;
-          GL.fit(pts.map(a => a.lon), pts.map(a => a.lat));
-        } else {
+        if (world) {
           GL.map.jumpTo({ center: [10, 25], zoom: 1.6 });
+        } else {
+          // même cadrage que le canvas : on convertit le scale de l'app en zoom MapLibre
+          const zoom = Math.log2(mapView.scale * Math.cos(mapView.cy * Math.PI / 180) / 1.4222);
+          GL.map.jumpTo({ center: [mapView.cx, mapView.cy], zoom: Math.min(Math.max(zoom, 1), 13) });
         }
       }
       drawMap();
