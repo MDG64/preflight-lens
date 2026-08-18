@@ -3465,9 +3465,271 @@ body.light .stat.on {
 
 
 
+    /* ===== PAGE D'ACCUEIL (écran d'ouverture) ============================
+       L'accueil recouvre la 1re page (z 50) mais reste SOUS la carte (60),
+       la carte FIR (60) et les modales (70) : tout ce qu'on ouvre depuis
+       l'accueil doit se peindre au-dessus de lui. */
+    .home-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch
+    }
+
+    .home-inner {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 24px 20px 44px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px
+    }
+
+    .home-head {
+      display: flex;
+      align-items: center;
+      gap: 10px
+    }
+
+    .home-brand {
+      font: 600 16px/1 var(--sans);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--text)
+    }
+
+    .home-brand b {
+      color: var(--cyan);
+      font-weight: 600
+    }
+
+    .home-head .hdr-actions {
+      margin-left: auto
+    }
+
+    .home-sec-label {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .2em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 8px
+    }
+
+    .home-sec-label .star {
+      color: var(--gold)
+    }
+
+    .home-entry .scratch {
+      width: 100%
+    }
+
+    .home-entry .scratch input {
+      width: 100%;
+      font-size: 24px;
+      letter-spacing: .24em;
+      padding: 14px 12px 14px 10px
+    }
+
+    .home-route {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap
+    }
+
+    .home-route .scratch input {
+      width: 78px;
+      font-size: 18px;
+      letter-spacing: .08em;
+      padding: 11px 6px 11px 4px
+    }
+
+    /* Le globe de l'accueil est toujours actif : pas de version grisée. */
+    .home-route .earthbtn {
+      opacity: 1;
+      filter: none
+    }
+
+    .home-chips {
+      border-radius: var(--radius);
+      border: 1px solid var(--line)
+    }
+
+    .home-chips .hint {
+      font: 500 11px/1.5 var(--sans);
+      color: var(--muted)
+    }
+
+    .home-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px
+    }
+
+    .home-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 24px 12px 20px;
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: 14px;
+      cursor: pointer;
+      color: var(--text);
+      box-shadow: var(--elev);
+      transition: background .15s, border-color .15s, box-shadow .15s, transform .1s
+    }
+
+    .home-card:hover {
+      background: var(--panel2);
+      border-color: var(--cyan-dim);
+      box-shadow: var(--elev-hi)
+    }
+
+    .home-card:active {
+      transform: scale(.98)
+    }
+
+    .home-card:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
+    }
+
+    .home-card svg {
+      width: 46px;
+      height: 46px
+    }
+
+    .hc-name {
+      font: 700 14px/1 var(--sans);
+      letter-spacing: .16em;
+      text-transform: uppercase
+    }
+
+    .hc-sub {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .12em;
+      color: var(--muted)
+    }
+
+    /* Case ICAO exigée mais vide : liseré rouge le temps d'une saisie. */
+    .scratch.need {
+      border-color: var(--red);
+      outline: 2px solid var(--red);
+      outline-offset: 1px
+    }
+
+    @media (max-width: 420px) {
+      .home-cards {
+        grid-template-columns: 1fr
+      }
+    }
+
+    /* ===== PAGE WEATHER (METAR / TAF) ==================================== */
+    .wx-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 52;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch
+    }
+
+    .wx-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 14px 20px 44px
+    }
+
+    .wx-code {
+      font: 600 15px/1 var(--mono);
+      letter-spacing: .14em;
+      color: var(--cyan)
+    }
+
+    .wx-name {
+      font: 500 12px/1.3 var(--sans);
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0
+    }
+
+    .wx-refresh {
+      min-height: 34px;
+      flex: none
+    }
+
+    .wx-status {
+      margin-top: 8px;
+      font: 500 12px/1.4 var(--sans);
+      color: var(--muted);
+      min-height: 17px
+    }
+
+    .wx-status.err {
+      color: var(--red)
+    }
+
+    .wx-block {
+      margin-top: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--elev);
+      overflow: hidden
+    }
+
+    .wx-block h3 {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: 0;
+      padding: 13px 16px 0;
+      font: 600 11px/1 var(--sans);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--muted)
+    }
+
+    .wx-age {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .08em;
+      color: var(--muted2);
+      text-transform: none
+    }
+
+    .wx-age.warn {
+      color: var(--amber)
+    }
+
+    .wx-raw {
+      margin: 0;
+      padding: 10px 16px 16px;
+      font: 500 14px/1.7 var(--mono);
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word
+    }
+
+    .wx-raw.empty {
+      color: var(--muted2)
+    }
+
+    .wx-src {
+      margin-top: 18px;
+      font: 500 10px/1.6 var(--sans);
+      color: var(--muted2)
+    }
+
     /* ===== Texture carbone du fond général — contraste accentué ===== */
     body,
     .route-screen,
+    .home-screen,
+    .wx-screen,
     .map-ov {
       background-color: #040506;
       background-image:
@@ -3493,6 +3755,8 @@ body.light .stat.on {
 
     body.light,
     body.light .route-screen,
+    body.light .home-screen,
+    body.light .wx-screen,
     body.light .map-ov {
       background-color: #c9ced2;
       background-image:
@@ -3657,6 +3921,8 @@ body .stat .k{
   <header>
     <div class="bar">
       <span class="beacon" aria-hidden="true"></span>
+      <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page"
+        style="margin-left:0">⌂</button>
       <div class="entry">
         <div class="scratch">
           <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
@@ -3777,6 +4043,106 @@ body .stat .k{
     </div>
   </div>
 
+  <!-- ================= PAGE D'ACCUEIL (écran d'ouverture) =================
+       Visible dès le HTML (pas de `hidden`) : c'est la première peinture de
+       l'app, elle ne doit pas attendre le script. Tout le reste vit derrière. -->
+  <div class="home-screen" id="homeScreen">
+    <div class="home-inner">
+      <div class="home-head">
+        <span class="beacon" aria-hidden="true"></span>
+        <span class="home-brand">Notam <b>Lens</b></span>
+        <div class="hdr-actions">
+          <button class="help-btn" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="home-sec-label">Aerodrome</div>
+        <div class="home-entry">
+          <div class="scratch rf-anchor">
+            <label for="hIcao">ICAO</label>
+            <input id="hIcao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
+              aria-label="Aerodrome ICAO code">
+            <div class="suggest" id="hIcaoSuggest" hidden></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="home-sec-label">Route</div>
+        <div class="home-route">
+          <div class="scratch rf-anchor"><label for="hFrom">FROM</label>
+            <input id="hFrom" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+            <div class="suggest" id="hFromSuggest" hidden></div>
+          </div>
+          <div class="scratch rf-anchor"><label for="hTo">TO</label>
+            <input id="hTo" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+            <div class="suggest" id="hToSuggest" hidden></div>
+          </div>
+          <div class="scratch rf-anchor"><label for="hAlt">ALT</label>
+            <input id="hAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+            <div class="suggest" id="hAltSuggest" hidden></div>
+          </div>
+          <button class="earthbtn" id="homeMapBtn" aria-label="Show map" title="Map">🌐</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="home-sec-label"><span class="star">★</span> Favorites</div>
+        <div class="chips home-chips" id="homeChips"></div>
+      </div>
+
+      <div class="home-cards">
+        <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodrome typed">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="31" cy="17" r="8" fill="var(--gold)" opacity=".9"/>
+            <path d="M13 36a7 7 0 0 1 0-14 9 9 0 0 1 17.4-2.6A6.5 6.5 0 0 1 36 32.6 7 7 0 0 1 30 36Z"
+              fill="var(--panel2)" stroke="var(--cyan)" stroke-width="2.4" stroke-linejoin="round"/>
+          </svg>
+          <span class="hc-name">Weather</span>
+          <span class="hc-sub">METAR · TAF</span>
+        </button>
+        <button class="home-card" id="homeNotamCard" aria-label="NOTAM — open the NOTAM list of the aerodrome typed">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <rect x="10" y="6" width="28" height="36" rx="4" fill="var(--panel2)"
+              stroke="var(--cyan)" stroke-width="2.4"/>
+            <line x1="16" y1="15" x2="32" y2="15" stroke="var(--cyan)" stroke-width="2.4" stroke-linecap="round"/>
+            <line x1="16" y1="22" x2="32" y2="22" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round"/>
+            <line x1="16" y1="29" x2="26" y2="29" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round"/>
+            <circle cx="31.5" cy="32.5" r="6" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
+            <line x1="35.7" y1="36.7" x2="40" y2="41" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+          <span class="hc-name">NOTAM</span>
+          <span class="hc-sub">Notam Lens</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PAGE WEATHER (METAR / TAF) ================= -->
+  <div class="wx-screen" id="wxScreen" hidden>
+    <div class="wx-inner">
+      <div class="route-head">
+        <button class="modal-x" id="wxClose" aria-label="Back" style="position:static">←</button>
+        <span class="route-title">Weather</span>
+        <span class="wx-code" id="wxCode">—</span>
+        <span class="wx-name" id="wxName"></span>
+        <button class="btn wx-refresh" id="wxRefresh">↻ Refresh</button>
+      </div>
+      <div class="wx-status" id="wxStatus"></div>
+      <section class="wx-block">
+        <h3>METAR <span class="wx-age" id="wxMetarAge"></span></h3>
+        <pre class="wx-raw" id="wxMetarRaw">—</pre>
+      </section>
+      <section class="wx-block">
+        <h3>TAF <span class="wx-age" id="wxTafAge"></span></h3>
+        <pre class="wx-raw" id="wxTafRaw">—</pre>
+      </section>
+      <div class="wx-src">Source: NOAA/NWS Aviation Weather Center (aviationweather.gov). Decision support only —
+        this display does not replace the official briefing of your company.</div>
+    </div>
+  </div>
+
   <!-- ================= OVERLAY CARTE ================= -->
   <div class="map-ov" id="mapOv" hidden>
     <button class="map-x" id="mapClose" aria-label="Back">←</button>
@@ -3871,6 +4237,13 @@ body .stat .k{
           <div class="hd-vis"><span class="hd-dot" style="background:var(--red)"></span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc"><b>Red dot</b> — no connection, last saved data is shown.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-cbtn">⌂</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Back to the <b>start page</b> — ICAO + route entry, favorites, and two shortcuts:
+            <b>Weather</b> opens the METAR/TAF page of the aerodrome typed, <b>NOTAM</b> opens its NOTAM list
+            directly.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-icao"><span class="l">ICAO</span><span class="v">LFBO</span></span></div>
@@ -12513,10 +12886,11 @@ function renderInfo(icao) {
     $("#clearTime").onclick = () => { $("#htime").value = ""; timeWin = null; timeMode = null; render(); };
 
     function setBeacon(online) {
-      const b = document.querySelector(".beacon");
-      if (!b) return;
-      b.classList.toggle("online", !!online);
-      b.classList.toggle("offline", !online);
+      // Deux pastilles : celle du bandeau ET celle de l'accueil — même état.
+      document.querySelectorAll(".beacon").forEach(b => {
+        b.classList.toggle("online", !!online);
+        b.classList.toggle("offline", !online);
+      });
     }
     setBeacon(netOnline());
     // La connexion peut tomber alors que l'app est DÉJÀ ouverte, terrain
@@ -12538,6 +12912,9 @@ function renderInfo(icao) {
       document.body.classList.toggle("light", t === "light");
       const b = $("#themeBtn");
       if (b) { b.textContent = t === "light" ? "☾" : "☀"; b.title = t === "light" ? "Night mode" : "Day mode"; }
+      // L'accueil a son propre commutateur : même glyphe, même sens.
+      const hb = $("#homeThemeBtn");
+      if (hb) { hb.textContent = t === "light" ? "☾" : "☀"; hb.title = t === "light" ? "Night mode" : "Day mode"; }
       // Le fond vectoriel a ses propres couleurs : on lui repasse le style.
       // try/catch et non `typeof GL` : GL est un `const` déclaré plus bas, donc
       // en zone morte temporelle au premier applyTheme() — et `typeof` sur une
@@ -12977,7 +13354,12 @@ function renderInfo(icao) {
       loadBorders().then(refreshMapBtn);
       const saved = activeRoute();
       if (saved && saved.dep && GEO[saved.dep]) {          // restauration de la dernière route
-        $("#rFrom").value = saved.dep; $("#rTo").value = saved.arr || ""; $("#rAlt").value = saved.alt || "";
+        // Les CASES ne se restaurent que vierges : une route déjà tapée (sur
+        // l'accueil ou ici même) ne doit pas être écrasée par l'ancienne.
+        if (!rVal("#rFrom") && !rVal("#rTo") && !rVal("#rAlt")) {
+          $("#rFrom").value = saved.dep; $("#rTo").value = saved.arr || ""; $("#rAlt").value = saved.alt || "";
+          syncRouteMirror();
+        }
         curRoute = computeRoute(saved.dep, saved.arr, saved.alt, { width: saved.width });
         if (curRoute.ok) {
           renderApGrid(saved.status || {});
@@ -13022,8 +13404,15 @@ function renderInfo(icao) {
     }
     $("#routeBtn").onclick = openRoute;
     $("#routeClose").onclick = () => { $("#routeScreen").hidden = true; };
-    const RNEXT = { rFrom: "#rTo", rTo: "#rAlt" };   // case pleine (4 lettres) -> champ suivant
-    const RSUGGEST = { rFrom: "#rFromSuggest", rTo: "#rToSuggest", rAlt: "#rAltSuggest" };
+    const RNEXT = { rFrom: "#rTo", rTo: "#rAlt", hFrom: "#hTo", hTo: "#hAlt" };   // case pleine (4 lettres) -> champ suivant
+    const RSUGGEST = {
+      rFrom: "#rFromSuggest", rTo: "#rToSuggest", rAlt: "#rAltSuggest",
+      hFrom: "#hFromSuggest", hTo: "#hToSuggest", hAlt: "#hAltSuggest"
+    };
+    // La route se tape indifféremment sur l'accueil (hFrom/hTo/hAlt) ou sur la
+    // page Route (rFrom/rTo/rAlt) : chaque frappe se recopie dans le champ
+    // jumeau, les deux écrans montrent toujours la même route.
+    const RMIRROR = { rFrom: "#hFrom", rTo: "#hTo", rAlt: "#hAlt", hFrom: "#rFrom", hTo: "#rTo", hAlt: "#rAlt" };
     // Rendu du menu déroulant pour un champ FROM/TO/ALT donné : mêmes règles
     // de matching/tri que la recherche principale (suggestCodes), le clic sur
     // une ligne remplit le champ et avance au suivant comme la saisie manuelle.
@@ -13041,15 +13430,17 @@ function renderInfo(icao) {
       box.querySelectorAll(".sg-row").forEach(r => r.onmousedown = e => {
         e.preventDefault();
         $("#" + fieldId).value = r.dataset.code;
+        const mir = RMIRROR[fieldId]; if (mir) $(mir).value = r.dataset.code;
         box.hidden = true;
         refreshGo();
         const nx = RNEXT[fieldId];
         if (nx) $(nx).focus(); else $("#" + fieldId).blur();
       });
     }
-    ["#rFrom", "#rTo", "#rAlt"].forEach(id => {
+    ["#rFrom", "#rTo", "#rAlt", "#hFrom", "#hTo", "#hAlt"].forEach(id => {
       $(id).addEventListener("input", e => {
         e.target.value = e.target.value.toUpperCase();
+        const mir = RMIRROR[e.target.id]; if (mir) $(mir).value = e.target.value;
         refreshGo();
         renderRouteSuggest(e.target.id, e.target.value);
         const nx = RNEXT[e.target.id];
@@ -13068,6 +13459,7 @@ function renderInfo(icao) {
       curRoute = null;
       userAdded = [];
       $("#rFrom").value = ""; $("#rTo").value = ""; $("#rAlt").value = "";
+      syncRouteMirror();                       // l'accueil reflète l'effacement
       $("#routeStatus").textContent = "";
       renderApGrid({});
       refreshGo(); refreshMapBtn();
@@ -13076,6 +13468,7 @@ function renderInfo(icao) {
     $("#swapBtn").onclick = () => {
       const f = $("#rFrom").value; $("#rFrom").value = $("#rTo").value; $("#rTo").value = f;
       $("#rAlt").value = "";        // la double flèche efface aussi le champ ALT
+      syncRouteMirror();                       // l'accueil reflète l'échange
       refreshGo();
     };
     document.querySelectorAll("#rfRwySeg .rf-pill").forEach(b => {
@@ -15185,7 +15578,236 @@ document.addEventListener("keydown", function(e){
 });
 window.addEventListener("resize", hidePop);
 window.addEventListener("scroll", hidePop, true);
-    updateFavCount(); buildSeg(); setTab("fav"); load(favs.length ? favs[0] : "LFBO");
+    /* ============================================================
+       PAGE D'ACCUEIL — l'écran d'ouverture de l'app.
+       Une case ICAO, la route, le globe, les favoris, puis deux cartes :
+       Weather ouvre la page METAR/TAF du terrain saisi, NOTAM ouvre
+       directement la liste NOTAM de ce terrain — sans repasser par la
+       case ICAO de la 1re page.
+       ============================================================ */
+    function syncRouteMirror() {
+      $("#hFrom").value = $("#rFrom").value;
+      $("#hTo").value = $("#rTo").value;
+      $("#hAlt").value = $("#rAlt").value;
+    }
+    // Code de la case ICAO de l'accueil, traduit (IATA 3 lettres -> OACI)
+    // et validé : "" si rien d'exploitable.
+    function homeCode() {
+      let c = ($("#hIcao").value || "").toUpperCase().trim();
+      if (c.length === 3 && IATA_TO_ICAO[c]) c = IATA_TO_ICAO[c];
+      return /^[A-Z]{4}$/.test(c) ? c : "";
+    }
+    // Case ICAO exigée mais inexploitable : liseré rouge, le temps d'une saisie.
+    function needHomeIcao() {
+      const s = $("#hIcao").closest(".scratch");
+      s.classList.add("need");
+      $("#hIcao").focus();
+      setTimeout(() => s.classList.remove("need"), 1600);
+    }
+    function renderHomeChips() {
+      const wrap = $("#homeChips");
+      if (!favs.length) {
+        wrap.innerHTML = `<span class="hint">No favorites yet — open NOTAM, load an aerodrome, then tap the ☆ star next to its code.</span>`;
+        return;
+      }
+      const cur = ($("#hIcao").value || "").toUpperCase();
+      wrap.innerHTML = favs.map(code => {
+        const m = AIRPORTS[code] || { city: "" };
+        return `<button class="chip-ad ${code === cur ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
+      }).join("");
+      // Une puce remplit la case ICAO — le choix Weather / NOTAM reste à faire.
+      wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => {
+        $("#hIcao").value = b.dataset.code;
+        $("#hIcao").closest(".scratch").classList.remove("need");
+        renderHomeChips();
+      });
+    }
+    function openHome() {
+      syncRouteMirror();          // l'écran Route a pu changer la route entre-temps
+      renderHomeChips();          // ... et la liste des favoris a pu bouger
+      $("#homeScreen").hidden = false;
+    }
+    function closeHome() { $("#homeScreen").hidden = true; }
+    $("#homeBtn").onclick = openHome;
+    $("#homeThemeBtn").onclick = () => $("#themeBtn").click();
+
+    /* ---- case ICAO de l'accueil : mêmes suggestions que la 1re page,
+       mais un clic REMPLIT la case (le choix Weather / NOTAM reste à faire). */
+    function renderHomeSuggest(q) {
+      const box = $("#hIcaoSuggest");
+      const matches = suggestCodes(q);
+      if (!matches.length) { box.hidden = true; box.innerHTML = ""; return; }
+      box.innerHTML = matches.map(c => {
+        const m = AIRPORTS[c];
+        const star = favs.includes(c) ? `<span class="sg-star">★</span>` : "";
+        const iata = m.iata ? `<span class="sg-iata">${m.iata}</span>` : "";
+        return `<button class="sg-row" data-code="${c}">
+      <span class="sg-code">${c}</span>${iata}<span class="sg-city">${m.city} · ${m.cc}</span>${star}</button>`;
+      }).join("");
+      box.hidden = false;
+      box.querySelectorAll(".sg-row").forEach(r => r.onmousedown = e => {
+        e.preventDefault();
+        $("#hIcao").value = r.dataset.code;
+        box.hidden = true;
+        renderHomeChips();
+      });
+    }
+    $("#hIcao").addEventListener("input", e => {
+      e.target.value = e.target.value.toUpperCase();
+      e.target.closest(".scratch").classList.remove("need");
+      renderHomeSuggest(e.target.value);
+      renderHomeChips();
+    });
+    $("#hIcao").addEventListener("focus", e => renderHomeSuggest(e.target.value));
+    $("#hIcao").addEventListener("blur", () => setTimeout(() => { $("#hIcaoSuggest").hidden = true; }, 150));
+    $("#hIcao").addEventListener("keydown", e => {
+      if (e.key === "Enter") { $("#hIcaoSuggest").hidden = true; $("#homeNotamCard").click(); }
+      else if (e.key === "Escape") { $("#hIcaoSuggest").hidden = true; }
+    });
+
+    /* ---- les deux cartes ---- */
+    // NOTAM : directement la liste du terrain saisi. Sans code exploitable,
+    // deux cas — case vide : on ouvre simplement Notam Lens (sa propre case
+    // ICAO attend) ; saisie partielle : on la signale plutôt que de la perdre.
+    $("#homeNotamCard").onclick = () => {
+      const c = homeCode();
+      if (!c && ($("#hIcao").value || "").trim()) { needHomeIcao(); return; }
+      closeHome();
+      if (c) load(c);
+      else $("#icao").focus();
+    };
+    // Weather : la page METAR/TAF a besoin d'un terrain — pas d'ouverture à vide.
+    $("#homeWxCard").onclick = () => {
+      const c = homeCode();
+      if (!c) { needHomeIcao(); return; }
+      openWx(c);                  // l'accueil reste derrière (z 50 < 52)
+    };
+
+    /* ---- globe de l'accueil : la carte, avec la route saisie si elle est
+       complète (FROM + TO valides) — sans téléchargement de NOTAMs, ça reste
+       le geste GO de la page Route. Sinon, carte centrée sur le terrain de la
+       case ICAO, ou vue monde. */
+    $("#homeMapBtn").onclick = async () => {
+      const dep = rVal("#hFrom"), arr = rVal("#hTo"), alt = rVal("#hAlt");
+      if (dep.length === 4 && arr.length === 4 && dep !== arr) {
+        try { await loadGeoData(); } catch (e) { }
+        if (GEO && GEO[dep] && GEO[arr] && (!alt || GEO[alt])) {
+          const r = computeRoute(dep, arr, alt || null, { width: 200 });
+          if (r.ok) { curRoute = r; refreshMapBtn(); }
+        }
+      }
+      openMapOverlay(homeCode() || null);
+    };
+
+    /* ============================================================
+       PAGE WEATHER — METAR + TAF du terrain, via le proxy (l'AWC
+       n'émet pas de CORS, voir /api/wx côté serveur). Dernière copie
+       gardée en localStorage : consultable hors ligne, datée.
+       ============================================================ */
+    const WX_STORE_PREFIX = "notam_wx:";
+    let wxIcao = null, wxToken = 0, wxTicker = null, wxData = null;
+    function wxStore(icao, d) { try { localStorage.setItem(WX_STORE_PREFIX + icao, JSON.stringify(d)); } catch (e) { } }
+    function wxLoad(icao) { try { const s = localStorage.getItem(WX_STORE_PREFIX + icao); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+    // Plie le TAF aux groupes d'évolution — un changement par ligne. L'ordre de
+    // l'alternance compte : « PROB40 TEMPO » doit rester d'un seul tenant.
+    function tafPretty(raw) {
+      return (raw || "").replace(/\s+(FM\d{6}|BECMG|(?:PROB\d{2}\s+)?TEMPO|PROB\d{2}|RMK)\b/g, "\n  $1");
+    }
+    function wxAge(iso) {
+      const t = Date.parse(iso || "");
+      if (isNaN(t)) return null;
+      const min = Math.max(0, Math.round((Date.now() - t) / 60000));
+      const d = new Date(t);
+      const hm = P(d.getUTCHours()) + ":" + P(d.getUTCMinutes()) + "Z";
+      const ago = min < 60 ? `${min} min ago` : `${Math.floor(min / 60)} h ${P(min % 60)} ago`;
+      return { txt: `${hm} · ${ago}`, min };
+    }
+    function setWxStatus(msg, cls) {
+      const el = $("#wxStatus");
+      el.textContent = msg || "";
+      el.className = "wx-status" + (cls ? " " + cls : "");
+    }
+    // Les âges vivent à l'écran : re-rendus seuls, toutes les 30 s, sans réseau.
+    function renderWxAges() {
+      const ma = wxData && wxData.metar ? wxAge(wxData.metar.time) : null;
+      const ta = wxData && wxData.taf ? wxAge(wxData.taf.time) : null;
+      const me = $("#wxMetarAge"), te = $("#wxTafAge");
+      me.textContent = ma ? "observed " + ma.txt : "";
+      me.classList.toggle("warn", !!(ma && ma.min > 90));    // plus d'1 h 30 : vieillissant
+      te.textContent = ta ? "issued " + ta.txt : "";
+      te.classList.toggle("warn", !!(ta && ta.min > 7 * 60)); // au-delà du cycle de 6 h
+    }
+    function renderWx(d) {
+      wxData = d;
+      const mEl = $("#wxMetarRaw"), tEl = $("#wxTafRaw");
+      if (d.metar && d.metar.raw) { mEl.textContent = d.metar.raw; mEl.classList.remove("empty"); }
+      else { mEl.textContent = "No METAR available for " + d.icao + "."; mEl.classList.add("empty"); }
+      if (d.taf && d.taf.raw) { tEl.textContent = tafPretty(d.taf.raw); tEl.classList.remove("empty"); }
+      else { tEl.textContent = "No TAF published for " + d.icao + "."; tEl.classList.add("empty"); }
+      renderWxAges();
+    }
+    async function refreshWx() {
+      const icao = wxIcao, my = ++wxToken;
+      setWxStatus("Requesting " + icao + "…");
+      $("#wxRefresh").disabled = true;
+      let d = null, err = null;
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(icao)}`);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        d = await r.json();
+      } catch (e) { err = e; }
+      if (my !== wxToken) return;               // un autre terrain a pris le relais
+      $("#wxRefresh").disabled = false;
+      if (d && !d.error) {
+        wxStore(icao, d);
+        renderWx(d);
+        if (!d.metar && !d.taf) setWxStatus("No reports available for " + icao + " — this station may not publish METAR/TAF.");
+        else if (d.stale) setWxStatus("Source unreachable — showing the last copy the server holds.");
+        else setWxStatus("");
+      } else {
+        // hors ligne / proxy muet : la dernière copie locale, datée par ses relevés
+        const cached = wxLoad(icao);
+        if (cached) {
+          renderWx(cached);
+          const a = wxAge(cached.at);
+          setWxStatus("Offline — data fetched " + (a ? a.txt : "earlier") + ".", "err");
+        } else {
+          setWxStatus("Weather unavailable — " + ((err && err.message) || "network error") + ".", "err");
+        }
+      }
+    }
+    async function openWx(icao) {
+      wxIcao = icao;
+      $("#wxScreen").hidden = false;
+      $("#wxCode").textContent = icao;
+      const m = AIRPORTS[icao];
+      $("#wxName").textContent = m ? `${m.city} · ${m.cc}` : "";
+      $("#wxMetarRaw").textContent = "—"; $("#wxTafRaw").textContent = "—";
+      $("#wxMetarAge").textContent = ""; $("#wxTafAge").textContent = "";
+      $("#wxMetarRaw").classList.remove("empty"); $("#wxTafRaw").classList.remove("empty");
+      wxData = null;
+      if (!wxTicker) wxTicker = setInterval(renderWxAges, 30000);
+      await refreshWx();
+    }
+    $("#wxRefresh").onclick = () => refreshWx();
+    $("#wxClose").onclick = () => {
+      $("#wxScreen").hidden = true;
+      wxToken++;                                 // coupe une requête en cours
+      if (wxTicker) { clearInterval(wxTicker); wxTicker = null; }
+    };
+
+    /* ---- démarrage ---- */
+    updateFavCount(); buildSeg(); setTab("fav");
+    /* L'accueil est l'écran d'ouverture : plus de chargement automatique du
+       premier favori — les NOTAMs ne se téléchargent qu'à la demande (carte
+       NOTAM). La case ICAO se préremplit du 1er favori (le geste du matin
+       reste : ouvrir, taper NOTAM), la route reprend la dernière enregistrée. */
+    if (favs.length) $("#hIcao").value = favs[0];
+    const bootRoute = activeRoute();
+    if (bootRoute && bootRoute.dep) {
+      $("#rFrom").value = bootRoute.dep; $("#rTo").value = bootRoute.arr || ""; $("#rAlt").value = bootRoute.alt || "";
+    }
+    openHome();
   </script>
   <script>
 
