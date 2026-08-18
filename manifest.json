@@ -1,6 +1,6 @@
 {
-  "name": "BriefZip",
-  "short_name": "BriefZip",
+  "name": "Preflight Lens",
+  "short_name": "Preflight",
   "description": "Pre-flight NOTAM decision support for pilots",
   "id": "./notam-filter.html",
   "start_url": "./notam-filter.html",

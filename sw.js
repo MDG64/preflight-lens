@@ -1,4 +1,4 @@
-// Service Worker — BriefZip PWA (fichiers et clé de cache restés "notam-filter-*" :
+// Service Worker — Preflight Lens PWA (fichiers et clé de cache restés "notam-filter-*" :
 // renommer casserait les URL GitHub Pages déjà en circulation ; le nom public de
 // l'app a changé le 2026-08-18, ses URL non)
 // v3 : "réseau d'abord" pour l'app (les MAJ s'affichent au prochain lancement),

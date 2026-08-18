@@ -7,7 +7,7 @@
   <!-- Pas de référencement tant que l'app n'est pas sur les stores (2026-08-04).
        N'interdit PAS l'accès : voir robots.txt. À retirer à la publication. -->
   <meta name="robots" content="noindex, nofollow">
-  <title>BriefZip — EUR / AFI</title>
+  <title>Preflight Lens — EUR / AFI</title>
   <!-- Polices auto-hébergées (2026-08-06), plus de Google Fonts : chaque
        chargement distant transmettait l'IP de l'utilisateur à Google, ce que
        l'art. 8.5 de legal.html (« ni traceur tiers ») interdisait de fait —
@@ -38,7 +38,7 @@
   <!-- Libellé sous l'icône sur iOS. Il doit répéter le short_name du manifeste
        (que Safari ignore) : il disait encore "NOTAM Filter", l'app s'installait
        donc sous deux noms différents selon la plateforme. -->
-  <meta name="apple-mobile-web-app-title" content="BriefZip">
+  <meta name="apple-mobile-web-app-title" content="Preflight Lens">
   <meta name="theme-color" content="#0d1117">
   <style>
     :root {
@@ -4196,7 +4196,7 @@ body .stat .k{
     <div class="home-inner">
       <div class="home-head">
         <span class="beacon" aria-hidden="true"></span>
-        <span class="home-brand">Brief<b>Zip</b></span>
+        <span class="home-brand">Preflight <b>Lens</b></span>
         <div class="hdr-actions">
           <button class="help-btn" id="homeMapBtn" aria-label="Show map" title="Map">🌐</button>
           <button class="help-btn" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
@@ -4637,7 +4637,7 @@ body .stat .k{
         <div class="hd-sec">Legal</div>
         <div class="hd-note">
           <a href="./legal.html">Legal notice, Terms of Use &amp; Privacy Policy</a><br>
-          Using this Service implies acceptance of those Terms. BriefZip is a
+          Using this Service implies acceptance of those Terms. Preflight Lens is a
           decision-support tool and does <b>not</b> replace the official pre-flight briefing.<br>
           <!-- Identité de la copie qui tourne : à citer dans tout signalement.
                Rempli par JS (voir APP_VERSION), jamais en dur dans le HTML. -->
@@ -12243,7 +12243,7 @@ E) ${e}`;
       if (!el) return;
       const t = Date.parse(document.lastModified);
       const build = isNaN(t) ? "—" : new Date(t).toISOString().slice(0, 16).replace("T", " ") + "Z";
-      el.textContent = "BriefZip v" + APP_VERSION + " · build " + build;
+      el.textContent = "Preflight Lens v" + APP_VERSION + " · build " + build;
     })();
 
     // Récupère les NOTAM bruts (tableau de chaînes ICAO) pour un code OACI.
