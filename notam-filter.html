@@ -273,7 +273,8 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      flex: none
+      flex: none;
+      margin-left: auto      /* le groupe d'actions reste collé au bord droit */
     }
 
     /* Les deux pastilles du header (jour/nuit, ?) sont plus grosses que le
@@ -581,16 +582,18 @@
       transition: transform .12s, color .12s, text-shadow .12s
     }
 
+    /* Le globe a rejoint .hdr-actions, à gauche du jour/nuit : il prend donc
+       la taille des boutons de ce groupe (38 px) et rend le `margin-left:auto`
+       — c'est désormais le GROUPE qui est poussé au bord droit, pas lui. */
     .stationmapbtn {
-      width: 42px;
-      height: 42px;
+      width: 38px;
+      height: 38px;
       flex: none;
-      margin-left: auto;
       border-radius: 50%;
       border: 1px solid var(--line2);
       background: #1a242c;
       color: var(--cyan);
-      font: 24px/1 var(--sans);
+      font: 21px/1 var(--sans);
       cursor: pointer;
       opacity: .7;
       filter: grayscale(1);
@@ -3317,12 +3320,6 @@
         padding: 11px 6px 11px 8px
       }
 
-      .stationmapbtn {
-        width: 34px;
-        height: 34px;
-        font-size: 19px
-      }
-
       .help-btn {
         width: 25px;
         height: 25px;
@@ -3330,8 +3327,10 @@
       }
 
       /* Le header reste sur une seule ligne : à 360px de large la barre
-         demande ~342px, marge conservée. */
-      .hdr-actions .help-btn {
+         demande ~342px, marge conservée. Le globe suit ses deux voisins du
+         groupe — il est du même jeu, il rétrécit avec eux. */
+      .hdr-actions .help-btn,
+      .hdr-actions .stationmapbtn {
         width: 29px;
         height: 29px;
         font-size: 14px
@@ -3582,10 +3581,6 @@ body.light .stat.on {
       font-weight: 600
     }
 
-    .home-head .hdr-actions {
-      margin-left: auto
-    }
-
     .home-sec-label {
       font: 500 10px/1 var(--mono);
       letter-spacing: .2em;
@@ -3770,10 +3765,6 @@ body.light .stat.on {
        élastique, cède la place en premier. */
     .wx-inner .route-head {
       flex-wrap: wrap
-    }
-
-    .wx-inner .route-head .hdr-actions {
-      margin-left: auto
     }
 
     .wx-status {
@@ -4119,11 +4110,11 @@ body .stat .k{
         <div class="suggest" id="suggest" hidden></div>
       </div>
       <div class="st-route" id="stRoute" hidden></div>
-      <button class="stationmapbtn" id="stationMapBtn" aria-label="Show route map"
-        title="Show route map">🌐</button>
       <button class="routebtn" id="routeBtn">Route</button>
       <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
       <div class="hdr-actions">
+        <button class="stationmapbtn" id="stationMapBtn" aria-label="Show route map"
+          title="Show route map">🌐</button>
         <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
       </div>
