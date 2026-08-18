@@ -15992,7 +15992,10 @@ window.addEventListener("scroll", hidePop, true);
       $("#wxScreen").hidden = false;
       const single = list.length === 1 && !list[0].role;
       const first = AIRPORTS[list[0].icao];
-      $("#wxCode").textContent = single ? list[0].icao : list.map(a => a.icao).join(" → ");
+      // Les codes se suivent dans l'ordre de la route : la succession se lit
+      // toute seule, une flèche entre chacun n'apprend rien de plus. Espaces
+      // insécables, pour que l'écart tienne là où le HTML replierait.
+      $("#wxCode").textContent = single ? list[0].icao : list.map(a => a.icao).join("  ");
       $("#wxName").textContent = single && first ? `${first.city} · ${first.cc}` : "";
       const body = $("#wxBody");
       body.classList.toggle("single", single);
