@@ -3719,6 +3719,81 @@ body.light .stat.on {
       color: var(--muted2)
     }
 
+    /* Une section par terrain — la page sert aussi bien un terrain seul
+       (l'en-tête de section se tait, celui de la page suffit) qu'une route
+       entière : DEP, DEST et ALT à la suite. */
+    .wx-ap {
+      margin-top: 28px
+    }
+
+    #wxBody > .wx-ap:first-child {
+      margin-top: 14px
+    }
+
+    #wxBody.single .wx-ap-head {
+      display: none
+    }
+
+    .wx-ap-head {
+      display: flex;
+      align-items: baseline;
+      gap: 10px
+    }
+
+    .wx-ap-role {
+      font: 600 9px/1 var(--mono);
+      letter-spacing: .14em;
+      border: 1px solid;
+      border-radius: 4px;
+      padding: 3px 6px;
+      flex: none
+    }
+
+    .wx-ap-role.dep {
+      color: var(--green);
+      border-color: var(--green)
+    }
+
+    .wx-ap-role.arr {
+      color: var(--cyan);
+      border-color: var(--cyan)
+    }
+
+    .wx-ap-role.alt {
+      color: var(--amber);
+      border-color: var(--amber)
+    }
+
+    .wx-ap-code {
+      font: 600 15px/1 var(--mono);
+      letter-spacing: .14em;
+      color: var(--cyan)
+    }
+
+    .wx-ap-name {
+      font: 500 12px/1.3 var(--sans);
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0
+    }
+
+    .wx-ap-note {
+      margin-top: 6px;
+      font: 500 11px/1.4 var(--sans);
+      color: var(--muted)
+    }
+
+    .wx-ap-note.warn {
+      color: var(--amber)
+    }
+
+    .wx-ap-note.err {
+      color: var(--red)
+    }
+
     .wx-src {
       margin-top: 18px;
       font: 500 10px/1.6 var(--sans);
@@ -4130,14 +4205,7 @@ body .stat .k{
         <button class="btn wx-refresh" id="wxRefresh">↻ Refresh</button>
       </div>
       <div class="wx-status" id="wxStatus"></div>
-      <section class="wx-block">
-        <h3>METAR <span class="wx-age" id="wxMetarAge"></span></h3>
-        <pre class="wx-raw" id="wxMetarRaw">—</pre>
-      </section>
-      <section class="wx-block">
-        <h3>TAF <span class="wx-age" id="wxTafAge"></span></h3>
-        <pre class="wx-raw" id="wxTafRaw">—</pre>
-      </section>
+      <div id="wxBody"></div>
       <div class="wx-src">Source: NOAA/NWS Aviation Weather Center (aviationweather.gov). Decision support only —
         this display does not replace the official briefing of your company.</div>
     </div>
@@ -4242,8 +4310,8 @@ body .stat .k{
           <div class="hd-vis"><span class="hd-cbtn">⌂</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Back to the <b>start page</b> — ICAO + route entry, favorites, and two shortcuts:
-            <b>Weather</b> opens the METAR/TAF page of the aerodrome typed, <b>NOTAM</b> opens its NOTAM list
-            directly.</div>
+            <b>Weather</b> opens the METAR/TAF page of the whole route (DEP · DEST · ALT) when one is entered,
+            else of the aerodrome typed; <b>NOTAM</b> opens the NOTAM list of the aerodrome typed.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-icao"><span class="l">ICAO</span><span class="v">LFBO</span></span></div>
@@ -15676,12 +15744,26 @@ window.addEventListener("scroll", hidePop, true);
       if (c) load(c);
       else $("#icao").focus();
     };
-    // Weather : la page METAR/TAF a besoin d'un terrain — pas d'ouverture à vide.
+    // Weather : la ROUTE prime quand elle est complète (FROM + TO valides) —
+    // la page météo aligne alors DEP, DEST et ALT. Sinon, terrain de la case
+    // ICAO ; et sans code exploitable, pas d'ouverture à vide.
     $("#homeWxCard").onclick = () => {
+      const route = homeRouteCodes();
+      if (route.length >= 2) { openWx(route); return; }
       const c = homeCode();
       if (!c) { needHomeIcao(); return; }
-      openWx(c);                  // l'accueil reste derrière (z 50 < 52)
+      openWx([{ icao: c }]);      // l'accueil reste derrière (z 50 < 52)
     };
+    // Terrains de la route de l'accueil, validés et dédoublonnés (un ALT égal
+    // au DEST n'apparaît qu'une fois), dans l'ordre DEP -> DEST -> ALT.
+    function homeRouteCodes() {
+      const dep = rVal("#hFrom"), arr = rVal("#hTo"), alt = rVal("#hAlt");
+      if (!/^[A-Z]{4}$/.test(dep) || !/^[A-Z]{4}$/.test(arr)) return [];
+      const list = [{ icao: dep, role: "dep" }, { icao: arr, role: "arr" }];
+      if (/^[A-Z]{4}$/.test(alt)) list.push({ icao: alt, role: "alt" });
+      const seen = new Set();
+      return list.filter(a => seen.has(a.icao) ? false : (seen.add(a.icao), true));
+    }
 
     /* ---- globe de l'accueil : la carte, avec la route saisie si elle est
        complète (FROM + TO valides) — sans téléchargement de NOTAMs, ça reste
@@ -15705,7 +15787,8 @@ window.addEventListener("scroll", hidePop, true);
        gardée en localStorage : consultable hors ligne, datée.
        ============================================================ */
     const WX_STORE_PREFIX = "notam_wx:";
-    let wxIcao = null, wxToken = 0, wxTicker = null, wxData = null;
+    let wxList = [], wxToken = 0, wxTicker = null;
+    const wxShown = {};                       // icao -> payload actuellement rendu
     function wxStore(icao, d) { try { localStorage.setItem(WX_STORE_PREFIX + icao, JSON.stringify(d)); } catch (e) { } }
     function wxLoad(icao) { try { const s = localStorage.getItem(WX_STORE_PREFIX + icao); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
     // Plie le TAF aux groupes d'évolution — un changement par ligne. L'ordre de
@@ -15727,72 +15810,116 @@ window.addEventListener("scroll", hidePop, true);
       el.textContent = msg || "";
       el.className = "wx-status" + (cls ? " " + cls : "");
     }
+    function wxRoleLabel(role) { return role === "dep" ? "DEP" : role === "arr" ? "DEST" : role === "alt" ? "ALT" : ""; }
+    function wxSection(icao) { return document.querySelector(`#wxBody .wx-ap[data-icao="${icao}"]`); }
     // Les âges vivent à l'écran : re-rendus seuls, toutes les 30 s, sans réseau.
     function renderWxAges() {
-      const ma = wxData && wxData.metar ? wxAge(wxData.metar.time) : null;
-      const ta = wxData && wxData.taf ? wxAge(wxData.taf.time) : null;
-      const me = $("#wxMetarAge"), te = $("#wxTafAge");
-      me.textContent = ma ? "observed " + ma.txt : "";
-      me.classList.toggle("warn", !!(ma && ma.min > 90));    // plus d'1 h 30 : vieillissant
-      te.textContent = ta ? "issued " + ta.txt : "";
-      te.classList.toggle("warn", !!(ta && ta.min > 7 * 60)); // au-delà du cycle de 6 h
+      for (const a of wxList) {
+        const sec = wxSection(a.icao), d = wxShown[a.icao];
+        if (!sec || !d) continue;
+        const ma = d.metar ? wxAge(d.metar.time) : null;
+        const ta = d.taf ? wxAge(d.taf.time) : null;
+        const me = sec.querySelector('[data-age="metar"]'), te = sec.querySelector('[data-age="taf"]');
+        me.textContent = ma ? "observed " + ma.txt : "";
+        me.classList.toggle("warn", !!(ma && ma.min > 90));      // plus d'1 h 30 : vieillissant
+        te.textContent = ta ? "issued " + ta.txt : "";
+        te.classList.toggle("warn", !!(ta && ta.min > 7 * 60));  // au-delà du cycle de 6 h
+      }
     }
-    function renderWx(d) {
-      wxData = d;
-      const mEl = $("#wxMetarRaw"), tEl = $("#wxTafRaw");
+    function setWxNote(icao, msg, cls) {
+      const sec = wxSection(icao); if (!sec) return;
+      const n = sec.querySelector(".wx-ap-note");
+      n.textContent = msg || "";
+      n.hidden = !msg;
+      n.className = "wx-ap-note" + (cls ? " " + cls : "");
+    }
+    function renderWxAirport(icao, d) {
+      const sec = wxSection(icao); if (!sec) return;
+      wxShown[icao] = d;
+      const mEl = sec.querySelector('[data-raw="metar"]'), tEl = sec.querySelector('[data-raw="taf"]');
       if (d.metar && d.metar.raw) { mEl.textContent = d.metar.raw; mEl.classList.remove("empty"); }
-      else { mEl.textContent = "No METAR available for " + d.icao + "."; mEl.classList.add("empty"); }
+      else { mEl.textContent = "No METAR available for " + icao + "."; mEl.classList.add("empty"); }
       if (d.taf && d.taf.raw) { tEl.textContent = tafPretty(d.taf.raw); tEl.classList.remove("empty"); }
-      else { tEl.textContent = "No TAF published for " + d.icao + "."; tEl.classList.add("empty"); }
+      else { tEl.textContent = "No TAF published for " + icao + "."; tEl.classList.add("empty"); }
       renderWxAges();
     }
-    async function refreshWx() {
-      const icao = wxIcao, my = ++wxToken;
-      setWxStatus("Requesting " + icao + "…");
-      $("#wxRefresh").disabled = true;
+    // UN terrain : succès -> rendu ; échec -> copie locale datée ; rien du
+    // tout -> l'erreur reste locale à SA section, les autres vivent leur vie.
+    async function fetchWxOne(a, my) {
       let d = null, err = null;
       try {
-        const r = await fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(icao)}`);
+        const r = await fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(a.icao)}`);
         if (!r.ok) throw new Error("HTTP " + r.status);
         d = await r.json();
       } catch (e) { err = e; }
-      if (my !== wxToken) return;               // un autre terrain a pris le relais
-      $("#wxRefresh").disabled = false;
+      if (my !== wxToken) return;               // l'écran a changé de sujet
       if (d && !d.error) {
-        wxStore(icao, d);
-        renderWx(d);
-        if (!d.metar && !d.taf) setWxStatus("No reports available for " + icao + " — this station may not publish METAR/TAF.");
-        else if (d.stale) setWxStatus("Source unreachable — showing the last copy the server holds.");
-        else setWxStatus("");
+        wxStore(a.icao, d);
+        renderWxAirport(a.icao, d);
+        if (!d.metar && !d.taf) setWxNote(a.icao, "No reports available — this station may not publish METAR/TAF.");
+        else if (d.stale) setWxNote(a.icao, "Source unreachable — showing the server's last copy.", "warn");
+        else setWxNote(a.icao, "");
       } else {
-        // hors ligne / proxy muet : la dernière copie locale, datée par ses relevés
-        const cached = wxLoad(icao);
+        // hors ligne / proxy muet : la dernière copie locale, datée
+        const cached = wxLoad(a.icao);
         if (cached) {
-          renderWx(cached);
-          const a = wxAge(cached.at);
-          setWxStatus("Offline — data fetched " + (a ? a.txt : "earlier") + ".", "err");
+          renderWxAirport(a.icao, cached);
+          const g = wxAge(cached.at);
+          setWxNote(a.icao, "Offline — copy fetched " + (g ? g.txt : "earlier") + ".", "err");
         } else {
-          setWxStatus("Weather unavailable — " + ((err && err.message) || "network error") + ".", "err");
+          setWxNote(a.icao, "Weather unavailable — " + ((err && err.message) || "network error") + ".", "err");
         }
       }
     }
-    async function openWx(icao) {
-      wxIcao = icao;
+    async function refreshWx() {
+      const my = ++wxToken;
+      setWxStatus("Requesting " + wxList.map(a => a.icao).join(" · ") + "…");
+      $("#wxRefresh").disabled = true;
+      await Promise.allSettled(wxList.map(a => fetchWxOne(a, my)));
+      if (my !== wxToken) return;
+      $("#wxRefresh").disabled = false;
+      setWxStatus("");
+    }
+    // `list` : [{icao, role?}] — un terrain seul (case ICAO, l'en-tête de page
+    // suffit) ou la route entière (sections DEP / DEST / ALT). Les sections se
+    // construisent tout de suite, chacune se remplit dès que SA réponse arrive.
+    async function openWx(list) {
+      wxList = list;
+      for (const k in wxShown) delete wxShown[k];
       $("#wxScreen").hidden = false;
-      $("#wxCode").textContent = icao;
-      const m = AIRPORTS[icao];
-      $("#wxName").textContent = m ? `${m.city} · ${m.cc}` : "";
-      $("#wxMetarRaw").textContent = "—"; $("#wxTafRaw").textContent = "—";
-      $("#wxMetarAge").textContent = ""; $("#wxTafAge").textContent = "";
-      $("#wxMetarRaw").classList.remove("empty"); $("#wxTafRaw").classList.remove("empty");
-      wxData = null;
+      const single = list.length === 1 && !list[0].role;
+      const first = AIRPORTS[list[0].icao];
+      $("#wxCode").textContent = single ? list[0].icao : list.map(a => a.icao).join(" → ");
+      $("#wxName").textContent = single && first ? `${first.city} · ${first.cc}` : "";
+      const body = $("#wxBody");
+      body.classList.toggle("single", single);
+      body.innerHTML = list.map(a => {
+        const m = AIRPORTS[a.icao];
+        const role = wxRoleLabel(a.role);
+        return `<section class="wx-ap" data-icao="${a.icao}">
+      <div class="wx-ap-head">
+        ${role ? `<span class="wx-ap-role ${a.role}">${role}</span>` : ""}
+        <span class="wx-ap-code">${a.icao}</span>
+        <span class="wx-ap-name">${m ? `${m.city} · ${m.cc}` : ""}</span>
+      </div>
+      <div class="wx-ap-note" hidden></div>
+      <div class="wx-block">
+        <h3>METAR <span class="wx-age" data-age="metar"></span></h3>
+        <pre class="wx-raw" data-raw="metar">—</pre>
+      </div>
+      <div class="wx-block">
+        <h3>TAF <span class="wx-age" data-age="taf"></span></h3>
+        <pre class="wx-raw" data-raw="taf">—</pre>
+      </div>
+    </section>`;
+      }).join("");
       if (!wxTicker) wxTicker = setInterval(renderWxAges, 30000);
       await refreshWx();
     }
     $("#wxRefresh").onclick = () => refreshWx();
     $("#wxClose").onclick = () => {
       $("#wxScreen").hidden = true;
-      wxToken++;                                 // coupe une requête en cours
+      wxToken++;                                 // coupe les requêtes en cours
       if (wxTicker) { clearInterval(wxTicker); wxTicker = null; }
     };
 
