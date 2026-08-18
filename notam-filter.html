@@ -4496,7 +4496,7 @@ body .stat .k{
           <span class="mleg wx"><i class="dot mred"></i>VIS ≤ 600 m or ceiling ≤ 300 ft</span>
           <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 700 ft</span>
           <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 700 ft</span>
-          <span class="mleg wx"><i class="dot mgrey"></i>No data — weather is fetched for the route only</span>
+          <span class="mleg wx"><i class="dot mgrey"></i>No usable data</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
@@ -14501,8 +14501,9 @@ function renderInfo(icao) {
       // --- couche mondiale des aérodromes (sous la route) ---
       // Couleur selon le curseur de vue : NOTAM = vert en cache offline
       // (savedSet), rouge non sauvegardé, aucune sévérité ; Weather = la
-      // palette de la carte de Weather Lens (gris quand la météo n'a pas été
-      // interrogée — tout ce qui n'est pas la route).
+      // palette de la carte de Weather Lens — la route par ses relevés
+      // individuels (plus frais), le reste du monde par le flux compact
+      // /api/wx/map, gris quand aucun METAR exploitable n'existe.
       // Densité progressive : au dézoom seuls les grands terrains ; les petits apparaissent au zoom.
       mapWorldHits = [];
       const GREEN = "#34d39a", RED = light ? "#e5484d" : "#ff5d6c";
@@ -14510,7 +14511,7 @@ function renderInfo(icao) {
         ? ["#9aa6b0", "#12936a", "#cf7a12", "#e5484d"]    // gris, vert, ambre, rouge — thème jour
         : ["#5e656c", "#34d39a", "#f6b23e", "#ff5d6c"];   // idem, thème nuit — valeurs de Weather Lens
       const dotCol = icao => mapMode === "wx"
-        ? WXPAL[mapWxCatOf(icao)]
+        ? WXPAL[mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0)]
         : (savedSet.has(icao) ? GREEN : RED);
       {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
@@ -14636,12 +14637,12 @@ function renderInfo(icao) {
       }
     }
     /* ---- vue weather : les couleurs de la carte de Weather Lens ----
-       Le proxy ne sert qu'un terrain à la fois (/api/wx/:icao) : on interroge
-       les terrains de la route (et celui qu'on centre), le reste du monde
-       reste gris « pas de données » — la légende le dit. VIS et plafond sont
-       relevés du METAR brut ; décodage repris du serveur Weather Lens
-       (wx-map.js), pour que la même couleur dise la même chose dans les
-       deux apps :
+       Deux sources, même palette : les terrains de la route (et celui qu'on
+       centre) par /api/wx/:icao — relevé individuel frais, consultable hors
+       ligne par sa copie locale — et le reste du monde par le flux compact
+       /api/wx/map, catégories calculées côté proxy. VIS et plafond du relevé
+       individuel sont décodés ici, repris du serveur Weather Lens (wx-map.js),
+       pour que la même couleur dise la même chose dans les deux apps :
          rouge  VIS ≤ 600 m ou plafond ≤ 300 ft
          ambre  VIS ≤ 2 000 m ou plafond ≤ 700 ft
          vert   au-dessus des deux
@@ -14733,6 +14734,28 @@ function renderInfo(icao) {
       if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
     }
 
+    // La couche mondiale en vue weather : toutes les stations en une réponse
+    // compacte du proxy (/api/wx/map), catégories calculées là-bas avec les
+    // mêmes règles que la carte de Weather Lens. Rafraîchie à l'ouverture et à
+    // la bascule, au plus une fois par minute ; sans réseau, pas de copie
+    // locale — un relevé mondial vieux de plusieurs heures colorerait faux,
+    // les points hors route restent gris et la légende reste honnête.
+    const MAP_WXWORLD_TTL = 60e3;
+    let mapWxWorld = new Map(), mapWxWorldAt = 0;   // icao -> cat (0..3)
+    async function mapWxWorldRefresh() {
+      if (Date.now() - mapWxWorldAt < MAP_WXWORLD_TTL) return;
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/wx/map`);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+        if (!d || !Array.isArray(d.stations)) return;
+        const m = new Map();
+        for (const s of d.stations) m.set(s[0], s[3]);
+        mapWxWorld = m; mapWxWorldAt = Date.now();
+        if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
+      } catch (_) { }
+    }
+
     // Le curseur : position gauche = vue weather, droite = vue notam. La
     // légende suit par la classe du conteneur, les couleurs au prochain dessin.
     function setMapMode(mode) {
@@ -14742,7 +14765,7 @@ function renderInfo(icao) {
     }
     $("#mapModeChk").onchange = e => {
       setMapMode(e.target.checked ? "notam" : "wx");
-      if (mapMode === "wx") mapWxRefresh();
+      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); }
       drawMap();
     };
     // Le bloc curseur+légende vit dans le conteneur qui écoute les clics de la
@@ -14800,6 +14823,7 @@ function renderInfo(icao) {
       mapWxTargets = routeOk ? curRoute.airports.map(a => a.icao) : [];
       if (focus && !mapWxTargets.includes(focus.icao)) mapWxTargets.push(focus.icao);
       mapWxRefresh();
+      mapWxWorldRefresh();
       // MapLibre disponible : c'est LUI qui cadre, mapView suivra au 1er rendu.
       if (GL.active && GL.map) {
         $("#routeMapGL").classList.add("gl");
