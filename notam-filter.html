@@ -4373,13 +4373,15 @@ body.light .stat.on {
 
     /* QFU : vent efficace et traversier, sous METAR et TAF. Une ligne par
        QFU, deux colonnes — le vent du METAR à gauche, le pire de la journée
-       (METAR ou TAF, rafales comprises) à droite. */
+       (METAR ou TAF, rafales comprises) à droite. Colonnes en max-content :
+       la colonne max se lit collée à celle du METAR, pas repoussée au bord. */
     .rwx {
       margin: 0;
       padding: 10px 16px 16px;
       display: grid;
-      grid-template-columns: auto 1fr 1fr;
-      gap: 4px 14px;
+      grid-template-columns: auto max-content max-content;
+      justify-content: start;
+      gap: 4px 16px;
       align-items: baseline;
       font: 500 13px/1.5 var(--mono);
       font-variant-numeric: tabular-nums
@@ -4411,6 +4413,13 @@ body.light .stat.on {
 
     .rwx .xw {
       color: var(--muted)
+    }
+
+    /* L'heure du groupe METAR/TAF qui donne la composante, collée à sa valeur. */
+    .rwx .t {
+      font-size: 9px;
+      color: var(--muted2);
+      margin-left: 2px
     }
 
     /* Une section par terrain — la page sert aussi bien un terrain seul
@@ -16971,16 +16980,24 @@ window.addEventListener("scroll", hidePop, true);
        ×10 — RUNWAYS ne porte pas de déclinaison, c'est l'approximation
        standard. Servi par la page Weather ET par le panneau de la carte. */
     const RWX_WIND = /^(\d{3}|VRB|\/{3})(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)$/;
+    /* Chaque vent porte l'heure `t` {d, h} de son groupe — heure d'observation
+       du METAR, début de validité ou de période (ddhh/ddhh, FMddhhmm) dans un
+       TAF : ces jetons précèdent toujours le vent qu'ils datent. */
     function rwxWinds(raw) {
       const out = [];
+      let t = null;
       for (const tok of String(raw || "").trim().split(/\s+/)) {
-        const m = RWX_WIND.exec(tok);
-        if (!m) continue;
+        let m;
+        if ((m = /^(\d{2})(\d{2})\d{2}Z$/.exec(tok)) ||
+            (m = /^(\d{2})(\d{2})\/\d{4}$/.exec(tok)) ||
+            (m = /^FM(\d{2})(\d{2})\d{2}$/.exec(tok))) { t = { d: +m[1], h: +m[2] }; continue; }
+        if (!(m = RWX_WIND.exec(tok))) continue;
         const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
         out.push({
           dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) : null,
           spd: Math.round(parseInt(m[2], 10) * k),
           gust: m[3] ? Math.round(parseInt(m[3], 10) * k) : null,
+          t,
         });
       }
       return out;
@@ -16996,12 +17013,21 @@ window.addEventListener("scroll", hidePop, true);
       return { head: Math.round(s * Math.cos(a)), cross: Math.abs(x), sign: x >= 0 ? 1 : -1 };
     }
     /* Une case : vent efficace (face en vert, arrière en rouge) puis
-       traversière grise, la flèche dans le sens où le vent pousse. */
-    function rwxCell(c) {
+       traversière grise, la flèche dans le sens où le vent pousse. Dans la
+       colonne max, chaque composante porte l'heure de SON groupe — le pire
+       vent efficace et la pire traversière peuvent venir de deux moments
+       différents. Le jour ne s'écrit que s'il diffère du jour de référence
+       (celui du METAR). */
+    function rwxTimeTag(t, refDay) {
+      if (!t) return "";
+      return `<span class="t">${t.d === refDay ? "" : P(t.d) + "/"}${P(t.h)}Z</span>`;
+    }
+    function rwxCell(c, refDay) {
       if (!c) return `<span class="c xw">—</span>`;
       const eff = c.head >= 0 ? `<span class="hw">↓${c.head}kt</span>`
                               : `<span class="tw">↑${-c.head}kt</span>`;
-      return `<span class="c">${eff} <span class="xw">${c.sign >= 0 ? "←" : "→"}${c.cross}kt</span></span>`;
+      return `<span class="c">${eff}${rwxTimeTag(c.tEff, refDay)} `
+           + `<span class="xw">${c.sign >= 0 ? "←" : "→"}${c.cross}kt</span>${rwxTimeTag(c.tX, refDay)}</span>`;
     }
     function wxRunwaysHtml(icao, d) {
       const s = RUNWAYS[icao];
@@ -17009,6 +17035,7 @@ window.addEventListener("scroll", hidePop, true);
       const metarW = rwxWinds(d && d.metar && d.metar.raw)[0] || null;
       const all = (metarW ? [metarW] : []).concat(rwxWinds(d && d.taf && d.taf.raw));
       if (!all.length) return "";
+      const refDay = metarW && metarW.t ? metarW.t.d : (all[0].t ? all[0].t.d : null);
       const rows = [];
       for (const r of s.split(";")) {
         for (const id of r.split(":")[0].split("/")) {
@@ -17017,14 +17044,14 @@ window.addEventListener("scroll", hidePop, true);
           const now = metarW ? rwxComp(deg, metarW, false) : null;
           /* Pire cas de la journée, composante par composante : le minimum de
              vent de face et le maximum de traversière peuvent venir de deux
-             groupes différents du TAF. */
-          let head = Infinity, cross = -1, sign = 1;
+             groupes différents du TAF — chacun garde l'heure du sien. */
+          let head = Infinity, cross = -1, sign = 1, tEff = null, tX = null;
           for (const w of all) {
             const c = rwxComp(deg, w, true);
-            if (c.head < head) head = c.head;
-            if (c.cross > cross) { cross = c.cross; sign = c.sign; }
+            if (c.head < head) { head = c.head; tEff = w.t; }
+            if (c.cross > cross) { cross = c.cross; sign = c.sign; tX = w.t; }
           }
-          rows.push({ id, now, max: { head, cross, sign } });
+          rows.push({ id, now, max: { head, cross, sign, tEff, tX } });
         }
       }
       if (!rows.length) return "";     // terrain tout hélico : rien à montrer
@@ -17032,7 +17059,7 @@ window.addEventListener("scroll", hidePop, true);
       rows.sort((a, b) => (b.now ? b.now.head : b.max.head) - (a.now ? a.now.head : a.max.head));
       return `<div class="wx-block"><h3>Runways</h3><div class="rwx">
         <span></span><span class="h">METAR</span><span class="h">Max today</span>
-        ${rows.map(r => `<span class="id">${r.id}:</span>${rwxCell(r.now)}${rwxCell(r.max)}`).join("")}
+        ${rows.map(r => `<span class="id">${r.id}:</span>${rwxCell(r.now, refDay)}${rwxCell(r.max, refDay)}`).join("")}
       </div></div>`;
     }
     function wxAge(iso) {
