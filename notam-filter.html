@@ -16851,22 +16851,28 @@ window.addEventListener("scroll", hidePop, true);
       refreshGo(); renderHomeChips(); renderHomeStars();
     }
     /* ---- la case choisie parmi les trois ----
-       On sélectionne une case (clic, tabulation), et c'est ELLE qui reçoit ce
-       qu'on tape comme ce qu'on désigne : un favori cliqué y tombe. Le liseré
-       cyan reste posé dessus pendant qu'on va chercher la puce, sinon on
-       perdrait de vue la case visée. Sans case choisie, on retombe sur
-       l'ancien réflexe : la première case libre. */
-    let homeSel = null;
+       Sans rien désigner, les puces de favori remplissent de la gauche vers la
+       droite : première case libre — départ, puis destination, puis alternate.
+       Les trois pleines, elles écrasent dans le même ordre, en repartant du
+       départ : on refait une route sans avoir à vider quoi que ce soit.
+       Pour viser une case précise, on la clique AVANT la puce : ce choix-là ne
+       vaut que pour la puce suivante, après quoi la file reprend la main. Le
+       liseré cyan reste posé sur la case visée pendant qu'on va chercher la
+       puce, sinon on la perdrait de vue. */
+    let homeSel = null;      // case désignée à la main, valable pour une puce
+    let homeMark = null;     // case sous liseré : désignée, ou tout juste remplie
+    let homeNext = 0;        // rang de la prochaine case écrasée, cases pleines
     function homeMarkSel() {
       HOME_FIELDS.forEach(id => {
-        $(id).closest(".scratch").classList.toggle("sel", id === homeSel);
+        $(id).closest(".scratch").classList.toggle("sel", id === homeMark);
       });
     }
-    function homeSelect(id) { homeSel = id; homeMarkSel(); }
+    function homeSelect(id) { homeSel = id; homeMark = id; homeMarkSel(); }
     // Case visée par un choix qui ne vient pas du clavier (puce de favori) :
-    // celle qu'on a sélectionnée, sinon la première libre, sinon le départ.
+    // celle qu'on a désignée, sinon la première libre, sinon celle dont c'est
+    // le tour dans la rotation gauche -> droite.
     function homeTargetField() {
-      return homeSel || HOME_FIELDS.find(id => !rVal(id)) || "#hFrom";
+      return homeSel || HOME_FIELDS.find(id => !rVal(id)) || HOME_FIELDS[homeNext % HOME_FIELDS.length];
     }
     HOME_FIELDS.forEach(id => {
       $(id).addEventListener("focus", () => homeSelect(id));
@@ -16885,12 +16891,18 @@ window.addEventListener("scroll", hidePop, true);
       // Une puce remplit la case CHOISIE — c'est là qu'on l'attend, et elle
       // écrase ce qui s'y trouvait : on a désigné la case exprès. Sans case
       // choisie, elle remplit la première libre — départ, puis destination,
-      // puis alternate : trois clics bâtissent la route. Toutes pleines, elle
-      // recommence par le départ. Le choix Weather / NOTAM reste à faire.
+      // puis alternate : trois clics bâtissent la route. Toutes pleines, la
+      // quatrième puce reprend au départ, la cinquième à la destination, et
+      // ainsi de suite. Le choix Weather / NOTAM reste à faire.
       wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => {
         const id = homeTargetField();
+        // La désignation manuelle est consommée : la puce suivante repart dans
+        // la file, à la case d'après celle qu'on vient de remplir.
+        homeSel = null;
+        homeMark = id;
+        homeNext = HOME_FIELDS.indexOf(id) + 1;
         homeSetField(id, b.dataset.code);
-        homeSelect(id);            // la case reste choisie : une autre puce la corrige
+        homeMarkSel();
       });
     }
     function openHome() {
