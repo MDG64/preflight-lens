@@ -16980,17 +16980,20 @@ window.addEventListener("scroll", hidePop, true);
        ×10 — RUNWAYS ne porte pas de déclinaison, c'est l'approximation
        standard. Servi par la page Weather ET par le panneau de la carte. */
     const RWX_WIND = /^(\d{3}|VRB|\/{3})(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)$/;
-    /* Chaque vent porte l'heure `t` {d, h} de son groupe — heure d'observation
-       du METAR, début de validité ou de période (ddhh/ddhh, FMddhhmm) dans un
-       TAF : ces jetons précèdent toujours le vent qu'ils datent. */
+    /* Chaque vent porte l'heure `t` {d, h, mi} de son groupe — heure
+       d'observation du METAR, début de validité ou de période (ddhh/ddhh)
+       dans un TAF, ou FMddhhmm : ces jetons précèdent toujours le vent qu'ils
+       datent. Seuls les groupes ddhh/ddhh (période TEMPO/BECMG/validité)
+       n'ont pas de minute — c'est là qu'on rajoute 00, pas sur un METAR ou un
+       FM dont la minute est réelle. */
     function rwxWinds(raw) {
       const out = [];
       let t = null;
       for (const tok of String(raw || "").trim().split(/\s+/)) {
         let m;
-        if ((m = /^(\d{2})(\d{2})\d{2}Z$/.exec(tok)) ||
-            (m = /^(\d{2})(\d{2})\/\d{4}$/.exec(tok)) ||
-            (m = /^FM(\d{2})(\d{2})\d{2}$/.exec(tok))) { t = { d: +m[1], h: +m[2] }; continue; }
+        if ((m = /^(\d{2})(\d{2})(\d{2})Z$/.exec(tok)) ||
+            (m = /^FM(\d{2})(\d{2})(\d{2})$/.exec(tok))) { t = { d: +m[1], h: +m[2], mi: +m[3] }; continue; }
+        if ((m = /^(\d{2})(\d{2})\/\d{4}$/.exec(tok))) { t = { d: +m[1], h: +m[2], mi: 0 }; continue; }
         if (!(m = RWX_WIND.exec(tok))) continue;
         const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
         out.push({
@@ -17020,7 +17023,7 @@ window.addEventListener("scroll", hidePop, true);
        (celui du METAR). */
     function rwxTimeTag(t, refDay) {
       if (!t) return "";
-      return `<span class="t">${t.d === refDay ? "" : P(t.d) + "/"}${P(t.h)}Z</span>`;
+      return `<span class="t">${t.d === refDay ? "" : P(t.d) + "/"}${P(t.h)}${P(t.mi)}Z</span>`;
     }
     function rwxCell(c, refDay) {
       if (!c) return `<span class="c xw">—</span>`;
