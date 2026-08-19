@@ -4178,13 +4178,17 @@ body.light .stat.on {
        Rapport 16/9 imposé et object-fit: cover : les trois clichés n'ont pas
        le meme cadrage d'origine, mais les trois cases doivent faire la meme
        hauteur au pixel pres. */
+    /* Vignette CARRÉE et étroite, pas un bandeau pleine largeur : le
+       pictogramme Weather est carré par nature, les deux photos s'alignent
+       sur lui — trois images de meme gabarit, quelle que soit la largeur de
+       la case qui les porte. */
     .home-card img {
-      width: 100%;
-      aspect-ratio: 16 / 9;
+      width: 128px;
+      height: 128px;
       object-fit: cover;
-      border-radius: 9px;
+      border-radius: 14px;
       display: block;
-      background: var(--panel2)
+      background: none
     }
 
     /* Pictogramme plutot que photo (Weather) : il doit tenir ENTIER dans la
@@ -4193,7 +4197,7 @@ body.light .stat.on {
        la tuile porte deja son propre fond arrondi. */
     .home-card img.hc-icon {
       object-fit: contain;
-      background: none
+      border-radius: 0
     }
 
     /* La carte tient la ligne du dessous à elle seule, mais garde la taille
@@ -4241,13 +4245,6 @@ body.light .stat.on {
       /* Une seule colonne : la carte n'a plus de moitié à occuper. */
       .home-card-wide {
         width: 100%
-      }
-
-      /* Pleine largeur, la photo en 16/9 pousserait les trois cases loin sous
-         la ligne de flottaison. Bandeau plus plat : les trois restent visibles
-         d'un coup d'oeil, comme avant les photos. */
-      .home-card img {
-        aspect-ratio: 24 / 9
       }
 
       /* Les trois cases tiennent sur UNE ligne, même à 360 px : c'est la route
@@ -4970,7 +4967,7 @@ body .stat .k{
           <span class="hc-sub">METAR · TAF</span>
         </button>
         <button class="home-card" id="homeNotamCard" aria-label="NOTAM — open the NOTAM list of the aerodromes typed">
-          <img src="./home-notam-v1.jpg" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-notam-v2.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">NOTAM</span>
           <span class="hc-sub">FILTERS</span>
         </button>
@@ -4978,7 +4975,7 @@ body .stat .k{
              sœurs : même geste, même taille de cible. Elle tient la ligne
              entière sous WEATHER et NOTAM. -->
         <button class="home-card home-card-wide" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
-          <img src="./home-map-v1.jpg" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-map-v2.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Map</span>
           <!-- Ligne vide : la case n'a pas de sous-titre à dire, mais elle
                doit faire la hauteur exacte des deux autres. -->
