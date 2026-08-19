@@ -544,6 +544,34 @@
       color: var(--green)
     }
 
+    /* Le terrain AFFICHÉ porte son rôle dans la case ICAO. Sans cette
+       étiquette, passer de la case DEST à la lecture de DEST effaçait le mot
+       « DEST » de l'écran : la file DEP -> DEST -> ALT se lisait amputée
+       d'une case, et rien ne disait plus quelle place tenait le terrain sous
+       les yeux. Même étiquette que les cases voisines, mêmes couleurs. */
+    .entry .scratch .st-role {
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .18em;
+      color: var(--muted);
+      padding: 0 0 0 12px
+    }
+
+    .entry .scratch .st-role[hidden] {
+      display: none
+    }
+
+    .entry .scratch .st-role.dep {
+      color: var(--green)
+    }
+
+    .entry .scratch .st-role.arr {
+      color: var(--cyan)
+    }
+
+    .entry .scratch .st-role.alt {
+      color: var(--amber)
+    }
+
     .st-chip.arr .l {
       color: var(--cyan)
     }
@@ -3767,7 +3795,8 @@
         gap: 5px
       }
 
-      .st-chip .l {
+      .st-chip .l,
+      .entry .scratch .st-role {
         font-size: 8px;
         letter-spacing: .10em;
         padding-left: 7px
@@ -4724,6 +4753,7 @@ body .stat .k{
       <div class="st-route" id="stRoutePre" hidden></div>
       <div class="entry">
         <div class="scratch">
+          <span class="st-role" id="icaoRole" hidden></span>
           <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
             aria-label="Aerodrome ICAO code">
         </div>
@@ -16920,6 +16950,15 @@ window.addEventListener("scroll", hidePop, true);
       // ailleurs sous le doigt.
       const i = notamRoute.findIndex(a => a.icao === currentIcao);
       const cut = i < 0 ? notamRoute.length : i;   // terrain hors route : tout devant
+      // La case ICAO prend l'étiquette du terrain qu'elle montre — DEP, DEST
+      // ou ALT — pour que la file reste complète : c'est la seule case dont
+      // le rôle changeait de nom en cours de route, et il disparaissait.
+      // Terrain hors route (ou consultation d'un terrain seul) : pas de rôle
+      // à nommer, l'étiquette s'efface.
+      const roleEl = $("#icaoRole"), lab = i < 0 ? "" : wxRoleLabel(notamRoute[i].role);
+      roleEl.textContent = lab;
+      roleEl.className = "st-role" + (lab ? " " + notamRoute[i].role : "");
+      roleEl.hidden = !lab;
       const chip = a => {
         const m = AIRPORTS[a.icao];
         const role = wxRoleLabel(a.role);
