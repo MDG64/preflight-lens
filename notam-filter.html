@@ -4352,6 +4352,15 @@ body.light .stat.on {
       .wx-refresh-lbl {
         display: none
       }
+
+      /* Seul dans son cadre, le ↻ garde la taille d'un mot alors qu'il doit
+         se lire comme un symbole : on le grossit sans toucher au bouton —
+         même hauteur, même largeur, même place dans la ligne. */
+      .wx-refresh {
+        font-size: 20px;
+        width: 44px;
+        padding: 0
+      }
     }
 
     /* Le ⌂ a rejoint les pastilles du bord droit : il n'est plus un bouton à
