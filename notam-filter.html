@@ -4185,6 +4185,15 @@ body.light .stat.on {
       background: var(--panel2)
     }
 
+    /* Pictogramme plutot que photo (Weather) : il doit tenir ENTIER dans la
+       boite, pas etre recadre. Meme gabarit 16/9 que les autres cases — c'est
+       lui qui maigrit, l'alignement des trois ne bouge pas. Fond transparent :
+       la tuile porte deja son propre fond arrondi. */
+    .home-card img.hc-icon {
+      object-fit: contain;
+      background: none
+    }
+
     /* La carte tient la ligne du dessous à elle seule, mais garde la taille
        exacte d'une des deux cases du haut : elle prend la largeur d'une
        colonne (moitié de la grille, moins la moitié de la gouttière) et se
@@ -4954,7 +4963,7 @@ body .stat .k{
 
       <div class="home-cards">
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
-          <img src="./home-wx-v1.jpg" alt="" aria-hidden="true" decoding="async">
+          <img class="hc-icon" src="./home-wx-icon-v1.png" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Weather</span>
           <span class="hc-sub">METAR · TAF</span>
         </button>
