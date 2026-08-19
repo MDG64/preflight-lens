@@ -4127,9 +4127,14 @@ body.light .stat.on {
       height: 32px
     }
 
-    /* La carte occupe la ligne entière sous les deux autres. */
+    /* La carte tient la ligne du dessous à elle seule, mais garde la taille
+       exacte d'une des deux cases du haut : elle prend la largeur d'une
+       colonne (moitié de la grille, moins la moitié de la gouttière) et se
+       centre entre les deux. */
     .home-card-wide {
-      grid-column: 1 / -1
+      grid-column: 1 / -1;
+      justify-self: center;
+      width: calc(50% - 7px)
     }
 
     .hc-name {
@@ -4162,6 +4167,11 @@ body.light .stat.on {
     @media (max-width: 420px) {
       .home-cards {
         grid-template-columns: 1fr
+      }
+
+      /* Une seule colonne : la carte n'a plus de moitié à occuper. */
+      .home-card-wide {
+        width: 100%
       }
 
       /* Les trois cases tiennent sur UNE ligne, même à 360 px : c'est la route
@@ -4849,6 +4859,9 @@ body .stat .k{
             <circle cx="24" cy="20" r="3.4" fill="var(--gold)"/>
           </svg>
           <span class="hc-name">Map</span>
+          <!-- Ligne vide : la case n'a pas de sous-titre à dire, mais elle
+               doit faire la hauteur exacte des deux autres. -->
+          <span class="hc-sub" aria-hidden="true">&nbsp;</span>
         </button>
       </div>
     </div>
