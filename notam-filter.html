@@ -3915,27 +3915,36 @@ body.light .stat.on {
       color: var(--gold)
     }
 
-    /* La case ICAO ne s'étire plus sur toute la largeur : c'est la même
-       saisie que FROM / TO / ALT — quatre lettres — et elle prend donc le
-       même gabarit qu'elles. Le conteneur passe en flex pour que la case
-       se règle sur son contenu au lieu de remplir la ligne. */
-    .home-entry {
-      display: flex
-    }
-
     .home-route {
       display: flex;
-      gap: 8px;
-      align-items: center;
+      gap: 10px;
+      align-items: flex-start;
       flex-wrap: wrap
     }
 
-    .home-entry .scratch input,
+    /* Chaque case porte son rôle AU-DESSUS d'elle, en toutes lettres. Sortir
+       l'étiquette de la boîte libère la largeur pour le code — et, contrairement
+       au `label` interne, elle reste lisible sur mobile (voir la règle
+       `.scratch label{display:none}` du bandeau étroit). */
+    .home-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px
+    }
+
+    .home-field-label {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .16em;
+      color: var(--muted);
+      text-transform: uppercase;
+      padding-left: 2px
+    }
+
     .home-route .scratch input {
-      width: 78px;
+      width: 84px;
       font-size: 18px;
       letter-spacing: .08em;
-      padding: 11px 6px 11px 4px
+      padding: 11px 6px 11px 12px
     }
 
     /* Étoile de favori DANS chaque case (ICAO, FROM, TO, ALT) : on peut
@@ -4037,6 +4046,28 @@ body.light .stat.on {
     @media (max-width: 420px) {
       .home-cards {
         grid-template-columns: 1fr
+      }
+
+      /* Les trois cases tiennent sur UNE ligne, même à 360 px : c'est la route
+         entière lue d'un balayage. Elles maigrissent au lieu de se replier —
+         un « Alternate » renvoyé seul à la ligne casse la lecture. */
+      .home-route {
+        gap: 8px
+      }
+
+      .home-route .scratch input {
+        width: 62px;
+        font-size: 16px;
+        letter-spacing: .06em;
+        padding: 11px 4px 11px 9px
+      }
+
+      .home-star {
+        padding: 13px 7px 13px 2px
+      }
+
+      .home-field-label {
+        letter-spacing: .10em
       }
     }
 
@@ -4558,37 +4589,32 @@ body .stat .k{
         </div>
       </div>
 
-      <div>
-        <div class="home-sec-label">Aerodrome</div>
-        <div class="home-entry">
+      <div class="home-route">
+        <div class="home-field">
+          <label class="home-field-label" for="hFrom">Departure</label>
           <div class="scratch rf-anchor">
-            <label for="hIcao">ICAO</label>
-            <input id="hIcao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
-              aria-label="Aerodrome ICAO code">
-            <button class="starbtn home-star" id="hIcaoStar" type="button" aria-pressed="false"
-              aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
-            <div class="suggest" id="hIcaoSuggest" hidden></div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div class="home-sec-label">Route</div>
-        <div class="home-route">
-          <div class="scratch rf-anchor"><label for="hFrom">FROM</label>
-            <input id="hFrom" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+            <input id="hFrom" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"
+              aria-label="Departure ICAO code">
             <button class="starbtn home-star" id="hFromStar" type="button" aria-pressed="false"
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hFromSuggest" hidden></div>
           </div>
-          <div class="scratch rf-anchor"><label for="hTo">TO</label>
-            <input id="hTo" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="home-field">
+          <label class="home-field-label" for="hTo">Destination</label>
+          <div class="scratch rf-anchor">
+            <input id="hTo" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"
+              aria-label="Destination ICAO code">
             <button class="starbtn home-star" id="hToStar" type="button" aria-pressed="false"
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hToSuggest" hidden></div>
           </div>
-          <div class="scratch rf-anchor"><label for="hAlt">ALT</label>
-            <input id="hAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="home-field">
+          <label class="home-field-label" for="hAlt">Alternate</label>
+          <div class="scratch rf-anchor">
+            <input id="hAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"
+              aria-label="Alternate ICAO code">
             <button class="starbtn home-star" id="hAltStar" type="button" aria-pressed="false"
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hAltSuggest" hidden></div>
@@ -4602,7 +4628,7 @@ body .stat .k{
       </div>
 
       <div class="home-cards">
-        <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodrome typed">
+        <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
           <svg viewBox="0 0 48 48" aria-hidden="true">
             <circle cx="31" cy="17" r="8" fill="var(--gold)" opacity=".9"/>
             <path d="M13 36a7 7 0 0 1 0-14 9 9 0 0 1 17.4-2.6A6.5 6.5 0 0 1 36 32.6 7 7 0 0 1 30 36Z"
@@ -4611,7 +4637,7 @@ body .stat .k{
           <span class="hc-name">Weather</span>
           <span class="hc-sub">METAR · TAF</span>
         </button>
-        <button class="home-card" id="homeNotamCard" aria-label="NOTAM — open the NOTAM list of the aerodrome typed">
+        <button class="home-card" id="homeNotamCard" aria-label="NOTAM — open the NOTAM list of the aerodromes typed">
           <svg viewBox="0 0 48 48" aria-hidden="true">
             <rect x="10" y="6" width="28" height="36" rx="4" fill="var(--panel2)"
               stroke="var(--cyan)" stroke-width="2.4"/>
@@ -16442,19 +16468,24 @@ window.addEventListener("scroll", hidePop, true);
       $("#hTo").value = $("#rTo").value;
       $("#hAlt").value = $("#rAlt").value;
     }
-    // Code de la case ICAO de l'accueil, traduit (IATA 3 lettres -> OACI)
-    // et validé : "" si rien d'exploitable.
-    function homeCode() {
-      let c = ($("#hIcao").value || "").toUpperCase().trim();
-      if (c.length === 3 && IATA_TO_ICAO[c]) c = IATA_TO_ICAO[c];
-      return /^[A-Z]{4}$/.test(c) ? c : "";
+    // Les trois cases de l'accueil, dans l'ordre de la route.
+    const HOME_FIELDS = ["#hFrom", "#hTo", "#hAlt"];
+    // Rien d'exploitable dans les cases : liseré rouge sur celle qu'on attend —
+    // le DÉPART par défaut, c'est par lui que la saisie commence.
+    function needHomeIcao(id) {
+      const f = $(id || "#hFrom");
+      const box = f.closest(".scratch");
+      box.classList.add("need");
+      f.focus();
+      setTimeout(() => box.classList.remove("need"), 1600);
     }
-    // Case ICAO exigée mais inexploitable : liseré rouge, le temps d'une saisie.
-    function needHomeIcao() {
-      const s = $("#hIcao").closest(".scratch");
-      s.classList.add("need");
-      $("#hIcao").focus();
-      setTimeout(() => s.classList.remove("need"), 1600);
+    // Écrit un code dans une case de l'accueil et propage tout ce qui en dépend :
+    // champ jumeau de la page Route, bouton GO, étoiles, puces.
+    function homeSetField(id, code) {
+      $(id).value = code;
+      const mir = RMIRROR[id.slice(1)]; if (mir) $(mir).value = code;
+      $(id).closest(".scratch").classList.remove("need");
+      refreshGo(); renderHomeChips(); renderHomeStars();
     }
     function renderHomeChips() {
       const wrap = $("#homeChips");
@@ -16462,16 +16493,16 @@ window.addEventListener("scroll", hidePop, true);
         wrap.innerHTML = `<span class="hint">No favorites yet — type an ICAO code above, then tap the ☆ star inside its box.</span>`;
         return;
       }
-      const cur = ($("#hIcao").value || "").toUpperCase();
+      const cur = HOME_FIELDS.map(rVal);
       wrap.innerHTML = favs.map(code => {
         const m = AIRPORTS[code] || { city: "" };
-        return `<button class="chip-ad ${code === cur ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
+        return `<button class="chip-ad ${cur.includes(code) ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
       }).join("");
-      // Une puce remplit la case ICAO — le choix Weather / NOTAM reste à faire.
+      // Une puce remplit la PREMIÈRE case libre — départ, puis destination, puis
+      // alternate : trois clics bâtissent la route. Toutes pleines, elle
+      // recommence par le départ. Le choix Weather / NOTAM reste à faire.
       wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => {
-        $("#hIcao").value = b.dataset.code;
-        $("#hIcao").closest(".scratch").classList.remove("need");
-        renderHomeChips(); renderHomeStars();
+        homeSetField(HOME_FIELDS.find(id => !rVal(id)) || "#hFrom", b.dataset.code);
       });
     }
     function openHome() {
@@ -16484,18 +16515,17 @@ window.addEventListener("scroll", hidePop, true);
     $("#homeBtn").onclick = openHome;
     $("#homeThemeBtn").onclick = () => $("#themeBtn").click();
 
-    /* ---- étoiles de favori DANS les cases ICAO / FROM / TO / ALT ----
-       Chaque case porte SON étoile : on peut favoriser un code dès la
-       saisie, sans passer par la page NOTAM. `#hIcao` traduit l'IATA comme
-       homeCode() ; les cases de route restent en 4 lettres strictes, comme
-       le reste de la saisie de route (voir rVal / routeInputsValid). */
+    /* ---- étoiles de favori DANS les trois cases ----
+       Chaque case porte SON étoile : on peut favoriser un code dès la saisie,
+       sans passer par la page NOTAM. Quatre lettres strictes, comme le reste de
+       la saisie de route (voir rVal / routeInputsValid) — un code IATA se saisit
+       par le menu de suggestions, qui traduit. */
     function homeFieldCode(id) {
-      if (id === "#hIcao") return homeCode();
       const v = ($(id).value || "").toUpperCase().trim();
       return /^[A-Z]{4}$/.test(v) ? v : "";
     }
     function renderHomeStars() {
-      ["#hIcao", "#hFrom", "#hTo", "#hAlt"].forEach(id => {
+      HOME_FIELDS.forEach(id => {
         const btn = $(id + "Star");
         const code = homeFieldCode(id);
         const fav = code && favs.includes(code);
@@ -16507,54 +16537,26 @@ window.addEventListener("scroll", hidePop, true);
         btn.setAttribute("aria-label", fav ? "Remove from favorites" : "Add to favorites");
       });
     }
-    $("#hIcaoStar").onclick = () => toggleFavCode(homeFieldCode("#hIcao"));
     $("#hFromStar").onclick = () => toggleFavCode(homeFieldCode("#hFrom"));
     $("#hToStar").onclick = () => toggleFavCode(homeFieldCode("#hTo"));
     $("#hAltStar").onclick = () => toggleFavCode(homeFieldCode("#hAlt"));
 
-    /* ---- case ICAO de l'accueil : mêmes suggestions que la 1re page,
-       mais un clic REMPLIT la case (le choix Weather / NOTAM reste à faire). */
-    function renderHomeSuggest(q) {
-      const box = $("#hIcaoSuggest");
-      const matches = suggestCodes(q);
-      if (!matches.length) { box.hidden = true; box.innerHTML = ""; return; }
-      box.innerHTML = matches.map(c => {
-        const m = AIRPORTS[c];
-        const star = favs.includes(c) ? `<span class="sg-star">★</span>` : "";
-        const iata = m.iata ? `<span class="sg-iata">${m.iata}</span>` : "";
-        return `<button class="sg-row" data-code="${c}">
-      <span class="sg-code">${c}</span>${iata}<span class="sg-city">${m.city} · ${m.cc}</span>${star}</button>`;
-      }).join("");
-      box.hidden = false;
-      box.querySelectorAll(".sg-row").forEach(r => r.onmousedown = e => {
-        e.preventDefault();
-        $("#hIcao").value = r.dataset.code;
-        box.hidden = true;
-        renderHomeChips(); renderHomeStars();
+    /* ---- Entrée sur une des trois cases : c'est le geste du matin, il part
+       sur les NOTAMs — comme le faisait l'ancienne case ICAO. */
+    HOME_FIELDS.forEach(id => {
+      $(id).addEventListener("keydown", e => {
+        if (e.key !== "Enter" && e.key !== "Escape") return;
+        const box = $(RSUGGEST[id.slice(1)]); if (box) box.hidden = true;
+        if (e.key === "Enter") $("#homeNotamCard").click();
       });
-    }
-    $("#hIcao").addEventListener("input", e => {
-      e.target.value = e.target.value.toUpperCase();
-      e.target.closest(".scratch").classList.remove("need");
-      renderHomeSuggest(e.target.value);
-      renderHomeChips(); renderHomeStars();
-    });
-    $("#hIcao").addEventListener("focus", e => renderHomeSuggest(e.target.value));
-    $("#hIcao").addEventListener("blur", () => setTimeout(() => { $("#hIcaoSuggest").hidden = true; }, 150));
-    $("#hIcao").addEventListener("keydown", e => {
-      if (e.key === "Enter") { $("#hIcaoSuggest").hidden = true; $("#homeNotamCard").click(); }
-      else if (e.key === "Escape") { $("#hIcaoSuggest").hidden = true; }
     });
 
     /* ---- les deux cartes ---- */
-    // NOTAM : la case AÉRODROME prime — dès qu'elle porte un code (saisi ou
-    // choisi dans les favoris), la page s'ouvre sur CE terrain, comme pour
-    // Weather. Case vide : la ROUTE prend le relais, la page s'ouvre sur le
-    // terrain de DÉPART et les codes de l'arrivée et de l'alternate s'alignent
-    // à côté du code station en onglets : un clic recharge la page sur ce
-    // terrain (voir renderStRoute). Ni case ni route : on ouvre simplement la
-    // page NOTAM (sa case attend) ; saisie partielle : on la signale plutôt
-    // que de la perdre.
+    // NOTAM : les trois cases décident. Un seul code rempli, la page s'ouvre sur
+    // CE terrain. Plusieurs, elle s'ouvre sur le DÉPART et les autres codes
+    // s'alignent à côté du code station en onglets : un clic recharge la page sur
+    // ce terrain (voir renderStRoute). Rien d'exploitable : on le signale plutôt
+    // que d'ouvrir à vide.
     let notamRoute = [];                  // [{icao, role}] — contexte route de la page NOTAM
     function renderStRoute() {
       const el = $("#stRoute");
@@ -16575,46 +16577,31 @@ window.addEventListener("scroll", hidePop, true);
       el.querySelectorAll(".st-chip").forEach(b => b.onclick = () => load(b.dataset.code));
     }
     $("#homeNotamCard").onclick = () => {
-      const c = homeCode();
-      if (!c && ($("#hIcao").value || "").trim()) { needHomeIcao(); return; }
-      if (c) {                            // la case aérodrome décide
-        notamRoute = [];
-        closeHome();
-        load(c);
-        return;
-      }
-      const route = homeRouteCodes();
-      if (route.length >= 2) {
-        notamRoute = route;
-        closeHome();
-        load(route[0].icao);              // le départ d'abord
-        return;
-      }
-      notamRoute = [];
+      const codes = homeRouteCodes();
+      if (!codes.length) { needHomeIcao(); return; }
+      notamRoute = codes.length > 1 ? codes : [];
       closeHome();
-      $("#icao").focus(); renderStRoute();
+      load(codes[0].icao);                // le départ d'abord
     };
-    // Weather : la case AÉRODROME prime — dès qu'elle porte un code, la page
-    // météo ne montre QUE ce terrain. Case vide : la ROUTE prend le relais
-    // quand elle est complète (FROM + TO valides) et la page aligne DEP, DEST
-    // et ALT. Sans code exploitable, pas d'ouverture à vide.
+    // Weather : un seul code rempli, la page météo ne montre QUE ce terrain (elle
+    // le reçoit sans rôle, c'est ce qui lui donne sa mise en page large).
+    // Plusieurs codes, elle aligne DEP, DEST et ALT. Sans code exploitable, pas
+    // d'ouverture à vide. L'accueil reste derrière (z 50 < 52).
     $("#homeWxCard").onclick = () => {
-      const c = homeCode();
-      if (!c && ($("#hIcao").value || "").trim()) { needHomeIcao(); return; }
-      if (c) { openWx([{ icao: c }]); return; }   // l'accueil reste derrière (z 50 < 52)
-      const route = homeRouteCodes();
-      if (route.length >= 2) { openWx(route); return; }
-      needHomeIcao();
+      const codes = homeRouteCodes();
+      if (!codes.length) { needHomeIcao(); return; }
+      openWx(codes.length === 1 ? [{ icao: codes[0].icao }] : codes);
     };
-    // Terrains de la route de l'accueil, validés et dédoublonnés (un ALT égal
-    // au DEST n'apparaît qu'une fois), dans l'ordre DEP -> DEST -> ALT.
+    // Terrains saisis sur l'accueil, validés et dédoublonnés (un ALT égal au DEST
+    // n'apparaît qu'une fois), dans l'ordre DEP -> DEST -> ALT. Les cases laissées
+    // vides sont simplement sautées : un départ seul est une saisie légitime.
     function homeRouteCodes() {
-      const dep = rVal("#hFrom"), arr = rVal("#hTo"), alt = rVal("#hAlt");
-      if (!/^[A-Z]{4}$/.test(dep) || !/^[A-Z]{4}$/.test(arr)) return [];
-      const list = [{ icao: dep, role: "dep" }, { icao: arr, role: "arr" }];
-      if (/^[A-Z]{4}$/.test(alt)) list.push({ icao: alt, role: "alt" });
+      const roles = { "#hFrom": "dep", "#hTo": "arr", "#hAlt": "alt" };
       const seen = new Set();
-      return list.filter(a => seen.has(a.icao) ? false : (seen.add(a.icao), true));
+      return HOME_FIELDS
+        .map(id => ({ icao: rVal(id), role: roles[id] }))
+        .filter(a => /^[A-Z]{4}$/.test(a.icao))
+        .filter(a => seen.has(a.icao) ? false : (seen.add(a.icao), true));
     }
 
     /* ---- globe de l'accueil : la carte, avec la route saisie si elle est
@@ -16630,7 +16617,8 @@ window.addEventListener("scroll", hidePop, true);
           if (r.ok) { curRoute = r; refreshMapBtn(); }
         }
       }
-      openMapOverlay(homeCode() || null);
+      const codes = homeRouteCodes();
+      openMapOverlay(codes.length ? codes[0].icao : null);
     }
     $("#homeMapBtn").onclick = openHomeMap;
 
@@ -16808,12 +16796,13 @@ window.addEventListener("scroll", hidePop, true);
     updateFavCount(); buildSeg(); setTab("fav");
     /* L'accueil est l'écran d'ouverture : plus de chargement automatique du
        premier favori — les NOTAMs ne se téléchargent qu'à la demande (carte
-       NOTAM). La case ICAO se préremplit du 1er favori (le geste du matin
-       reste : ouvrir, taper NOTAM), la route reprend la dernière enregistrée. */
-    if (favs.length) $("#hIcao").value = favs[0];
+       NOTAM). La route reprend la dernière enregistrée ; à défaut, le DÉPART se
+       prérègle sur le 1er favori (le geste du matin reste : ouvrir, taper NOTAM). */
     const bootRoute = activeRoute();
     if (bootRoute && bootRoute.dep) {
       $("#rFrom").value = bootRoute.dep; $("#rTo").value = bootRoute.arr || ""; $("#rAlt").value = bootRoute.alt || "";
+    } else if (favs.length) {
+      $("#rFrom").value = favs[0];
     }
     openHome();
   </script>
