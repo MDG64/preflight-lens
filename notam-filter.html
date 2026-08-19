@@ -3606,6 +3606,17 @@
       visibility: hidden
     }
 
+    /* Le « ? » de la carte FIR : même pastille que le retour, à l'autre bord,
+       et il reste là quand le détail s'ouvre — la règle ci-dessus ne vaut que
+       pour #firBackBtn. */
+    .fir-help-btn {
+      left: auto;
+      right: 14px;
+      font: 600 17px/1 var(--sans);
+      opacity: 1 !important;
+      visibility: visible !important
+    }
+
     /* Le bouton expand n'est visible QUE quand le détail est ouvert (desktop) */
     .fir-expand-desktop {
       display: none !important
@@ -3675,6 +3686,15 @@
       left: auto;
       right: 14px;
       font-size: 17px
+    }
+
+    /* Le mode d'emploi depuis la carte : la pastille voisine du soleil, au
+       même bord. Le « ? » est une lettre, pas un glyphe — il lui faut sa
+       propre graisse pour peser autant que ses voisines. */
+    .map-help {
+      left: auto;
+      right: 58px;
+      font: 600 17px/1 var(--sans)
     }
 
     @media (max-width:560px) {
@@ -4916,6 +4936,7 @@ body .stat .k{
         <span class="home-brand">Preflight <b>Lens</b></span>
         <div class="hdr-actions">
           <button class="help-btn theme-mirror" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+          <button class="help-btn" id="homeHelpBtn" aria-label="Information" title="Information">?</button>
         </div>
       </div>
 
@@ -4996,6 +5017,7 @@ body .stat .k{
             <button class="help-btn wx-home" id="wxHome" aria-label="Start page" title="Start page">⌂</button>
             <button class="help-btn mapword" id="wxMapBtn" aria-label="Show map" title="Map">MAP</button>
             <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+            <button class="help-btn" id="wxHelpBtn" aria-label="Information" title="Information">?</button>
           </div>
         </div>
         <!-- Le rafraîchissement suit les codes au lieu de rejoindre les
@@ -5018,6 +5040,7 @@ body .stat .k{
   <div class="map-ov" id="mapOv" hidden>
     <button class="map-x" id="mapClose" aria-label="Back">←</button>
     <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+    <button class="map-x map-help" id="mapHelpBtn" aria-label="Information" title="Information">?</button>
     <!-- Fond vectoriel MapLibre SOUS le canvas. Le canvas garde tout le dessin
          de l'app (route, terrains, capsules) et laisse passer les gestes vers
          MapLibre, qui gère glisser/zoom/inertie. Si MapLibre ne démarre pas, ce
@@ -5059,6 +5082,7 @@ body .stat .k{
   <div class="map-ov" id="firOv" hidden>
     <!-- Bouton retour: visible UNIQUEMENT en vue mondiale -->
     <button class="fir-back-btn" id="firBackBtn" aria-label="Back to app" title="Back to app">←</button>
+    <button class="fir-back-btn fir-help-btn" id="firHelpBtn" aria-label="Information" title="Information">?</button>
     <div class="fir-split" id="firSplit">
       <div class="fir-panel" id="firPanel" hidden>
         <div class="fir-header">
@@ -5174,7 +5198,9 @@ body .stat .k{
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn">?</span></div>
           <div class="hd-arr">→</div>
-          <div class="hd-desc">Open this <b>help</b> page.</div>
+          <div class="hd-desc">Open this <b>help</b> page. It is on <b>every screen</b> — start page, NOTAM, Weather,
+            the route map and the world FIR map — and always opens on top of it. <code>Esc</code> closes it and leaves
+            the screen underneath as it was.</div>
         </div>
 
         <div class="hd-sec">Favourites</div>
@@ -13876,9 +13902,21 @@ function renderInfo(icao) {
     $("#planClose").onclick = closePlanOv;
     $("#planOv").onclick = e => { if (e.target === $("#planOv")) closePlanOv(); };
     $("#helpBtn").onclick = () => { $("#helpOv").hidden = false; };
+    /* Le mode d'emploi s'atteint de partout : accueil, Weather, carte de route
+       et carte FIR. Il se pose par-dessus (z-index 70 contre 50 à 60), donc
+       l'écran d'où on l'appelle reste tel quel derrière. */
+    ["#homeHelpBtn", "#wxHelpBtn", "#mapHelpBtn", "#firHelpBtn"].forEach(sel => {
+      const b = $(sel);
+      if (b) b.onclick = () => { $("#helpOv").hidden = false; };
+    });
     $("#helpClose").onclick = () => { $("#helpOv").hidden = true; };
     $("#helpOv").onclick = e => { if (e.target === $("#helpOv")) $("#helpOv").hidden = true; };
-    document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#helpOv").hidden = true; $("#infoOv").hidden = true; if (!$("#planOv").hidden) closePlanOv(); } });
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape") return;
+      if (!$("#helpOv").hidden || !$("#infoOv").hidden) e.overlayClosed = true;
+      $("#helpOv").hidden = true; $("#infoOv").hidden = true;
+      if (!$("#planOv").hidden) { closePlanOv(); e.overlayClosed = true; }
+    });
     $("#infoBtn").onclick = () => {
       if (!currentIcao) return;
       $("#infoTitle").textContent = currentIcao + " — Airport info";
@@ -16246,6 +16284,7 @@ function renderInfo(icao) {
 
     document.addEventListener("keydown", e => {
       if (e.key === "Escape") {
+        if (e.overlayClosed) return;   // la couche du dessus s'est déjà refermée
         if (!$("#mapOv").hidden) $("#mapOv").hidden = true;
         else if (!$("#firOv").hidden) $("#firOv").hidden = true;
         else if (!$("#routeScreen").hidden) $("#routeScreen").hidden = true;
