@@ -3076,6 +3076,12 @@
       flex: 1;
       min-height: 0;
       overflow-y: auto;
+      /* Le corps EST le conteneur de défilement : c'est donc SA valeur de
+         touch-action que le navigateur consulte, pas celle du panneau
+         au-dessus. Sans ce pan-y, le doigt qui part vers la gauche est
+         confisqué par le navigateur, aucun pointermove n'arrive, et le
+         panneau ne se ferme jamais sur mobile. */
+      touch-action: pan-y;
       /* Sous la flèche ← de la carte, qui flotte par-dessus le coin
          haut-gauche du panneau : le contenu commence après elle. */
       padding: 60px 14px 16px;
