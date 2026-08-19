@@ -4142,25 +4142,27 @@ body.light .stat.on {
       gap: 14px
     }
 
+    /* Sans cadre depuis le 19 aout 2026 : plus de fond, de liseré ni d'ombre
+       autour de la case. L'image porte la cible du doigt, le texte la nomme —
+       le cadre ne disait rien de plus. La cible de clic garde sa taille, seul
+       le décor est parti. */
     .home-card {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 9px;
-      padding: 10px 10px 13px;
-      background: var(--panel);
-      border: 1px solid var(--line2);
+      padding: 0 0 4px;
+      background: none;
+      border: 0;
       border-radius: 14px;
       cursor: pointer;
       color: var(--text);
-      box-shadow: var(--elev);
-      transition: background .15s, border-color .15s, box-shadow .15s, transform .1s
+      transition: opacity .15s, transform .1s
     }
 
-    .home-card:hover {
-      background: var(--panel2);
-      border-color: var(--cyan-dim);
-      box-shadow: var(--elev-hi)
+    /* Sans fond à éclaircir, le survol se dit sur l'image elle-même. */
+    .home-card:hover img {
+      opacity: .82
     }
 
     .home-card:active {
@@ -4963,7 +4965,7 @@ body .stat .k{
 
       <div class="home-cards">
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
-          <img class="hc-icon" src="./home-wx-icon-v1.png" alt="" aria-hidden="true" decoding="async">
+          <img class="hc-icon" src="./home-wx-icon-v2.png" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Weather</span>
           <span class="hc-sub">METAR · TAF</span>
         </button>
