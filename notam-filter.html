@@ -4622,7 +4622,7 @@ body .stat .k{
             <line x1="35.7" y1="36.7" x2="40" y2="41" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
           </svg>
           <span class="hc-name">NOTAM</span>
-          <span class="hc-sub">BY FLIGHT PHASE</span>
+          <span class="hc-sub">FILTERS</span>
         </button>
       </div>
     </div>
@@ -16547,12 +16547,14 @@ window.addEventListener("scroll", hidePop, true);
     });
 
     /* ---- les deux cartes ---- */
-    // NOTAM : la ROUTE prime, comme pour Weather — la page s'ouvre sur les
-    // NOTAM du terrain de DÉPART, et les codes de l'arrivée et de l'alternate
-    // s'alignent à côté du code station en onglets : un clic recharge la page
-    // sur ce terrain (voir renderStRoute). Sans route : terrain de la case
-    // ICAO ; case vide : on ouvre simplement la page NOTAM (sa case attend) ;
-    // saisie partielle : on la signale plutôt que de la perdre.
+    // NOTAM : la case AÉRODROME prime — dès qu'elle porte un code (saisi ou
+    // choisi dans les favoris), la page s'ouvre sur CE terrain, comme pour
+    // Weather. Case vide : la ROUTE prend le relais, la page s'ouvre sur le
+    // terrain de DÉPART et les codes de l'arrivée et de l'alternate s'alignent
+    // à côté du code station en onglets : un clic recharge la page sur ce
+    // terrain (voir renderStRoute). Ni case ni route : on ouvre simplement la
+    // page NOTAM (sa case attend) ; saisie partielle : on la signale plutôt
+    // que de la perdre.
     let notamRoute = [];                  // [{icao, role}] — contexte route de la page NOTAM
     function renderStRoute() {
       const el = $("#stRoute");
@@ -16573,6 +16575,14 @@ window.addEventListener("scroll", hidePop, true);
       el.querySelectorAll(".st-chip").forEach(b => b.onclick = () => load(b.dataset.code));
     }
     $("#homeNotamCard").onclick = () => {
+      const c = homeCode();
+      if (!c && ($("#hIcao").value || "").trim()) { needHomeIcao(); return; }
+      if (c) {                            // la case aérodrome décide
+        notamRoute = [];
+        closeHome();
+        load(c);
+        return;
+      }
       const route = homeRouteCodes();
       if (route.length >= 2) {
         notamRoute = route;
@@ -16581,21 +16591,20 @@ window.addEventListener("scroll", hidePop, true);
         return;
       }
       notamRoute = [];
+      closeHome();
+      $("#icao").focus(); renderStRoute();
+    };
+    // Weather : la case AÉRODROME prime — dès qu'elle porte un code, la page
+    // météo ne montre QUE ce terrain. Case vide : la ROUTE prend le relais
+    // quand elle est complète (FROM + TO valides) et la page aligne DEP, DEST
+    // et ALT. Sans code exploitable, pas d'ouverture à vide.
+    $("#homeWxCard").onclick = () => {
       const c = homeCode();
       if (!c && ($("#hIcao").value || "").trim()) { needHomeIcao(); return; }
-      closeHome();
-      if (c) load(c);
-      else { $("#icao").focus(); renderStRoute(); }
-    };
-    // Weather : la ROUTE prime quand elle est complète (FROM + TO valides) —
-    // la page météo aligne alors DEP, DEST et ALT. Sinon, terrain de la case
-    // ICAO ; et sans code exploitable, pas d'ouverture à vide.
-    $("#homeWxCard").onclick = () => {
+      if (c) { openWx([{ icao: c }]); return; }   // l'accueil reste derrière (z 50 < 52)
       const route = homeRouteCodes();
       if (route.length >= 2) { openWx(route); return; }
-      const c = homeCode();
-      if (!c) { needHomeIcao(); return; }
-      openWx([{ icao: c }]);      // l'accueil reste derrière (z 50 < 52)
+      needHomeIcao();
     };
     // Terrains de la route de l'accueil, validés et dédoublonnés (un ALT égal
     // au DEST n'apparaît qu'une fois), dans l'ordre DEP -> DEST -> ALT.
