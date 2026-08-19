@@ -15115,21 +15115,18 @@ function renderInfo(icao) {
       el.classList.add("open");
       try {
         const r = await fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(icao)}`);
-        if (!r.ok) throw new Error("HTTP " + r.status);
+        if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { status: r.status });
         const d = await r.json();
         if (seq !== mapWxSideSeq) return;      // panneau refermé ou rouvert ailleurs
-        if (!d || d.error) throw new Error((d && d.error) || "empty");
+        if (!d || d.error) throw Object.assign(new Error((d && d.error) || "empty"), { svc: true });
         wxStore(icao, d);                      // même copie locale que la page Weather
         render(d, d.stale ? "Source unreachable — showing the server's last copy." : "", "warn");
       } catch (e) {
         if (seq !== mapWxSideSeq) return;
         const cached = wxLoad(icao);
-        if (cached) {
-          const g = wxAge(cached.at);
-          render(cached, "Offline — copy fetched " + (g ? g.txt : "earlier") + ".", "err");
-        } else {
-          body.innerHTML = head + `<div class="mapwx-note err">Weather unavailable — ${esc(e.message || "network error")}.</div>`;
-        }
+        const note = wxFailNote(e, cached);
+        if (cached) render(cached, note, "err");
+        else body.innerHTML = head + `<div class="mapwx-note err">${esc(note)}</div>`;
       }
     }
     (() => { // fermeture du panneau : croix, et glissement du doigt vers la gauche
@@ -16673,6 +16670,27 @@ window.addEventListener("scroll", hidePop, true);
         te.classList.toggle("warn", !!(ta && ta.min > 7 * 60));  // au-delà du cycle de 6 h
       }
     }
+    /* La note d'échec météo. Trois pannes très différentes se cachaient
+       derrière le mot « Offline » : l'appareil sans réseau, le proxy
+       injoignable, et le proxy joignable qui répond une erreur parce que sa
+       source amont (AWC) est tombée. Les confondre accuse la connexion du
+       pilote alors que le plus souvent c'est le service qui flanche — et
+       envoie chercher un problème là où il n'y en a pas. `err.status` porte
+       le code HTTP quand une réponse est bien arrivée ; `err.svc` marque une
+       réponse arrivée mais porteuse d'une erreur. */
+    function wxFailCause(err) {
+      if (!netOnline()) return "Offline";
+      if (err && err.status) return "Weather service unavailable (HTTP " + err.status + ")";
+      if (err && err.svc) return "Weather service unavailable";
+      return "Weather service unreachable";
+    }
+    // La date de la copie fait partie de la phrase : c'est elle qui dit ce que
+    // vaut ce qu'on regarde. Sans copie, la note le dit aussi — un écran vide
+    // sans explication laisserait croire à un terrain sans relevé.
+    function wxFailNote(err, cached) {
+      const g = cached ? wxAge(cached.at) : null;
+      return wxFailCause(err) + (g ? " — copy fetched " + g.txt + "." : " — no local copy for this station.");
+    }
     function setWxNote(icao, msg, cls) {
       const sec = wxSection(icao); if (!sec) return;
       const n = sec.querySelector(".wx-ap-note");
@@ -16696,9 +16714,10 @@ window.addEventListener("scroll", hidePop, true);
       let d = null, err = null;
       try {
         const r = await fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(a.icao)}`);
-        if (!r.ok) throw new Error("HTTP " + r.status);
+        if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { status: r.status });
         d = await r.json();
       } catch (e) { err = e; }
+      if (!err && d && d.error) err = Object.assign(new Error(String(d.error)), { svc: true });
       if (my !== wxToken) return;               // l'écran a changé de sujet
       if (d && !d.error) {
         wxStore(a.icao, d);
@@ -16707,15 +16726,10 @@ window.addEventListener("scroll", hidePop, true);
         else if (d.stale) setWxNote(a.icao, "Source unreachable — showing the server's last copy.", "warn");
         else setWxNote(a.icao, "");
       } else {
-        // hors ligne / proxy muet : la dernière copie locale, datée
+        // échec : la dernière copie locale, datée, et la cause nommée
         const cached = wxLoad(a.icao);
-        if (cached) {
-          renderWxAirport(a.icao, cached);
-          const g = wxAge(cached.at);
-          setWxNote(a.icao, "Offline — copy fetched " + (g ? g.txt : "earlier") + ".", "err");
-        } else {
-          setWxNote(a.icao, "Weather unavailable — " + ((err && err.message) || "network error") + ".", "err");
-        }
+        if (cached) renderWxAirport(a.icao, cached);
+        setWxNote(a.icao, wxFailNote(err, cached), "err");
       }
     }
     async function refreshWx() {
