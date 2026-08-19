@@ -583,6 +583,28 @@
       padding-left: 12px
     }
 
+    /* Mais ce code-là se change : la page météo est souvent le seul écran
+       ouvert, et repasser par l'accueil pour lire un autre terrain est un
+       détour. La case devient donc la saisie — même cadre, même typo, même
+       place : rien ne bouge, seul le curseur dit qu'on peut écrire. Elle
+       s'allume au survol et au focus, comme une case cliquable. */
+    .st-chip.plain input.v {
+      width: calc(4ch + .9em);
+      background: none;
+      border: 0;
+      outline: none;
+      text-transform: uppercase;
+      cursor: text
+    }
+
+    .st-chip.plain:has(input):hover {
+      border-color: var(--cyan)
+    }
+
+    .st-chip.plain:focus-within {
+      border-color: var(--cyan)
+    }
+
     .st-chip:focus-visible {
       outline: 2px solid var(--cyan);
       outline-offset: 2px
@@ -17165,7 +17187,12 @@ window.addEventListener("scroll", hidePop, true);
       box.hidden = !list.length;
       box.innerHTML = list.map(a => {
         const m = AIRPORTS[a.icao], role = wxRoleLabel(a.role);
-        if (!role) return `<span class="st-chip plain"${m ? ` title="${m.city}"` : ""}><span class="v">${a.icao}</span></span>`;
+        /* Terrain seul : sa case se saisit. Elle porte le code du moment ;
+           quatre lettres et Entrée (ou simplement sortir de la case) ouvrent
+           l'autre terrain sans repasser par l'accueil. */
+        if (!role) return `<span class="st-chip plain"${m ? ` title="${m.city}"` : ""}
+      ><input class="v" id="wxIcao" value="${a.icao}" maxlength="4" size="4" autocomplete="off"
+        spellcheck="false" aria-label="Aerodrome ICAO code — type another to change station"></span>`;
         return `<button class="st-chip ${a.role}" data-code="${a.icao}"
       title="${role}${m ? " — " + m.city : ""}" aria-label="Go to the ${role} report, ${a.icao}"
       ><span class="l">${role}</span><span class="v">${a.icao}</span></button>`;
@@ -17174,6 +17201,27 @@ window.addEventListener("scroll", hidePop, true);
         const sec = wxSection(b.dataset.code);
         if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
       });
+      const inp = box.querySelector("#wxIcao");
+      if (inp) {
+        const cur = list[0].icao;
+        /* Un code incomplet ou inconnu du format ne vaut pas une requête : on
+           remet celui qui est à l'écran plutôt que d'ouvrir une page vide. Le
+           même code que celui affiché ne rouvre rien non plus — c'est
+           Refresh qui recharge, pas la case. */
+        const go = () => {
+          const v = inp.value.trim().toUpperCase();
+          if (!/^[A-Z]{4}$/.test(v)) { inp.value = cur; return; }
+          if (v === cur) { inp.value = cur; return; }
+          openWx([{ icao: v }]);
+        };
+        inp.oninput = () => { inp.value = inp.value.toUpperCase().replace(/[^A-Z]/g, ""); };
+        inp.onkeydown = e => {
+          if (e.key === "Enter") { e.preventDefault(); go(); }
+          else if (e.key === "Escape") { inp.value = cur; inp.blur(); }
+        };
+        inp.onblur = go;
+        inp.onfocus = () => inp.select();
+      }
     }
     // Les âges vivent à l'écran : re-rendus seuls, toutes les 30 s, sans réseau.
     function renderWxAges() {
