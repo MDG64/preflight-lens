@@ -14948,6 +14948,20 @@ function renderInfo(icao) {
       const dotCol = icao => mapMode === "wx"
         ? WXPAL[mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0)]
         : (savedSet.has(icao) ? GREEN : RED);
+      // Priorité de dessin quand deux terrains se recouvrent — au dézoom, deux
+      // voisins tombent sur le même pixel et c'est le dernier tracé qui reste
+      // visible. Sans ordre, c'est l'ordre du fichier qui tranche : Minorque
+      // montrait le gris de LESL par-dessus le vert de LEMH, autrement dit un
+      // « pas de données » là où il y a une observation. On classe donc du
+      // moins parlant au plus parlant, et on dessine dans cet ordre :
+      //   vue Weather  gris < vert < ambre < rouge — la sévérité l'emporte,
+      //                et un point sans METAR ne masque jamais un point coloré ;
+      //   vue NOTAM    téléchargé < non téléchargé — même règle que le tri des
+      //                étiquettes de Weather Lens : c'est le manque qui doit
+      //                rester visible.
+      const dotPri = icao => mapMode === "wx"
+        ? (mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0))
+        : (savedSet.has(icao) ? 0 : 1);
       // Rayon commun à tous les points de la carte. En vue Weather il vaut
       // pour tout le monde, route comprise : la carte météo ne dit qu'une
       // chose, la couleur du dernier relevé, et un point plus gros ferait
@@ -14979,11 +14993,20 @@ function renderInfo(icao) {
         ctx.textBaseline = "middle";
         ctx.font = "600 " + (11 * dpr) + "px 'IBM Plex Mono',monospace";
         ctx.lineJoin = "round";
+        // Deux passes : on retient d'abord les terrains visibles, on les trie
+        // par priorité croissante, puis on dessine — le plus parlant en
+        // dernier, donc au-dessus. Le tri est stable, deux terrains de même
+        // couleur gardent leur ordre d'origine.
+        const world = [];
         for (const a of GEO_ARR) {
           if (a.rwy < minRwy) continue;
           if (routeSet.has(a.icao)) continue;          // déjà rendu par la couche route
           const x = X(a.lon), y = Y(a.lat);
           if (x < -30 * dpr || x > cv.width + 30 * dpr || y < -20 * dpr || y > cv.height + 20 * dpr) continue;
+          world.push({ a, x, y });
+        }
+        world.sort((p, q) => dotPri(p.a.icao) - dotPri(q.a.icao));
+        for (const { a, x, y } of world) {
           const saved = savedSet.has(a.icao);
           ctx.fillStyle = dotCol(a.icao);
           ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
