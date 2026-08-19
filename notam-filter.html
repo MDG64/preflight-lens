@@ -4096,8 +4096,8 @@ body.light .stat.on {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 10px;
-      padding: 24px 12px 20px;
+      gap: 7px;
+      padding: 15px 10px 13px;
       background: var(--panel);
       border: 1px solid var(--line2);
       border-radius: 14px;
@@ -4123,8 +4123,13 @@ body.light .stat.on {
     }
 
     .home-card svg {
-      width: 46px;
-      height: 46px
+      width: 32px;
+      height: 32px
+    }
+
+    /* La carte occupe la ligne entière sous les deux autres. */
+    .home-card-wide {
+      grid-column: 1 / -1
     }
 
     .hc-name {
@@ -4765,7 +4770,6 @@ body .stat .k{
         <span class="beacon" aria-hidden="true"></span>
         <span class="home-brand">Preflight <b>Lens</b></span>
         <div class="hdr-actions">
-          <button class="help-btn mapword" id="homeMapBtn" aria-label="Show map" title="Map">MAP</button>
           <button class="help-btn theme-mirror" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         </div>
       </div>
@@ -4830,6 +4834,21 @@ body .stat .k{
           </svg>
           <span class="hc-name">NOTAM</span>
           <span class="hc-sub">FILTERS</span>
+        </button>
+        <!-- La carte a quitté le bandeau du haut pour rejoindre ses deux
+             sœurs : même geste, même taille de cible. Elle tient la ligne
+             entière sous WEATHER et NOTAM. -->
+        <button class="home-card home-card-wide" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M6 12 18 8v28L6 40Z" fill="var(--panel2)" stroke="var(--cyan)"
+              stroke-width="2.4" stroke-linejoin="round"/>
+            <path d="M18 8 30 12v28L18 36Z" fill="none" stroke="var(--cyan)"
+              stroke-width="2.4" stroke-linejoin="round"/>
+            <path d="M30 12 42 8v28L30 40Z" fill="var(--panel2)" stroke="var(--cyan)"
+              stroke-width="2.4" stroke-linejoin="round"/>
+            <circle cx="24" cy="20" r="3.4" fill="var(--gold)"/>
+          </svg>
+          <span class="hc-name">Map</span>
         </button>
       </div>
     </div>
@@ -16850,7 +16869,7 @@ window.addEventListener("scroll", hidePop, true);
       const codes = homeRouteCodes();
       openMapOverlay(codes.length ? codes[0].icao : null);
     }
-    $("#homeMapBtn").onclick = openHomeMap;
+    $("#homeMapCard").onclick = openHomeMap;
 
     /* ============================================================
        PAGE WEATHER — METAR + TAF du terrain, via le proxy (l'AWC
