@@ -4371,6 +4371,19 @@ body.light .stat.on {
       color: var(--muted2)
     }
 
+    /* Le groupe sévère garde son encre : seul le fond change, assez peu pour
+       rester lisible sur les deux thèmes. */
+    .wx-raw mark.wx-sev {
+      background: color-mix(in srgb, var(--amber) 16%, transparent);
+      color: inherit;
+      border-radius: 3px;
+      padding: 1px 2px
+    }
+
+    .wx-raw mark.wx-sev.red {
+      background: color-mix(in srgb, var(--red) 16%, transparent)
+    }
+
     /* QFU : vent efficace et traversier, sous METAR et TAF. Une ligne par
        QFU, deux colonnes — le vent du METAR à gauche, le pire de la journée
        (METAR ou TAF, rafales comprises) à droite. Colonnes en max-content :
@@ -15423,9 +15436,9 @@ function renderInfo(icao) {
         body.innerHTML = head
           + (note ? `<div class="mapwx-note${noteCls ? " " + noteCls : ""}">${esc(note)}</div>` : "")
           + `<div class="wx-block"><h3>METAR <span class="wx-age${ma && ma.min > 90 ? " warn" : ""}">${ma ? "observed " + ma.txt : ""}</span></h3>`
-          + `<pre class="wx-raw${d && d.metar && d.metar.raw ? "" : " empty"}">${d && d.metar && d.metar.raw ? esc(d.metar.raw) : "No METAR available for " + icao + "."}</pre></div>`
+          + `<pre class="wx-raw${d && d.metar && d.metar.raw ? "" : " empty"}">${d && d.metar && d.metar.raw ? wxSevHtml(d.metar.raw) : "No METAR available for " + icao + "."}</pre></div>`
           + `<div class="wx-block"><h3>TAF <span class="wx-age${ta && ta.min > 7 * 60 ? " warn" : ""}">${ta ? "issued " + ta.txt : ""}</span></h3>`
-          + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? esc(tafPretty(d.taf.raw)) : "No TAF published for " + icao + "."}</pre></div>`
+          + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? wxSevHtml(tafPretty(d.taf.raw)) : "No TAF published for " + icao + "."}</pre></div>`
           + wxRunwaysHtml(icao, d)
           + `<p class="mapwx-hint">Swipe left to close.</p>`;
       };
@@ -16974,6 +16987,67 @@ window.addEventListener("scroll", hidePop, true);
     function tafPretty(raw) {
       return (raw || "").replace(/\s+(FM\d{6}|BECMG|(?:PROB\d{2}\s+)?TEMPO|PROB\d{2}|RMK)\b/g, "\n  $1");
     }
+    /* ---- Surbrillance des valeurs sévères, dans le METAR comme dans le TAF ----
+       Lecture brute du message, sans minima ni terrain : l'œil doit accrocher
+       tout de suite le groupe qui sort de l'ordinaire, dans la base comme dans
+       un TEMPO. Vent (rafale comprise) ≥ 30 kt ambre, ≥ 40 kt rouge ;
+       visibilité et RVR < 2000 m ambre, < 600 m rouge ; plafond — BKN, OVC,
+       VV — < 700 ft ambre, < 300 ft rouge. Teinte légère : elle signale, elle
+       ne juge pas. */
+    const WXS_WIND = { amber: 30, red: 40 };     // kt, dès ce seuil
+    const WXS_VIS  = { amber: 2000, red: 600 };  // m, en dessous — RVR comprise
+    const WXS_CEIL = { amber: 700, red: 300 };   // ft, en dessous
+    const WXS_CLOUD = /^(FEW|SCT|BKN|OVC|VV)(\d{3}|\/{3})(CB|TCU|\/{3})?$/;  // AUTO : type nuageux « /// »
+    const WXS_RVR   = /^R\d{2}[LCR]?\/[PM]?(\d{3,4})(?:V[PM]?(\d{3,4}))?(FT)?\/?[UDN]?$/;
+
+    const wxSevOf = (v, sc, below) =>
+      (below ? v < sc.red : v >= sc.red) ? "red"
+      : (below ? v < sc.amber : v >= sc.amber) ? "amber" : null;
+
+    /* `prev` sert au seul cas où une valeur tient en deux jetons : la
+       visibilité anglo-saxonne « 1 1/2SM ». */
+    function wxSevTok(tok, prev) {
+      let m;
+      if ((m = RWX_WIND.exec(tok))) {
+        const k = u => m[4] === "MPS" ? Math.round(u * 1.94384)
+                     : m[4] === "KMH" ? Math.round(u * 0.539957) : u;
+        return wxSevOf(Math.max(k(+m[2]), m[3] ? k(+m[3]) : 0), WXS_WIND, false);
+      }
+      if ((m = WXS_RVR.exec(tok))) {
+        const toM = v => m[3] === "FT" ? Math.round(v * 0.3048) : v;
+        const vals = [toM(+m[1])].concat(m[2] ? [toM(+m[2])] : []);
+        return wxSevOf(Math.min.apply(null, vals), WXS_VIS, true);
+      }
+      if ((m = WXS_CLOUD.exec(tok)))
+        return ["BKN", "OVC", "VV"].includes(m[1]) && m[2] !== "///"
+          ? wxSevOf(+m[2] * 100, WXS_CEIL, true) : null;
+      if (/^\d{4}$/.test(tok) || /^\d{4}(N|NE|E|SE|S|SW|W|NW)$/.test(tok))
+        return wxSevOf(parseInt(tok, 10), WXS_VIS, true);
+      if ((m = /^(?:M|P)?(\d{1,2})?(?:(\d)\/(\d))?SM$/.exec(tok)) && (m[1] || m[2])) {
+        /* « 1 1/2SM » : l'entier est resté dans le jeton précédent. */
+        let sm = (m[1] ? +m[1] : 0) + (m[2] ? +m[2] / +m[3] : 0);
+        if (m[2] && !m[1] && /^\d{1,2}$/.test(prev || "")) sm += +prev;
+        return wxSevOf(Math.round(sm * 1609.344), WXS_VIS, true);
+      }
+      return null;
+    }
+
+    /* Rend le texte échappé, les groupes sévères enveloppés d'un <mark>. Les
+       espaces et retours à la ligne du texte plié sont conservés tels quels. */
+    function wxSevHtml(text) {
+      let html = "", prev = null, stop = false;
+      for (const part of String(text || "").split(/(\s+)/)) {
+        if (!part) continue;
+        if (/^\s+$/.test(part) || stop) { html += esc(part); continue; }
+        const tok = part.toUpperCase();
+        if (tok === "RMK") { stop = true; html += esc(part); continue; }
+        const cls = wxSevTok(tok, prev);
+        html += cls ? `<mark class="wx-sev ${cls}">${esc(part)}</mark>` : esc(part);
+        prev = tok;
+      }
+      return html;
+    }
+
     /* ---- QFU : vent efficace et traversier, sous METAR et TAF ----
        Le vent se lit au jeton dans les textes bruts (un groupe dans le METAR,
        un par évolution dans le TAF) ; les caps de QFU sortent du désignateur
@@ -17147,9 +17221,9 @@ window.addEventListener("scroll", hidePop, true);
       const sec = wxSection(icao); if (!sec) return;
       wxShown[icao] = d;
       const mEl = sec.querySelector('[data-raw="metar"]'), tEl = sec.querySelector('[data-raw="taf"]');
-      if (d.metar && d.metar.raw) { mEl.textContent = d.metar.raw; mEl.classList.remove("empty"); }
+      if (d.metar && d.metar.raw) { mEl.innerHTML = wxSevHtml(d.metar.raw); mEl.classList.remove("empty"); }
       else { mEl.textContent = "No METAR available for " + icao + "."; mEl.classList.add("empty"); }
-      if (d.taf && d.taf.raw) { tEl.textContent = tafPretty(d.taf.raw); tEl.classList.remove("empty"); }
+      if (d.taf && d.taf.raw) { tEl.innerHTML = wxSevHtml(tafPretty(d.taf.raw)); tEl.classList.remove("empty"); }
       else { tEl.textContent = "No TAF published for " + icao + "."; tEl.classList.add("empty"); }
       sec.querySelector("[data-rwx]").innerHTML = wxRunwaysHtml(icao, d);
       renderWxAges();
