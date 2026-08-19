@@ -291,11 +291,17 @@
       font-size: 19px
     }
 
-    /* Le ⌂ ouvre la barre : rien à sa gauche que la balise, donc pas de marge
-       d'écart à reprendre. Sur téléphone il quitte cette place pour rejoindre
-       le globe (voir le bloc 560px). */
+    /* Le ⌂ a rejoint les pastilles du bord droit, comme sur la page Weather :
+       les deux départs — l'accueil et la carte — se rangent ensemble, et la
+       gauche de la barre est rendue aux cases de route. Le ⌂ est un caractère,
+       pas un émoji : il ne remplit pas son cadratin, d'où une police plus
+       grande pour un dessin de même hauteur à l'œil. */
     #homeBtn {
       margin-left: 0
+    }
+
+    .hdr-actions #homeBtn {
+      font-size: 22px
     }
 
     .brand-title {
@@ -4497,7 +4503,6 @@ body .stat .k{
   <header>
     <div class="bar">
       <span class="beacon" aria-hidden="true"></span>
-      <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page">⌂</button>
       <div class="st-route" id="stRoutePre" hidden></div>
       <div class="entry">
         <div class="scratch">
@@ -4510,6 +4515,7 @@ body .stat .k{
       <button class="routebtn" id="routeBtn">Route</button>
       <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
       <div class="hdr-actions">
+        <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page">⌂</button>
         <button class="stationmapbtn" id="stationMapBtn" aria-label="Show route map"
           title="Show route map">🌐</button>
         <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
