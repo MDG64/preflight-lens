@@ -138,6 +138,10 @@
       background: #e9eff3;
     }
 
+    body.light .st-chip.plain:hover {
+      background: #f4f7f9;
+    }
+
     body.light .btn {
       background: #eef4f7;
     }
@@ -555,6 +559,22 @@
 
     .st-chip:hover {
       border-color: var(--cyan)
+    }
+
+    /* Case sans rôle — le terrain seul de la page météo. Rien à étiqueter, donc
+       le code reprend à gauche la marge que tenait l'étiquette ; et rien à
+       cliquer, puisque la seule section de la page est déjà sous les yeux :
+       elle ne s'allume pas au survol. */
+    .st-chip.plain {
+      cursor: default
+    }
+
+    .st-chip.plain:hover {
+      border-color: var(--line2)
+    }
+
+    .st-chip.plain .v {
+      padding-left: 12px
     }
 
     .st-chip:focus-visible {
@@ -4087,10 +4107,19 @@ body.light .stat.on {
       padding: 14px 20px 44px
     }
 
-    .wx-code {
-      font: 600 15px/1 var(--mono);
-      letter-spacing: .14em;
-      color: var(--cyan)
+    /* Les codes de l'en-tête météo sont les cases du bandeau NOTAM, à
+       l'identique (.st-chip) : la route se lit de la même façon d'une page à
+       l'autre. Elles ne s'étirent pas sur la hauteur de la ligne ici — il n'y a
+       pas de case de saisie à côté sur qui se caler. */
+    .wx-route {
+      align-self: center
+    }
+
+    /* Sur une route, le nom du terrain se tait — il y en a trois à nommer, et
+       chaque section le fait sous son propre code. Vide, il ne doit pas garder
+       sa place : les cases sont larges, l'en-tête a besoin de ces pixels. */
+    .wx-name:empty {
+      display: none
     }
 
     .wx-name {
@@ -4662,7 +4691,7 @@ body .stat .k{
       <div class="route-head">
         <button class="btn wx-home" id="wxHome" aria-label="Start page" title="Start page">⌂ Home</button>
         <span class="route-title">Weather</span>
-        <span class="wx-code" id="wxCode">—</span>
+        <div class="st-route wx-route" id="wxCodes" hidden></div>
         <span class="wx-name" id="wxName"></span>
         <button class="btn wx-refresh" id="wxRefresh">↻ Refresh</button>
         <div class="hdr-actions">
@@ -16667,6 +16696,26 @@ window.addEventListener("scroll", hidePop, true);
     }
     function wxRoleLabel(role) { return role === "dep" ? "DEP" : role === "arr" ? "DEST" : role === "alt" ? "ALT" : ""; }
     function wxSection(icao) { return document.querySelector(`#wxBody .wx-ap[data-icao="${icao}"]`); }
+    /* Les codes de la route en en-tête, dans les cases du bandeau NOTAM — même
+       cadre, même étiquette de rôle colorée, même typo. Un clic descend à la
+       section du terrain : sur cette page les relevés sont déjà chargés, la
+       case sert donc à y aller, pas à recharger. Terrain seul (aucun rôle) :
+       il n'a ni étiquette ni section à part, sa case reste muette. */
+    function renderWxCodes(list) {
+      const box = $("#wxCodes");
+      box.hidden = !list.length;
+      box.innerHTML = list.map(a => {
+        const m = AIRPORTS[a.icao], role = wxRoleLabel(a.role);
+        if (!role) return `<span class="st-chip plain"${m ? ` title="${m.city}"` : ""}><span class="v">${a.icao}</span></span>`;
+        return `<button class="st-chip ${a.role}" data-code="${a.icao}"
+      title="${role}${m ? " — " + m.city : ""}" aria-label="Go to the ${role} report, ${a.icao}"
+      ><span class="l">${role}</span><span class="v">${a.icao}</span></button>`;
+      }).join("");
+      box.querySelectorAll(".st-chip[data-code]").forEach(b => b.onclick = () => {
+        const sec = wxSection(b.dataset.code);
+        if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
     // Les âges vivent à l'écran : re-rendus seuls, toutes les 30 s, sans réseau.
     function renderWxAges() {
       for (const a of wxList) {
@@ -16761,10 +16810,6 @@ window.addEventListener("scroll", hidePop, true);
       $("#wxScreen").hidden = false;
       const single = list.length === 1 && !list[0].role;
       const first = AIRPORTS[list[0].icao];
-      // Les codes se suivent dans l'ordre de la route : la succession se lit
-      // toute seule, une flèche entre chacun n'apprend rien de plus. Espaces
-      // insécables, pour que l'écart tienne là où le HTML replierait.
-      $("#wxCode").textContent = single ? list[0].icao : list.map(a => a.icao).join("  ");
       $("#wxName").textContent = single && first ? `${first.city} · ${first.cc}` : "";
       const body = $("#wxBody");
       body.classList.toggle("single", single);
@@ -16788,6 +16833,8 @@ window.addEventListener("scroll", hidePop, true);
       </div>
     </section>`;
       }).join("");
+      // Après les sections : chaque case cherche la sienne au clic.
+      renderWxCodes(list);
       if (!wxTicker) wxTicker = setInterval(renderWxAges, 30000);
       await refreshWx();
     }
