@@ -492,8 +492,9 @@
        reprennent la FORME exacte — même cadre, même étiquette, même typo —
        pour que les cases se lisent comme un seul jeu ; seule la couleur de
        l'étiquette distingue le rôle (celles de la page Weather). Le terrain
-       affiché n'a pas sa case ici : son code est déjà dans la case ICAO,
-       juste à gauche. */
+       affiché n'a pas sa case ici : son code est déjà dans la case ICAO, qui
+       tient sa place dans la file DEP -> DEST -> ALT (voir renderStRoute :
+       les cases d'avant vont dans #stRoutePre, celles d'après dans #stRoute). */
     .st-route {
       display: flex;
       align-items: stretch;
@@ -4454,6 +4455,7 @@ body .stat .k{
     <div class="bar">
       <span class="beacon" aria-hidden="true"></span>
       <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page">⌂</button>
+      <div class="st-route" id="stRoutePre" hidden></div>
       <div class="entry">
         <div class="scratch">
           <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
@@ -16559,22 +16561,34 @@ window.addEventListener("scroll", hidePop, true);
     // que d'ouvrir à vide.
     let notamRoute = [];                  // [{icao, role}] — contexte route de la page NOTAM
     function renderStRoute() {
-      const el = $("#stRoute");
+      const pre = $("#stRoutePre"), el = $("#stRoute");
       // Le terrain affiché ne prend pas de case : son code est déjà dans la
-      // case ICAO à gauche, le répéter n'apprendrait rien. Une route de trois
-      // terrains montre donc toujours trois cases en tout, quelle que soit
-      // celle qu'on regarde.
-      const others = notamRoute.filter(a => a.icao !== currentIcao);
-      if (!others.length) { el.hidden = true; el.innerHTML = ""; return; }
-      el.hidden = false;
-      el.innerHTML = others.map(a => {
+      // case ICAO, le répéter n'apprendrait rien. Une route de trois terrains
+      // montre donc toujours trois cases en tout, quelle que soit celle qu'on
+      // regarde.
+      //
+      // Mais l'ordre DEP -> DEST -> ALT ne bouge pas d'un terrain à l'autre :
+      // la case ICAO se range à SA place dans la file plutôt que de rester
+      // collée à gauche. Les cases qui précèdent le terrain affiché passent
+      // donc avant elle (#stRoutePre), les suivantes après (#stRoute). Chaque
+      // terrain garde ainsi sa colonne : un clic sur DEST n'envoie pas ALT
+      // ailleurs sous le doigt.
+      const i = notamRoute.findIndex(a => a.icao === currentIcao);
+      const cut = i < 0 ? notamRoute.length : i;   // terrain hors route : tout devant
+      const chip = a => {
         const m = AIRPORTS[a.icao];
         const role = wxRoleLabel(a.role);
         return `<button class="st-chip ${a.role}" data-code="${a.icao}"
       title="${role}${m ? " — " + m.city : ""}" aria-label="Show NOTAMs for ${a.icao}"
       ><span class="l">${role}</span><span class="v">${a.icao}</span></button>`;
-      }).join("");
-      el.querySelectorAll(".st-chip").forEach(b => b.onclick = () => load(b.dataset.code));
+      };
+      const fill = (box, list) => {
+        box.hidden = !list.length;
+        box.innerHTML = list.map(chip).join("");
+        box.querySelectorAll(".st-chip").forEach(b => b.onclick = () => load(b.dataset.code));
+      };
+      fill(pre, notamRoute.slice(0, cut));
+      fill(el, notamRoute.slice(cut).filter(a => a.icao !== currentIcao));
     }
     $("#homeNotamCard").onclick = () => {
       const codes = homeRouteCodes();
