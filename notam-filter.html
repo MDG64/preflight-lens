@@ -4063,6 +4063,14 @@ body.light .stat.on {
       color: var(--muted)
     }
 
+    /* Case CHOISIE parmi les trois : elle garde le liseré cyan du focus même
+       quand le doigt part ailleurs — sur une puce de favori, par exemple. Sans
+       ça, on ne saurait plus dans quelle case le prochain code va tomber. */
+    .home-route .scratch.sel {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
+    }
+
     /* Case ICAO exigée mais vide : liseré rouge le temps d'une saisie. */
     .scratch.need {
       border-color: var(--red);
@@ -16566,6 +16574,27 @@ window.addEventListener("scroll", hidePop, true);
       $(id).closest(".scratch").classList.remove("need");
       refreshGo(); renderHomeChips(); renderHomeStars();
     }
+    /* ---- la case choisie parmi les trois ----
+       On sélectionne une case (clic, tabulation), et c'est ELLE qui reçoit ce
+       qu'on tape comme ce qu'on désigne : un favori cliqué y tombe. Le liseré
+       cyan reste posé dessus pendant qu'on va chercher la puce, sinon on
+       perdrait de vue la case visée. Sans case choisie, on retombe sur
+       l'ancien réflexe : la première case libre. */
+    let homeSel = null;
+    function homeMarkSel() {
+      HOME_FIELDS.forEach(id => {
+        $(id).closest(".scratch").classList.toggle("sel", id === homeSel);
+      });
+    }
+    function homeSelect(id) { homeSel = id; homeMarkSel(); }
+    // Case visée par un choix qui ne vient pas du clavier (puce de favori) :
+    // celle qu'on a sélectionnée, sinon la première libre, sinon le départ.
+    function homeTargetField() {
+      return homeSel || HOME_FIELDS.find(id => !rVal(id)) || "#hFrom";
+    }
+    HOME_FIELDS.forEach(id => {
+      $(id).addEventListener("focus", () => homeSelect(id));
+    });
     function renderHomeChips() {
       const wrap = $("#homeChips");
       if (!favs.length) {
@@ -16577,17 +16606,22 @@ window.addEventListener("scroll", hidePop, true);
         const m = AIRPORTS[code] || { city: "" };
         return `<button class="chip-ad ${cur.includes(code) ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
       }).join("");
-      // Une puce remplit la PREMIÈRE case libre — départ, puis destination, puis
-      // alternate : trois clics bâtissent la route. Toutes pleines, elle
+      // Une puce remplit la case CHOISIE — c'est là qu'on l'attend, et elle
+      // écrase ce qui s'y trouvait : on a désigné la case exprès. Sans case
+      // choisie, elle remplit la première libre — départ, puis destination,
+      // puis alternate : trois clics bâtissent la route. Toutes pleines, elle
       // recommence par le départ. Le choix Weather / NOTAM reste à faire.
       wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => {
-        homeSetField(HOME_FIELDS.find(id => !rVal(id)) || "#hFrom", b.dataset.code);
+        const id = homeTargetField();
+        homeSetField(id, b.dataset.code);
+        homeSelect(id);            // la case reste choisie : une autre puce la corrige
       });
     }
     function openHome() {
       syncRouteMirror();          // l'écran Route a pu changer la route entre-temps
       renderHomeChips();          // ... et la liste des favoris a pu bouger
       renderHomeStars();
+      homeMarkSel();
       $("#homeScreen").hidden = false;
     }
     function closeHome() { $("#homeScreen").hidden = true; }
