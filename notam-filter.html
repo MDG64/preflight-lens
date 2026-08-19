@@ -553,7 +553,15 @@
       font: 500 9px/1 var(--mono);
       letter-spacing: .18em;
       color: var(--muted);
-      padding: 0 0 0 12px
+      padding: 0 0 0 12px;
+      /* L'étiquette tient la MÊME largeur d'un rôle à l'autre — celle du plus
+         long, DEST — sinon la case ICAO enflait et maigrissait sous le doigt
+         à chaque changement de terrain, et le bandeau bougeait avec elle. En
+         police à chasse fixe, quatre lettres font 4ch plus leur interlettrage
+         (compté aussi après la dernière). */
+      flex: none;
+      box-sizing: content-box;
+      width: calc(4ch + 4 * .18em)
     }
 
     .entry .scratch .st-role[hidden] {
@@ -3800,6 +3808,10 @@
         font-size: 8px;
         letter-spacing: .10em;
         padding-left: 7px
+      }
+
+      .entry .scratch .st-role {
+        width: calc(4ch + 4 * .10em)
       }
 
       .st-chip .v {
