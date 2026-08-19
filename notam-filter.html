@@ -4355,9 +4355,10 @@ body.light .stat.on {
 
       /* Seul dans son cadre, le ↻ garde la taille d'un mot alors qu'il doit
          se lire comme un symbole : on le grossit sans toucher au bouton —
-         même hauteur, même largeur, même place dans la ligne. */
+         même hauteur, même largeur, même place dans la ligne. 24 px est le
+         plafond : au-delà le dessin déborde des 32 px de hauteur utile. */
       .wx-refresh {
-        font-size: 20px;
+        font-size: 24px;
         width: 44px;
         padding: 0
       }
