@@ -14130,11 +14130,30 @@ function renderInfo(icao) {
       return BORDERS;
     }
     function rVal(id) { return ($(id).value || "").toUpperCase().trim(); }
+    /* ---- un code, une seule case ----
+       Le même terrain deux fois dans la route ne veut rien dire : le corridor
+       se replierait sur lui-même et la page NOTAM afficherait deux fois le même
+       onglet. On ne refuse pas le geste pour autant — le DERNIER gagne, et le
+       code quitte la case où il se trouvait. C'est valable d'où qu'il vienne :
+       frappe, menu de suggestions ou puce de favori, sur l'accueil comme sur la
+       page Route (les deux écrans sont jumelés, on vide donc les deux). */
+    const ROUTE_ROLES = ["From", "To", "Alt"];
+    function routeRole(fieldId) { return String(fieldId).replace(/^#?[rh]/, ""); }
+    function dropRouteDuplicate(fieldId, code) {
+      if (!/^[A-Z]{4}$/.test(code || "")) return;
+      const role = routeRole(fieldId);
+      ROUTE_ROLES.filter(r => r !== role).forEach(r => {
+        ["#r", "#h"].forEach(prefix => {
+          const el = $(prefix + r);
+          if (el && (el.value || "").toUpperCase().trim() === code) el.value = "";
+        });
+      });
+    }
     function routeInputsValid() {
       if (!GEO) return false;
       const f = rVal("#rFrom"), t = rVal("#rTo"), a = rVal("#rAlt");
       return /^[A-Z]{4}$/.test(f) && /^[A-Z]{4}$/.test(t) && GEO[f] && GEO[t] && f !== t
-        && (!a || (/^[A-Z]{4}$/.test(a) && GEO[a]));
+        && (!a || (/^[A-Z]{4}$/.test(a) && GEO[a] && a !== f && a !== t));
     }
     function refreshGo() {
       const ok = routeInputsValid() && !preloading;
@@ -14346,8 +14365,10 @@ function renderInfo(icao) {
         e.preventDefault();
         $("#" + fieldId).value = r.dataset.code;
         const mir = RMIRROR[fieldId]; if (mir) $(mir).value = r.dataset.code;
+        dropRouteDuplicate(fieldId, r.dataset.code);   // un code, une seule case
         box.hidden = true;
         refreshGo();
+        renderHomeChips();          // les puces suivent : la case libérée redevient cible
         renderHomeStars();          // le code choisi peut être FROM/TO/ALT lui-même ou son miroir
         const nx = RNEXT[fieldId];
         if (nx) $(nx).focus(); else $("#" + fieldId).blur();
@@ -14357,9 +14378,13 @@ function renderInfo(icao) {
       $(id).addEventListener("input", e => {
         e.target.value = e.target.value.toUpperCase();
         const mir = RMIRROR[e.target.id]; if (mir) $(mir).value = e.target.value;
+        // Le code n'est complet qu'à la quatrième lettre : avant, deux cases
+        // peuvent se ressembler sans être encore le même terrain.
+        dropRouteDuplicate(e.target.id, e.target.value);
         refreshGo();
         renderRouteSuggest(e.target.id, e.target.value);
         renderHomeStars();
+        renderHomeChips();
         const nx = RNEXT[e.target.id];
         if (nx && e.target.value.length >= 4) $(nx).focus();
       });
@@ -16847,6 +16872,7 @@ window.addEventListener("scroll", hidePop, true);
     function homeSetField(id, code) {
       $(id).value = code;
       const mir = RMIRROR[id.slice(1)]; if (mir) $(mir).value = code;
+      dropRouteDuplicate(id, code);   // un code, une seule case : il quitte l'ancienne
       $(id).closest(".scratch").classList.remove("need");
       refreshGo(); renderHomeChips(); renderHomeStars();
     }
@@ -16895,6 +16921,17 @@ window.addEventListener("scroll", hidePop, true);
       // quatrième puce reprend au départ, la cinquième à la destination, et
       // ainsi de suite. Le choix Weather / NOTAM reste à faire.
       wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => {
+        // Terrain déjà dans la route, sans case désignée : rien à faire. Le
+        // reposer plus loin le RETIRERAIT de sa case actuelle (un code, une
+        // seule case) — on se contente de montrer où il est. Pour le déplacer
+        // vraiment, on clique d'abord la case d'arrivée.
+        const held = HOME_FIELDS.find(f => rVal(f) === b.dataset.code);
+        if (held && !homeSel) {
+          homeMark = held;
+          homeNext = HOME_FIELDS.indexOf(held) + 1;
+          homeMarkSel();
+          return;
+        }
         const id = homeTargetField();
         // La désignation manuelle est consommée : la puce suivante repart dans
         // la file, à la case d'après celle qu'on vient de remplir.
