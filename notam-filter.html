@@ -4374,14 +4374,14 @@ body.light .stat.on {
     /* Le groupe sévère garde son encre : seul le fond change, assez peu pour
        rester lisible sur les deux thèmes. */
     .wx-raw mark.wx-sev {
-      background: color-mix(in srgb, var(--amber) 16%, transparent);
-      color: inherit;
+      background: color-mix(in srgb, var(--amber) 32%, transparent);
+      color: inherit;   /* l'encre ne bouge pas : le fond seul signale */
       border-radius: 3px;
       padding: 1px 2px
     }
 
     .wx-raw mark.wx-sev.red {
-      background: color-mix(in srgb, var(--red) 16%, transparent)
+      background: color-mix(in srgb, var(--red) 32%, transparent)
     }
 
     /* QFU : vent efficace et traversier, sous METAR et TAF. Une ligne par
