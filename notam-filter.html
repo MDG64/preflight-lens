@@ -4151,6 +4151,17 @@ body.light .stat.on {
       font-size: 22px
     }
 
+    /* Le ⌂ n'a pas de jambage : son dessin s'arrête sur la ligne de base, et
+       le centrage vertical, qui aligne la boîte de la fonte et non l'encre,
+       le laisse un peu bas dans le rond. Un padding bas le remonte de la
+       moitié de l'écart — en em, pour que la correction suive la taille du
+       glyphe d'un écran à l'autre. La pastille ne bouge pas : elle a une
+       hauteur fixe en border-box. */
+    #homeBtn,
+    .wx-home.help-btn {
+      padding: 0 6px .185em
+    }
+
     /* Sur écran large, le ⌂ dessine plus grand DANS son rond : la pastille ne
        bouge pas, seul le trait du symbole grossit pour se lire d'aussi loin
        que le globe voisin. Au doigt le rond fait 29 px — le glyphe y garde sa
