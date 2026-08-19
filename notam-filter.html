@@ -3617,9 +3617,8 @@
         font-size: 12px
       }
 
-      /* Le header reste sur une seule ligne : à 360px de large la barre
-         demande ~342px, marge conservée. Le globe suit ses deux voisins du
-         groupe — il est du même jeu, il rétrécit avec eux. */
+      /* Le globe suit ses deux voisins du groupe — il est du même jeu, il
+         rétrécit avec eux. */
       .hdr-actions .help-btn,
       .hdr-actions .stationmapbtn {
         width: 29px;
@@ -3627,31 +3626,66 @@
         font-size: 14px
       }
 
-      /* Au doigt, le ⌂ va se prendre avec les autres pastilles, contre le bord
-         droit, juste à gauche du globe : deux départs — l'accueil et la carte —
-         rangés ensemble, et la gauche de la barre rendue aux cases ICAO.
-         `display:contents` efface la boîte du groupe pour que ses trois
-         boutons et le ⌂ deviennent des éléments de la barre : on peut alors
-         les ordonner entre eux. Le `margin-left:auto` du groupe passe au ⌂,
-         qui ouvre désormais la série et la pousse à droite. */
+      /* Au doigt, les pastilles montent sur une rangée à elles, au-dessus des
+         cases ICAO : dès qu'une route est saisie, DEST et ALT prenaient toute
+         la largeur et repoussaient les symboles sur une deuxième ligne mal
+         rangée. On assume donc les deux lignes — d'abord les départs et les
+         réglages (⌂, globe, FIR, jour/nuit, ?), ensuite les codes — au lieu de
+         les laisser se bousculer. `display:contents` efface la boîte du groupe
+         pour que ses boutons deviennent des éléments de la barre : on peut
+         alors les ordonner avec le FIR et les codes, et glisser entre les deux
+         séries une cale de pleine largeur qui force le retour à la ligne. */
       .hdr-actions {
         display: contents
       }
 
       #homeBtn {
-        order: 8;
-        margin-left: auto
+        order: 1;
+        margin-left: 0
       }
 
       .hdr-actions .stationmapbtn {
-        order: 9
+        order: 2
+      }
+
+      #firMapBtn {
+        order: 3
       }
 
       #themeBtn {
-        order: 10
+        order: 4
       }
 
       #helpBtn {
+        order: 5
+      }
+
+      /* La cale : hauteur nulle, largeur pleine — elle ne se voit pas, elle
+         coupe seulement la ligne. */
+      .bar::after {
+        content: "";
+        order: 6;
+        flex: 0 0 100%;
+        height: 0
+      }
+
+      .bar > .beacon {
+        order: 7
+      }
+
+      #stRoutePre {
+        order: 8
+      }
+
+      .entry {
+        order: 9
+      }
+
+      #stRoute {
+        order: 10
+      }
+
+      #routeBtn {
         order: 11
       }
 
