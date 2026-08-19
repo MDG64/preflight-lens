@@ -4183,8 +4183,9 @@ body.light .stat.on {
        sur lui — trois images de meme gabarit, quelle que soit la largeur de
        la case qui les porte. */
     .home-card img {
-      width: 128px;
-      height: 128px;
+      width: min(128px, 100%);
+      aspect-ratio: 1;
+      height: auto;
       object-fit: cover;
       border-radius: 14px;
       display: block;
@@ -4238,14 +4239,10 @@ body.light .stat.on {
     }
 
     @media (max-width: 420px) {
-      .home-cards {
-        grid-template-columns: 1fr
-      }
-
-      /* Une seule colonne : la carte n'a plus de moitié à occuper. */
-      .home-card-wide {
-        width: 100%
-      }
+      /* La grille reste à DEUX colonnes sur téléphone : Weather et NOTAM côte
+         à côte, Map centrée dessous à la même largeur. Depuis que l'image est
+         une vignette de 128 px, une seule colonne étirait les cases sans rien
+         montrer de plus, et repoussait Map sous la ligne de flottaison. */
 
       /* Les trois cases tiennent sur UNE ligne, même à 360 px : c'est la route
          entière lue d'un balayage. Elles maigrissent au lieu de se replier —
