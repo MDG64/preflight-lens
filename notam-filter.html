@@ -4371,6 +4371,48 @@ body.light .stat.on {
       color: var(--muted2)
     }
 
+    /* QFU : vent efficace et traversier, sous METAR et TAF. Une ligne par
+       QFU, deux colonnes — le vent du METAR à gauche, le pire de la journée
+       (METAR ou TAF, rafales comprises) à droite. */
+    .rwx {
+      margin: 0;
+      padding: 10px 16px 16px;
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      gap: 4px 14px;
+      align-items: baseline;
+      font: 500 13px/1.5 var(--mono);
+      font-variant-numeric: tabular-nums
+    }
+
+    .rwx .h {
+      font: 600 9px/1 var(--mono);
+      letter-spacing: .12em;
+      color: var(--muted2);
+      text-transform: uppercase
+    }
+
+    .rwx .id {
+      font-weight: 700;
+      color: var(--text)
+    }
+
+    .rwx .c {
+      white-space: nowrap
+    }
+
+    .rwx .hw {
+      color: var(--green)
+    }
+
+    .rwx .tw {
+      color: var(--red)
+    }
+
+    .rwx .xw {
+      color: var(--muted)
+    }
+
     /* Une section par terrain — la page sert aussi bien un terrain seul
        (l'en-tête de section se tait, celui de la page suffit) qu'une route
        entière : DEP, DEST et ALT à la suite. */
@@ -15375,6 +15417,7 @@ function renderInfo(icao) {
           + `<pre class="wx-raw${d && d.metar && d.metar.raw ? "" : " empty"}">${d && d.metar && d.metar.raw ? esc(d.metar.raw) : "No METAR available for " + icao + "."}</pre></div>`
           + `<div class="wx-block"><h3>TAF <span class="wx-age${ta && ta.min > 7 * 60 ? " warn" : ""}">${ta ? "issued " + ta.txt : ""}</span></h3>`
           + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? esc(tafPretty(d.taf.raw)) : "No TAF published for " + icao + "."}</pre></div>`
+          + wxRunwaysHtml(icao, d)
           + `<p class="mapwx-hint">Swipe left to close.</p>`;
       };
       el.hidden = false;
@@ -16922,6 +16965,74 @@ window.addEventListener("scroll", hidePop, true);
     function tafPretty(raw) {
       return (raw || "").replace(/\s+(FM\d{6}|BECMG|(?:PROB\d{2}\s+)?TEMPO|PROB\d{2}|RMK)\b/g, "\n  $1");
     }
+    /* ---- QFU : vent efficace et traversier, sous METAR et TAF ----
+       Le vent se lit au jeton dans les textes bruts (un groupe dans le METAR,
+       un par évolution dans le TAF) ; les caps de QFU sortent du désignateur
+       ×10 — RUNWAYS ne porte pas de déclinaison, c'est l'approximation
+       standard. Servi par la page Weather ET par le panneau de la carte. */
+    const RWX_WIND = /^(\d{3}|VRB|\/{3})(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)$/;
+    function rwxWinds(raw) {
+      const out = [];
+      for (const tok of String(raw || "").trim().split(/\s+/)) {
+        const m = RWX_WIND.exec(tok);
+        if (!m) continue;
+        const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
+        out.push({
+          dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) : null,
+          spd: Math.round(parseInt(m[2], 10) * k),
+          gust: m[3] ? Math.round(parseInt(m[3], 10) * k) : null,
+        });
+      }
+      return out;
+    }
+    /* Composantes d'un vent sur un QFU. Sans direction (VRB, ///), pire cas :
+       tout le vent en arrière ET tout le vent en travers. `useGust` : la
+       colonne « pire de la journée » juge sur la rafale quand il y en a une. */
+    function rwxComp(deg, w, useGust) {
+      const s = useGust && w.gust != null ? Math.max(w.spd, w.gust) : w.spd;
+      if (w.dir == null) return { head: -s, cross: s, sign: 1 };
+      const a = (w.dir - deg) * Math.PI / 180;
+      const x = Math.round(s * Math.sin(a));
+      return { head: Math.round(s * Math.cos(a)), cross: Math.abs(x), sign: x >= 0 ? 1 : -1 };
+    }
+    /* Une case : vent efficace (face en vert, arrière en rouge) puis
+       traversière grise, la flèche dans le sens où le vent pousse. */
+    function rwxCell(c) {
+      if (!c) return `<span class="c xw">—</span>`;
+      const eff = c.head >= 0 ? `<span class="hw">↓${c.head}kt</span>`
+                              : `<span class="tw">↑${-c.head}kt</span>`;
+      return `<span class="c">${eff} <span class="xw">${c.sign >= 0 ? "←" : "→"}${c.cross}kt</span></span>`;
+    }
+    function wxRunwaysHtml(icao, d) {
+      const s = RUNWAYS[icao];
+      if (!s) return "";
+      const metarW = rwxWinds(d && d.metar && d.metar.raw)[0] || null;
+      const all = (metarW ? [metarW] : []).concat(rwxWinds(d && d.taf && d.taf.raw));
+      if (!all.length) return "";
+      const rows = [];
+      for (const r of s.split(";")) {
+        for (const id of r.split(":")[0].split("/")) {
+          const deg = (parseInt(id, 10) % 36 || 36) * 10;
+          const now = metarW ? rwxComp(deg, metarW, false) : null;
+          /* Pire cas de la journée, composante par composante : le minimum de
+             vent de face et le maximum de traversière peuvent venir de deux
+             groupes différents du TAF. */
+          let head = Infinity, cross = -1, sign = 1;
+          for (const w of all) {
+            const c = rwxComp(deg, w, true);
+            if (c.head < head) head = c.head;
+            if (c.cross > cross) { cross = c.cross; sign = c.sign; }
+          }
+          rows.push({ id, now, max: { head, cross, sign } });
+        }
+      }
+      // Le meilleur QFU en tête : le plus de vent de face au METAR d'abord.
+      rows.sort((a, b) => (b.now ? b.now.head : b.max.head) - (a.now ? a.now.head : a.max.head));
+      return `<div class="wx-block"><h3>Runways</h3><div class="rwx">
+        <span></span><span class="h">METAR</span><span class="h">Max today</span>
+        ${rows.map(r => `<span class="id">${r.id}:</span>${rwxCell(r.now)}${rwxCell(r.max)}`).join("")}
+      </div></div>`;
+    }
     function wxAge(iso) {
       const t = Date.parse(iso || "");
       if (isNaN(t)) return null;
@@ -17008,6 +17119,7 @@ window.addEventListener("scroll", hidePop, true);
       else { mEl.textContent = "No METAR available for " + icao + "."; mEl.classList.add("empty"); }
       if (d.taf && d.taf.raw) { tEl.textContent = tafPretty(d.taf.raw); tEl.classList.remove("empty"); }
       else { tEl.textContent = "No TAF published for " + icao + "."; tEl.classList.add("empty"); }
+      sec.querySelector("[data-rwx]").innerHTML = wxRunwaysHtml(icao, d);
       renderWxAges();
     }
     // UN terrain : succès -> rendu ; échec -> copie locale datée ; rien du
@@ -17073,6 +17185,7 @@ window.addEventListener("scroll", hidePop, true);
         <h3>TAF <span class="wx-age" data-age="taf"></span></h3>
         <pre class="wx-raw" data-raw="taf">—</pre>
       </div>
+      <div data-rwx></div>
     </section>`;
       }).join("");
       // Après les sections : chaque case cherche la sienne au clic.
