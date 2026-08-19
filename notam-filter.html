@@ -17012,6 +17012,7 @@ window.addEventListener("scroll", hidePop, true);
       const rows = [];
       for (const r of s.split(";")) {
         for (const id of r.split(":")[0].split("/")) {
+          if (/H$/.test(id)) continue;   // piste hélico (08H/26H) : pas de vent à juger ici
           const deg = (parseInt(id, 10) % 36 || 36) * 10;
           const now = metarW ? rwxComp(deg, metarW, false) : null;
           /* Pire cas de la journée, composante par composante : le minimum de
@@ -17026,6 +17027,7 @@ window.addEventListener("scroll", hidePop, true);
           rows.push({ id, now, max: { head, cross, sign } });
         }
       }
+      if (!rows.length) return "";     // terrain tout hélico : rien à montrer
       // Le meilleur QFU en tête : le plus de vent de face au METAR d'abord.
       rows.sort((a, b) => (b.now ? b.now.head : b.max.head) - (a.now ? a.now.head : a.max.head));
       return `<div class="wx-block"><h3>Runways</h3><div class="rwx">
