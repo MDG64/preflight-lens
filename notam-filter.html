@@ -4137,17 +4137,31 @@ body.light .stat.on {
       flex: none
     }
 
-    .wx-home {
-      min-height: 34px;
-      flex: none
+    /* Le ⌂ a rejoint les pastilles du bord droit : il n'est plus un bouton à
+       texte mais un symbole, du même jeu que le globe et le jour/nuit. Le ⌂
+       est un caractère, pas un émoji — il ne remplit pas son cadratin, d'où
+       une police plus grande pour un dessin de même hauteur à l'œil. */
+    .wx-home.help-btn {
+      font-size: 22px
     }
 
-    /* L'en-tête météo porte désormais Home, le titre, les codes, Refresh et
-       les deux actions globales : il doit pouvoir passer à la ligne sur un
-       téléphone plutôt que de déborder. Le nom du terrain, seul élément
-       élastique, cède la place en premier. */
+    /* L'en-tête météo tient sur deux lignes : le titre et les actions en
+       haut, les cases ICAO en dessous. Elles y sont seules — larges, elles
+       débordaient de la ligne du titre sur un téléphone. */
+    .wx-head {
+      margin-bottom: 14px
+    }
+
     .wx-inner .route-head {
-      flex-wrap: wrap
+      flex-wrap: wrap;
+      margin-bottom: 10px
+    }
+
+    /* Le groupe d'actions de l'en-tête météo garde sa boîte au doigt : la
+       règle `display:contents` du bloc 560px vise la barre du haut, dont les
+       boutons ont des `order` propres. Ici il n'y a rien à réordonner. */
+    .wx-inner .hdr-actions {
+      display: flex
     }
 
     .wx-status {
@@ -4688,16 +4702,21 @@ body .stat .k{
   <!-- ================= PAGE WEATHER (METAR / TAF) ================= -->
   <div class="wx-screen" id="wxScreen" hidden>
     <div class="wx-inner">
-      <div class="route-head">
-        <button class="btn wx-home" id="wxHome" aria-label="Start page" title="Start page">⌂ Home</button>
-        <span class="route-title">Weather</span>
-        <div class="st-route wx-route" id="wxCodes" hidden></div>
-        <span class="wx-name" id="wxName"></span>
-        <button class="btn wx-refresh" id="wxRefresh">↻ Refresh</button>
-        <div class="hdr-actions">
-          <button class="help-btn" id="wxMapBtn" aria-label="Show map" title="Map">🌐</button>
-          <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+      <!-- Deux lignes : le titre et les actions en haut, les cases ICAO en
+           dessous. Le ⌂ a rejoint les pastilles du bord droit et n'y garde
+           que son symbole — son nom est dans l'infobulle. -->
+      <div class="wx-head">
+        <div class="route-head">
+          <span class="route-title">Weather</span>
+          <span class="wx-name" id="wxName"></span>
+          <div class="hdr-actions">
+            <button class="btn wx-refresh" id="wxRefresh">↻ Refresh</button>
+            <button class="help-btn wx-home" id="wxHome" aria-label="Start page" title="Start page">⌂</button>
+            <button class="help-btn" id="wxMapBtn" aria-label="Show map" title="Map">🌐</button>
+            <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+          </div>
         </div>
+        <div class="st-route wx-route" id="wxCodes" hidden></div>
       </div>
       <div class="wx-status" id="wxStatus"></div>
       <div id="wxBody"></div>
