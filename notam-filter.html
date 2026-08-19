@@ -663,6 +663,31 @@
       background: #e3edf1
     }
 
+    /* La carte s'annonce par le mot MAP et non plus par un globe : trois
+       lettres se lisent partout de la même façon, là où l'émoji changeait de
+       dessin d'un système à l'autre. Les pastilles gardent leur rond et leur
+       diamètre — seule la fonte rétrécit pour que le mot y tienne. Le
+       `grayscale`, écrit pour éteindre les couleurs de l'émoji, n'a plus
+       d'objet sur du texte : c'est l'opacité qui dit désormais l'état inerte. */
+    button.mapword,
+    .hdr-actions button.mapword,
+    span.mapword {
+      font: 700 11px/1 var(--sans);
+      letter-spacing: .06em;
+      color: var(--cyan);
+      filter: none
+    }
+
+    @media (max-width:560px) {
+
+      button.mapword,
+      .hdr-actions button.mapword,
+      span.mapword {
+        font-size: 9px
+      }
+    }
+
+
     .starbtn:hover {
       transform: scale(1.12);
       color: var(--gold)
@@ -4604,8 +4629,8 @@ body .stat .k{
       <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
       <div class="hdr-actions">
         <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page">⌂</button>
-        <button class="stationmapbtn" id="stationMapBtn" aria-label="Show route map"
-          title="Show route map">🌐</button>
+        <button class="stationmapbtn mapword" id="stationMapBtn" aria-label="Show route map"
+          title="Show route map">MAP</button>
         <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
       </div>
@@ -4683,7 +4708,7 @@ body .stat .k{
             <input id="rFrom" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
             <div class="suggest" id="rFromSuggest" hidden></div>
           </div>
-          <button class="earthbtn" id="mapBtn" aria-label="Show map" title="Map" disabled>🌐</button>
+          <button class="earthbtn mapword" id="mapBtn" aria-label="Show map" title="Map" disabled>MAP</button>
         </div>
         <button class="swapbtn" id="swapBtn" aria-label="Swap FROM and TO" title="Swap FROM / TO">⇄</button>
         <div class="route-col route-grid">
@@ -4723,7 +4748,7 @@ body .stat .k{
         <span class="beacon" aria-hidden="true"></span>
         <span class="home-brand">Preflight <b>Lens</b></span>
         <div class="hdr-actions">
-          <button class="help-btn" id="homeMapBtn" aria-label="Show map" title="Map">🌐</button>
+          <button class="help-btn mapword" id="homeMapBtn" aria-label="Show map" title="Map">MAP</button>
           <button class="help-btn theme-mirror" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         </div>
       </div>
@@ -4805,7 +4830,7 @@ body .stat .k{
           <span class="wx-name" id="wxName"></span>
           <div class="hdr-actions">
             <button class="help-btn wx-home" id="wxHome" aria-label="Start page" title="Start page">⌂</button>
-            <button class="help-btn" id="wxMapBtn" aria-label="Show map" title="Map">🌐</button>
+            <button class="help-btn mapword" id="wxMapBtn" aria-label="Show map" title="Map">MAP</button>
             <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
           </div>
         </div>
@@ -4962,7 +4987,7 @@ body .stat .k{
           <div class="hd-desc">Type the <b>4-letter ICAO code</b> of the aerodrome.</div>
         </div>
         <div class="hd-row">
-          <div class="hd-vis"><span class="hd-cbtn">🌐</span></div>
+          <div class="hd-vis"><span class="hd-cbtn mapword">MAP</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Open the <b>map</b> centred on the aerodrome shown. Once a route has been run, the same
             map draws it.</div>
@@ -5179,7 +5204,7 @@ body .stat .k{
             <b>downloads and saves their NOTAMs</b>. Keep the app in the foreground while it runs.</div>
         </div>
         <div class="hd-note">Once saved, tap any card to read that aerodrome's NOTAMs — <b>including in flight, with no
-            connection</b>. The <b>🌐</b> button draws the route and the aerodromes on the map.</div>
+            connection</b>. The <b>MAP</b> button draws the route and the aerodromes on the map.</div>
 
         <div class="hd-sec">FIR map</div>
         <div class="hd-note">The <b>FIR</b> button opens the world map of flight information regions. Tap one to read
