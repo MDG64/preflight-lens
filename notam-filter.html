@@ -665,8 +665,10 @@
 
     /* La carte s'annonce par le mot MAP et non plus par un globe : trois
        lettres se lisent partout de la même façon, là où l'émoji changeait de
-       dessin d'un système à l'autre. Les pastilles gardent leur rond et leur
-       diamètre — seule la fonte rétrécit pour que le mot y tienne. Le
+       dessin d'un système à l'autre. Un mot n'est pas un glyphe : le rond des
+       pastilles voisines l'étranglait, il prend donc une case rectangulaire à
+       coins doux, large de son texte plus une gouttière. La hauteur, elle, ne
+       bouge pas — la case reste alignée sur les ronds de la même rangée. Le
        `grayscale`, écrit pour éteindre les couleurs de l'émoji, n'a plus
        d'objet sur du texte : c'est l'opacité qui dit désormais l'état inerte. */
     button.mapword,
@@ -675,7 +677,20 @@
       font: 700 11px/1 var(--sans);
       letter-spacing: .06em;
       color: var(--cyan);
-      filter: none
+      filter: none;
+      width: auto;
+      min-width: 0;
+      padding: 0 10px;
+      border-radius: 5px
+    }
+
+    /* En jour, le cyan sur fond clair pâlit là où trois lettres serrées
+       demandent du contraste : le mot passe au noir, comme le texte de la
+       page. */
+    body.light button.mapword,
+    body.light .hdr-actions button.mapword,
+    body.light span.mapword {
+      color: #10161b
     }
 
     @media (max-width:560px) {
@@ -683,7 +698,9 @@
       button.mapword,
       .hdr-actions button.mapword,
       span.mapword {
-        font-size: 9px
+        font-size: 9px;
+        width: auto;
+        padding: 0 7px
       }
     }
 
