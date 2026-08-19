@@ -138,10 +138,6 @@
       background: #e9eff3;
     }
 
-    body.light .st-chip.plain:hover {
-      background: #f4f7f9;
-    }
-
     body.light .btn {
       background: #eef4f7;
     }
@@ -568,27 +564,22 @@
     }
 
     /* Case sans rôle — le terrain seul de la page météo. Rien à étiqueter, donc
-       le code reprend à gauche la marge que tenait l'étiquette ; et rien à
-       cliquer, puisque la seule section de la page est déjà sous les yeux :
-       elle ne s'allume pas au survol. */
-    .st-chip.plain {
-      cursor: default
-    }
-
-    .st-chip.plain:hover {
-      border-color: var(--line2)
-    }
-
+       le code reprend à gauche la marge que tenait l'étiquette. */
     .st-chip.plain .v {
       padding-left: 12px
     }
 
-    /* Mais ce code-là se change : la page météo est souvent le seul écran
-       ouvert, et repasser par l'accueil pour lire un autre terrain est un
-       détour. La case devient donc la saisie — même cadre, même typo, même
-       place : rien ne bouge, seul le curseur dit qu'on peut écrire. Elle
-       s'allume au survol et au focus, comme une case cliquable. */
-    .st-chip.plain input.v {
+    /* Page Weather : le code de chaque case se change sur place — la page est
+       souvent le seul écran ouvert, et repasser par l'accueil pour lire un
+       autre terrain est un détour. La case devient la saisie — même cadre,
+       même typo, même place : rien ne bouge, seul le curseur dit qu'on peut
+       écrire, et le cadre s'allume au survol comme au focus. */
+    .st-chip input.v {
+      /* La largeur est celle des quatre lettres et de leur interlettrage — la
+         case garde donc la taille qu'elle avait en simple texte. Elle se
+         compte hors marges (`content-box`) : la marge du code n'est pas la
+         même selon que la case porte une étiquette de rôle ou non. */
+      box-sizing: content-box;
       width: calc(4ch + .9em);
       background: none;
       border: 0;
@@ -597,11 +588,7 @@
       cursor: text
     }
 
-    .st-chip.plain:has(input):hover {
-      border-color: var(--cyan)
-    }
-
-    .st-chip.plain:focus-within {
+    .st-chip:focus-within {
       border-color: var(--cyan)
     }
 
@@ -17178,41 +17165,38 @@ window.addEventListener("scroll", hidePop, true);
     function wxRoleLabel(role) { return role === "dep" ? "DEP" : role === "arr" ? "DEST" : role === "alt" ? "ALT" : ""; }
     function wxSection(icao) { return document.querySelector(`#wxBody .wx-ap[data-icao="${icao}"]`); }
     /* Les codes de la route en en-tête, dans les cases du bandeau NOTAM — même
-       cadre, même étiquette de rôle colorée, même typo. Un clic descend à la
-       section du terrain : sur cette page les relevés sont déjà chargés, la
-       case sert donc à y aller, pas à recharger. Terrain seul (aucun rôle) :
-       il n'a ni étiquette ni section à part, sa case reste muette. */
+       cadre, même étiquette de rôle colorée, même typo. Chaque case porte SON
+       code en saisie : quatre lettres et Entrée changent le terrain de cette
+       place-là — DEP, DEST ou ALT — sans repasser par l'accueil, et le terrain
+       seul se change pareil. Le geste d'avant n'est pas perdu : entrer dans la
+       case descend à la section du terrain, ce que faisait le clic.
+       Le changement ne vaut que pour cette page : la route enregistrée, elle,
+       se modifie sur l'accueil — on ne réécrit pas un plan de vol en allant
+       lire un METAR. */
     function renderWxCodes(list) {
       const box = $("#wxCodes");
       box.hidden = !list.length;
-      box.innerHTML = list.map(a => {
+      box.innerHTML = list.map((a, i) => {
         const m = AIRPORTS[a.icao], role = wxRoleLabel(a.role);
-        /* Terrain seul : sa case se saisit. Elle porte le code du moment ;
-           quatre lettres et Entrée (ou simplement sortir de la case) ouvrent
-           l'autre terrain sans repasser par l'accueil. */
-        if (!role) return `<span class="st-chip plain"${m ? ` title="${m.city}"` : ""}
-      ><input class="v" id="wxIcao" value="${a.icao}" maxlength="4" size="4" autocomplete="off"
-        spellcheck="false" aria-label="Aerodrome ICAO code — type another to change station"></span>`;
-        return `<button class="st-chip ${a.role}" data-code="${a.icao}"
-      title="${role}${m ? " — " + m.city : ""}" aria-label="Go to the ${role} report, ${a.icao}"
-      ><span class="l">${role}</span><span class="v">${a.icao}</span></button>`;
+        const lab = role ? `${role} — type another ICAO code to change this station`
+                         : "Aerodrome ICAO code — type another to change station";
+        return `<span class="st-chip ${role ? a.role : "plain"}"
+      title="${role}${m ? (role ? " — " : "") + m.city : ""}"
+      >${role ? `<span class="l">${role}</span>` : ""}<input class="v" data-i="${i}"
+        value="${a.icao}" maxlength="4" size="4" autocomplete="off" spellcheck="false"
+        aria-label="${lab}"></span>`;
       }).join("");
-      box.querySelectorAll(".st-chip[data-code]").forEach(b => b.onclick = () => {
-        const sec = wxSection(b.dataset.code);
-        if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-      const inp = box.querySelector("#wxIcao");
-      if (inp) {
-        const cur = list[0].icao;
-        /* Un code incomplet ou inconnu du format ne vaut pas une requête : on
-           remet celui qui est à l'écran plutôt que d'ouvrir une page vide. Le
-           même code que celui affiché ne rouvre rien non plus — c'est
-           Refresh qui recharge, pas la case. */
+      /* Un code incomplet, ou déjà tenu par une autre case, ne vaut pas une
+         requête : on remet celui qui est à l'écran plutôt que d'ouvrir une
+         page vide ou de doubler un terrain. Le même code que celui affiché ne
+         rouvre rien non plus — c'est Refresh qui recharge, pas la case. */
+      box.querySelectorAll("input.v").forEach(inp => {
+        const i = +inp.dataset.i, cur = list[i].icao;
         const go = () => {
           const v = inp.value.trim().toUpperCase();
-          if (!/^[A-Z]{4}$/.test(v)) { inp.value = cur; return; }
-          if (v === cur) { inp.value = cur; return; }
-          openWx([{ icao: v }]);
+          if (!/^[A-Z]{4}$/.test(v) || v === cur ||
+              list.some((b, j) => j !== i && b.icao === v)) { inp.value = cur; return; }
+          openWx(list.map((b, j) => j === i ? { icao: v, role: b.role } : b));
         };
         inp.oninput = () => { inp.value = inp.value.toUpperCase().replace(/[^A-Z]/g, ""); };
         inp.onkeydown = e => {
@@ -17220,8 +17204,12 @@ window.addEventListener("scroll", hidePop, true);
           else if (e.key === "Escape") { inp.value = cur; inp.blur(); }
         };
         inp.onblur = go;
-        inp.onfocus = () => inp.select();
-      }
+        inp.onfocus = () => {
+          inp.select();
+          const sec = wxSection(cur);
+          if (sec && list.length > 1) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+        };
+      });
     }
     // Les âges vivent à l'écran : re-rendus seuls, toutes les 30 s, sans réseau.
     function renderWxAges() {
