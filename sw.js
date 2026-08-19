@@ -28,6 +28,10 @@ const ASSETS = [
   // refonte d'icône : incrémenter le suffixe, ne pas écraser.
   "./icon-192-v2.png", "./icon-512-v2.png", "./icon-maskable-512-v2.png",
   "./apple-touch-icon-180-v2.png", "./favicon-32-v2.png",
+  // Photos des trois cases d'accueil (19 aout 2026). Meme regle que les icones :
+  // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
+  // refonte d'image change le suffixe, on n'ecrase jamais en place.
+  "./home-wx-v1.jpg", "./home-notam-v1.jpg", "./home-map-v1.jpg",
   // Polices auto-hébergées (2026-08-06, retrait de Google Fonts). Pré-cache
   // OBLIGATOIRE : la règle 6 les sert « cache d'abord » mais ne dépose jamais
   // rien — sans cette liste, la typo tomberait en police système hors ligne.

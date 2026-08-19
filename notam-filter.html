@@ -4146,8 +4146,8 @@ body.light .stat.on {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 7px;
-      padding: 15px 10px 13px;
+      gap: 9px;
+      padding: 10px 10px 13px;
       background: var(--panel);
       border: 1px solid var(--line2);
       border-radius: 14px;
@@ -4172,9 +4172,17 @@ body.light .stat.on {
       outline-offset: 2px
     }
 
-    .home-card svg {
-      width: 32px;
-      height: 32px
+    /* Photo de la case, à la place de l'ancienne icône SVG (19 aout 2026).
+       Rapport 16/9 imposé et object-fit: cover : les trois clichés n'ont pas
+       le meme cadrage d'origine, mais les trois cases doivent faire la meme
+       hauteur au pixel pres. */
+    .home-card img {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 9px;
+      display: block;
+      background: var(--panel2)
     }
 
     /* La carte tient la ligne du dessous à elle seule, mais garde la taille
@@ -4222,6 +4230,13 @@ body.light .stat.on {
       /* Une seule colonne : la carte n'a plus de moitié à occuper. */
       .home-card-wide {
         width: 100%
+      }
+
+      /* Pleine largeur, la photo en 16/9 pousserait les trois cases loin sous
+         la ligne de flottaison. Bandeau plus plat : les trois restent visibles
+         d'un coup d'oeil, comme avant les photos. */
+      .home-card img {
+        aspect-ratio: 24 / 9
       }
 
       /* Les trois cases tiennent sur UNE ligne, même à 360 px : c'est la route
@@ -4939,24 +4954,12 @@ body .stat .k{
 
       <div class="home-cards">
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <circle cx="31" cy="17" r="8" fill="var(--gold)" opacity=".9"/>
-            <path d="M13 36a7 7 0 0 1 0-14 9 9 0 0 1 17.4-2.6A6.5 6.5 0 0 1 36 32.6 7 7 0 0 1 30 36Z"
-              fill="var(--panel2)" stroke="var(--cyan)" stroke-width="2.4" stroke-linejoin="round"/>
-          </svg>
+          <img src="./home-wx-v1.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Weather</span>
           <span class="hc-sub">METAR · TAF</span>
         </button>
         <button class="home-card" id="homeNotamCard" aria-label="NOTAM — open the NOTAM list of the aerodromes typed">
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <rect x="10" y="6" width="28" height="36" rx="4" fill="var(--panel2)"
-              stroke="var(--cyan)" stroke-width="2.4"/>
-            <line x1="16" y1="15" x2="32" y2="15" stroke="var(--cyan)" stroke-width="2.4" stroke-linecap="round"/>
-            <line x1="16" y1="22" x2="32" y2="22" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round"/>
-            <line x1="16" y1="29" x2="26" y2="29" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round"/>
-            <circle cx="31.5" cy="32.5" r="6" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
-            <line x1="35.7" y1="36.7" x2="40" y2="41" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
-          </svg>
+          <img src="./home-notam-v1.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">NOTAM</span>
           <span class="hc-sub">FILTERS</span>
         </button>
@@ -4964,15 +4967,7 @@ body .stat .k{
              sœurs : même geste, même taille de cible. Elle tient la ligne
              entière sous WEATHER et NOTAM. -->
         <button class="home-card home-card-wide" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <path d="M6 12 18 8v28L6 40Z" fill="var(--panel2)" stroke="var(--cyan)"
-              stroke-width="2.4" stroke-linejoin="round"/>
-            <path d="M18 8 30 12v28L18 36Z" fill="none" stroke="var(--cyan)"
-              stroke-width="2.4" stroke-linejoin="round"/>
-            <path d="M30 12 42 8v28L30 40Z" fill="var(--panel2)" stroke="var(--cyan)"
-              stroke-width="2.4" stroke-linejoin="round"/>
-            <circle cx="24" cy="20" r="3.4" fill="var(--gold)"/>
-          </svg>
+          <img src="./home-map-v1.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Map</span>
           <!-- Ligne vide : la case n'a pas de sous-titre à dire, mais elle
                doit faire la hauteur exacte des deux autres. -->
