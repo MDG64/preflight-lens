@@ -217,6 +217,21 @@ test("un REIL hors service est ambre, en départ ET en approche", async () => {
   assert.equal(classifyNotam("QMRLC", "RWY 35 CLSD, REIL RELOCATED").severity, "critical");
 });
 
+test("le RVR borne le décollage autant que l'approche", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réel A5236/26 (QFTAS) : « RVR THR 06, MEDIAN AND 24 NOT AVBL » sortait
+  // Arrival seul. Le sujet FT est le transmissomètre — l'équipement qui MESURE
+  // le RVR — et le RVR borne les minima de DÉCOLLAGE (départ LVP) comme ceux
+  // d'approche. Revue du 2026-08-20.
+  assert.deepEqual(classifyNotam("QFTAS", "RVR THR 06, MEDIAN AND 24 NOT AVBL.").categories.sort(),
+    ["approche", "depart"]);
+  // Sans Q-code exploitable, le mot-clé « RVR » donne les deux phases lui aussi.
+  assert.deepEqual(classifyNotam("QXXXX", "RVR RWY 06 NOT AVBL").categories.sort(),
+    ["approche", "depart"]);
+  assert.deepEqual(classifyNotam(null, "RVR REPORTING SYSTEM U/S").categories.sort(),
+    ["approche", "depart"]);
+});
+
 test("les activités annoncées — drones et feux d'artifice — sont de l'Information", async () => {
   const { classifyNotam } = await chargerClassificateur();
   // Cas réels R2211/26 (QWULW) et D3872/26 (QWZLW) : ressortaient Caution

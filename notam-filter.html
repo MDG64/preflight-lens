@@ -5703,7 +5703,13 @@ body .stat .k{
       CM: ["sol"], CP: ["approche"], CR: ["approche"], CS: ["vol"], CT: ["approche"],
       FA: ["vol"], FB: ["sol"], FC: ["approche"], FD: ["sol"], FE: ["vol"], FF: ["vol"], FG: ["sol"],
       FH: ["sol"], FI: ["sol"], FJ: ["sol"], FL: ["approche"], FM: ["vol"], FO: ["approche"],
-      FP: ["vol"], FS: ["sol"], FT: ["approche"], FU: ["vol"], FW: ["approche"], FZ: ["vol"],
+      // FT (transmissomètre — l'équipement qui MESURE le RVR) : le RVR borne
+      // les minima de DÉCOLLAGE autant que ceux d'approche — sans mesure, pas
+      // de départ LVP. Rangé en approche seule jusqu'au 2026-08-20 ; cas réel
+      // A5236/26 (QFTAS) « RVR THR 06, MEDIAN AND 24 NOT AVBL » affiché
+      // Arrival seul. Pendant textuel : « RVR » ajouté à la liste « depart »
+      // des FREETEXT_KEYWORDS, voir son commentaire.
+      FP: ["vol"], FS: ["sol"], FT: ["approche", "depart"], FU: ["vol"], FW: ["approche"], FZ: ["vol"],
       GA: ["approche"], GW: ["vol", "approche"],
       IC: ["approche"], ID: ["approche"], IG: ["approche"], II: ["approche"], IL: ["approche"],
       IM: ["approche"], IN: ["approche"], IO: ["approche"], IS: ["approche"], IT: ["approche"],
@@ -5798,8 +5804,13 @@ body .stat .k{
       // « REIL » est encadré d'un espace à gauche à dessein : la comparaison se
       // fait par sous-chaîne, et CREIL (LFPC) est un terrain français bien réel
       // qui se serait classé tout seul.
+      // RVR : la portée visuelle de piste borne les minima de DÉCOLLAGE comme
+      // ceux d'approche (départ LVP). Le mot-clé ne valait qu'approche — même
+      // angle mort que la manche à air. Revue du 2026-08-20, A5236/26 (QFTAS)
+      // « RVR THR 06, MEDIAN AND 24 NOT AVBL » affiché Arrival seul ; corrigé
+      // avec le sujet Q FT (transmissomètre) passé en approche+départ.
       depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
-        "VOR", "TACAN", "VORTAC",
+        "VOR", "TACAN", "VORTAC", "RVR",
         "END ID LGT", "END IDENT LGT", "END IDENTIFIER LIGHT", " REIL",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
