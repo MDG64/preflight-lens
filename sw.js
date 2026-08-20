@@ -31,7 +31,7 @@ const ASSETS = [
   // Photos des trois cases d'accueil (19 aout 2026). Meme regle que les icones :
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
   // refonte d'image change le suffixe, on n'ecrase jamais en place.
-  "./home-wx-icon-v2.png", "./home-notam-v3.jpg", "./home-map-v2.jpg",
+  "./home-wx-icon-v2.png", "./home-notam-v3.jpg", "./home-map-v3.jpg",
   // Polices auto-hébergées (2026-08-06, retrait de Google Fonts). Pré-cache
   // OBLIGATOIRE : la règle 6 les sert « cache d'abord » mais ne dépose jamais
   // rien — sans cette liste, la typo tomberait en police système hors ligne.
