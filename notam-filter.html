@@ -15434,7 +15434,7 @@ function renderInfo(icao) {
         const cap = mapTouchUI ? 2.2 : 1.6;
         const zk = Math.log2(v.scale / 1.4222);
         const s = dpr * Math.min(cap, Math.max(1, 1 + (zk - 8) * (cap - 1) / 3));
-        const STEP = 8 * s, SHAFT = 22 * s, HEAD = 5 * s, GAP = 9 * s;
+        const STEP = 9 * s, SHAFT = 26 * s, HEAD = 6 * s, GAP = 9 * s;
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(wd * Math.PI / 180);
@@ -15443,7 +15443,7 @@ function renderInfo(icao) {
         // pointe reste pleine pour garder son cap lisible : c'est la VUE qui
         // est une prévision, vent TAF ou METAR conservé.
         const dash = mapWindHour > 0 ? [4 * s, 3.2 * s] : [];
-        for (const [c, lw] of [[halo, 4 * s], [col, 1.7 * s]]) {
+        for (const [c, lw] of [[halo, 5 * s], [col, 2.4 * s]]) {
           ctx.strokeStyle = c; ctx.lineWidth = lw;
           for (let i = 0; i < n; i++) {
             const ax = (i - (n - 1) / 2) * STEP;
