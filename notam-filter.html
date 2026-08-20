@@ -15418,13 +15418,17 @@ function renderInfo(icao) {
         const col = WXPAL[ws > 30 ? 3 : ws >= 20 ? 2 : 1];
         const halo = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
         // Passé le zoom ville, le faisceau grossit avec la carte — même courbe
-        // que Weather Lens (icon-size ×1 au zoom MapLibre 8, ×1.6 au zoom 11,
-        // plafonné là) : près du terrain, la flèche reste un objet qu'on lit,
-        // sans devenir monstrueuse au niveau rue que cette carte, elle, atteint.
-        // `s` remplace dpr dans toutes les cotes : halo, pointillé et triangle
-        // suivent, exactement comme l'icône raster de l'autre app.
+        // que Weather Lens (×1 au zoom MapLibre 8, plafond atteint au zoom 11) :
+        // près du terrain, la flèche reste un objet qu'on lit, sans devenir
+        // monstrueuse au niveau rue que cette carte, elle, atteint. Sur écran
+        // tactile — pas de souris, même critère que planIsFullScreen — le
+        // plafond monte de ×1.6 à ×2.2 : l'écran est petit, le doigt est gros,
+        // la flèche doit se voir de plus loin. `s` remplace dpr dans toutes
+        // les cotes : halo, pointillé et triangle suivent, exactement comme
+        // l'icône raster de l'autre app.
+        const cap = mapTouchUI ? 2.2 : 1.6;
         const zk = Math.log2(v.scale / 1.4222);
-        const s = dpr * Math.min(1.6, Math.max(1, 1 + (zk - 8) * .2));
+        const s = dpr * Math.min(cap, Math.max(1, 1 + (zk - 8) * (cap - 1) / 3));
         const STEP = 8 * s, SHAFT = 22 * s, HEAD = 5 * s, GAP = 9 * s;
         ctx.save();
         ctx.translate(x, y);
@@ -15652,6 +15656,9 @@ function renderInfo(icao) {
     let mapMode = "wx", mapWxTargets = [], mapWindOn = false;
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
     let mapWindHour = 0;
+    // Écran tactile — pas de souris, téléphone ou tablette, même critère que
+    // planIsFullScreen : les flèches de vent y plafonnent plus haut au zoom.
+    const mapTouchUI = matchMedia("(max-width: 640px), (hover: none) and (pointer: coarse)").matches;
     const mapWx = new Map();             // icao -> { vis, ceil, wdir, wspd, t: heure du METAR, at: heure du fetch }
 
     // Décodage minimal : seuls les groupes qui portent sur les deux seuils de
