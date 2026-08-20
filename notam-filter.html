@@ -884,16 +884,16 @@
     /* ---------- summary ---------- */
     .summary {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 10px;
-      margin: 18px 0
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin: 12px 0
     }
 
     .stat {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 14px 16px;
+      padding: 8px 12px;
       cursor: pointer;
       transition: border-color .15s, box-shadow .15s;
       box-shadow: var(--elev);
@@ -911,7 +911,7 @@
     }
 
     .stat .n {
-      font: 600 26px/1 var(--num);
+      font: 600 20px/1 var(--num);
       /* SF Pro a de vrais chiffres tabulaires : le compteur ne se décale plus
          au passage de 9 à 13 quand on change de filtre. */
       font-variant-numeric: tabular-nums;
@@ -1006,7 +1006,7 @@
     }
 
     .filters-tab {
-      font: 600 13px/1 var(--mono);
+      font: 600 11px/1 var(--mono);
       color: var(--cyan);
       letter-spacing: .18em;
       text-transform: uppercase;
@@ -1014,7 +1014,7 @@
       border: 2px solid var(--steel);
       border-bottom: none;
       border-radius: var(--radius) var(--radius) 0 0;
-      padding: 9px 15px
+      padding: 6px 12px
     }
 
     .filters-wrap {
@@ -4093,7 +4093,7 @@ body.light .cat{
 /* === Premium refinement July 2026 === */
 body.light .stat,
 body.light .cat {
-  min-height: 72px;
+  min-height: 0;
   border-radius: 12px !important;
   border: 1px solid #E9E5D7 !important;
   box-shadow:
@@ -4944,18 +4944,18 @@ body.light .stat.on {
     }
 
 
-/* ===== Agrandissement boutons Ground / Departure / Flight / Arrival ===== */
+/* ===== Boutons Ground / Departure / Flight / Arrival : taille contenue ===== */
 body .cat{
-  height:58px !important;
+  height:42px !important;
 }
 body .cat-label{
-  font-size:14px !important;
-  font-weight:700 !important;
+  font-size:11px !important;
+  font-weight:600 !important;
   letter-spacing:.04em !important;
 }
 body .cat .cnt{
-  font-size:20px !important;
-  font-weight:700 !important;
+  font-size:15px !important;
+  font-weight:600 !important;
 }
 
 /* Mobile */
@@ -4967,12 +4967,12 @@ body .cat .cnt{
 
 
 
-/* ===== Summary cards : larger titles ===== */
+/* ===== Summary cards : titres contenus ===== */
 body .stat .k{
-  font-size:13px !important;
+  font-size:10px !important;
   font-weight:600 !important;
   letter-spacing:.10em !important;
-  margin-top:8px !important;
+  margin-top:4px !important;
 }
 
 /* Keep readable on mobile */
