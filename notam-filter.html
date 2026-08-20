@@ -15417,7 +15417,15 @@ function renderInfo(icao) {
         const n = Math.min(3, Math.ceil(ws / 10));
         const col = WXPAL[ws > 30 ? 3 : ws >= 20 ? 2 : 1];
         const halo = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
-        const STEP = 8 * dpr, SHAFT = 22 * dpr, HEAD = 5 * dpr, GAP = 9 * dpr;
+        // Passé le zoom ville, le faisceau grossit avec la carte — même courbe
+        // que Weather Lens (icon-size ×1 au zoom MapLibre 8, ×1.6 au zoom 11,
+        // plafonné là) : près du terrain, la flèche reste un objet qu'on lit,
+        // sans devenir monstrueuse au niveau rue que cette carte, elle, atteint.
+        // `s` remplace dpr dans toutes les cotes : halo, pointillé et triangle
+        // suivent, exactement comme l'icône raster de l'autre app.
+        const zk = Math.log2(v.scale / 1.4222);
+        const s = dpr * Math.min(1.6, Math.max(1, 1 + (zk - 8) * .2));
+        const STEP = 8 * s, SHAFT = 22 * s, HEAD = 5 * s, GAP = 9 * s;
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(wd * Math.PI / 180);
@@ -15425,8 +15433,8 @@ function renderInfo(icao) {
         // Sur un horizon prévu (+1/+2/+3 h), le fût passe en pointillé — la
         // pointe reste pleine pour garder son cap lisible : c'est la VUE qui
         // est une prévision, vent TAF ou METAR conservé.
-        const dash = mapWindHour > 0 ? [4 * dpr, 3.2 * dpr] : [];
-        for (const [c, lw] of [[halo, 4 * dpr], [col, 1.7 * dpr]]) {
+        const dash = mapWindHour > 0 ? [4 * s, 3.2 * s] : [];
+        for (const [c, lw] of [[halo, 4 * s], [col, 1.7 * s]]) {
           ctx.strokeStyle = c; ctx.lineWidth = lw;
           for (let i = 0; i < n; i++) {
             const ax = (i - (n - 1) / 2) * STEP;
@@ -15449,21 +15457,21 @@ function renderInfo(icao) {
         // lit debout, quel que soit le cap du vent.
         if (ws > 40) {
           const wcol = WXPAL[ws > 50 ? 3 : 2];
-          ctx.translate(0, -(GAP + SHAFT + 17 * dpr));
+          ctx.translate(0, -(GAP + SHAFT + 17 * s));
           ctx.rotate(-wd * Math.PI / 180);
           const tri = () => {
             ctx.beginPath();
-            ctx.moveTo(0, -8 * dpr);
-            ctx.lineTo(-7.5 * dpr, 6.5 * dpr);
-            ctx.lineTo(7.5 * dpr, 6.5 * dpr);
+            ctx.moveTo(0, -8 * s);
+            ctx.lineTo(-7.5 * s, 6.5 * s);
+            ctx.lineTo(7.5 * s, 6.5 * s);
             ctx.closePath();
           };
-          ctx.strokeStyle = halo; ctx.lineWidth = 4 * dpr; tri(); ctx.stroke();
-          ctx.fillStyle = wcol; ctx.strokeStyle = wcol; ctx.lineWidth = 1.5 * dpr; tri(); ctx.fill(); ctx.stroke();
-          ctx.strokeStyle = halo; ctx.lineWidth = 2 * dpr;
-          ctx.beginPath(); ctx.moveTo(0, -3.5 * dpr); ctx.lineTo(0, 0.8 * dpr); ctx.stroke();
+          ctx.strokeStyle = halo; ctx.lineWidth = 4 * s; tri(); ctx.stroke();
+          ctx.fillStyle = wcol; ctx.strokeStyle = wcol; ctx.lineWidth = 1.5 * s; tri(); ctx.fill(); ctx.stroke();
+          ctx.strokeStyle = halo; ctx.lineWidth = 2 * s;
+          ctx.beginPath(); ctx.moveTo(0, -3.5 * s); ctx.lineTo(0, 0.8 * s); ctx.stroke();
           ctx.fillStyle = halo;
-          ctx.beginPath(); ctx.arc(0, 3.4 * dpr, 1.2 * dpr, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 3.4 * s, 1.2 * s, 0, 7); ctx.fill();
         }
         ctx.restore();
       };
