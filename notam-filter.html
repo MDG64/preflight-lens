@@ -3392,6 +3392,56 @@
       color: var(--text)
     }
 
+    /* L'œil et la légende partagent une rangée : l'icône se cale au pied du
+       cartouche, et reste seule quand la légende est repliée. */
+    .mleg-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .mleg-eye {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      cursor: pointer;
+      color: var(--muted);
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: var(--radius);
+    }
+
+    .mleg-eye:hover {
+      color: var(--text);
+      border-color: var(--muted);
+    }
+
+    .mleg-eye svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
+    .mleg-eye .off {
+      display: none;
+    }
+
+    #mapOv.leg-off .map-legend {
+      display: none;
+    }
+
+    #mapOv.leg-off .mleg-eye .on {
+      display: none;
+    }
+
+    #mapOv.leg-off .mleg-eye .off {
+      display: block;
+    }
+
     .map-legend {
       background: var(--panel);
       border: 1px solid var(--line2);
@@ -3447,11 +3497,6 @@
 
     #mapOv.wind-on:not(.notam-mode) .mleg.wd {
       display: flex
-    }
-
-    .mleg.wd.note {
-      color: var(--muted2);
-      font-size: 10px
     }
 
     .mleg .wda {
@@ -5147,6 +5192,10 @@ body .stat .k{
           <span class="rd" aria-hidden="true"></span>
           <span class="lb">Wind</span>
         </label>
+        <!-- L'œil replie la légende : la carte se lit alors sans cartouche, et
+             l'icône reste seule pour la faire revenir. Les interrupteurs, eux,
+             ne bougent pas — on ne cache que ce qui EXPLIQUE, jamais ce qui AGIT. -->
+        <div class="mleg-row">
         <div class="map-legend">
           <span class="mleg wx"><i class="dot mred"></i>VIS ≤ 600 m or ceiling ≤ 300 ft</span>
           <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 700 ft</span>
@@ -5155,10 +5204,14 @@ body .stat .k{
           <span class="mleg wx wd"><i class="wda g">↑</i>Wind &lt; 20 kt</span>
           <span class="mleg wx wd"><i class="wda a">↑↑</i>Wind 20–30 kt</span>
           <span class="mleg wx wd"><i class="wda r">↑↑↑</i>Wind &gt; 30 kt</span>
-          <span class="mleg wx wd note">One arrow per 10 kt, blowing downwind onto the station</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
+        </div>
+        <button class="mleg-eye" id="mapLegEye" type="button" aria-label="Hide or show the legend" title="Hide / show legend">
+          <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
         </div>
       </div>
     </div>
@@ -15622,6 +15675,8 @@ function renderInfo(icao) {
       $("#mapOv").classList.toggle("wind-on", mapWindOn);
       drawMap();
     };
+    // L'œil replie la légende ; il ne touche à rien d'autre.
+    $("#mapLegEye").onclick = () => $("#mapOv").classList.toggle("leg-off");
     // Le bloc curseur+légende vit dans le conteneur qui écoute les clics de la
     // carte : on coupe la propagation pour qu'un réglage ne charge pas le
     // terrain qui se trouverait dessous.
