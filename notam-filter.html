@@ -15405,16 +15405,18 @@ function renderInfo(icao) {
       // VIENT le vent), pointes tournées vers lui, arrêtées à GAP du disque :
       // la flèche désigne le terrain qu'elle va balayer sans jamais le
       // toucher. Deux passes de trait, halo du fond puis couleur, pour rester
-      // lisible sur l'eau comme sur la terre. Dézoomé sous l'échelle 5,
-      // seules les ambre et rouges se dessinent : au niveau continent, la
-      // nuée de brises vertes recouvrirait la couleur des points, et c'est le
-      // coup de vent qui mérite l'écran.
+      // lisible sur l'eau comme sur la terre. Dézoomé sous l'échelle 45 —
+      // le zoom 5 de Weather Lens, où sa carte coupe aussi ses flèches —
+      // plus RIEN ne se dessine, brises comme coups de vent : sur l'Europe
+      // entière les flèches ne racontent plus rien, seuls les disques
+      // colorés parlent, et l'interrupteur WIND reste allumé pour le retour
+      // au zoom utile.
       const windArrow = (icao, x, y) => {
         if (!mapWindOn || mapMode !== "wx") return;
+        if (v.scale < 45) return;
         const w = mapWindOf(icao);
         if (!w) return;
         const [wd, ws] = w;
-        if (v.scale < 5 && ws < 20) return;
         // Trois flèches au plus — la légende ne parle pas d'autre chose :
         // ↑, ↑↑, ↑↑↑. Au-delà, le rouge dit déjà tout.
         const n = Math.min(3, Math.ceil(ws / 10));
