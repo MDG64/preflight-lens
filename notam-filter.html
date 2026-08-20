@@ -287,17 +287,11 @@
       font-size: 19px
     }
 
-    /* Le ⌂ a rejoint les pastilles du bord droit, comme sur la page Weather :
-       les deux départs — l'accueil et la carte — se rangent ensemble, et la
-       gauche de la barre est rendue aux cases de route. Le ⌂ est un caractère,
-       pas un émoji : il ne remplit pas son cadratin, d'où une police plus
-       grande pour un dessin de même hauteur à l'œil. */
+    /* La maison a rejoint les pastilles du bord droit, comme sur la page
+       Weather : les deux départs — l'accueil et la carte — se rangent
+       ensemble, et la gauche de la barre est rendue aux cases de route. */
     #homeBtn {
       margin-left: 0
-    }
-
-    .hdr-actions #homeBtn {
-      font-size: 22px
     }
 
     .brand-title {
@@ -1477,6 +1471,36 @@
     .help-btn:hover {
       border-color: var(--cyan);
       background: #202a33
+    }
+
+    /* Les symboles pleins (maison, lune) sont des dessins, pas des caractères :
+       ils remplissent leur boîte, et une taille de police ne les commande plus.
+       On les mesure donc en pourcentage de la pastille — qui rétrécit au doigt
+       et grossit dans le bandeau — pour qu'ils gardent partout la même marge
+       autour du dessin, sans une règle par écran. Le rapport est celui de
+       Weather Lens, où la maison et la lune font 20 px dans un rond de 38 :
+       les deux apps partagent ces pictogrammes, elles les dessinent pareil.
+       La classe les distingue des SVG qui portent leur propre gabarit, comme
+       le panneau de guidage. */
+    .help-btn .pict,
+    .hd-cbtn .pict,
+    .map-x .pict {
+      width: 53%;
+      height: 53%;
+      display: block;
+      flex: none
+    }
+
+    /* Les pastilles qui portent un dessin perdent le padding que le navigateur
+       met d'office sur un <button> (1px 6px) : c'est leur boîte de contenu qui
+       mesure le pourcentage ci-dessus, et douze pixels pris sur la largeur y
+       rétrécissaient le symbole d'un tiers — la lune sortait ovale. Le
+       centrage est fait au flex, rien d'autre ne bouge. */
+    #homeBtn,
+    .wx-home.help-btn,
+    #themeBtn,
+    .theme-mirror {
+      padding: 0
     }
 
     /* Panneau de guidage : il garde ses couleurs réelles (jaune/noir) — c'est un
@@ -3796,13 +3820,11 @@
         order: 11
       }
 
-      /* Même pastille que le globe. Le ⌂ est un caractère, pas un émoji : il
-         ne remplit pas son cadratin, d'où une taille de police plus grande
-         pour un dessin de même hauteur à l'œil. */
+      /* Même pastille que le globe : le dessin la suit tout seul, il est
+         mesuré en pourcentage de son rond. */
       #homeBtn.help-btn {
         width: 29px;
-        height: 29px;
-        font-size: 20px
+        height: 29px
       }
 
       .planbtn svg {
@@ -4364,36 +4386,10 @@ body.light .stat.on {
       }
     }
 
-    /* Le ⌂ a rejoint les pastilles du bord droit : il n'est plus un bouton à
-       texte mais un symbole, du même jeu que le globe et le jour/nuit. Le ⌂
-       est un caractère, pas un émoji — il ne remplit pas son cadratin, d'où
-       une police plus grande pour un dessin de même hauteur à l'œil. */
-    .wx-home.help-btn {
-      font-size: 22px
-    }
-
-    /* Le ⌂ n'a pas de jambage : son dessin s'arrête sur la ligne de base, et
-       le centrage vertical, qui aligne la boîte de la fonte et non l'encre,
-       le laisse un peu bas dans le rond. Un padding bas le remonte de la
-       moitié de l'écart — en em, pour que la correction suive la taille du
-       glyphe d'un écran à l'autre. La pastille ne bouge pas : elle a une
-       hauteur fixe en border-box. */
-    #homeBtn,
-    .wx-home.help-btn {
-      padding: 0 6px .185em
-    }
-
-    /* Sur écran large, le ⌂ dessine plus grand DANS son rond : la pastille ne
-       bouge pas, seul le trait du symbole grossit pour se lire d'aussi loin
-       que le globe voisin. Au doigt le rond fait 29 px — le glyphe y garde sa
-       taille, sinon il toucherait le cadre. */
-    @media (min-width:561px) {
-
-      .hdr-actions #homeBtn,
-      .wx-home.help-btn {
-        font-size: 27px
-      }
-    }
+    /* La maison a rejoint les pastilles du bord droit : elle n'est plus un
+       bouton à texte mais un symbole, du même jeu que le globe et le
+       jour/nuit. Le padding qui rattrapait l'assise du caractère ⌂ est parti
+       avec lui, avec celui des autres pastilles à dessin. */
 
     /* L'en-tête météo tient sur deux lignes : le titre et les pastilles en
        haut, les cases ICAO et le rafraîchissement en dessous. Les cases ne
@@ -4825,7 +4821,7 @@ body .stat .k{
       <button class="routebtn" id="routeBtn">Route</button>
       <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
       <div class="hdr-actions">
-        <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page">⌂</button>
+        <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
         <button class="stationmapbtn mapword" id="stationMapBtn" aria-label="Show route map"
           title="Show route map">MAP</button>
         <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
@@ -5024,7 +5020,7 @@ body .stat .k{
           <span class="route-title">Weather</span>
           <span class="wx-name" id="wxName"></span>
           <div class="hdr-actions">
-            <button class="help-btn wx-home" id="wxHome" aria-label="Start page" title="Start page">⌂</button>
+            <button class="help-btn wx-home" id="wxHome" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
             <button class="help-btn mapword" id="wxMapBtn" aria-label="Show map" title="Map">MAP</button>
             <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
             <button class="help-btn" id="wxHelpBtn" aria-label="Information" title="Information">?</button>
@@ -5172,7 +5168,7 @@ body .stat .k{
           <div class="hd-desc"><b>Red dot</b> — no connection, last saved data is shown.</div>
         </div>
         <div class="hd-row">
-          <div class="hd-vis"><span class="hd-cbtn">⌂</span></div>
+          <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Back to the <b>start page</b> — ICAO + route entry, favorites, and two shortcuts.
             With a route entered, <b>Weather</b> opens the METAR/TAF page of the whole route (DEP · DEST · ALT)
@@ -5201,7 +5197,7 @@ body .stat .k{
           <div class="hd-desc">Open the <b>world FIR map</b> — see below.</div>
         </div>
         <div class="hd-row">
-          <div class="hd-vis"><span class="hd-cbtn">☾</span></div>
+          <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Switch <b>day / night</b> theme.</div>
         </div>
@@ -13853,17 +13849,24 @@ function renderInfo(icao) {
 
     /* ---- thème jour / nuit (mémorisé) ---- */
     const THEME_KEY = "notam_theme";
+    /* Le croissant du glyphe ☾ est un filet : posé à côté du soleil, plein, il
+       disparaît. Une lune pleine, dessinée comme la maison voisine — au doigt,
+       une silhouette se reconnaît plus vite qu'un trait. Le soleil reste un
+       caractère : il est déjà plein. */
+    const MOON_ICON = `<svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+</svg>`;
     function applyTheme(t) {
       document.body.classList.toggle("light", t === "light");
       const b = $("#themeBtn");
-      if (b) { b.textContent = t === "light" ? "☾" : "☀"; b.title = t === "light" ? "Night mode" : "Day mode"; }
+      if (b) { b.innerHTML = t === "light" ? MOON_ICON : "☀"; b.title = t === "light" ? "Night mode" : "Day mode"; }
       // L'accueil a son propre commutateur : même glyphe, même sens.
       // Les écrans pleine page (accueil, weather) ont leur propre commutateur,
       // qui n'est qu'un renvoi vers celui du bandeau : ils portent tous
       // .theme-mirror et affichent donc le même glyphe, quel que soit celui
       // sur lequel on a cliqué.
       document.querySelectorAll(".theme-mirror").forEach(b => {
-        b.textContent = t === "light" ? "☾" : "☀";
+        b.innerHTML = t === "light" ? MOON_ICON : "☀";
         b.title = t === "light" ? "Night mode" : "Day mode";
       });
       // Le fond vectoriel a ses propres couleurs : on lui repasse le style.
