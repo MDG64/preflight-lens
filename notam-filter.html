@@ -5142,7 +5142,7 @@ body .stat .k{
           <span class="rd" aria-hidden="true"></span>
           <span class="lb nt">NOTAM</span>
         </label>
-        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, pointing downwind">
+        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, blowing downwind onto the station">
           <input type="checkbox" id="mapWindChk">
           <span class="rd" aria-hidden="true"></span>
           <span class="lb">Wind</span>
@@ -5155,7 +5155,7 @@ body .stat .k{
           <span class="mleg wx wd"><i class="wda g">↑</i>Wind &lt; 20 kt</span>
           <span class="mleg wx wd"><i class="wda a">↑↑</i>Wind 20–30 kt</span>
           <span class="mleg wx wd"><i class="wda r">↑↑↑</i>Wind &gt; 30 kt</span>
-          <span class="mleg wx wd note">One arrow per 10 kt, pointing downwind</span>
+          <span class="mleg wx wd note">One arrow per 10 kt, blowing downwind onto the station</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
@@ -15243,14 +15243,17 @@ function renderInfo(icao) {
         ? (mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0))
         : (savedSet.has(icao) ? 0 : 1);
       // --- flèches de vent (vue Weather, interrupteur WIND) ---
-      // Une flèche par tranche de 10 kt entamée, pointée là où le vent POUSSE
-      // (direction météo + 180°), aux couleurs de la carte : vert < 20 kt,
-      // ambre jusqu'à 30, rouge au-delà — les seuils de Weather Lens, pour que
-      // la même flèche dise la même chose dans les deux apps. Deux passes de
-      // trait, halo du fond puis couleur, pour rester lisible sur l'eau comme
-      // sur la terre. Dézoomé sous l'échelle 5, seules les ambre et rouges se
-      // dessinent : au niveau continent, la nuée de brises vertes recouvrirait
-      // la couleur des points, et c'est le coup de vent qui mérite l'écran.
+      // Une flèche par tranche de 10 kt entamée, aux couleurs de la carte :
+      // vert < 20 kt, ambre jusqu'à 30, rouge au-delà — les seuils de Weather
+      // Lens, pour que la même flèche dise la même chose dans les deux apps.
+      // Le faisceau se pose AU VENT du terrain (rotation = direction d'où
+      // VIENT le vent), pointes tournées vers lui, arrêtées à GAP du disque :
+      // la flèche désigne le terrain qu'elle va balayer sans jamais le
+      // toucher. Deux passes de trait, halo du fond puis couleur, pour rester
+      // lisible sur l'eau comme sur la terre. Dézoomé sous l'échelle 5,
+      // seules les ambre et rouges se dessinent : au niveau continent, la
+      // nuée de brises vertes recouvrirait la couleur des points, et c'est le
+      // coup de vent qui mérite l'écran.
       const windArrow = (icao, x, y) => {
         if (!mapWindOn || mapMode !== "wx") return;
         const w = mapWindOf(icao);
@@ -15260,21 +15263,21 @@ function renderInfo(icao) {
         const n = Math.min(6, Math.ceil(ws / 10));
         const col = WXPAL[ws > 30 ? 3 : ws >= 20 ? 2 : 1];
         const halo = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
-        const STEP = 8 * dpr, SHAFT = 13 * dpr, HEAD = 4.5 * dpr;
+        const STEP = 8 * dpr, SHAFT = 22 * dpr, HEAD = 5 * dpr, GAP = 9 * dpr;
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate((wd + 180) * Math.PI / 180);
+        ctx.rotate(wd * Math.PI / 180);
         ctx.lineCap = "round"; ctx.lineJoin = "round";
         for (const [c, lw] of [[halo, 4 * dpr], [col, 1.7 * dpr]]) {
           ctx.strokeStyle = c; ctx.lineWidth = lw;
           for (let i = 0; i < n; i++) {
             const ax = (i - (n - 1) / 2) * STEP;
             ctx.beginPath();
-            ctx.moveTo(ax, -dpr);
-            ctx.lineTo(ax, -(SHAFT + HEAD));
-            ctx.moveTo(ax - HEAD * .75, -SHAFT);
-            ctx.lineTo(ax, -(SHAFT + HEAD));
-            ctx.lineTo(ax + HEAD * .75, -SHAFT);
+            ctx.moveTo(ax, -(GAP + SHAFT));
+            ctx.lineTo(ax, -GAP);
+            ctx.moveTo(ax - HEAD * .75, -(GAP + HEAD));
+            ctx.lineTo(ax, -GAP);
+            ctx.lineTo(ax + HEAD * .75, -(GAP + HEAD));
             ctx.stroke();
           }
         }
