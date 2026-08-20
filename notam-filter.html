@@ -14947,10 +14947,19 @@ function renderInfo(icao) {
       } else {                                           // schéma OpenMapTiles
         L.push(
           { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .9 } },
-          { id: "water", type: "fill", source: "o", "source-layer": "water",
-            paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], C.sea, C.lake], "fill-outline-color": C.lakeEdge } },
+          // Le trait de côte passe SOUS l'eau, et c'est voulu. Les polygones
+          // d'eau des tuiles sont découpés au bord de chaque tuile : souligner
+          // leur contour dessinait aussi ces coupures, d'où les longues droites
+          // en plein océan quand on zoome. Dessiné avant le remplissage, le
+          // contour est recouvert par l'eau de la tuile voisine — la coupure
+          // disparaît — tandis que la vraie côte garde sa moitié côté terre.
+          // D'où la largeur doublée : seule la moitié se voit.
           { id: "coast", type: "line", source: "o", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"],
-            paint: { "line-color": C.coast, "line-width": ["interpolate", ["linear"], ["zoom"], 3, .6, 8, 1.1] } },
+            paint: { "line-color": C.coast, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2.2] } },
+          { id: "lake-edge", type: "line", source: "o", "source-layer": "water", filter: ["!=", ["get", "class"], "ocean"],
+            paint: { "line-color": C.lakeEdge, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2] } },
+          { id: "water", type: "fill", source: "o", "source-layer": "water",
+            paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], C.sea, C.lake] } },
           { id: "river", type: "line", source: "o", "source-layer": "waterway", minzoom: 5,
             paint: { "line-color": C.river, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 12, 1.6] } },
           { id: "bnd", type: "line", source: "o", "source-layer": "boundary", filter: ["<=", ["get", "admin_level"], 2],
