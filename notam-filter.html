@@ -676,9 +676,14 @@
        Le mot prend la taille de Route et FIR (14 px, graisse 600) : les trois
        boutons ouvrent chacun une page, aucun n'est d'un rang inférieur.
        (Le MAP du haut, lui, est devenu un .routebtn ordinaire — ces règles ne
-       concernent plus que les MAP de la page Route et du panneau météo.) */
+       concernent plus que les MAP de la page Route et du panneau météo.)
+       Le troisième sélecteur pèse ce que pèsent les grosses pastilles du
+       bandeau (.hdr-actions .help-btn, largeur 38 px, police 19 px) : sans
+       lui, leur gabarit l'emportait sur celui-ci et le mot débordait de sa
+       case dans l'en-tête météo. */
     button.mapword,
-    span.mapword {
+    span.mapword,
+    .hdr-actions .help-btn.mapword {
       font: 600 14px/1 var(--sans);
       letter-spacing: .08em;
       color: var(--cyan);
@@ -15131,6 +15136,10 @@ function renderInfo(icao) {
       // s'efface alors à moitié — le fond redevient un repère. La vue NOTAM
       // garde ses contrastes plein soleil, et la nuit rien ne bouge.
       const FB = light && wx ? .45 : 1;
+      // Routes et fleuves, un cran plus bas encore : simples repères au sol,
+      // ils se lisaient toujours trop en plein jour sur PC et tablette face
+      // aux surcouches météo. Vue NOTAM et nuit : rien ne bouge.
+      const FR = light && wx ? .5 : 1;
       // `tiles:` et NON `url:` pour l'archive locale. Avec `url:`, MapLibre y voit
       // l'adresse d'un TileJSON : il appelle le protocole UNE fois, avec
       // "pmtiles://local" tout court, en attendant un descripteur de source. Le
@@ -15155,7 +15164,7 @@ function renderInfo(icao) {
           { id: "bnd", type: "line", source: "o", "source-layer": "boundaries", paint: { "line-color": C.border, "line-opacity": FB, "line-width": .8, "line-dasharray": [3, 3] } },
           { id: "roads", type: "line", source: "o", "source-layer": "roads", minzoom: 4,
             filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
-            paint: { "line-color": roadHi, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 4, .5, 6, 1.4] } }
+            paint: { "line-color": roadHi, "line-opacity": FB * FR, "line-width": ["interpolate", ["linear"], ["zoom"], 4, .5, 6, 1.4] } }
         );
       } else {                                           // schéma OpenMapTiles
         L.push(
@@ -15174,18 +15183,18 @@ function renderInfo(icao) {
           { id: "water", type: "fill", source: "o", "source-layer": "water",
             paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], C.sea, C.lake], "fill-opacity": FB } },
           { id: "river", type: "line", source: "o", "source-layer": "waterway", minzoom: 5,
-            paint: { "line-color": C.river, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 12, 1.6] } },
+            paint: { "line-color": C.river, "line-opacity": FB * FR, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 12, 1.6] } },
           { id: "bnd", type: "line", source: "o", "source-layer": "boundary", filter: ["<=", ["get", "admin_level"], 2],
             paint: { "line-color": C.border, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 3, .7, 9, 1.4], "line-dasharray": [3, 3] } },
           { id: "road-major", type: "line", source: "o", "source-layer": "transportation", minzoom: 5,
             filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk"]]],
-            paint: { "line-color": roadHi, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .6, 10, 1.9, 14, 3.4] } },
+            paint: { "line-color": roadHi, "line-opacity": FB * FR, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .6, 10, 1.9, 14, 3.4] } },
           // Sous le pixel, l'antialiasing rend la moitié du contraste gagné sur
           // la couleur : un trait à .4 px ne couvre que ~40 % de sa case. D'où
           // le plancher à .6 px, sans quoi la route secondaire reste pâle.
           { id: "road-minor", type: "line", source: "o", "source-layer": "transportation", minzoom: 8,
             filter: ["in", ["get", "class"], ["literal", ["primary", "secondary", "tertiary"]]],
-            paint: { "line-color": road, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .6, 14, 2] } },
+            paint: { "line-color": road, "line-opacity": FB * FR, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .6, 14, 2] } },
           { id: "aero-a", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "fill-color": C.dot, "fill-opacity": .45 * FB } },
           { id: "aero-l", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "line-color": C.dot, "line-opacity": FB, "line-width": 1.2 } }
         );
