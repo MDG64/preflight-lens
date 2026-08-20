@@ -15443,7 +15443,7 @@ function renderInfo(icao) {
         // lit debout, quel que soit le cap du vent.
         if (ws > 40) {
           const wcol = WXPAL[ws > 50 ? 3 : 2];
-          ctx.translate(0, -(GAP + SHAFT + 9 * dpr));
+          ctx.translate(0, -(GAP + SHAFT + 17 * dpr));
           ctx.rotate(-wd * Math.PI / 180);
           const tri = () => {
             ctx.beginPath();
