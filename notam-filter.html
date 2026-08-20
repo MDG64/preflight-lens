@@ -5298,6 +5298,8 @@ body .stat .k{
           <span class="mleg wx wd"><i class="wda g">↑</i>Wind/gust &lt; 20 kt</span>
           <span class="mleg wx wd"><i class="wda a">↑↑</i>Wind/gust 20–30 kt</span>
           <span class="mleg wx wd"><i class="wda r">↑↑↑</i>Wind/gust &gt; 30 kt</span>
+          <span class="mleg wx wd"><i class="wda a">⚠</i>Wind/gust &gt; 40 kt</span>
+          <span class="mleg wx wd"><i class="wda r">⚠</i>Wind/gust &gt; 50 kt</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
@@ -15434,6 +15436,28 @@ function renderInfo(icao) {
             ctx.lineTo(ax + HEAD * .75, -(GAP + HEAD));
             ctx.stroke();
           }
+        }
+        // Au-delà de 40 kt, un triangle « ! » — rouge au-delà de 50 — posé au
+        // DÉBUT du faisceau, au vent, à l'opposé du terrain. On annule la
+        // rotation autour de son point d'ancrage : un point d'exclamation se
+        // lit debout, quel que soit le cap du vent.
+        if (ws > 40) {
+          const wcol = WXPAL[ws > 50 ? 3 : 2];
+          ctx.translate(0, -(GAP + SHAFT + 9 * dpr));
+          ctx.rotate(-wd * Math.PI / 180);
+          const tri = () => {
+            ctx.beginPath();
+            ctx.moveTo(0, -8 * dpr);
+            ctx.lineTo(-7.5 * dpr, 6.5 * dpr);
+            ctx.lineTo(7.5 * dpr, 6.5 * dpr);
+            ctx.closePath();
+          };
+          ctx.strokeStyle = halo; ctx.lineWidth = 4 * dpr; tri(); ctx.stroke();
+          ctx.fillStyle = wcol; ctx.strokeStyle = wcol; ctx.lineWidth = 1.5 * dpr; tri(); ctx.fill(); ctx.stroke();
+          ctx.strokeStyle = halo; ctx.lineWidth = 2 * dpr;
+          ctx.beginPath(); ctx.moveTo(0, -3.5 * dpr); ctx.lineTo(0, 0.8 * dpr); ctx.stroke();
+          ctx.fillStyle = halo;
+          ctx.beginPath(); ctx.arc(0, 3.4 * dpr, 1.2 * dpr, 0, 7); ctx.fill();
         }
         ctx.restore();
       };
