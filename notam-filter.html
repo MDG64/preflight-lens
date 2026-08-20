@@ -655,51 +655,14 @@
       transition: transform .12s, color .12s, text-shadow .12s
     }
 
-    /* Le globe a rejoint .hdr-actions, à gauche du jour/nuit : il prend donc
-       la taille des boutons de ce groupe (38 px) et rend le `margin-left:auto`
-       — c'est désormais le GROUPE qui est poussé au bord droit, pas lui. */
-    .stationmapbtn {
-      width: 38px;
-      height: 38px;
-      flex: none;
-      border-radius: 50%;
-      border: 1px solid var(--line2);
-      background: #1a242c;
-      color: var(--cyan);
-      font: 21px/1 var(--sans);
-      cursor: pointer;
-      opacity: .7;
-      filter: grayscale(1);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: background .15s, border-color .15s, transform .12s, box-shadow .15s, opacity .15s, filter .15s
-    }
-
-    .stationmapbtn.hasroute {
-      opacity: 1;
-      filter: none;
+    /* MAP a quitté le groupe de droite pour se poser à droite de FIR : les
+       trois boutons Route · FIR · MAP ouvrent chacun une page, ils portent
+       donc le même habit (.routebtn) — même taille, même couleur, même
+       pilule. Il ne garde en propre que son signal : le liseré vert quand
+       une route est chargée. */
+    #stationMapBtn.hasroute {
       border-color: #34d39a;
       box-shadow: 0 0 0 1px #34d39a inset, 0 0 6px rgba(52,211,154,.3)
-    }
-
-    .stationmapbtn:hover {
-      border-color: var(--cyan);
-      background: #0f3340;
-      transform: scale(1.06)
-    }
-
-    .stationmapbtn:focus-visible {
-      outline: 2px solid var(--cyan);
-      outline-offset: 2px
-    }
-
-    body.light .stationmapbtn {
-      background: #eef4f7
-    }
-
-    body.light .stationmapbtn:hover {
-      background: #e3edf1
     }
 
     /* La carte s'annonce par le mot MAP et non plus par un globe : trois
@@ -711,9 +674,10 @@
        `grayscale`, écrit pour éteindre les couleurs de l'émoji, n'a plus
        d'objet sur du texte : c'est l'opacité qui dit désormais l'état inerte.
        Le mot prend la taille de Route et FIR (14 px, graisse 600) : les trois
-       boutons ouvrent chacun une page, aucun n'est d'un rang inférieur. */
+       boutons ouvrent chacun une page, aucun n'est d'un rang inférieur.
+       (Le MAP du haut, lui, est devenu un .routebtn ordinaire — ces règles ne
+       concernent plus que les MAP de la page Route et du panneau météo.) */
     button.mapword,
-    .hdr-actions button.mapword,
     span.mapword {
       font: 600 14px/1 var(--sans);
       letter-spacing: .08em;
@@ -729,7 +693,6 @@
        demandent du contraste : le mot passe au noir, comme le texte de la
        page. */
     body.light button.mapword,
-    body.light .hdr-actions button.mapword,
     body.light span.mapword {
       color: #10161b
     }
@@ -740,7 +703,6 @@
     @media (max-width:560px) {
 
       button.mapword,
-      .hdr-actions button.mapword,
       span.mapword {
         font-size: 11.5px;
         width: auto;
@@ -3940,10 +3902,7 @@
         font-size: 12px
       }
 
-      /* Le globe suit ses deux voisins du groupe — il est du même jeu, il
-         rétrécit avec eux. */
-      .hdr-actions .help-btn,
-      .hdr-actions .stationmapbtn {
+      .hdr-actions .help-btn {
         width: 29px;
         height: 29px;
         font-size: 14px
@@ -3953,7 +3912,7 @@
          cases ICAO : dès qu'une route est saisie, DEST et ALT prenaient toute
          la largeur et repoussaient les symboles sur une deuxième ligne mal
          rangée. On assume donc les deux lignes — d'abord les départs et les
-         réglages (⌂, globe, FIR, jour/nuit, ?), ensuite les codes — au lieu de
+         réglages (⌂, FIR, MAP, jour/nuit, ?), ensuite les codes — au lieu de
          les laisser se bousculer. `display:contents` efface la boîte du groupe
          pour que ses boutons deviennent des éléments de la barre : on peut
          alors les ordonner avec le FIR et les codes, et glisser entre les deux
@@ -3962,20 +3921,21 @@
         display: contents
       }
 
-      /* La maison reste seule à gauche — c'est la sortie ; les autres
-         pastilles (globe, FIR, jour/nuit, ?) se rangent au bord droit,
-         poussées par le ressort de la marge automatique. */
+      /* La maison reste seule à gauche — c'est la sortie ; le reste (FIR,
+         MAP, jour/nuit, ?) se range au bord droit, poussé par le ressort de
+         la marge automatique. */
       #homeBtn {
         order: 1;
         margin-left: 0;
         margin-right: auto
       }
 
-      .hdr-actions .stationmapbtn {
+      #firMapBtn {
         order: 2
       }
 
-      #firMapBtn {
+      /* MAP garde sa place de la version large : juste à droite de FIR. */
+      #stationMapBtn {
         order: 3
       }
 
@@ -5031,10 +4991,9 @@ body .stat .k{
       <div class="st-route" id="stRoute" hidden></div>
       <button class="routebtn" id="routeBtn">Route</button>
       <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
+      <button class="routebtn" id="stationMapBtn" aria-label="Show route map" title="Show route map">MAP</button>
       <div class="hdr-actions">
         <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
-        <button class="stationmapbtn mapword" id="stationMapBtn" aria-label="Show route map"
-          title="Show route map">MAP</button>
         <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
       </div>
@@ -5425,12 +5384,6 @@ body .stat .k{
           <div class="hd-desc">Type the <b>4-letter ICAO code</b> of the aerodrome.</div>
         </div>
         <div class="hd-row">
-          <div class="hd-vis"><span class="hd-cbtn mapword">MAP</span></div>
-          <div class="hd-arr">→</div>
-          <div class="hd-desc">Open the <b>map</b> centred on the aerodrome shown. Once a route has been run, the same
-            map draws it.</div>
-        </div>
-        <div class="hd-row">
           <div class="hd-vis"><span class="hd-chip">Route</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Open the <b>Route</b> page — see below.</div>
@@ -5439,6 +5392,12 @@ body .stat .k{
           <div class="hd-vis"><span class="hd-chip">FIR</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Open the <b>world FIR map</b> — see below.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-chip">MAP</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Open the <b>map</b> centred on the aerodrome shown. Once a route has been run, the same
+            map draws it.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div>
