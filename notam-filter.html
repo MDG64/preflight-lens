@@ -4235,12 +4235,18 @@ body.light .stat.on {
     }
 
     /* Pictogramme plutot que photo (Weather) : il doit tenir ENTIER dans la
-       boite, pas etre recadre. Meme gabarit 16/9 que les autres cases — c'est
-       lui qui maigrit, l'alignement des trois ne bouge pas. Fond transparent :
-       la tuile porte deja son propre fond arrondi. */
+       boite, pas etre recadre. Meme gabarit que les autres cases — c'est lui
+       qui maigrit, l'alignement des trois ne bouge pas.
+       Les deux voisines sont des photos qui remplissent leur vignette ; celle-ci
+       flottait dans le vide. Elle reçoit donc son propre fond, un ciel de nuit
+       du meme gabarit et du meme arrondi que les deux clichés — et le meme dans
+       les deux thèmes, puisque c'est une nuit. Le retrait laisse respirer le
+       dessin sans changer la taille de la vignette. */
     .home-card img.hc-icon {
       object-fit: contain;
-      border-radius: 0
+      box-sizing: border-box;
+      padding: 12px;
+      background: radial-gradient(120% 90% at 50% 0%, #1d2c47 0%, #131c2e 45%, #0a0f1a 100%)
     }
 
     /* La carte tient la ligne du dessous à elle seule, mais garde la taille
