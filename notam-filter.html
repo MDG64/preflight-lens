@@ -5198,7 +5198,7 @@ body .stat .k{
           <span class="rd" aria-hidden="true"></span>
           <span class="lb nt">NOTAM</span>
         </label>
-        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, blowing downwind onto the station">
+        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, gusts included, blowing downwind onto the station">
           <input type="checkbox" id="mapWindChk">
           <span class="rd" aria-hidden="true"></span>
           <span class="lb">Wind</span>
@@ -5219,9 +5219,9 @@ body .stat .k{
           <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 700 ft</span>
           <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 700 ft</span>
           <span class="mleg wx"><i class="dot mgrey"></i>No usable data</span>
-          <span class="mleg wx wd"><i class="wda g">↑</i>Wind &lt; 20 kt</span>
-          <span class="mleg wx wd"><i class="wda a">↑↑</i>Wind 20–30 kt</span>
-          <span class="mleg wx wd"><i class="wda r">↑↑↑</i>Wind &gt; 30 kt</span>
+          <span class="mleg wx wd"><i class="wda g">↑</i>Wind/gust &lt; 20 kt</span>
+          <span class="mleg wx wd"><i class="wda a">↑↑</i>Wind/gust 20–30 kt</span>
+          <span class="mleg wx wd"><i class="wda r">↑↑↑</i>Wind/gust &gt; 30 kt</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
@@ -15309,7 +15309,8 @@ function renderInfo(icao) {
         ? (mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0))
         : (savedSet.has(icao) ? 0 : 1);
       // --- flèches de vent (vue Weather, interrupteur WIND) ---
-      // Une flèche par tranche de 10 kt entamée, aux couleurs de la carte :
+      // Une flèche par tranche de 10 kt entamée — rafale comprise, c'est
+      // mapWindOf qui rend le vent le plus fort annoncé —, aux couleurs de la carte :
       // vert < 20 kt, ambre jusqu'à 30, rouge au-delà — les seuils de Weather
       // Lens, pour que la même flèche dise la même chose dans les deux apps.
       // Le faisceau se pose AU VENT du terrain (rotation = direction d'où
@@ -15579,29 +15580,33 @@ function renderInfo(icao) {
 
     // Vent du corps du METAR : premier groupe dddffGffKT (ou MPS/KMH, ramené
     // en nœuds). Direction VRB ou /// : null — pas d'orientation à donner à
-    // une flèche. La rafale n'est pas retenue : les flèches disent le vent
-    // moyen, le détail s'obtient au clic. Repris du serveur Weather Lens
-    // (wx-map.js), pour que la même flèche dise la même chose dans les deux apps.
-    const WX_WIND_RE = /^(\d{3}|VRB|\/{3})(\d{2,3})(?:G\d{2,3})?(KT|MPS|KMH)$/;
+    // une flèche. La rafale est retenue : sur la carte, 19G29 doit peser
+    // 29 kt — c'est le vent le plus fort annoncé qui fait le danger, pas la
+    // moyenne. Repris du serveur Weather Lens (wx-map.js), pour que la même
+    // flèche dise la même chose dans les deux apps.
+    const WX_WIND_RE = /^(\d{3}|VRB|\/{3})(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)$/;
     function wxWindOfRaw(raw) {
       for (const t of String(raw || "").toUpperCase().replace(/=/g, " ").split(/\s+/)) {
         if (t === "RMK" || t === "TEMPO" || t === "BECMG") break;
         const m = WX_WIND_RE.exec(t);
         if (!m) continue;
-        const k = m[3] === "MPS" ? 1.94384 : m[3] === "KMH" ? 1 / 1.852 : 1;
+        const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
         return { dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) % 360 : null,
-                 spd: Math.round(parseInt(m[2], 10) * k) };
+                 spd: Math.round(parseInt(m[2], 10) * k),
+                 gst: m[3] ? Math.round(parseInt(m[3], 10) * k) : 0 };
       }
       return null;
     }
 
     // Le vent d'un terrain, deux sources comme la couleur de son point : le
     // relevé individuel de la route quand il est frais (plus récent), sinon le
-    // flux mondial du proxy. Rien de dessinable (calme, VRB, périmé) : null.
+    // flux mondial du proxy. La vitesse rendue est le vent le plus FORT
+    // annoncé, rafale comprise — c'est elle qui compte les flèches et choisit
+    // leur couleur. Rien de dessinable (calme, VRB, périmé) : null.
     function mapWindOf(icao) {
       const e = mapWx.get(icao);
       if (e && e.t && Date.now() - e.t <= MAP_WX_MAX_AGE) {
-        return (e.wdir != null && e.wspd >= 2) ? [e.wdir, e.wspd] : null;
+        return (e.wdir != null && e.wspd >= 2) ? [e.wdir, Math.max(e.wspd, e.wgst || 0)] : null;
       }
       const w = mapWxWind.get(icao);
       return (w && w[0] != null && w[1] >= 2) ? w : null;
@@ -15612,7 +15617,7 @@ function renderInfo(icao) {
       const vc = m && m.raw ? wxVisCeil(m.raw) : { vis: null, ceil: null };
       const w = m && m.raw ? wxWindOfRaw(m.raw) : null;
       mapWx.set(icao, { vis: vc.vis, ceil: vc.ceil, wdir: w ? w.dir : null, wspd: w ? w.spd : 0,
-                        t: m ? (Date.parse(m.time || "") || 0) : 0, at });
+                        wgst: w ? w.gst : 0, t: m ? (Date.parse(m.time || "") || 0) : 0, at });
     }
 
     function mapWxCatOf(icao) {
@@ -15659,9 +15664,11 @@ function renderInfo(icao) {
         const m = new Map(), w = new Map();
         for (const s of d.stations) {
           m.set(s[0], s[3]);
-          // [wdir, wspd] absents si calme ou METAR périmé, wdir null si VRB :
-          // le proxy applique la même règle de fraîcheur qu'à la catégorie.
-          if (s.length > 4 && s[5] > 0) w.set(s[0], [s[4], s[5]]);
+          // [wdir, wspd] absents si calme ou METAR périmé, wdir null si VRB,
+          // rafale en 7e position quand elle dépasse la moyenne : on retient
+          // le plus fort des deux. Le proxy applique la même règle de
+          // fraîcheur qu'à la catégorie.
+          if (s.length > 4 && s[5] > 0) w.set(s[0], [s[4], Math.max(s[5], s[6] || 0)]);
         }
         mapWxWorld = m; mapWxWind = w; mapWxWorldAt = Date.now();
         if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
@@ -15745,6 +15752,13 @@ function renderInfo(icao) {
       // La carte s'ouvre en vue weather ; la météo de la route arrive en
       // asynchrone et recolore les points au fil des réponses.
       setMapMode("wx");
+      // Le vent repart toujours ÉTEINT : la carte s'ouvre sur les couleurs
+      // des points, le faisceau ne revient que si on le rallume — le
+      // navigateur peut restaurer la case cochée d'une visite passée, on ne
+      // s'y fie pas.
+      mapWindOn = false;
+      $("#mapWindChk").checked = false;
+      $("#mapOv").classList.remove("wind-on");
       mapWxTargets = routeOk ? curRoute.airports.map(a => a.icao) : [];
       if (focus && !mapWxTargets.includes(focus.icao)) mapWxTargets.push(focus.icao);
       mapWxRefresh();
