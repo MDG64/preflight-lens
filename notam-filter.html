@@ -16187,6 +16187,18 @@ function renderInfo(icao) {
           const r = $("#routeMap").getBoundingClientRect(), dpr = mapView.dpr;
           clickAt((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
         });
+        // Survol souris : la main devient un doigt au-dessus d'un terrain
+        // cliquable — même hit-test que le clic. Le curseur se pose en style
+        // inline sur le canvas MapLibre (le canvas 2D ne reçoit rien ici) ;
+        // vidé, la CSS MapLibre reprend la main (grab).
+        host.addEventListener("pointermove", e => {
+          if (!GL.active || !GL.map || !mapView) return;
+          const c = GL.map.getCanvas();
+          if (down) { c.style.cursor = ""; return; }          // en plein glisser : grabbing, pas le doigt
+          const r = $("#routeMap").getBoundingClientRect(), dpr = mapView.dpr;
+          const px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr;
+          c.style.cursor = (hitAirport(px, py) || hitWorld(px, py)) ? "pointer" : "";
+        });
       })();
       cv.addEventListener("touchstart", e => {
         if (e.touches.length === 2) {
