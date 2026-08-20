@@ -709,12 +709,14 @@
        coins doux, large de son texte plus une gouttière. La hauteur, elle, ne
        bouge pas — la case reste alignée sur les ronds de la même rangée. Le
        `grayscale`, écrit pour éteindre les couleurs de l'émoji, n'a plus
-       d'objet sur du texte : c'est l'opacité qui dit désormais l'état inerte. */
+       d'objet sur du texte : c'est l'opacité qui dit désormais l'état inerte.
+       Le mot prend la taille de Route et FIR (14 px, graisse 600) : les trois
+       boutons ouvrent chacun une page, aucun n'est d'un rang inférieur. */
     button.mapword,
     .hdr-actions button.mapword,
     span.mapword {
-      font: 700 11px/1 var(--sans);
-      letter-spacing: .06em;
+      font: 600 14px/1 var(--sans);
+      letter-spacing: .08em;
       color: var(--cyan);
       filter: none;
       width: auto;
