@@ -15398,6 +15398,10 @@ function renderInfo(icao) {
       // entière les flèches ne racontent plus rien, seuls les disques
       // colorés parlent, et l'interrupteur WIND reste allumé pour le retour
       // au zoom utile.
+      // Boîtes englobantes des faisceaux dessinés dans CE rendu, en
+      // coordonnées écran : les étiquettes OACI les consultent pour ne
+      // jamais se poser sur une flèche — la leur comme celle d'un voisin.
+      const windBoxes = [];
       const windArrow = (icao, x, y) => {
         if (!mapWindOn || mapMode !== "wx") return;
         if (v.scale < 45) return;
@@ -15470,6 +15474,18 @@ function renderInfo(icao) {
           ctx.beginPath(); ctx.arc(0, 3.4 * s, 1.2 * s, 0, 7); ctx.fill();
         }
         ctx.restore();
+        // La boîte du faisceau — triangle « ! » compris — tournée du cap du
+        // vent puis englobée à l'écran, halo compté dans les marges.
+        const th = wd * Math.PI / 180, cos = Math.cos(th), sin = Math.sin(th);
+        const hw = Math.max((n - 1) / 2 * STEP + 7 * s, ws > 40 ? 9.5 * s : 0);
+        const y0 = -(GAP + SHAFT + (ws > 40 ? 27 * s : 2.5 * s)), y1 = -GAP + 2.5 * s;
+        let bx0 = 1/0, by0 = 1/0, bx1 = -1/0, by1 = -1/0;
+        for (const [u, vv] of [[-hw, y0], [hw, y0], [-hw, y1], [hw, y1]]) {
+          const px = x + u * cos - vv * sin, py = y + u * sin + vv * cos;
+          if (px < bx0) bx0 = px; if (px > bx1) bx1 = px;
+          if (py < by0) by0 = py; if (py > by1) by1 = py;
+        }
+        windBoxes.push([bx0, by0, bx1, by1]);
       };
       // Rayon commun à tous les points de la carte. En vue Weather il vaut
       // pour tout le monde, route comprise : la carte météo ne dit qu'une
@@ -15519,6 +15535,9 @@ function renderInfo(icao) {
         // Toutes les flèches d'abord, tous les points ensuite : un faisceau ne
         // passe jamais par-dessus le disque d'un voisin.
         for (const p of world) windArrow(p.a.icao, p.x, p.y);
+        // Les faisceaux comptent comme des occupants : une étiquette qui les
+        // aurait chevauchés cherche un autre côté du point.
+        placed.push(...windBoxes);
         for (const { a, x, y } of world) {
           const saved = savedSet.has(a.icao);
           ctx.fillStyle = dotCol(a.icao);
@@ -15611,8 +15630,22 @@ function renderInfo(icao) {
           const lr = labelPx / 12;                      // ratio par rapport à la taille de référence (12px)
           ctx.font = (depArr ? "700 " : "600 ") + (labelPx * dpr) + "px 'IBM Plex Mono',monospace";
           const w = ctx.measureText(a.icao).width;
-          const pad = 6 * dpr, bh = 14 * dpr;
-          boxX = x + dotR + 3 * dpr; boxY = y - bh / 2; boxW = w + pad * 2; boxH = bh;
+          const pad = 6 * dpr, bh = 14 * dpr, bw = w + pad * 2;
+          // Même règle que la couche mondiale : le libellé évite les faisceaux
+          // de vent — droite d'abord, puis gauche, dessus, dessous ; aucune
+          // place libre, la droite quand même (jamais de disparition).
+          const cands = [
+            [x + dotR + 3 * dpr, y - bh / 2],
+            [x - bw - dotR - 3 * dpr, y - bh / 2],
+            [x - bw / 2, y - dotR - bh - 2 * dpr],
+            [x - bw / 2, y + dotR + 2 * dpr],
+          ];
+          let pick = cands[0];
+          for (const cnd of cands) {
+            const b = [cnd[0], cnd[1], cnd[0] + bw, cnd[1] + bh];
+            if (!windBoxes.some(p => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1])) { pick = cnd; break; }
+          }
+          boxX = pick[0]; boxY = pick[1]; boxW = bw; boxH = bh;
           // étiquette « pastille » arrondie (style capsule) : fond = couleur du point, texte foncé
           const rr = boxH / 2;
           ctx.lineJoin = "round";
@@ -15622,7 +15655,8 @@ function renderInfo(icao) {
           // capsule transparente, liseré = couleur du point (vert=téléchargé, rouge=non)
           ctx.lineWidth = 1.4 * lr * dpr; ctx.strokeStyle = col; ctx.stroke();
           ctx.fillStyle = C.txt;
-          ctx.textAlign = "left"; ctx.fillText(a.icao, boxX + pad, y); ctx.textAlign = "start";
+          // Centré sur la capsule, plus sur le point : elle peut avoir déménagé.
+          ctx.textAlign = "left"; ctx.fillText(a.icao, boxX + pad, boxY + boxH / 2); ctx.textAlign = "start";
         }
         // zone cliquable : pastille (rayon élargi pour le tactile) + rectangle d'étiquette,
         // dans l'ordre de dessin (le dernier poussé = dessiné au-dessus, donc prioritaire au clic)
