@@ -3392,6 +3392,67 @@
       color: var(--text)
     }
 
+    /* Sélecteur d'horizon du vent : quatre ronds à cocher, un seul allumé —
+       le rond se remplit de vert comme le curseur des interrupteurs voisins.
+       Il n'existe à l'écran que quand WIND montre ses flèches, et jamais en
+       vue NOTAM. */
+    #mapOv:not(.wind-on) .map-wind-hours,
+    #mapOv.notam-mode .map-wind-hours {
+      display: none
+    }
+
+    .map-wind-hours {
+      gap: 12px;
+      cursor: default;
+    }
+
+    .map-wind-hours .wh {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      font: 600 10.5px/1 var(--sans);
+      letter-spacing: .09em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .map-wind-hours .wh .c {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      flex: none;
+      border: 1.5px solid var(--line2);
+      background: transparent;
+      transition: background .15s, border-color .15s;
+    }
+
+    .map-wind-hours .wh:hover {
+      color: var(--text)
+    }
+
+    .map-wind-hours .wh:hover .c {
+      border-color: var(--muted)
+    }
+
+    .map-wind-hours .wh.on {
+      color: var(--text)
+    }
+
+    .map-wind-hours .wh.on .c {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .map-wind-hours .wh:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
     /* Le bandeau LEGEND au-dessus du cartouche : même carte que le curseur de
        vue, le mot à gauche, l'œil à droite. Replié, le cartouche disparaît et
        le bandeau reste — c'est lui qui fait revenir la légende. */
@@ -3528,6 +3589,10 @@
 
     .mleg .wda.r {
       color: var(--red)
+    }
+
+    .mleg .wda.f {
+      color: var(--muted)
     }
 
     /* Chaque vue n'affiche que les lignes qu'elle explique. */
@@ -5203,6 +5268,17 @@ body .stat .k{
           <span class="rd" aria-hidden="true"></span>
           <span class="lb">Wind</span>
         </label>
+        <!-- Sélecteur d'horizon du vent, visible seulement quand WIND est
+             allumé : NOW = vent du METAR, +1/+2/+3 h = vent prévu par le TAF à
+             cette heure-là (flèches en pointillés) ; un terrain dont le TAF ne
+             change pas le vent garde celui du METAR. -->
+        <div class="map-mode map-wind-hours" id="mapWindHours" role="radiogroup" aria-label="Wind time"
+             title="Wind time — NOW shows the METAR wind; +1/+2/+3 h show the TAF forecast wind (dashed arrows). Stations whose TAF gives no wind for that hour keep their METAR wind.">
+          <button type="button" class="wh on" data-h="0" aria-label="METAR wind now"><i class="c" aria-hidden="true"></i>now</button>
+          <button type="button" class="wh" data-h="1" aria-label="TAF wind in 1 hour"><i class="c" aria-hidden="true"></i>+1h</button>
+          <button type="button" class="wh" data-h="2" aria-label="TAF wind in 2 hours"><i class="c" aria-hidden="true"></i>+2h</button>
+          <button type="button" class="wh" data-h="3" aria-label="TAF wind in 3 hours"><i class="c" aria-hidden="true"></i>+3h</button>
+        </div>
         <!-- Le bandeau LEGEND coiffe le cartouche ; son œil le replie et le
              fait revenir — la carte se lit alors sans légende, le bandeau seul
              reste. Les interrupteurs, eux, ne bougent pas — on ne cache que ce
@@ -5222,6 +5298,7 @@ body .stat .k{
           <span class="mleg wx wd"><i class="wda g">↑</i>Wind/gust &lt; 20 kt</span>
           <span class="mleg wx wd"><i class="wda a">↑↑</i>Wind/gust 20–30 kt</span>
           <span class="mleg wx wd"><i class="wda r">↑↑↑</i>Wind/gust &gt; 30 kt</span>
+          <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
@@ -15335,13 +15412,21 @@ function renderInfo(icao) {
         ctx.translate(x, y);
         ctx.rotate(wd * Math.PI / 180);
         ctx.lineCap = "round"; ctx.lineJoin = "round";
+        // Sur un horizon prévu (+1/+2/+3 h), le fût passe en pointillé — la
+        // pointe reste pleine pour garder son cap lisible : c'est la VUE qui
+        // est une prévision, vent TAF ou METAR conservé.
+        const dash = mapWindHour > 0 ? [4 * dpr, 3.2 * dpr] : [];
         for (const [c, lw] of [[halo, 4 * dpr], [col, 1.7 * dpr]]) {
           ctx.strokeStyle = c; ctx.lineWidth = lw;
           for (let i = 0; i < n; i++) {
             const ax = (i - (n - 1) / 2) * STEP;
+            ctx.setLineDash(dash);
             ctx.beginPath();
             ctx.moveTo(ax, -(GAP + SHAFT));
             ctx.lineTo(ax, -GAP);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.beginPath();
             ctx.moveTo(ax - HEAD * .75, -(GAP + HEAD));
             ctx.lineTo(ax, -GAP);
             ctx.lineTo(ax + HEAD * .75, -(GAP + HEAD));
@@ -15525,6 +15610,8 @@ function renderInfo(icao) {
     const MAP_WX_MAX_AGE = 210 * 60e3;   // au-delà, l'observation ne décrit plus le présent : gris
     const MAP_WX_TTL = 5 * 60e3;         // fraîcheur d'un relevé déjà chargé — aligné sur le cache du proxy
     let mapMode = "wx", mapWxTargets = [], mapWindOn = false;
+    // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
+    let mapWindHour = 0;
     const mapWx = new Map();             // icao -> { vis, ceil, wdir, wspd, t: heure du METAR, at: heure du fetch }
 
     // Décodage minimal : seuls les groupes qui portent sur les deux seuils de
@@ -15603,7 +15690,15 @@ function renderInfo(icao) {
     // flux mondial du proxy. La vitesse rendue est le vent le plus FORT
     // annoncé, rafale comprise — c'est elle qui compte les flèches et choisit
     // leur couleur. Rien de dessinable (calme, VRB, périmé) : null.
+    // Sur un horizon prévu (+1/+2/+3 h), le vent que le TAF donne pour cette
+    // heure-là remplace celui du METAR — et faute d'un groupe TAF qui gouverne
+    // cet instant, le vent du METAR reste.
     function mapWindOf(icao) {
+      if (mapWindHour > 0) {
+        const f = mapWxFc.get(icao);
+        const s = f && f[mapWindHour - 1];
+        if (s) return (s[0] != null && s[1] >= 2) ? [s[0], Math.max(s[1], s[2] || 0)] : null;
+      }
       const e = mapWx.get(icao);
       if (e && e.t && Date.now() - e.t <= MAP_WX_MAX_AGE) {
         return (e.wdir != null && e.wspd >= 2) ? [e.wdir, Math.max(e.wspd, e.wgst || 0)] : null;
@@ -15654,6 +15749,7 @@ function renderInfo(icao) {
     const MAP_WXWORLD_TTL = 60e3;
     let mapWxWorld = new Map(), mapWxWorldAt = 0;   // icao -> cat (0..3)
     let mapWxWind = new Map();                      // icao -> [wdir, wspd kt] — queue de ligne du flux
+    let mapWxFc = new Map();                        // icao -> vents TAF [+1h,+2h,+3h], triplets [dir,spd,gst] ou 0
     async function mapWxWorldRefresh() {
       if (Date.now() - mapWxWorldAt < MAP_WXWORLD_TTL) return;
       try {
@@ -15670,7 +15766,13 @@ function renderInfo(icao) {
           // fraîcheur qu'à la catégorie.
           if (s.length > 4 && s[5] > 0) w.set(s[0], [s[4], Math.max(s[5], s[6] || 0)]);
         }
-        mapWxWorld = m; mapWxWind = w; mapWxWorldAt = Date.now();
+        // d.winds porte à part les vents PRÉVUS par TAF : par OACI, un triplet
+        // [dir,spd,gst] par horizon +1/+2/+3 h, ou 0 quand le TAF ne gouverne
+        // pas cet instant — le sélecteur d'horizon pioche dedans sans
+        // re-requêter.
+        const fc = new Map();
+        if (d.winds) for (const k in d.winds) fc.set(k, d.winds[k]);
+        mapWxWorld = m; mapWxWind = w; mapWxFc = fc; mapWxWorldAt = Date.now();
         if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
       } catch (_) { }
     }
@@ -15690,11 +15792,25 @@ function renderInfo(icao) {
     };
     // Interrupteur des flèches de vent : l'état vit dans la classe du
     // conteneur (pour la légende) et dans mapWindOn (pour le dessin).
+    // L'éteindre ramène l'horizon sur NOW — au rallumage, la carte repart du
+    // vent OBSERVÉ, pas d'une prévision choisie avant.
     $("#mapWindChk").onchange = e => {
       mapWindOn = e.target.checked;
       $("#mapOv").classList.toggle("wind-on", mapWindOn);
+      if (!mapWindOn) setMapWindHour(0);
       drawMap();
     };
+    // Sélecteur d'horizon : un rond s'allume, toutes les flèches se
+    // redessinent — pas de nouvelle requête, les vents TAF sont déjà dans le
+    // flux de la carte.
+    function setMapWindHour(h) {
+      mapWindHour = h;
+      document.querySelectorAll("#mapWindHours .wh").forEach(b =>
+        b.classList.toggle("on", +b.dataset.h === h));
+    }
+    document.querySelectorAll("#mapWindHours .wh").forEach(b => {
+      b.onclick = () => { setMapWindHour(+b.dataset.h); drawMap(); };
+    });
     // L'œil replie la légende ; il ne touche à rien d'autre.
     $("#mapLegEye").onclick = () => $("#mapOv").classList.toggle("leg-off");
     // Le bloc curseur+légende vit dans le conteneur qui écoute les clics de la
@@ -15759,6 +15875,7 @@ function renderInfo(icao) {
       mapWindOn = false;
       $("#mapWindChk").checked = false;
       $("#mapOv").classList.remove("wind-on");
+      setMapWindHour(0);
       mapWxTargets = routeOk ? curRoute.airports.map(a => a.icao) : [];
       if (focus && !mapWxTargets.includes(focus.icao)) mapWxTargets.push(focus.icao);
       mapWxRefresh();
