@@ -4613,6 +4613,13 @@ body.light .stat.on {
       display: flex
     }
 
+    /* Même parade pour la page d'accueil : sans leur boîte, le jour/nuit et
+       le « ? » se collaient au mot « Lens » au lieu du bord droit. La marge
+       automatique de la boîte les y ramène, sur la ligne du titre. */
+    .home-head .hdr-actions {
+      display: flex
+    }
+
     .wx-status {
       margin-top: 8px;
       font: 500 12px/1.4 var(--sans);
