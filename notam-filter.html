@@ -3392,12 +3392,24 @@
       color: var(--text)
     }
 
-    /* L'œil et la légende partagent une rangée : l'icône se cale au pied du
-       cartouche, et reste seule quand la légende est repliée. */
-    .mleg-row {
+    /* Le bandeau LEGEND au-dessus du cartouche : même carte que le curseur de
+       vue, le mot à gauche, l'œil à droite. Replié, le cartouche disparaît et
+       le bandeau reste — c'est lui qui fait revenir la légende. */
+    .mleg-head {
       display: flex;
-      align-items: flex-end;
-      gap: 6px;
+      align-items: center;
+      gap: 9px;
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: var(--radius);
+      padding: 4px 8px 4px 12px;
+    }
+
+    .mleg-head .lb {
+      font: 600 10.5px/1 var(--sans);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
 
     .mleg-eye {
@@ -3405,19 +3417,18 @@
       align-items: center;
       justify-content: center;
       flex: none;
-      width: 28px;
-      height: 28px;
+      width: 22px;
+      height: 22px;
       padding: 0;
       cursor: pointer;
       color: var(--muted);
-      background: var(--panel);
-      border: 1px solid var(--line2);
-      border-radius: var(--radius);
+      background: none;
+      border: 0;
+      border-radius: 6px;
     }
 
     .mleg-eye:hover {
       color: var(--text);
-      border-color: var(--muted);
     }
 
     .mleg-eye svg {
@@ -5192,10 +5203,17 @@ body .stat .k{
           <span class="rd" aria-hidden="true"></span>
           <span class="lb">Wind</span>
         </label>
-        <!-- L'œil replie la légende : la carte se lit alors sans cartouche, et
-             l'icône reste seule pour la faire revenir. Les interrupteurs, eux,
-             ne bougent pas — on ne cache que ce qui EXPLIQUE, jamais ce qui AGIT. -->
-        <div class="mleg-row">
+        <!-- Le bandeau LEGEND coiffe le cartouche ; son œil le replie et le
+             fait revenir — la carte se lit alors sans légende, le bandeau seul
+             reste. Les interrupteurs, eux, ne bougent pas — on ne cache que ce
+             qui EXPLIQUE, jamais ce qui AGIT. -->
+        <div class="mleg-head">
+          <span class="lb">Legend</span>
+          <button class="mleg-eye" id="mapLegEye" type="button" aria-label="Hide or show the legend" title="Hide / show legend">
+            <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
         <div class="map-legend">
           <span class="mleg wx"><i class="dot mred"></i>VIS ≤ 600 m or ceiling ≤ 300 ft</span>
           <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 700 ft</span>
@@ -5207,11 +5225,6 @@ body .stat .k{
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
-        </div>
-        <button class="mleg-eye" id="mapLegEye" type="button" aria-label="Hide or show the legend" title="Hide / show legend">
-          <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-          <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-        </button>
         </div>
       </div>
     </div>
