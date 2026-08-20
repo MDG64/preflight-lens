@@ -3957,9 +3957,13 @@
         display: contents
       }
 
+      /* La maison reste seule à gauche — c'est la sortie ; les autres
+         pastilles (globe, FIR, jour/nuit, ?) se rangent au bord droit,
+         poussées par le ressort de la marge automatique. */
       #homeBtn {
         order: 1;
-        margin-left: 0
+        margin-left: 0;
+        margin-right: auto
       }
 
       .hdr-actions .stationmapbtn {
