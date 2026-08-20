@@ -3181,13 +3181,16 @@
     /* Panneau METAR/TAF de la vue Weather : au clic sur un point ou un code,
        il entre par la gauche et se pose SUR la carte sans la couvrir — la
        station cliquée et son voisinage restent lisibles à droite. Il se
-       referme comme il est venu : un glissement du doigt vers la gauche. */
+       referme comme il est venu : un glissement du doigt vers la gauche.
+       7 : au-dessus de la flèche ← (6) — panneau ouvert, la flèche disparaît
+       dessous ; on sort du relevé par sa croix ou le glissement, pas de la
+       carte. */
     .mapwx {
       position: absolute;
       left: 0;
       top: 0;
       bottom: 0;
-      z-index: 5;
+      z-index: 7;
       width: min(340px, 86%);
       display: flex;
       flex-direction: column;
@@ -3220,9 +3223,9 @@
          confisqué par le navigateur, aucun pointermove n'arrive, et le
          panneau ne se ferme jamais sur mobile. */
       touch-action: pan-y;
-      /* Sous la flèche ← de la carte, qui flotte par-dessus le coin
-         haut-gauche du panneau : le contenu commence après elle. */
-      padding: 60px 14px 16px;
+      /* La flèche ← de la carte est passée SOUS le panneau : le contenu
+         reprend le haut du cadre, seule la croix garde son coin droit. */
+      padding: 14px 14px 16px;
     }
 
     .mapwx-x {
