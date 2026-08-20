@@ -15132,9 +15132,15 @@ function renderInfo(icao) {
           cover: "#232d26", road: "#465464", roadHi: "#617484"
         };
     }
-    function glStyle(light, offline) {
+    function glStyle(light, offline, wx) {
       const C = glPalette(light);
       const cover = C.cover, road = C.road, roadHi = C.roadHi;
+      // En vue WEATHER de jour, la palette ci-dessus dispute la vedette aux
+      // surcouches : mer bleue et couvert vert éteignent les flèches de vent
+      // et les pastilles météo. Tout ce qui est peint sur la terre blanche
+      // s'efface alors à moitié — le fond redevient un repère. La vue NOTAM
+      // garde ses contrastes plein soleil, et la nuit rien ne bouge.
+      const FB = light && wx ? .45 : 1;
       // `tiles:` et NON `url:` pour l'archive locale. Avec `url:`, MapLibre y voit
       // l'adresse d'un TileJSON : il appelle le protocole UNE fois, avec
       // "pmtiles://local" tout court, en attendant un descripteur de source. Le
@@ -15153,17 +15159,17 @@ function renderInfo(icao) {
       if (offline) {                                     // schéma Protomaps
         L.push(
           { id: "earth", type: "fill", source: "o", "source-layer": "earth", paint: { "fill-color": C.land } },
-          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .85 } },
-          { id: "water", type: "fill", source: "o", "source-layer": "water", paint: { "fill-color": C.sea } },
-          { id: "coast", type: "line", source: "o", "source-layer": "earth", paint: { "line-color": C.coast, "line-width": .9 } },
-          { id: "bnd", type: "line", source: "o", "source-layer": "boundaries", paint: { "line-color": C.border, "line-width": .8, "line-dasharray": [3, 3] } },
+          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .85 * FB } },
+          { id: "water", type: "fill", source: "o", "source-layer": "water", paint: { "fill-color": C.sea, "fill-opacity": FB } },
+          { id: "coast", type: "line", source: "o", "source-layer": "earth", paint: { "line-color": C.coast, "line-opacity": FB, "line-width": .9 } },
+          { id: "bnd", type: "line", source: "o", "source-layer": "boundaries", paint: { "line-color": C.border, "line-opacity": FB, "line-width": .8, "line-dasharray": [3, 3] } },
           { id: "roads", type: "line", source: "o", "source-layer": "roads", minzoom: 4,
             filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
-            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 4, .5, 6, 1.4] } }
+            paint: { "line-color": roadHi, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 4, .5, 6, 1.4] } }
         );
       } else {                                           // schéma OpenMapTiles
         L.push(
-          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .9 } },
+          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .9 * FB } },
           // Le trait de côte passe SOUS l'eau, et c'est voulu. Les polygones
           // d'eau des tuiles sont découpés au bord de chaque tuile : souligner
           // leur contour dessinait aussi ces coupures, d'où les longues droites
@@ -15172,26 +15178,26 @@ function renderInfo(icao) {
           // disparaît — tandis que la vraie côte garde sa moitié côté terre.
           // D'où la largeur doublée : seule la moitié se voit.
           { id: "coast", type: "line", source: "o", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"],
-            paint: { "line-color": C.coast, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2.2] } },
+            paint: { "line-color": C.coast, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2.2] } },
           { id: "lake-edge", type: "line", source: "o", "source-layer": "water", filter: ["!=", ["get", "class"], "ocean"],
-            paint: { "line-color": C.lakeEdge, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2] } },
+            paint: { "line-color": C.lakeEdge, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2] } },
           { id: "water", type: "fill", source: "o", "source-layer": "water",
-            paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], C.sea, C.lake] } },
+            paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], C.sea, C.lake], "fill-opacity": FB } },
           { id: "river", type: "line", source: "o", "source-layer": "waterway", minzoom: 5,
-            paint: { "line-color": C.river, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 12, 1.6] } },
+            paint: { "line-color": C.river, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 12, 1.6] } },
           { id: "bnd", type: "line", source: "o", "source-layer": "boundary", filter: ["<=", ["get", "admin_level"], 2],
-            paint: { "line-color": C.border, "line-width": ["interpolate", ["linear"], ["zoom"], 3, .7, 9, 1.4], "line-dasharray": [3, 3] } },
+            paint: { "line-color": C.border, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 3, .7, 9, 1.4], "line-dasharray": [3, 3] } },
           { id: "road-major", type: "line", source: "o", "source-layer": "transportation", minzoom: 5,
             filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk"]]],
-            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .6, 10, 1.9, 14, 3.4] } },
+            paint: { "line-color": roadHi, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .6, 10, 1.9, 14, 3.4] } },
           // Sous le pixel, l'antialiasing rend la moitié du contraste gagné sur
           // la couleur : un trait à .4 px ne couvre que ~40 % de sa case. D'où
           // le plancher à .6 px, sans quoi la route secondaire reste pâle.
           { id: "road-minor", type: "line", source: "o", "source-layer": "transportation", minzoom: 8,
             filter: ["in", ["get", "class"], ["literal", ["primary", "secondary", "tertiary"]]],
-            paint: { "line-color": road, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .6, 14, 2] } },
-          { id: "aero-a", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "fill-color": C.dot, "fill-opacity": .45 } },
-          { id: "aero-l", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "line-color": C.dot, "line-width": 1.2 } }
+            paint: { "line-color": road, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .6, 14, 2] } },
+          { id: "aero-a", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "fill-color": C.dot, "fill-opacity": .45 * FB } },
+          { id: "aero-l", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "line-color": C.dot, "line-opacity": FB, "line-width": 1.2 } }
         );
       }
       return { version: 8, sources: { o: src }, layers: L };
@@ -15249,7 +15255,7 @@ function renderInfo(icao) {
           const host = $("#routeMapGL");
           try {
             this.map = new maplibregl.Map({
-              container: host, style: glStyle(document.body.classList.contains("light"), this.offline),
+              container: host, style: glStyle(document.body.classList.contains("light"), this.offline, mapMode === "wx"),
               center: [10, 25], zoom: 2, attributionControl: false,
               dragRotate: false, pitchWithRotate: false, maxZoom: 16, fadeDuration: 0
             });
@@ -15266,7 +15272,7 @@ function renderInfo(icao) {
             if (this.offline) return;
             if (ev && ev.sourceId && ev.sourceId !== "o") return;
             this.offline = true;
-            try { this.map.setStyle(glStyle(document.body.classList.contains("light"), true)); }
+            try { this.map.setStyle(glStyle(document.body.classList.contains("light"), true, mapMode === "wx")); }
             catch (_) { }
             console.warn("[carte] tuiles en ligne injoignables — bascule sur l'archive hors ligne");
           });
@@ -15289,7 +15295,7 @@ function renderInfo(icao) {
       // `scale` de l'app (px CSS par degré de latitude) déduit du zoom MapLibre,
       // pour que TOUS les seuils existants (v.scale > 58, minRwy...) restent vrais.
       scale() { return 1.4222 * Math.pow(2, this.map.getZoom()) / Math.cos(_rad(this.map.getCenter().lat)); },
-      setTheme(light) { if (this.map) this.map.setStyle(glStyle(light, this.offline)); }
+      setTheme(light) { if (this.map) this.map.setStyle(glStyle(light, this.offline, mapMode === "wx")); }
     };
 
     function drawMap() {
@@ -15809,6 +15815,11 @@ function renderInfo(icao) {
       mapMode = mode;
       $("#mapModeChk").checked = mode === "notam";
       $("#mapOv").classList.toggle("notam-mode", mode === "notam");
+      // Le fondu du fond ne vaut qu'en vue weather et de jour : le style du
+      // fond change donc avec la vue. Restyler de nuit serait un no-op payé
+      // d'un rechargement des couches — on s'en dispense.
+      if (GL.map && document.body.classList.contains("light"))
+        GL.map.setStyle(glStyle(true, GL.offline, mode === "wx"));
     }
     $("#mapModeChk").onchange = e => {
       setMapMode(e.target.checked ? "notam" : "wx");
