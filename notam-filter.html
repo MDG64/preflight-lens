@@ -15404,7 +15404,9 @@ function renderInfo(icao) {
         if (!w) return;
         const [wd, ws] = w;
         if (v.scale < 5 && ws < 20) return;
-        const n = Math.min(6, Math.ceil(ws / 10));
+        // Trois flèches au plus — la légende ne parle pas d'autre chose :
+        // ↑, ↑↑, ↑↑↑. Au-delà, le rouge dit déjà tout.
+        const n = Math.min(3, Math.ceil(ws / 10));
         const col = WXPAL[ws > 30 ? 3 : ws >= 20 ? 2 : 1];
         const halo = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
         const STEP = 8 * dpr, SHAFT = 22 * dpr, HEAD = 5 * dpr, GAP = 9 * dpr;
