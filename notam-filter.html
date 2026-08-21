@@ -5171,8 +5171,12 @@ body .stat .k{
 
   <div class="wrap">
     <div class="tabs">
+      <!-- Deux onglets sur la même liste, comme sur la page d'accueil : les
+           terrains un à un, ou les routes entières. -->
       <button class="tab on" id="tabFav" aria-pressed="true"><span class="star">★</span> Favorites <span
           id="favCount">(0)</span></button>
+      <button class="tab" id="tabRoute" aria-pressed="false"><span class="star">★</span> Route <span
+          id="routeCount">(0)</span></button>
     </div>
     <div class="chips" id="chips"></div>
 
@@ -13763,14 +13767,21 @@ E) ${e}`;
     const $ = s => document.querySelector(s);
     const list = $("#list"), summary = $("#summary"), seg = $("#seg");
 
-    /* ---- onglets + chips (Démo / Favoris) ---- */
+    /* ---- onglets + chips (Favoris / Routes) ----
+       Même paire d'onglets que sur la page d'accueil, et même liste derrière
+       (favs, favRoutes) — seul le geste change : ici, une puce CHARGE les
+       NOTAMs au lieu de remplir les cases et d'attendre. */
     function setTab(t) {
       tab = t;
-      $("#tabFav").classList.toggle("on", t === "fav");
-      $("#tabFav").setAttribute("aria-pressed", t === "fav");
+      [["#tabFav", "fav"], ["#tabRoute", "route"]].forEach(([sel, k]) => {
+        $(sel).classList.toggle("on", t === k);
+        $(sel).setAttribute("aria-pressed", String(t === k));
+      });
       renderChips();
     }
     function renderChips() {
+      updateFavCount();
+      if (tab === "route") return renderRouteChips();
       const wrap = $("#chips");
       const codes = favs;
       if (!codes.length) {
@@ -13783,7 +13794,46 @@ E) ${e}`;
       }).join("");
       wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => load(b.dataset.code));
     }
-    function updateFavCount() { $("#favCount").textContent = "(" + favs.length + ")"; }
+    /* ---- puces de route sur la page NOTAM ----
+       Une puce rejoue la route entière : les trois cases se remplissent
+       (accueil et page Route sont jumelées), les onglets DEP/DEST/ALT
+       s'alignent à côté du code station, et la page s'ouvre sur le départ —
+       le même résultat que la carte NOTAM de l'accueil, en un clic. La croix
+       retire la route de la liste sans rien charger. */
+    function renderRouteChips() {
+      const wrap = $("#chips");
+      if (!favRoutes.length) {
+        wrap.innerHTML = `<span class="hint">No route yet — open the start page, type the codes, then tap the ☆ star at the end of the line.</span>`;
+        return;
+      }
+      const cur = routeKey(homeRouteSlots());
+      wrap.innerHTML = favRoutes.map((r, i) => {
+        const f = routeSlotsFilled(r);
+        return `
+        <button class="chip-ad chip-rt ${routeKey(r) === cur ? "on" : ""}" data-i="${i}"
+          aria-label="Show NOTAMs for route ${f.join(" to ")}">${f.map(c => `<span>${c}</span>`).join(`<span class="rt-arrow" aria-hidden="true">›</span>`)}<span
+            class="rt-x" data-x="${i}" title="Remove route">×</span></button>`;
+      }).join("");
+      wrap.querySelectorAll(".chip-rt").forEach(b => b.onclick = e => {
+        const x = e.target.dataset.x;
+        if (x !== undefined) {
+          favRoutes = favRoutes.filter((_, n) => n !== Number(x));
+          saveFavRoutes(favRoutes);
+          renderChips(); renderHomeChips(); renderHomeStars();
+          return;
+        }
+        homeApplyRoute(favRoutes[Number(b.dataset.i)]);
+        const codes = homeRouteCodes();
+        if (!codes.length) return;
+        notamRoute = codes.length > 1 ? codes : [];
+        renderChips();
+        load(codes[0].icao);
+      });
+    }
+    function updateFavCount() {
+      $("#favCount").textContent = "(" + favs.length + ")";
+      $("#routeCount").textContent = "(" + favRoutes.length + ")";
+    }
 
     // Copie exacte de l'algorithme testé et validé, à intégrer dans le fichier.
     const rad = d => d * Math.PI / 180;
@@ -14229,6 +14279,7 @@ function renderInfo(icao) {
     });
     $("#star").onclick = toggleFav;
     $("#tabFav").onclick = () => setTab("fav");
+    $("#tabRoute").onclick = () => setTab("route");
 
     /* ---- filtre horaire ---- */
     function applyTime(val) {
@@ -17743,6 +17794,7 @@ window.addEventListener("scroll", hidePop, true);
       saveFavRoutes(favRoutes);
       renderHomeStars();
       renderHomeChips();
+      renderChips();          // la liste de la page NOTAM tient le même compte
     }
     // Une puce de route remplit les TROIS cases d'un coup — elle remplace ce
     // qui s'y trouvait : c'est une route entière, pas un terrain de plus. La
