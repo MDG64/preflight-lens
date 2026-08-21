@@ -4579,15 +4579,13 @@ body.light .stat.on {
        resserrement qui le dit. Dedans plus rien ne respire — l'unité colle au
        chiffre, le point de séparation n'a plus de marge du tout — et l'écart
        de 14 px qui le sépare des champs voisins fait le reste. */
-    .favwx-data .d.rwy { display: inline-flex; align-items: baseline }
+    .favwx-data .d.rwy { display: inline-flex; align-items: center }
     /* Seule la flèche prend la couleur : la valeur reste dans le gris du
-       texte, sinon le bloc vire au pavé coloré et ne se lit plus. */
-    /* Les flèches portent seules l'état du vent : elles montent d'un cran en
-       corps, passent en gras et gagnent un contour épais, sans quoi un
-       glyphe de mono se perd entre deux chiffres. Le trait du contour fait le
-       gros du travail : les mono ne donnent presque rien en graisse sur
-       ↓↑←→. */
-    .favwx-data .d b { font: 700 15px/1 var(--mono); -webkit-text-stroke: .9px }
+       texte, sinon le bloc vire au pavé coloré et ne se lit plus. Elle est
+       dessinée, pas écrite : les glyphes ↓↑←→ des mono restent maigres quoi
+       qu'on leur fasse, un SVG plein tient l'épaisseur qu'on veut. */
+    .favwx-data .d b { display: inline-flex; align-items: center }
+    .favwx-data .d b svg { display: block; width: 13px; height: 13px; fill: currentColor }
     .favwx-data .d u { text-decoration: none; margin-left: 1px }
     /* Plus de point entre face et traversière : quatre pixels séparent les
        deux composantes, assez pour qu'elles ne se touchent pas, trop peu pour
@@ -18813,6 +18811,14 @@ window.addEventListener("scroll", hidePop, true);
     function favWxTone(v, amber, red) {
       return v > red ? "w-bad" : (amber != null && v > amber ? "w-warn" : "w-ok");
     }
+    /* Flèche pleine des composantes : un seul dessin, pointe en bas, tourné
+       d'un quart de tour selon le sens — 0 le vent de face, 180 l'arrière, 90
+       et 270 le côté où la traversière pousse. Le fût est large et la pointe
+       massive, pour qu'elle se voie au milieu des chiffres. */
+    function favWxArrow(rot, lab) {
+      return `<svg viewBox="0 0 13 13" role="img" aria-label="${lab}">`
+        + `<path transform="rotate(${rot} 6.5 6.5)" d="M4.5 1h4v5.1H11L6.5 12 2 6.1h2.5z"/></svg>`;
+    }
     function favWxWindTxt(w) {
       if (!w || w.spd == null) return "—";
       if (!w.spd && !w.gust) return "Calm";
@@ -18902,8 +18908,12 @@ window.addEventListener("scroll", hidePop, true);
             return `<div class="favwx-data">`
               + `<span class="d">${favWxWindTxt(p.wind)}</span>`
               + (c ? `<span class="d rwy"><i>Rwy${c.id}</i>`
-                  + `<b class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">${c.head >= 0 ? "↓" : "↑"}</b>${Math.abs(c.head)}<u>kt</u>`
-                  + `<b class="xw ${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}</b>${c.cross}<u>kt</u></span>` : "")
+                  + `<b class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">`
+                  + `${c.head >= 0 ? favWxArrow(0, "Headwind") : favWxArrow(180, "Tailwind")}</b>`
+                  + `${Math.abs(c.head)}<u>kt</u>`
+                  + `<b class="xw ${favWxTone(c.cross, 20, 30)}">`
+                  + `${c.sign >= 0 ? favWxArrow(90, "Crosswind from the right") : favWxArrow(270, "Crosswind from the left")}</b>`
+                  + `${c.cross}<u>kt</u></span>` : "")
               + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
               + `<span class="d">${favWxBaseTxt(p)}</span>`
               + `<span class="d">${favWxVisTxt(p)}</span>`
