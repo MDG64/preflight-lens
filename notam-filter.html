@@ -4437,25 +4437,32 @@ body.light .stat.on {
       border: 1px solid var(--line)
     }
 
-    /* Flèche au bout de la ligne d'onglets Favorites : elle ouvre le résumé
-       météo de tous les favoris. Le même dessin, retourné, referme le volet
-       une fois ouvert — même geste, même endroit, sens inversé. */
+    /* Flèche du résumé météo des favoris : DANS la case, en haut à droite —
+       un vrai bouton, doré comme l'étoile, assez gros pour l'œil et le doigt.
+       Le même dessin, retourné, referme le volet une fois ouvert. */
     .fav-arrow {
-      margin-left: auto;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: none;
-      border: none;
+      width: 36px;
+      height: 31px;
+      padding: 0;
       cursor: pointer;
-      color: var(--muted);
-      padding: 0 2px 5px;
-      transition: color .15s;
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: 7px;
+      color: var(--gold);
+      box-shadow: var(--elev);
+      transition: border-color .15s, background .15s;
     }
-    .fav-arrow:hover { color: var(--gold) }
-    .fav-arrow svg { width: 15px; height: 15px; display: block }
-    .fav-arrow:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px }
-    .fav-arrow[hidden] { display: none }
+    .fav-arrow:hover { border-color: var(--gold); background: var(--panel2) }
+    .fav-arrow svg { width: 20px; height: 20px; display: block }
+    .fav-arrow:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px }
+    /* Posée dans le coin de la case ; le renfoncement à droite de .fav-chips
+       lui réserve la place, les puces ne passent jamais dessous. */
+    .fav-chips { position: relative; padding-right: 52px }
+    .fav-chips .fav-arrow { position: absolute; top: 7px; right: 7px }
+    .favwx-head .fav-arrow { margin-left: auto }
 
     /* ---- résumé météo des favoris ----
        Un volet qui descend du haut de l'écran : une ligne par favori —
@@ -4466,24 +4473,30 @@ body.light .stat.on {
     .favwx-ov { position: fixed; inset: 0; z-index: 500; background: rgba(3, 7, 11, .55) }
     body.light .favwx-ov { background: rgba(22, 29, 36, .4) }
     .favwx-ov[hidden] { display: none }
+    /* Le volet ne part plus du bord de l'écran : il s'ancre au HAUT de la
+       case favoris d'où la flèche a été pressée (--favwx-top, posé par
+       favWxOpen) et se déploie vers le bas depuis cette ligne — clip-path
+       découvre le contenu sans l'écraser. La remontée du geste de fermeture
+       le replie pareil. */
     .favwx-sheet {
       position: absolute;
-      top: 0;
+      top: var(--favwx-top, 0px);
       left: 50%;
-      transform: translate(-50%, -103%);
+      transform: translate(-50%, 0);
       width: min(720px, 100%);
-      max-height: min(88vh, 100%);
+      max-height: calc(100vh - var(--favwx-top, 0px) - 14px);
       display: flex;
       flex-direction: column;
       background: var(--panel);
       border: 1px solid var(--line);
-      border-top: 0;
-      border-radius: 0 0 var(--radius) var(--radius);
+      border-radius: var(--radius);
       box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
-      transition: transform .28s ease;
+      clip-path: inset(0 0 100% 0);
+      opacity: .5;
+      transition: clip-path .26s ease, opacity .26s ease, transform .26s ease;
     }
     body.light .favwx-sheet { box-shadow: 0 24px 60px rgba(15, 40, 55, .2) }
-    .favwx-ov.open .favwx-sheet { transform: translate(-50%, 0) }
+    .favwx-ov.open .favwx-sheet { clip-path: inset(0 0 0 0); opacity: 1 }
     .favwx-head { display: flex; align-items: center; gap: 16px; padding: 13px 16px 0 }
     .favwx-head .fav-tab { cursor: default }
     .favwx-list {
@@ -5304,11 +5317,6 @@ body .stat .k{
           class="star">★</span> Favorites <span id="favCount">(0)</span></button>
       <button class="fav-tab" id="tabRoute" type="button" role="tab" aria-selected="false"><span
           class="star">★</span> Route <span id="routeCount">(0)</span></button>
-      <button class="fav-arrow" id="pageFavWx" type="button" hidden title="Weather summary of favorites"
-        aria-label="Weather summary of favorites" aria-haspopup="dialog">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
-      </button>
     </div>
     <div class="chips fav-chips" id="chips"></div>
 
@@ -5487,11 +5495,6 @@ body .stat .k{
               class="star">★</span> Favorites <span id="homeAdCount"></span></button>
           <button class="fav-tab" id="homeTabRoute" type="button" role="tab" aria-selected="false"><span
               class="star">★</span> Route <span id="homeRouteCount"></span></button>
-          <button class="fav-arrow" id="homeFavWx" type="button" hidden title="Weather summary of favorites"
-            aria-label="Weather summary of favorites" aria-haspopup="dialog">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
-          </button>
         </div>
         <div class="chips fav-chips" id="homeChips"></div>
       </div>
@@ -13944,10 +13947,12 @@ E) ${e}`;
         wrap.innerHTML = `<span class="hint">No favorites yet — load an aerodrome, then tap the ☆ star next to its code.</span>`;
         return;
       }
-      wrap.innerHTML = codes.map(code => {
+      wrap.innerHTML = favArrowHtml() + codes.map(code => {
         const m = AIRPORTS[code] || { city: "" };
         return `<button class="chip-ad ${code === currentIcao ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
       }).join("");
+      const ar = wrap.querySelector(".fav-arrow");
+      if (ar) ar.onclick = favWxOpen;
       wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => load(b.dataset.code));
     }
     /* ---- puces de route sur la page NOTAM ----
@@ -13989,7 +13994,6 @@ E) ${e}`;
     function updateFavCount() {
       $("#favCount").textContent = "(" + favs.length + ")";
       $("#routeCount").textContent = "(" + favRoutes.length + ")";
-      favWxSyncArrows();
     }
 
     // Copie exacte de l'algorithme testé et validé, à intégrer dans le fichier.
@@ -18022,7 +18026,6 @@ window.addEventListener("scroll", hidePop, true);
     function renderHomeChips() {
       $("#homeAdCount").textContent = "(" + favs.length + ")";
       $("#homeRouteCount").textContent = "(" + favRoutes.length + ")";
-      favWxSyncArrows();
       [["#homeTabAd", "ad"], ["#homeTabRoute", "route"]].forEach(([sel, t]) => {
         $(sel).classList.toggle("on", homeFavTab === t);
         $(sel).setAttribute("aria-selected", String(homeFavTab === t));
@@ -18034,10 +18037,12 @@ window.addEventListener("scroll", hidePop, true);
         return;
       }
       const cur = HOME_FIELDS.map(rVal);
-      wrap.innerHTML = favs.map(code => {
+      wrap.innerHTML = favArrowHtml() + favs.map(code => {
         const m = AIRPORTS[code] || { city: "" };
         return `<button class="chip-ad ${cur.includes(code) ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
       }).join("");
+      const ar = wrap.querySelector(".fav-arrow");
+      if (ar) ar.onclick = favWxOpen;
       // Une puce remplit la case CHOISIE — c'est là qu'on l'attend, et elle
       // écrase ce qui s'y trouvait : on a désigné la case exprès. Sans case
       // choisie, elle remplit la première libre — départ, puis destination,
@@ -18821,12 +18826,28 @@ window.addEventListener("scroll", hidePop, true);
         if (cell && s) cell.innerHTML = dwxIconHtml(s.s);
       }).catch(() => { }));
     }
-    function favWxOpen() {
+    /* La flèche que les deux rendeurs de puces posent dans le coin de la
+       case — une fonction déclarée, disponible dès le premier rendu. */
+    function favArrowHtml() {
+      return `<button class="fav-arrow" type="button" title="Weather summary of favorites"
+        aria-label="Weather summary of favorites" aria-haspopup="dialog">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
+      </button>`;
+    }
+    function favWxOpen(e) {
       if (!favs.length || !$("#favWxOv").hidden) return;
       const ov = $("#favWxOv"), sheet = ov.querySelector(".favwx-sheet");
+      /* Le volet s'ancre au haut de la case d'où la flèche a été pressée —
+         c'est d'elle qu'il se déploie. Plafonné à mi-écran : une case poussée
+         tout en bas par le défilement laisserait au volet trop peu de hauteur
+         pour lire quatre lignes. */
+      const box = e && e.currentTarget && e.currentTarget.closest(".fav-chips");
+      const top = box ? Math.min(Math.max(0, box.getBoundingClientRect().top), window.innerHeight * 0.5) : 0;
+      ov.style.setProperty("--favwx-top", Math.round(top) + "px");
       ov.hidden = false;
       /* Reflow forcé : sans lui, la levée de [hidden] et la classe .open
-         tombent dans la même frame et le volet apparaît sans descendre. */
+         tombent dans la même frame et le volet apparaît sans se déployer. */
       void sheet.offsetHeight;
       ov.classList.add("open");
       favWxFill(favs.slice());
@@ -18846,15 +18867,6 @@ window.addEventListener("scroll", hidePop, true);
       sheet.addEventListener("transitionend", end);
       setTimeout(end, 380);
     }
-    /* La flèche ne se montre que s'il y a des favoris à résumer — appelée par
-       updateFavCount (page NOTAM et démarrage) et renderHomeChips (accueil). */
-    function favWxSyncArrows() {
-      const off = !favs.length;
-      $("#homeFavWx").hidden = off;
-      $("#pageFavWx").hidden = off;
-    }
-    $("#homeFavWx").onclick = favWxOpen;
-    $("#pageFavWx").onclick = favWxOpen;
     $("#favWxClose").onclick = favWxClose;
     $("#favWxOv").addEventListener("click", e => { if (e.target === $("#favWxOv")) favWxClose(); });
     /* En phase de capture : le volet vit au-dessus de tout, il prend Échap
