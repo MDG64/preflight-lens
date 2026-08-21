@@ -14296,8 +14296,25 @@ function renderInfo(icao) {
     });
 
     /* ---- événements ---- */
+    /* Une case pleine se sélectionne d'un clic : le code affiché est celui
+       qu'on vient remplacer, la première lettre tapée repart donc de zéro.
+       Safari relâche la sélection au mouseup qui suit le focus — on annule ce
+       mouseup-là, un seul, pour qu'elle tienne. Même geste que les cases de la
+       page météo, qui l'avaient déjà. */
+    function selectAllOnFocus(input) {
+      let armed = false;
+      input.addEventListener("focus", () => {
+        if (!input.value) return;
+        input.select(); armed = true;
+        /* Le navigateur repose parfois le caret APRÈS l'événement focus : on
+           resélectionne au tick suivant si le champ tient toujours le focus. */
+        setTimeout(() => { if (document.activeElement === input) input.select(); }, 0);
+      });
+      input.addEventListener("mouseup", e => { if (armed) { armed = false; e.preventDefault(); } });
+    }
     $("#icao").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); renderSuggest(e.target.value); });
     $("#icao").addEventListener("focus", e => renderSuggest(e.target.value));
+    selectAllOnFocus($("#icao"));
     $("#icao").addEventListener("blur", () => setTimeout(() => { $("#suggest").hidden = true; }, 150));
     $("#icao").addEventListener("keydown", e => {
       if (e.key === "Enter") { $("#suggest").hidden = true; load($("#icao").value); }
@@ -14972,6 +14989,7 @@ function renderInfo(icao) {
         if (nx && e.target.value.length >= 4) $(nx).focus();
       });
       $(id).addEventListener("focus", e => renderRouteSuggest(e.target.id, e.target.value));
+      selectAllOnFocus($(id));
       $(id).addEventListener("blur", e => {
         // Saisie directe d'un code IATA (3 lettres, ex. "ORY") : on le traduit
         // en OACI au moment où le champ se quitte — pas à la frappe, où trois
