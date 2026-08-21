@@ -16414,17 +16414,24 @@ function renderInfo(icao) {
       if (/^clearsky/.test(s)) return night ? "moon" : "sun";
       return "cloud";
     }
-    /* Petit cache côté client : rouvrir le même panneau dans le quart d'heure
-       ne repaie ni le réseau ni le proxy. */
+    /* Petit cache côté client : redemander le même terrain dans le quart
+       d'heure — panneau rouvert, page météo rafraîchie — ne repaie ni le
+       réseau ni le proxy. L'échec se retient aussi, cinq minutes : un
+       Refresh insistant ne doit pas rejouer la requête qui vient d'échouer. */
     const dwxCache = new Map();
     async function fetchDayWx(icao) {
       const hit = dwxCache.get(icao);
-      if (hit && Date.now() - hit.at < 15 * 60e3) return hit.data;
-      const r = await fetch(`${BACKEND_URL}/api/daywx/${encodeURIComponent(icao)}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      dwxCache.set(icao, { at: Date.now(), data });
-      return data;
+      if (hit && Date.now() - hit.at < (hit.data ? 15 : 5) * 60e3) return hit.data;
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/daywx/${encodeURIComponent(icao)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        dwxCache.set(icao, { at: Date.now(), data });
+        return data;
+      } catch (e) {
+        dwxCache.set(icao, { at: Date.now(), data: null });
+        throw e;
+      }
     }
     function dayWxSecHtml(d) {
       const cells = d.slots.map(s => {
@@ -18443,6 +18450,19 @@ window.addEventListener("scroll", hidePop, true);
       sec.querySelector("[data-rwx]").innerHTML = wxRunwaysHtml(icao, d);
       renderWxAges();
     }
+    // La bande du jour d'UNE section : elle part en parallèle du relevé et se
+    // glisse sous le TAF quand elle arrive ; son échec la laisse simplement
+    // absente — elle est un plus, jamais une condition.
+    function loadWxDaySec(icao, my) {
+      fetchDayWx(icao).then(d => {
+        if (my !== wxToken) return;              // l'écran a changé de sujet
+        const sec = wxSection(icao); if (!sec) return;
+        const el = sec.querySelector("[data-daywx]"); if (!el) return;
+        if (!d || !Array.isArray(d.slots) || !d.slots.some(Boolean)) { el.hidden = true; return; }
+        el.innerHTML = dayWxSecHtml(d);
+        el.hidden = false;
+      }).catch(() => { });
+    }
     // UN terrain : succès -> rendu ; échec -> copie locale datée ; rien du
     // tout -> l'erreur reste locale à SA section, les autres vivent leur vie.
     async function fetchWxOne(a, my) {
@@ -18471,6 +18491,7 @@ window.addEventListener("scroll", hidePop, true);
       const my = ++wxToken;
       setWxStatus("Requesting " + wxList.map(a => a.icao).join(" · ") + "…");
       $("#wxRefresh").disabled = true;
+      wxList.forEach(a => loadWxDaySec(a.icao, my));
       await Promise.allSettled(wxList.map(a => fetchWxOne(a, my)));
       if (my !== wxToken) return;
       $("#wxRefresh").disabled = false;
@@ -18506,6 +18527,7 @@ window.addEventListener("scroll", hidePop, true);
         <h3>TAF <span class="wx-age" data-age="taf"></span></h3>
         <pre class="wx-raw" data-raw="taf">—</pre>
       </div>
+      <div class="wx-block" data-daywx hidden></div>
       <div data-rwx></div>
     </section>`;
       }).join("");
