@@ -4551,6 +4551,12 @@ body.light .stat.on {
       text-transform: uppercase;
       margin-right: 4px;
     }
+    /* Les composantes se colorent comme le tableau Runways de la page
+       Weather : la flèche et sa valeur ensemble, pour que la teinte se voie
+       d'un coup d'œil. */
+    .favwx-data .w-ok { color: var(--green) }
+    .favwx-data .w-warn { color: var(--amber) }
+    .favwx-data .w-bad { color: var(--red) }
     .favwx-none { font: 500 12px/1.5 var(--sans); color: var(--muted); padding: 2px 0 }
     .favwx-src { font: 400 10px/1.4 var(--sans); color: var(--muted2); padding: 0 16px 12px }
 
@@ -18715,6 +18721,13 @@ window.addEventListener("scroll", hidePop, true);
       }
       return out;
     }
+    /* Teinte d'une composante : le vent de face reste vert quoi qu'il
+       arrive, l'arrière passe au rouge au-delà de 9 kt, la traversière à
+       l'ambre au-delà de 20 kt et au rouge au-delà de 30 — le barème du
+       panneau de carte, partagé avec Minima Lens. */
+    function favWxTone(v, amber, red) {
+      return v > red ? "w-bad" : (amber != null && v > amber ? "w-warn" : "w-ok");
+    }
     function favWxWindTxt(w) {
       if (!w || w.spd == null) return "—";
       if (!w.spd && !w.gust) return "Calm";
@@ -18799,7 +18812,9 @@ window.addEventListener("scroll", hidePop, true);
             const c = favWxComp(icao, p.wind);
             return `<div class="favwx-data">`
               + `<span class="d">${favWxWindTxt(p.wind)}</span>`
-              + (c ? `<span class="d"><i>Rwy ${c.id}</i>${c.head >= 0 ? "↓" : "↑"}${Math.abs(c.head)} kt · ${c.sign >= 0 ? "←" : "→"}${c.cross} kt</span>` : "")
+              + (c ? `<span class="d"><i>Rwy ${c.id}</i>`
+                  + `<span class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">${c.head >= 0 ? "↓" : "↑"}${Math.abs(c.head)} kt</span>`
+                  + ` · <span class="${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}${c.cross} kt</span></span>` : "")
               + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
               + `<span class="d">${favWxBaseTxt(p)}</span>`
               + `<span class="d">${favWxVisTxt(p)}</span>`
