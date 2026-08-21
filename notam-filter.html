@@ -5443,7 +5443,7 @@ body .stat .k{
           <span class="rd" aria-hidden="true"></span>
           <span class="lb nt">NOTAM</span>
         </label>
-        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, gusts included, blowing downwind onto the station">
+        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, strongest wind announced (gusts and TEMPO included), blowing downwind onto the station">
           <input type="checkbox" id="mapWindChk">
           <span class="rd" aria-hidden="true"></span>
           <span class="lb">Wind</span>
@@ -15610,19 +15610,19 @@ function renderInfo(icao) {
       // VIENT le vent), pointes tournées vers lui, arrêtées à GAP du disque :
       // la flèche désigne le terrain qu'elle va balayer sans jamais le
       // toucher. Deux passes de trait, halo du fond puis couleur, pour rester
-      // lisible sur l'eau comme sur la terre. Dézoomé sous l'échelle 45 —
-      // le zoom 5 de Weather Lens, où sa carte coupe aussi ses flèches —
-      // plus RIEN ne se dessine, brises comme coups de vent : sur l'Europe
-      // entière les flèches ne racontent plus rien, seuls les disques
-      // colorés parlent, et l'interrupteur WIND reste allumé pour le retour
-      // au zoom utile.
+      // lisible sur l'eau comme sur la terre. Dézoomé sous l'échelle 11.25 —
+      // le zoom 3 de Weather Lens, où sa carte coupe aussi ses flèches, deux
+      // crans plus tôt qu'avant — plus RIEN ne se dessine, brises comme coups
+      // de vent : sur une carte du monde les flèches ne racontent plus rien,
+      // seuls les disques colorés parlent, et l'interrupteur WIND reste
+      // allumé pour le retour au zoom utile.
       // Boîtes englobantes des faisceaux dessinés dans CE rendu, en
       // coordonnées écran : les étiquettes OACI les consultent pour ne
       // jamais se poser sur une flèche — la leur comme celle d'un voisin.
       const windBoxes = [];
       const windArrow = (icao, x, y) => {
         if (!mapWindOn || mapMode !== "wx") return;
-        if (v.scale < 45) return;
+        if (v.scale < 11.25) return;
         const w = mapWindOf(icao);
         if (!w) return;
         const [wd, ws] = w;
@@ -15964,16 +15964,23 @@ function renderInfo(icao) {
     // flèche dise la même chose dans les deux apps.
     const WX_WIND_RE = /^(\d{3}|VRB|\/{3})(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)$/;
     function wxWindOfRaw(raw) {
+      // On ne s'arrête PAS au premier groupe : la tendance du METAR (TEMPO,
+      // BECMG) porte son propre vent, et « 12010KT … TEMPO 12025G40KT » est un
+      // terrain à 40 kt, pas à 10. Tous les groupes sont pesés jusqu'à RMK,
+      // le plus FORT — rafale comprise — fait la flèche.
+      let best = null;
+      const eff = w => Math.max(w.spd, w.gst || 0);
       for (const t of String(raw || "").toUpperCase().replace(/=/g, " ").split(/\s+/)) {
-        if (t === "RMK" || t === "TEMPO" || t === "BECMG") break;
+        if (t === "RMK") break;
         const m = WX_WIND_RE.exec(t);
         if (!m) continue;
         const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
-        return { dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) % 360 : null,
-                 spd: Math.round(parseInt(m[2], 10) * k),
-                 gst: m[3] ? Math.round(parseInt(m[3], 10) * k) : 0 };
+        const w = { dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) % 360 : null,
+                    spd: Math.round(parseInt(m[2], 10) * k),
+                    gst: m[3] ? Math.round(parseInt(m[3], 10) * k) : 0 };
+        if (!best || eff(w) > eff(best)) best = w;
       }
-      return null;
+      return best;
     }
 
     // Le vent d'un terrain, deux sources comme la couleur de son point : le
