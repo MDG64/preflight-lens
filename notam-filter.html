@@ -4437,6 +4437,110 @@ body.light .stat.on {
       border: 1px solid var(--line)
     }
 
+    /* Flèche au bout de la ligne d'onglets Favorites : elle ouvre le résumé
+       météo de tous les favoris. Le même dessin, retourné, referme le volet
+       une fois ouvert — même geste, même endroit, sens inversé. */
+    .fav-arrow {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 0 2px 5px;
+      transition: color .15s;
+    }
+    .fav-arrow:hover { color: var(--gold) }
+    .fav-arrow svg { width: 15px; height: 15px; display: block }
+    .fav-arrow:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px }
+    .fav-arrow[hidden] { display: none }
+
+    /* ---- résumé météo des favoris ----
+       Un volet qui descend du haut de l'écran : une ligne par favori —
+       identité, pictogramme du moment, vent et composantes sur la meilleure
+       piste, température, plafond, visibilité, QNH. Il se referme comme il
+       est venu, en remontant : glissement du doigt vers le haut, flèche
+       (désormais vers le haut), Échap ou clic sur le fond. */
+    .favwx-ov { position: fixed; inset: 0; z-index: 500; background: rgba(3, 7, 11, .55) }
+    body.light .favwx-ov { background: rgba(22, 29, 36, .4) }
+    .favwx-ov[hidden] { display: none }
+    .favwx-sheet {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translate(-50%, -103%);
+      width: min(720px, 100%);
+      max-height: min(88vh, 100%);
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-top: 0;
+      border-radius: 0 0 var(--radius) var(--radius);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+      transition: transform .28s ease;
+    }
+    body.light .favwx-sheet { box-shadow: 0 24px 60px rgba(15, 40, 55, .2) }
+    .favwx-ov.open .favwx-sheet { transform: translate(-50%, 0) }
+    .favwx-head { display: flex; align-items: center; gap: 16px; padding: 13px 16px 0 }
+    .favwx-head .fav-tab { cursor: default }
+    .favwx-list {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      padding: 2px 16px 12px;
+    }
+    .favwx-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--elev);
+      padding: 10px 12px;
+    }
+    /* La case du pictogramme garde sa place avant que le dessin n'arrive :
+       les lignes ne sautent pas quand met.no répond. */
+    .favwx-pic { flex: none; width: 42px; height: 42px }
+    .favwx-pic img { width: 100%; height: 100%; display: block }
+    .favwx-main { flex: 1 1 auto; min-width: 0 }
+    .favwx-id { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px }
+    .favwx-id .code { font: 600 13px/1.3 var(--mono); letter-spacing: .14em; color: var(--cyan); flex: none }
+    .favwx-id .iata {
+      font: 600 10px/1 var(--mono);
+      letter-spacing: .12em;
+      color: var(--muted);
+      flex: none;
+      border: 1px solid var(--line2);
+      border-radius: 4px;
+      padding: 3px 5px;
+    }
+    .favwx-id .name {
+      font: 500 12.5px/1.3 var(--sans);
+      color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .favwx-data { display: flex; flex-wrap: wrap; gap: 4px 14px }
+    .favwx-data .d { font: 500 12px/1.4 var(--mono); letter-spacing: .04em; color: var(--text); white-space: nowrap }
+    .favwx-data .d i {
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .14em;
+      color: var(--muted);
+      font-style: normal;
+      text-transform: uppercase;
+      margin-right: 4px;
+    }
+    .favwx-none { font: 500 12px/1.5 var(--sans); color: var(--muted); padding: 2px 0 }
+    .favwx-src { font: 400 10px/1.4 var(--sans); color: var(--muted2); padding: 0 16px 12px }
+
     /* Puce de route : les codes dans l'ordre, séparés par un chevron, et la
        croix qui la retire. Même habit que la puce de terrain. */
     .chip-rt {
@@ -5200,6 +5304,11 @@ body .stat .k{
           class="star">★</span> Favorites <span id="favCount">(0)</span></button>
       <button class="fav-tab" id="tabRoute" type="button" role="tab" aria-selected="false"><span
           class="star">★</span> Route <span id="routeCount">(0)</span></button>
+      <button class="fav-arrow" id="pageFavWx" type="button" hidden title="Weather summary of favorites"
+        aria-label="Weather summary of favorites" aria-haspopup="dialog">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
+      </button>
     </div>
     <div class="chips fav-chips" id="chips"></div>
 
@@ -5378,6 +5487,11 @@ body .stat .k{
               class="star">★</span> Favorites <span id="homeAdCount"></span></button>
           <button class="fav-tab" id="homeTabRoute" type="button" role="tab" aria-selected="false"><span
               class="star">★</span> Route <span id="homeRouteCount"></span></button>
+          <button class="fav-arrow" id="homeFavWx" type="button" hidden title="Weather summary of favorites"
+            aria-label="Weather summary of favorites" aria-haspopup="dialog">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
+          </button>
         </div>
         <div class="chips fav-chips" id="homeChips"></div>
       </div>
@@ -5879,6 +5993,25 @@ body .stat .k{
       <h2 class="hd-title" id="infoTitle">Airport info</h2>
       <div id="infoBody"></div>
     </div>
+  </div>
+</div>
+
+<!-- Résumé météo des favoris : volet descendu du haut par la flèche de la
+     ligne d'onglets Favorites, rempli par favWxFill(). Il se referme en
+     remontant — glissement vers le haut, flèche inversée, Échap ou clic sur
+     le fond. -->
+<div class="favwx-ov" id="favWxOv" hidden>
+  <div class="favwx-sheet" role="dialog" aria-modal="true" aria-label="Favorites weather summary">
+    <div class="favwx-head">
+      <span class="fav-tab on"><span class="star">★</span> Favorites — weather</span>
+      <button class="fav-arrow" id="favWxClose" type="button" title="Close"
+        aria-label="Close the weather summary">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 8 5.5l5 5"/></svg>
+      </button>
+    </div>
+    <div class="favwx-list" id="favWxList"></div>
+    <div class="favwx-src">Latest METAR per aerodrome · pictograms MET Norway (CC BY 4.0).</div>
   </div>
 </div>
 
@@ -13856,6 +13989,7 @@ E) ${e}`;
     function updateFavCount() {
       $("#favCount").textContent = "(" + favs.length + ")";
       $("#routeCount").textContent = "(" + favRoutes.length + ")";
+      favWxSyncArrows();
     }
 
     // Copie exacte de l'algorithme testé et validé, à intégrer dans le fichier.
@@ -17888,6 +18022,7 @@ window.addEventListener("scroll", hidePop, true);
     function renderHomeChips() {
       $("#homeAdCount").textContent = "(" + favs.length + ")";
       $("#homeRouteCount").textContent = "(" + favRoutes.length + ")";
+      favWxSyncArrows();
       [["#homeTabAd", "ad"], ["#homeTabRoute", "route"]].forEach(([sel, t]) => {
         $(sel).classList.toggle("on", homeFavTab === t);
         $(sel).setAttribute("aria-selected", String(homeFavTab === t));
@@ -18542,6 +18677,227 @@ window.addEventListener("scroll", hidePop, true);
     $("#wxHome").onclick = closeWx;
     $("#wxMapBtn").onclick = openHomeMap;
     $("#wxThemeBtn").onclick = () => $("#themeBtn").click();
+
+    /* ---- résumé météo des favoris ----
+       Ouvert par la flèche de la ligne d'onglets Favorites (accueil comme
+       page NOTAM) : un volet descend du haut de l'écran, une ligne par
+       favori. Les relevés viennent du proxy (/api/wx/:icao, une requête par
+       terrain, copie locale wxStore/wxLoad en repli), les pictogrammes du
+       même cache que la bande du jour (fetchDayWx) — le volet n'invente
+       aucune source. */
+    /* Lecture minimale d'un METAR brut pour la ligne de résumé : vent (via
+       rwxWinds), température, QNH/altimètre, visibilité, couches nuageuses.
+       Pas un parseur complet — juste les chiffres que la ligne affiche. */
+    function favWxParse(raw) {
+      const out = { wind: rwxWinds(raw)[0] || null, clouds: [], sky: null,
+                    temp: null, qnh: null, alt: null, visM: null, visSM: null, cavok: false };
+      for (const tok of String(raw || "").trim().toUpperCase().split(/\s+/)) {
+        let m;
+        if (tok === "CAVOK") { out.cavok = true; continue; }
+        if ((m = /^(FEW|SCT|BKN|OVC|VV)(\d{3})/.exec(tok))) { out.clouds.push({ amt: m[1], ft: parseInt(m[2], 10) * 100 }); continue; }
+        if (/^(NSC|NCD|SKC|CLR)$/.test(tok)) { out.sky = tok; continue; }
+        if ((m = /^(M?\d{2})\/(M?\d{2})$/.exec(tok))) { out.temp = parseInt(m[1].replace("M", "-"), 10); continue; }
+        if ((m = /^Q(\d{4})$/.exec(tok))) { out.qnh = +m[1]; continue; }
+        if ((m = /^A(\d{4})$/.exec(tok))) { out.alt = +m[1] / 100; continue; }
+        if (/SM$/.test(tok)) {
+          let t = tok.replace(/^[MP]/, "").replace(/SM$/, ""), v = null;
+          if (t.includes("/")) { const f = /^(\d)?(\d)\/(\d{1,2})$/.exec(t); if (f) v = (f[1] ? +f[1] : 0) + (+f[2]) / (+f[3]); }
+          else v = parseFloat(t);
+          if (v != null && !isNaN(v)) out.visSM = v;
+          continue;
+        }
+        if (/^\d{4}$/.test(tok) && out.visM == null) { out.visM = parseInt(tok, 10); continue; }
+      }
+      return out;
+    }
+    function favWxWindTxt(w) {
+      if (!w || w.spd == null) return "—";
+      if (!w.spd && !w.gust) return "Calm";
+      const dir = w.dir != null ? String(w.dir).padStart(3, "0") + "°" : "VRB";
+      return `${dir} ${w.spd}${w.gust ? "G" + w.gust : ""} kt`;
+    }
+    /* Le « plafond » du résumé : la couche BKN la plus basse (OVC et VV
+       comptent — plus couvert que BKN), sinon la SCT la plus basse, sinon la
+       FEW. */
+    function favWxBaseTxt(p) {
+      const pick = k => p.clouds.filter(c => k.includes(c.amt)).sort((a, b) => a.ft - b.ft)[0];
+      const l = pick(["BKN", "OVC", "VV"]) || pick(["SCT"]) || pick(["FEW"]);
+      if (l) return `${l.amt} ${l.ft} ft`;
+      if (p.cavok) return "CAVOK";
+      if (p.sky) return p.sky;
+      return "—";
+    }
+    function favWxVisTxt(p) {
+      if (p.cavok) return "≥10 km";
+      if (p.visSM != null) return `${p.visSM} SM`;
+      if (p.visM == null) return "—";
+      if (p.visM >= 9999) return "≥10 km";
+      if (p.visM >= 1000) { const k = p.visM / 1000; return `${k.toFixed(k % 1 ? 1 : 0)} km`; }
+      return `${p.visM} m`;
+    }
+    /* Composantes sur la meilleure piste du favori : mêmes caps ×10 et même
+       rwxComp que le tableau Runways de la page Weather. Meilleur QFU = vent
+       de face maximal, traversière minimale pour départager. Sans direction
+       (VRB) ou sans piste connue, pas de composantes — plutôt rien qu'un
+       chiffre inventé. */
+    function favWxComp(icao, w) {
+      if (!w || w.dir == null || !w.spd) return null;
+      const s = RUNWAYS[icao];
+      if (!s) return null;
+      let best = null;
+      for (const r of s.split(";")) for (const id of r.split(":")[0].split("/")) {
+        if (/H$/.test(id)) continue;   // piste hélico : pas de vent à juger ici
+        const deg = (parseInt(id, 10) % 36 || 36) * 10;
+        const c = rwxComp(deg, w, false);
+        if (!best || c.head > best.head || (c.head === best.head && c.cross < best.cross))
+          best = { id, head: c.head, cross: c.cross };
+      }
+      return best;
+    }
+    /* Pictogramme « du moment » : le créneau de la bande du jour le plus
+       proche de l'heure courante — la bande peut porter demain quand la
+       journée est finie, ses créneaux comptent alors 24 h de plus. */
+    function favWxSlotNow(d) {
+      if (!d || !Array.isArray(d.slots)) return null;
+      const now = new Date();
+      const nowZ = now.getUTCHours() + now.getUTCMinutes() / 60;
+      let best = null, dist = Infinity;
+      for (const s of d.slots) {
+        if (!s || !Number.isFinite(Number(s.z))) continue;
+        const z = Number(s.z) + (d.tomorrow ? 24 : 0);
+        const dd = Math.abs(z - nowZ);
+        if (dd < dist) { dist = dd; best = s; }
+      }
+      return best;
+    }
+    function favWxRowHtml(icao, p) {
+      const m = AIRPORTS[icao];
+      const name = m ? [m.city, m.cc].filter(Boolean).join(", ") : "";
+      const id = `<div class="favwx-id"><span class="code">${icao}</span>`
+        + (m && m.iata ? `<span class="iata">${m.iata}</span>` : "")
+        + `<span class="name">${esc(name)}</span></div>`;
+      const body = !p
+        ? `<div class="favwx-none">No METAR available.</div>`
+        : (() => {
+            const c = favWxComp(icao, p.wind);
+            return `<div class="favwx-data">`
+              + `<span class="d"><i>Wind</i>${favWxWindTxt(p.wind)}</span>`
+              + (c ? `<span class="d"><i>Rwy ${c.id}</i>${c.head >= 0 ? "HW" : "TW"} ${Math.abs(c.head)} kt · XW ${c.cross} kt</span>` : "")
+              + `<span class="d"><i>T</i>${p.temp != null ? p.temp + "°" : "—"}</span>`
+              + `<span class="d"><i>Ceil</i>${favWxBaseTxt(p)}</span>`
+              + `<span class="d"><i>Vis</i>${favWxVisTxt(p)}</span>`
+              + `<span class="d"><i>QNH</i>${p.qnh ? "Q" + p.qnh : (p.alt ? "A" + p.alt.toFixed(2) : "—")}</span>`
+              + `</div>`;
+          })();
+      return `<div class="favwx-row"><div class="favwx-pic" data-pic="${icao}"></div>`
+        + `<div class="favwx-main">${id}${body}</div></div>`;
+    }
+    /* Le jeton coupe une réponse arrivée après fermeture ou réouverture —
+       même garde que la page Weather avec wxToken. */
+    let favWxToken = 0;
+    async function favWxFill(list) {
+      const el = $("#favWxList");
+      const my = ++favWxToken;
+      el.innerHTML = `<div class="favwx-none">Requesting ${list.length} station${list.length > 1 ? "s" : ""}…</div>`;
+      /* Une requête par terrain (le proxy n'a pas d'appel groupé) ; l'échec
+         d'une station retombe sur sa copie locale, comme la page Weather. */
+      const results = await Promise.all(list.map(f =>
+        fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(f)}`)
+          .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+          .then(d => { if (!d || d.error) throw new Error("svc"); wxStore(f, d); return d; })
+          .catch(() => wxLoad(f))));
+      if (my !== favWxToken) return;
+      el.innerHTML = list.map((f, i) => {
+        const d = results[i];
+        return favWxRowHtml(f, d && d.metar && d.metar.raw ? favWxParse(d.metar.raw) : null);
+      }).join("");
+      /* Les pictogrammes se glissent à leur place quand met.no répond : la
+         liste est déjà lisible sans eux, et le cache rend la réouverture
+         immédiate. */
+      list.forEach(f => fetchDayWx(f).then(d => {
+        if (my !== favWxToken) return;
+        const cell = el.querySelector(`[data-pic="${f}"]`);
+        const s = favWxSlotNow(d);
+        if (cell && s) cell.innerHTML = dwxIconHtml(s.s);
+      }).catch(() => { }));
+    }
+    function favWxOpen() {
+      if (!favs.length || !$("#favWxOv").hidden) return;
+      const ov = $("#favWxOv"), sheet = ov.querySelector(".favwx-sheet");
+      ov.hidden = false;
+      /* Reflow forcé : sans lui, la levée de [hidden] et la classe .open
+         tombent dans la même frame et le volet apparaît sans descendre. */
+      void sheet.offsetHeight;
+      ov.classList.add("open");
+      favWxFill(favs.slice());
+    }
+    function favWxClose() {
+      const ov = $("#favWxOv"), sheet = ov.querySelector(".favwx-sheet");
+      if (ov.hidden) return;
+      favWxToken++;
+      sheet.style.transition = ""; sheet.style.transform = "";
+      ov.classList.remove("open");
+      /* [hidden] à la fin de la remontée seulement — la poser tout de suite
+         escamoterait le volet sans le geste. La minuterie double
+         transitionend, qui peut ne jamais venir onglet en arrière-plan. */
+      let done = false;
+      const end = () => { if (done) return; done = true;
+        ov.hidden = true; sheet.removeEventListener("transitionend", end); };
+      sheet.addEventListener("transitionend", end);
+      setTimeout(end, 380);
+    }
+    /* La flèche ne se montre que s'il y a des favoris à résumer — appelée par
+       updateFavCount (page NOTAM et démarrage) et renderHomeChips (accueil). */
+    function favWxSyncArrows() {
+      const off = !favs.length;
+      $("#homeFavWx").hidden = off;
+      $("#pageFavWx").hidden = off;
+    }
+    $("#homeFavWx").onclick = favWxOpen;
+    $("#pageFavWx").onclick = favWxOpen;
+    $("#favWxClose").onclick = favWxClose;
+    $("#favWxOv").addEventListener("click", e => { if (e.target === $("#favWxOv")) favWxClose(); });
+    /* En phase de capture : le volet vit au-dessus de tout, il prend Échap
+       avant les écouteurs des écrans du dessous, et la marque overlayClosed
+       leur dit que la touche a déjà servi. */
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape" || $("#favWxOv").hidden) return;
+      e.overlayClosed = true;
+      favWxClose();
+    }, true);
+    /* Glisser vers le haut referme — le geste inverse de l'ouverture. Le
+       volet suit le doigt pour le dire ; il ne part que si le geste commence
+       sur l'en-tête ou quand la liste n'a plus rien à faire défiler vers le
+       bas, sinon il volerait le défilement. */
+    (() => {
+      const sheet = $("#favWxOv .favwx-sheet");
+      let t = null;
+      sheet.addEventListener("touchstart", e => {
+        const l = $("#favWxList");
+        t = {
+          y: e.touches[0].clientY,
+          grab: !!e.target.closest(".favwx-head")
+            || l.scrollHeight - l.scrollTop - l.clientHeight < 4,
+        };
+      }, { passive: true });
+      sheet.addEventListener("touchmove", e => {
+        if (!t) return;
+        const dy = e.touches[0].clientY - t.y;
+        if (dy < 0 && t.grab) {
+          sheet.style.transition = "none";
+          sheet.style.transform = `translate(-50%, ${dy}px)`;
+        }
+      }, { passive: true });
+      sheet.addEventListener("touchend", e => {
+        if (!t) return;
+        const dy = e.changedTouches[0].clientY - t.y;
+        const grab = t.grab;
+        t = null;
+        sheet.style.transition = "";
+        if (grab && dy < -60) favWxClose();
+        else sheet.style.transform = "";
+      });
+    })();
 
     /* ---- démarrage ---- */
     updateFavCount(); buildSeg(); setTab("fav");
