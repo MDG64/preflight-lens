@@ -2967,6 +2967,7 @@
     /* case de saisie vierge : insérer un terrain de son choix */
     .apcard.addcard {
       opacity: 1;
+      position: relative;   /* ancre du menu de propositions (#addSuggest) */
       border-style: dashed;
       border-color: var(--cyan-dim);
       background: transparent;
@@ -13971,13 +13972,16 @@ function renderInfo(icao) {
 
     /* ---- autocomplétion (à partir de 2 lettres) : logique partagée --------- */
     // Calcule la liste des codes ICAO suggérés pour une saisie q (2+ lettres) :
-    // préfixe ICAO classique, uni à une correspondance IATA exacte (3 lettres,
-    // ex. "ORY" -> "LFPO"), grands aéroports priorisés puis ordre alphabétique.
+    // préfixe ICAO classique, uni aux préfixes IATA ("OR" propose ORY -> LFPO
+    // comme ORB, ORK…), grands aéroports priorisés puis ordre alphabétique.
     function suggestCodes(q) {
       q = (q || "").toUpperCase().trim();
       if (q.length < 2) return [];
       const codes = new Set(Object.keys(AIRPORTS).filter(c => c.startsWith(q)));
-      if (q.length === 3 && IATA_TO_ICAO[q]) codes.add(IATA_TO_ICAO[q]);
+      // Un IATA fait 3 lettres : au-delà, plus rien à préfixer.
+      if (q.length <= 3)
+        for (const [iata, icao] of Object.entries(IATA_TO_ICAO))
+          if (iata.startsWith(q)) codes.add(icao);
       return [...codes]
         .sort((a, b) => (MAJOR_AIRPORTS.has(b) - MAJOR_AIRPORTS.has(a)) || a.localeCompare(b))
         .slice(0, 8);
@@ -14743,7 +14747,8 @@ function renderInfo(icao) {
       const addCard = `<div class="apcard addcard">
       <input class="addinput" id="addIcao" maxlength="4" placeholder="+ ICAO"
              autocomplete="off" spellcheck="false" aria-label="Add an aerodrome">
-      <div class="addhint" id="addHint">enter a 4-letter code</div>
+      <div class="addhint" id="addHint">ICAO or IATA code</div>
+      <div class="suggest" id="addSuggest" hidden></div>
     </div>`;
       g.innerHTML = cards + addCard;
       g.querySelectorAll(".apcard.ok").forEach(b => b.onclick = () => {
@@ -14753,14 +14758,39 @@ function renderInfo(icao) {
     }
     function wireAddInput() {
       const inp = $("#addIcao"); if (!inp) return;
-      inp.addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); });
+      // Mêmes propositions que partout ailleurs (suggestCodes, dès 2 lettres) ;
+      // le mousedown précède le blur et le neutralise (preventDefault), le
+      // choix passe donc par addUserAirport sans double déclenchement.
+      inp.addEventListener("input", e => {
+        e.target.value = e.target.value.toUpperCase();
+        const box = $("#addSuggest"); if (!box) return;
+        const matches = suggestCodes(e.target.value);
+        if (!matches.length) { box.hidden = true; box.innerHTML = ""; return; }
+        box.innerHTML = matches.map(c => {
+          const m = AIRPORTS[c];
+          const iata = m.iata ? `<span class="sg-iata">${m.iata}</span>` : "";
+          return `<button class="sg-row" data-code="${c}">
+        <span class="sg-code">${c}</span>${iata}<span class="sg-city">${m.city} · ${m.cc}</span></button>`;
+        }).join("");
+        box.hidden = false;
+        box.querySelectorAll(".sg-row").forEach(r => r.onmousedown = ev => {
+          ev.preventDefault();
+          box.hidden = true;
+          addUserAirport(r.dataset.code);
+        });
+      });
       inp.addEventListener("keydown", e => { if (e.key === "Enter") addUserAirport(inp.value); });
-      inp.addEventListener("blur", () => { if (inp.value.trim()) addUserAirport(inp.value); });
+      inp.addEventListener("blur", () => {
+        const box = $("#addSuggest"); if (box) { box.hidden = true; box.innerHTML = ""; }
+        if (inp.value.trim()) addUserAirport(inp.value);
+      });
     }
     async function addUserAirport(code) {
       code = (code || "").toUpperCase().trim();
       const hint = $("#addHint");
-      if (!/^[A-Z]{4}$/.test(code)) { if (hint) { hint.textContent = "4-letter code"; } return; }
+      // Un code IATA tapé tel quel (3 lettres) se traduit en OACI.
+      if (code.length === 3 && IATA_TO_ICAO[code]) code = IATA_TO_ICAO[code];
+      if (!/^[A-Z]{4}$/.test(code)) { if (hint) { hint.textContent = "ICAO or IATA code"; } return; }
       if (!GEO[code]) { if (hint) { hint.textContent = code + " not in database"; } return; }
       if (curRoute.airports.some(a => a.icao === code)) { if (hint) { hint.textContent = "already in list"; } return; }
       // ajoute le terrain à la route (rôle "alt", marqué comme ajouté par l'utilisateur)
@@ -14897,10 +14927,22 @@ function renderInfo(icao) {
         if (nx && e.target.value.length >= 4) $(nx).focus();
       });
       $(id).addEventListener("focus", e => renderRouteSuggest(e.target.id, e.target.value));
-      $(id).addEventListener("blur", () => setTimeout(() => {
-        const box = $(RSUGGEST[id.slice(1)]);
-        if (box) box.hidden = true;
-      }, 150));
+      $(id).addEventListener("blur", e => {
+        // Saisie directe d'un code IATA (3 lettres, ex. "ORY") : on le traduit
+        // en OACI au moment où le champ se quitte — pas à la frappe, où trois
+        // lettres sont le plus souvent un code OACI en cours de saisie.
+        const el = e.target, v = (el.value || "").toUpperCase().trim();
+        if (/^[A-Z]{3}$/.test(v) && IATA_TO_ICAO[v]) {
+          el.value = IATA_TO_ICAO[v];
+          const mir = RMIRROR[el.id]; if (mir) $(mir).value = el.value;
+          dropRouteDuplicate(el.id, el.value);
+          refreshGo(); renderHomeStars(); renderHomeChips();
+        }
+        setTimeout(() => {
+          const box = $(RSUGGEST[id.slice(1)]);
+          if (box) box.hidden = true;
+        }, 150);
+      });
     });
     $("#goBtn").onclick = goRoute;
     function clearRouteUI() {

@@ -20,6 +20,10 @@
   jamais dans l'URL.
   ============================================================ -->
 <link rel="manifest" href="fiches.webmanifest">
+<!-- Annuaire compact OACI/IATA (généré par Tools/build-annuaire.js) : nourrit
+     l'autocomplétion du champ terrain. S'il manque (hors ligne, première
+     visite), le champ fonctionne comme avant, sans propositions. -->
+<script src="annuaire-terrains.js" defer></script>
 <link rel="icon" href="fiches-icon-192-v1.png">
 <link rel="apple-touch-icon" href="fiches-icon-180-v1.png">
 <meta name="theme-color" content="#16324f">
@@ -59,6 +63,24 @@
     font-family: inherit;
   }
   input.icao { text-transform: uppercase; letter-spacing: .2em; font-size: 20px; text-align: center; }
+  .champ-terrain { position: relative; }
+  .propositions {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30;
+    background: var(--carte); border: 1px solid var(--bord); border-radius: 10px;
+    overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.5);
+  }
+  .propositions button {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: none; border: 0; border-bottom: 1px solid var(--bord);
+    padding: 11px 13px; color: var(--texte); font-family: inherit; font-size: 14px; cursor: pointer;
+  }
+  .propositions button:last-child { border-bottom: 0; }
+  .propositions .p-oaci { font-weight: 600; letter-spacing: .12em; color: var(--accent); }
+  .propositions .p-iata {
+    font-size: 11px; letter-spacing: .06em; color: var(--sourd);
+    border: 1px solid var(--bord); border-radius: 4px; padding: 2px 5px;
+  }
+  .propositions .p-lieu { color: var(--sourd); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   button.principal {
     width: 100%; padding: 16px; border: none; border-radius: 12px;
     background: var(--accent); color: #fff; font-size: 17px; font-weight: 600;
@@ -119,9 +141,10 @@
   <!-- L'écran de tous les jours : ouvrir la caméra. -->
   <section class="ecran" id="ecran-principal">
     <button class="camera" id="btn-camera"><span>📷</span>Photographier une fiche</button>
-    <div>
-      <label for="icao">Terrain (OACI, facultatif — nomme le fichier)</label>
+    <div class="champ-terrain">
+      <label for="icao">Terrain (OACI ou IATA, facultatif — nomme le fichier)</label>
       <input type="text" id="icao" class="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false">
+      <div class="propositions" id="propositions" hidden></div>
     </div>
     <div class="erreur" id="err-principal"></div>
     <ul class="journal" id="journal"></ul>
@@ -187,7 +210,7 @@ function erreur(id, msg) {
 
 /* ---------- démarrage ---------- */
 function demarrer() {
-  $('pied').textContent = 'v2.1 · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
+  $('pied').textContent = 'v2.2 · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   // Le serveur par défaut se montre dès la première ouverture : un champ
   // vide faisait croire qu'il y avait quelque chose à trouver soi-même.
   $('cfg-serveur').value = CFG.serveur;
@@ -226,8 +249,64 @@ $('fichier').onchange = () => {
 $('btn-reprendre').onclick = () => { photo = null; montrer('ecran-principal'); $('btn-camera').click(); };
 $('btn-encore').onclick = () => { montrer('ecran-principal'); $('btn-camera').click(); };
 
+/* ---------- autocomplétion du terrain (annuaire OACI/IATA) ----------
+   L'annuaire compact (annuaire-terrains.js, généré depuis la base de l'app
+   principale) se découpe à la première frappe. Propositions dès 2 lettres :
+   préfixe OACI ou préfixe IATA ; le choix insère toujours le code OACI. */
+let terrains = null, parIata = null;
+function chargerAnnuaire() {
+  if (terrains) return true;
+  if (!window.ANNUAIRE_TERRAINS) return false;
+  terrains = []; parIata = {};
+  for (const ligne of window.ANNUAIRE_TERRAINS.split('\n')) {
+    const [oaci, iata, ville, pays] = ligne.split('|');
+    if (!oaci) continue;
+    const t = { oaci, iata: iata || '', ville: ville || '', pays: pays || '' };
+    terrains.push(t);
+    if (t.iata && !parIata[t.iata]) parIata[t.iata] = oaci;
+  }
+  return true;
+}
+function proposer(q) {
+  if (q.length < 2 || !chargerAnnuaire()) return [];
+  const res = [];
+  for (const t of terrains) {
+    let rang = -1;
+    if (t.iata === q) rang = 0;
+    else if (t.oaci.startsWith(q)) rang = 1;
+    else if (q.length <= 3 && t.iata && t.iata.startsWith(q)) rang = 2;
+    if (rang >= 0) res.push({ rang, t });
+  }
+  res.sort((a, b) => a.rang - b.rang || (a.t.oaci < b.t.oaci ? -1 : 1));
+  return res.slice(0, 8).map(r => r.t);
+}
+const champIcao = $('icao'), boite = $('propositions');
+function fermerPropositions() { boite.hidden = true; boite.innerHTML = ''; }
+champIcao.addEventListener('input', () => {
+  const q = champIcao.value.trim().toUpperCase();
+  const liste = proposer(q);
+  if (!liste.length) { fermerPropositions(); return; }
+  boite.innerHTML = liste.map(t => `<button type="button" data-oaci="${t.oaci}">
+    <span class="p-oaci">${t.oaci}</span>${t.iata ? `<span class="p-iata">${t.iata}</span>` : ''}
+    <span class="p-lieu">${t.ville}${t.pays ? ' · ' + t.pays : ''}</span></button>`).join('');
+  boite.hidden = false;
+  boite.querySelectorAll('button').forEach(b => b.onmousedown = e => {
+    e.preventDefault();
+    champIcao.value = b.dataset.oaci;
+    fermerPropositions();
+  });
+});
+champIcao.addEventListener('blur', () => {
+  // Un code IATA laissé tel quel (3 lettres) se traduit en OACI.
+  const v = champIcao.value.trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(v) && chargerAnnuaire() && parIata[v]) champIcao.value = parIata[v];
+  setTimeout(fermerPropositions, 150);
+});
+
 function nomDeFichier(f) {
-  const icao = $('icao').value.trim().toUpperCase();
+  let icao = $('icao').value.trim().toUpperCase();
+  // Ceinture et bretelles : si le blur n'est pas passé, l'IATA se traduit ici.
+  if (/^[A-Z]{3}$/.test(icao) && chargerAnnuaire() && parIata[icao]) icao = parIata[icao];
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
   const ts = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
