@@ -4524,14 +4524,17 @@ body.light .stat.on {
     .favwx-main { flex: 1 1 auto; min-width: 0 }
     .favwx-id { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px }
     .favwx-id .code { font: 600 13px/1.3 var(--mono); letter-spacing: .14em; color: var(--cyan); flex: none }
+    /* Le code IATA se lit presque aussi gros que l'OACI — c'est par lui que
+       beaucoup reconnaissent le terrain — mais il reste gris : le cyan de
+       l'OACI garde le premier rang. */
     .favwx-id .iata {
-      font: 600 10px/1 var(--mono);
+      font: 600 12px/1 var(--mono);
       letter-spacing: .12em;
       color: var(--muted);
       flex: none;
       border: 1px solid var(--line2);
       border-radius: 4px;
-      padding: 3px 5px;
+      padding: 3px 6px;
     }
     .favwx-id .name {
       font: 500 12.5px/1.3 var(--sans);
@@ -4543,13 +4546,16 @@ body.light .stat.on {
     }
     .favwx-data { display: flex; flex-wrap: wrap; gap: 4px 14px }
     .favwx-data .d { font: 500 12px/1.4 var(--mono); letter-spacing: .04em; color: var(--text); white-space: nowrap }
+    /* L'étiquette du QFU : le numéro de piste porte le sens des composantes
+       qui suivent, il doit se lire sans effort — gros presque comme elles,
+       gris pour rester en retrait des chiffres colorés. */
     .favwx-data .d i {
-      font: 500 9px/1 var(--mono);
+      font: 500 11px/1 var(--mono);
       letter-spacing: .14em;
       color: var(--muted);
       font-style: normal;
       text-transform: uppercase;
-      margin-right: 4px;
+      margin-right: 5px;
     }
     /* Les composantes se colorent comme le tableau Runways de la page
        Weather : la flèche et sa valeur ensemble, pour que la teinte se voie
