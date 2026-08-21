@@ -4358,36 +4358,26 @@ body.light .stat.on {
       visibility: visible
     }
 
-    /* Bouton d'INVERSION, entre Departure et Destination : deux fleches
-       empilees, celle du haut vers la droite, celle du bas vers la gauche —
-       le dessin dit le geste. Il se cale sur la hauteur d'une case comme
-       l'etoile de la route, sous une etiquette vide de meme hauteur. */
+    /* Bouton d'INVERSION, entre Departure et Destination : le meme pastille
+       ronde que la double fleche de la page Route (.swapbtn), en un peu plus
+       gros, avec les deux fleches EMPILEES — celle du haut vers la droite,
+       celle du bas vers la gauche : le dessin dit le geste. Le rond se pose au
+       bas de sa colonne pour se centrer sur les cases, pas sur l'etiquette,
+       et s'ecarte de ses voisines pour ne pas coller aux codes. */
     .home-field-swap {
       align-self: stretch
     }
 
-    .swapbtn {
-      flex: 1;
-      align-self: stretch;
-      margin: 0;
-      display: flex;
+    .swapbtn.home-swap {
+      width: 46px;
+      height: 46px;
+      flex: none;
+      align-self: center;
+      margin: auto 5px 1px;
       flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 2px;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--muted);
-      font: 600 13px/1 var(--mono);
-      padding: 0 4px;
-      border-radius: 8px;
-      transition: color .12s
-    }
-
-    .swapbtn:hover,
-    .swapbtn:focus-visible {
-      color: var(--cyan)
+      gap: 1px;
+      font: 400 15px/1 var(--sans);
+      letter-spacing: 0
     }
 
     /* Étoile de la ROUTE : même glyphe que celles des cases, mais elle
@@ -4609,11 +4599,11 @@ body.light .stat.on {
          entière lue d'un balayage. Elles maigrissent au lieu de se replier —
          un « Alternate » renvoyé seul à la ligne casse la lecture. */
       .home-route {
-        gap: 6px
+        gap: 5px
       }
 
       .home-route .scratch input {
-        width: 58px;
+        width: 56px;
         font-size: 16px;
         letter-spacing: .06em;
         padding: 11px 4px 11px 9px
@@ -4628,13 +4618,14 @@ body.light .stat.on {
         padding: 0 4px
       }
 
-      /* Le bouton d'inversion prend sa part sur la largeur du telephone : les
-         cases maigrissent de quatre points et l'ecart d'un, pour que les trois
-         codes et les deux fleches tiennent toujours sur UNE ligne a 360 px. */
-      .swapbtn {
-        font-size: 11px;
-        padding: 0;
-        width: 18px
+      /* Le rond d'inversion prend sa part sur la largeur du telephone : les
+         cases maigrissent, l'ecart aussi, pour que les trois codes et le rond
+         tiennent toujours sur UNE ligne a 360 px. */
+      .swapbtn.home-swap {
+        width: 30px;
+        height: 30px;
+        margin: auto 0 8px;
+        font-size: 11px
       }
 
       .home-field-label {
@@ -5302,7 +5293,7 @@ body .stat .k{
              il s'efface plutot que de mentir. -->
         <div class="home-field home-field-swap">
           <span class="home-field-label" aria-hidden="true">&nbsp;</span>
-          <button class="swapbtn" id="hSwap" type="button"
+          <button class="swapbtn home-swap" id="hSwap" type="button"
             aria-label="Swap departure and destination"
             title="Swap departure and destination — the alternate is cleared">
             <span aria-hidden="true">&#8594;</span>
