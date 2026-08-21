@@ -4574,6 +4574,9 @@ body.light .stat.on {
       font-style: normal;
       text-transform: uppercase;
       margin-right: 2px;
+      /* Rwy et son numéro font un mot : l'espace du mono, déjà élargi par
+         l'interlettrage, se rattrape ici. */
+      word-spacing: -3px;
     }
     /* Le relevé de piste est un bloc, mais sans cadre ni fond : c'est le
        resserrement qui le dit. Dedans plus rien ne respire — l'unité colle au
