@@ -4358,9 +4358,98 @@ body.light .stat.on {
       visibility: visible
     }
 
+    /* Étoile de la ROUTE : même glyphe que celles des cases, mais elle
+       répond des trois codes à la fois. Elle se cale sur la hauteur d'une
+       case (46 px) pour ne pas flotter au-dessus de la ligne. */
+    /* La colonne s'étire sur la hauteur de la ligne (`align-items: flex-start`
+       du parent ne s'applique plus), et l'étoile prend tout ce qui reste sous
+       l'étiquette : sa cible fait la hauteur d'une case, comme les trois
+       autres étoiles. La hauteur exacte d'un <input> varie d'un moteur à
+       l'autre — on la recopie au lieu de la deviner. */
+    .home-field-route {
+      align-self: stretch
+    }
+
+    .route-star {
+      font-size: 20px;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      border-radius: 8px;
+      border: 1px dashed var(--line)
+    }
+
+    .route-star:disabled {
+      opacity: .35;
+      cursor: default
+    }
+
+    .route-star.on {
+      border-style: solid;
+      border-color: var(--gold)
+    }
+
+    /* Onglets de l'accueil : même typo que l'ancienne étiquette de section,
+       le seul ajout est le trait doré sous celui qu'on lit. */
+    .home-tabs {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 8px
+    }
+
+    .home-tab {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .2em;
+      color: var(--muted);
+      text-transform: uppercase;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 0 0 5px;
+      cursor: pointer
+    }
+
+    .home-tab .star {
+      color: var(--muted)
+    }
+
+    .home-tab.on {
+      color: var(--text);
+      border-bottom-color: var(--gold)
+    }
+
+    .home-tab.on .star {
+      color: var(--gold)
+    }
+
     .home-chips {
       border-radius: var(--radius);
       border: 1px solid var(--line)
+    }
+
+    /* Puce de route : les codes dans l'ordre, séparés par un chevron, et la
+       croix qui la retire. Même habit que la puce de terrain. */
+    .chip-rt {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .chip-rt .rt-arrow {
+      color: var(--muted)
+    }
+
+    .chip-rt .rt-x {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1;
+      margin-left: 2px;
+      padding: 0 2px
+    }
+
+    .chip-rt .rt-x:hover {
+      color: var(--red)
     }
 
     .home-chips .hint {
@@ -4500,6 +4589,11 @@ body.light .stat.on {
 
       .home-star {
         padding: 13px 7px 13px 2px
+      }
+
+      .route-star {
+        font-size: 18px;
+        padding: 0 4px
       }
 
       .home-field-label {
@@ -5181,10 +5275,26 @@ body .stat .k{
             <div class="suggest" id="hAltSuggest" hidden></div>
           </div>
         </div>
+        <!-- L'étoile de la ROUTE, au bout de la file : les trois cases
+             portent chacune la leur, celle-ci prend les trois d'un coup. Elle
+             s'aligne sur les cases grâce à une étiquette vide de même hauteur. -->
+        <div class="home-field home-field-route">
+          <span class="home-field-label" aria-hidden="true">&nbsp;</span>
+          <button class="starbtn route-star" id="hRouteStar" type="button" aria-pressed="false"
+            aria-label="Add this route to favorites" title="Add / remove this route from favorites"
+            disabled>☆</button>
+        </div>
       </div>
 
       <div>
-        <div class="home-sec-label"><span class="star">★</span> Favorites</div>
+        <!-- Deux onglets sur la même liste : les terrains un à un, ou les
+             routes entières. -->
+        <div class="home-tabs" role="tablist" aria-label="Favorites">
+          <button class="home-tab on" id="homeTabAd" type="button" role="tab" aria-selected="true"><span
+              class="star">★</span> Favorites <span id="homeAdCount"></span></button>
+          <button class="home-tab" id="homeTabRoute" type="button" role="tab" aria-selected="false"><span
+              class="star">★</span> Route <span id="homeRouteCount"></span></button>
+        </div>
         <div class="chips home-chips" id="homeChips"></div>
       </div>
 
@@ -13346,6 +13456,17 @@ E) ${e}`;
     let tab = "fav";              // onglet actif : "fav"
     function loadFavs() { try { return JSON.parse(localStorage.getItem("notam_favs") || "[]"); } catch (e) { return []; } }
     function saveFavs(a) { try { localStorage.setItem("notam_favs", JSON.stringify(a)); } catch (e) { } }
+    /* Routes favorites : une liste de listes de codes, dans l'ordre
+       départ -> destination -> dégagement. Rangées à part des terrains
+       favoris — ce ne sont pas les mêmes objets, et la même route peut
+       n'avoir aucun de ses terrains en favori. */
+    function loadFavRoutes() {
+      try {
+        const a = JSON.parse(localStorage.getItem("notam_fav_routes") || "[]");
+        return Array.isArray(a) ? a.filter(r => Array.isArray(r) && r.filter(Boolean).length >= 2) : [];
+      } catch (e) { return []; }
+    }
+    function saveFavRoutes(a) { try { localStorage.setItem("notam_fav_routes", JSON.stringify(a)); } catch (e) { } }
 
     /* ---- stockage hors-ligne des NOTAM consultés (avec horodatage) ---- */
     const OFFLINE_MAX = 30;                       // nb max d'aérodromes gardés hors-ligne (hors route active)
@@ -13539,6 +13660,7 @@ E) ${e}`;
     }
     function hideOffline() { const el = $("#offlineBanner"); el.hidden = true; el.innerHTML = ""; }
     let favs = loadFavs();        // codes OACI favoris (persistés si possible)
+    let favRoutes = loadFavRoutes();   // routes favorites : [[DEP, DEST, ALT], ...]
 
     /* ---- fenêtre temporelle : aujourd'hui à H:M ± 1 h (UTC) ---- */
     function ts(s) {             // "YYMMDDHHMM..." -> ms UTC, ou null
@@ -17476,7 +17598,22 @@ window.addEventListener("scroll", hidePop, true);
     HOME_FIELDS.forEach(id => {
       $(id).addEventListener("focus", () => homeSelect(id));
     });
+    /* Onglet ouvert sous les cases : les terrains un à un ("ad"), ou les
+       routes entières ("route"). L'onglet ne se retient pas d'une session à
+       l'autre : l'accueil s'ouvre sur les terrains, le geste le plus courant. */
+    let homeFavTab = "ad";
+    function homeSetFavTab(t) {
+      homeFavTab = t;
+      renderHomeChips();
+    }
     function renderHomeChips() {
+      $("#homeAdCount").textContent = "(" + favs.length + ")";
+      $("#homeRouteCount").textContent = "(" + favRoutes.length + ")";
+      [["#homeTabAd", "ad"], ["#homeTabRoute", "route"]].forEach(([sel, t]) => {
+        $(sel).classList.toggle("on", homeFavTab === t);
+        $(sel).setAttribute("aria-selected", String(homeFavTab === t));
+      });
+      if (homeFavTab === "route") return renderHomeRouteChips();
       const wrap = $("#homeChips");
       if (!favs.length) {
         wrap.innerHTML = `<span class="hint">No favorites yet — type an ICAO code above, then tap the ☆ star inside its box.</span>`;
@@ -17515,6 +17652,67 @@ window.addEventListener("scroll", hidePop, true);
         homeMarkSel();
       });
     }
+    /* ---- routes favorites ----
+       Une route, c'est la ligne des trois cases lue de gauche à droite. Deux
+       codes suffisent à en faire une (départ + destination : tout vol n'a pas
+       de dégagement noté), le troisième s'ajoute s'il est là. Deux routes sont
+       la même quand elles alignent les mêmes codes dans le même ordre. */
+    // La route garde ses TROIS emplacements, trous compris : un vol noté
+    // départ + dégagement, sans destination, doit revenir dans ces cases-là et
+    // pas tassé à gauche.
+    function homeRouteSlots() { return HOME_FIELDS.map(homeFieldCode); }
+    function routeSlotsFilled(r) { return r.filter(Boolean); }
+    function routeKey(r) { return r.join(">"); }
+    function findFavRoute(codes) { const k = routeKey(codes); return favRoutes.findIndex(r => routeKey(r) === k); }
+    function toggleFavRoute() {
+      const codes = homeRouteSlots();
+      if (routeSlotsFilled(codes).length < 2) return;
+      const i = findFavRoute(codes);
+      favRoutes = i < 0 ? [...favRoutes, codes] : favRoutes.filter((_, n) => n !== i);
+      saveFavRoutes(favRoutes);
+      renderHomeStars();
+      renderHomeChips();
+    }
+    // Une puce de route remplit les TROIS cases d'un coup — elle remplace ce
+    // qui s'y trouvait : c'est une route entière, pas un terrain de plus. La
+    // file de remplissage repart donc de zéro.
+    function homeApplyRoute(codes) {
+      HOME_FIELDS.forEach((id, i) => {
+        const c = codes[i] || "";
+        $(id).value = c;
+        const mir = RMIRROR[id.slice(1)]; if (mir) $(mir).value = c;
+        $(id).closest(".scratch").classList.remove("need");
+      });
+      homeSel = null; homeMark = null; homeNext = 0;
+      homeMarkSel();
+      refreshGo(); renderHomeChips(); renderHomeStars();
+    }
+    function renderHomeRouteChips() {
+      const wrap = $("#homeChips");
+      if (!favRoutes.length) {
+        wrap.innerHTML = `<span class="hint">No route yet — type the codes above, then tap the ☆ star at the end of the line.</span>`;
+        return;
+      }
+      const cur = routeKey(homeRouteSlots());
+      wrap.innerHTML = favRoutes.map((r, i) => {
+        const f = routeSlotsFilled(r);
+        return `
+        <button class="chip-ad chip-rt ${routeKey(r) === cur ? "on" : ""}" data-i="${i}"
+          aria-label="Load route ${f.join(" to ")}">${f.map(c => `<span>${c}</span>`).join(`<span class="rt-arrow" aria-hidden="true">›</span>`)}<span
+            class="rt-x" data-x="${i}" title="Remove route">×</span></button>`;
+      }).join("");
+      wrap.querySelectorAll(".chip-rt").forEach(b => b.onclick = e => {
+        const x = e.target.dataset.x;
+        if (x !== undefined) {
+          favRoutes = favRoutes.filter((_, n) => n !== Number(x));
+          saveFavRoutes(favRoutes);
+          renderHomeChips(); renderHomeStars();
+          return;
+        }
+        homeApplyRoute(favRoutes[Number(b.dataset.i)]);
+      });
+    }
+
     function openHome() {
       syncRouteMirror();          // l'écran Route a pu changer la route entre-temps
       renderHomeChips();          // ... et la liste des favoris a pu bouger
@@ -17547,10 +17745,23 @@ window.addEventListener("scroll", hidePop, true);
         btn.setAttribute("aria-pressed", String(!!fav));
         btn.setAttribute("aria-label", fav ? "Remove from favorites" : "Add to favorites");
       });
+      /* L'étoile de la route suit les trois cases : éteinte tant qu'il n'y a
+         pas de route à retenir (moins de deux codes complets), pleine quand
+         celle qui est saisie est déjà en favori. */
+      const codes = homeRouteSlots(), rb = $("#hRouteStar"), ok = routeSlotsFilled(codes).length >= 2;
+      const rfav = ok && findFavRoute(codes) >= 0;
+      rb.disabled = !ok;
+      rb.textContent = rfav ? "★" : "☆";
+      rb.classList.toggle("on", rfav);
+      rb.setAttribute("aria-pressed", String(rfav));
+      rb.setAttribute("aria-label", rfav ? "Remove this route from favorites" : "Add this route to favorites");
     }
     $("#hFromStar").onclick = () => toggleFavCode(homeFieldCode("#hFrom"));
     $("#hToStar").onclick = () => toggleFavCode(homeFieldCode("#hTo"));
     $("#hAltStar").onclick = () => toggleFavCode(homeFieldCode("#hAlt"));
+    $("#hRouteStar").onclick = toggleFavRoute;
+    $("#homeTabAd").onclick = () => homeSetFavTab("ad");
+    $("#homeTabRoute").onclick = () => homeSetFavTab("route");
 
     /* ---- Entrée sur une des trois cases : c'est le geste du matin, il part
        sur les NOTAMs — comme le faisait l'ancienne case ICAO. */
