@@ -433,35 +433,10 @@
     }
 
     /* ---------- tabs/favorites/station/suggest ---------- */
-    .tabs {
-      display: flex;
-      gap: 6px;
-      margin-top: 4px;
-      margin-bottom: -2px;
-      position: relative;
-      z-index: 1
-    }
-
-    .tab {
-      font: 600 11px/1 var(--sans);
-      letter-spacing: .07em;
-      color: var(--muted);
-      background: var(--panel);
-      border: 2px solid var(--steel);
-      border-bottom: none;
-      border-radius: var(--radius) var(--radius) 0 0;
-      padding: 9px 15px;
-      cursor: pointer
-    }
-
-    .tab.on {
-      color: var(--text);
-      background: var(--panel);
-      border-color: var(--steel)
-    }
-
-    .tab .star {
-      color: var(--gold)
+    /* La ligne d'onglets de la page NOTAM prend l'air de celle de l'accueil
+       (.fav-tabs) ; il ne lui reste que sa respiration en haut du bandeau. */
+    .fav-tabs.page-tabs {
+      margin-top: 10px
     }
 
     .chips {
@@ -4417,15 +4392,17 @@ body.light .stat.on {
       border-color: var(--gold)
     }
 
-    /* Onglets de l'accueil : même typo que l'ancienne étiquette de section,
-       le seul ajout est le trait doré sous celui qu'on lit. */
-    .home-tabs {
+    /* Onglets de favoris — même habit sur l'accueil et sur la page NOTAM :
+       la typo de l'ancienne étiquette de section, et pour seul ajout le trait
+       doré sous celui qu'on lit. La boîte de puces qui suit se contente d'un
+       filet fin : ce sont les puces qu'on regarde, pas leur cadre. */
+    .fav-tabs {
       display: flex;
       gap: 16px;
       margin-bottom: 8px
     }
 
-    .home-tab {
+    .fav-tab {
       font: 500 10px/1 var(--mono);
       letter-spacing: .2em;
       color: var(--muted);
@@ -4437,20 +4414,20 @@ body.light .stat.on {
       cursor: pointer
     }
 
-    .home-tab .star {
+    .fav-tab .star {
       color: var(--muted)
     }
 
-    .home-tab.on {
+    .fav-tab.on {
       color: var(--text);
       border-bottom-color: var(--gold)
     }
 
-    .home-tab.on .star {
+    .fav-tab.on .star {
       color: var(--gold)
     }
 
-    .home-chips {
+    .fav-chips {
       border-radius: var(--radius);
       border: 1px solid var(--line)
     }
@@ -4479,7 +4456,7 @@ body.light .stat.on {
       color: var(--red)
     }
 
-    .home-chips .hint {
+    .fav-chips .hint {
       font: 500 11px/1.5 var(--sans);
       color: var(--muted)
     }
@@ -5170,15 +5147,15 @@ body .stat .k{
   </header>
 
   <div class="wrap">
-    <div class="tabs">
-      <!-- Deux onglets sur la même liste, comme sur la page d'accueil : les
-           terrains un à un, ou les routes entières. -->
-      <button class="tab on" id="tabFav" aria-pressed="true"><span class="star">★</span> Favorites <span
-          id="favCount">(0)</span></button>
-      <button class="tab" id="tabRoute" aria-pressed="false"><span class="star">★</span> Route <span
-          id="routeCount">(0)</span></button>
+    <!-- Deux onglets sur la même liste, même habit qu'à l'accueil : les
+         terrains un à un, ou les routes entières. -->
+    <div class="fav-tabs page-tabs" role="tablist" aria-label="Favorites">
+      <button class="fav-tab on" id="tabFav" type="button" role="tab" aria-selected="true"><span
+          class="star">★</span> Favorites <span id="favCount">(0)</span></button>
+      <button class="fav-tab" id="tabRoute" type="button" role="tab" aria-selected="false"><span
+          class="star">★</span> Route <span id="routeCount">(0)</span></button>
     </div>
-    <div class="chips" id="chips"></div>
+    <div class="chips fav-chips" id="chips"></div>
 
     <div class="station" id="station" hidden>
       <span class="stationcode" id="stationCode">—</span>
@@ -5350,13 +5327,13 @@ body .stat .k{
       <div>
         <!-- Deux onglets sur la même liste : les terrains un à un, ou les
              routes entières. -->
-        <div class="home-tabs" role="tablist" aria-label="Favorites">
-          <button class="home-tab on" id="homeTabAd" type="button" role="tab" aria-selected="true"><span
+        <div class="fav-tabs" role="tablist" aria-label="Favorites">
+          <button class="fav-tab on" id="homeTabAd" type="button" role="tab" aria-selected="true"><span
               class="star">★</span> Favorites <span id="homeAdCount"></span></button>
-          <button class="home-tab" id="homeTabRoute" type="button" role="tab" aria-selected="false"><span
+          <button class="fav-tab" id="homeTabRoute" type="button" role="tab" aria-selected="false"><span
               class="star">★</span> Route <span id="homeRouteCount"></span></button>
         </div>
-        <div class="chips home-chips" id="homeChips"></div>
+        <div class="chips fav-chips" id="homeChips"></div>
       </div>
 
       <div class="home-cards">
@@ -13775,7 +13752,7 @@ E) ${e}`;
       tab = t;
       [["#tabFav", "fav"], ["#tabRoute", "route"]].forEach(([sel, k]) => {
         $(sel).classList.toggle("on", t === k);
-        $(sel).setAttribute("aria-pressed", String(t === k));
+        $(sel).setAttribute("aria-selected", String(t === k));
       });
       renderChips();
     }
