@@ -332,9 +332,13 @@
 
     /* Ancre locale pour les menus de suggestion des champs FROM/TO/ALT du
        planificateur de route (chaque dropdown se positionne sous SON champ,
-       sans dépendre du positionnement accidentel d'un ancêtre plus haut). */
+       sans dépendre du positionnement accidentel d'un ancêtre plus haut).
+       overflow visible OBLIGATOIRE : il défait le `overflow: hidden` de
+       .scratch (même spécificité, cette règle vient après), qui rognait le
+       menu — positionné SOUS la case, il était intégralement invisible. */
     .rf-anchor {
-      position: relative
+      position: relative;
+      overflow: visible
     }
 
     .scratch label {
