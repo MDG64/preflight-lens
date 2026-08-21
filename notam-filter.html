@@ -4573,11 +4573,14 @@ body.light .stat.on {
       color: var(--muted);
       font-style: normal;
       text-transform: uppercase;
-      margin-right: 5px;
+      margin-right: 3px;
     }
-    /* Les composantes se colorent comme le tableau Runways de la page
-       Weather : la flèche et sa valeur ensemble, pour que la teinte se voie
-       d'un coup d'œil. */
+    /* Seule la flèche prend la couleur : la valeur reste dans le gris du
+       texte, sinon le groupe QFU vire au bloc coloré et ne se lit plus. Le
+       point de séparation se resserre pour que le relevé tienne d'un seul
+       tenant. */
+    .favwx-data .d b { font-weight: 500 }
+    .favwx-data .d em { font-style: normal; color: var(--muted2); margin: 0 2px }
     .favwx-data .w-ok { color: var(--green) }
     .favwx-data .w-warn { color: var(--amber) }
     .favwx-data .w-bad { color: var(--red) }
@@ -18881,13 +18884,14 @@ window.addEventListener("scroll", hidePop, true);
                visi, le Q du QNH. Seul le QFU garde la sienne, sans quoi le
                numéro de piste ne dirait rien. Les composantes passent aux
                flèches du tableau Runways : ↓ le vent de face, ↑ l'arrière,
-               ← et → le côté où la traversière pousse. */
+               ← et → le côté où la traversière pousse. Seule la flèche porte
+               la couleur, la valeur reste grise. */
             const c = favWxComp(icao, p.wind);
             return `<div class="favwx-data">`
               + `<span class="d">${favWxWindTxt(p.wind)}</span>`
               + (c ? `<span class="d"><i>Rwy ${c.id}</i>`
-                  + `<span class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">${c.head >= 0 ? "↓" : "↑"}${Math.abs(c.head)} kt</span>`
-                  + ` · <span class="${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}${c.cross} kt</span></span>` : "")
+                  + `<b class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">${c.head >= 0 ? "↓" : "↑"}</b>${Math.abs(c.head)} kt`
+                  + `<em>·</em><b class="${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}</b>${c.cross} kt</span>` : "")
               + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
               + `<span class="d">${favWxBaseTxt(p)}</span>`
               + `<span class="d">${favWxVisTxt(p)}</span>`
