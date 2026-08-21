@@ -4287,6 +4287,19 @@ body.light .stat.on {
       flex-wrap: wrap
     }
 
+    /* La ligne du Clear ne compte pas comme une section de l'accueil : la
+       marge negative reprend l'ecart de 24 px de `.home-inner` pour que le
+       bouton reste pose sur les cases qu'il efface. */
+    .home-route-top {
+      display: flex;
+      margin-bottom: -18px
+    }
+
+    .clearRouteBtn.home-clear {
+      padding: 5px 9px;
+      font-size: 10px
+    }
+
     /* Chaque case porte son rôle AU-DESSUS d'elle, en toutes lettres. Sortir
        l'étiquette de la boîte libère la largeur pour le code — et, contrairement
        au `label` interne, elle reste lisible sur mobile (voir la règle
@@ -5439,6 +5452,16 @@ body .stat .k{
           <button class="help-btn theme-mirror" id="homeThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
           <button class="help-btn" id="homeHelpBtn" aria-label="Information" title="Information">?</button>
         </div>
+      </div>
+
+      <!-- Effacer la route d'un geste : trois codes tapes, un seul bouton pour
+           les reprendre a zero. Il se tient AU-DESSUS de la ligne, du cote de
+           Departure — c'est par la que la saisie recommence. Eteint tant qu'il
+           n'y a rien a effacer. -->
+      <div class="home-route-top">
+        <button class="clearRouteBtn home-clear" id="hClearBtn" type="button" disabled
+          aria-label="Clear departure, destination and alternate"
+          title="Clear the three codes — departure, destination and alternate">Clear</button>
       </div>
 
       <div class="home-route">
@@ -18187,6 +18210,8 @@ window.addEventListener("scroll", hidePop, true);
       rb.classList.toggle("on", rfav);
       rb.setAttribute("aria-pressed", String(rfav));
       rb.setAttribute("aria-label", rfav ? "Remove this route from favorites" : "Add this route to favorites");
+      // Rien dans les cases : rien a effacer, le bouton s'eteint.
+      $("#hClearBtn").disabled = !HOME_FIELDS.some(id => rVal(id));
     }
     $("#hFromStar").onclick = () => toggleFavCode(homeFieldCode("#hFrom"));
     $("#hToStar").onclick = () => toggleFavCode(homeFieldCode("#hTo"));
@@ -18206,6 +18231,12 @@ window.addEventListener("scroll", hidePop, true);
       });
       refreshGo(); renderHomeChips(); renderHomeStars();
     };
+    /* ---- effacement des trois cases ----
+       Une route entiere posee a vide : c'est exactement ce que fait une puce de
+       route, avec trois codes vides. Les deux ecrans sont jumeles, la page
+       Route se vide donc avec l'accueil, et la file de remplissage repart du
+       depart. */
+    $("#hClearBtn").onclick = () => homeApplyRoute(["", "", ""]);
     $("#homeTabAd").onclick = () => homeSetFavTab("ad");
     $("#homeTabRoute").onclick = () => homeSetFavTab("route");
 
