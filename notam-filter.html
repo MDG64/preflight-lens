@@ -16813,6 +16813,22 @@ function renderInfo(icao) {
           cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py)) ? "pointer" : "grab";
         }
       });
+      /* Vue notam : le clic ouvre la PAGE NOTAM du terrain, exactement comme la
+         carte NOTAM de l'accueil. Donc l'accueil se referme aussi — la carte
+         s'ouvre par-dessus lui (z 60 > 50), et le seul fait de la cacher
+         rendait l'accueil à l'écran pendant que la page chargée restait
+         derrière, invisible : on cliquait un terrain et on retombait sur la
+         page d'accueil. Le terrain reprend au passage le contexte de route de
+         l'accueil quand il en fait partie, pour retrouver les mêmes onglets
+         DEP/DEST/ALT qu'en passant par la carte NOTAM. */
+      function openNotamPage(icao) {
+        const codes = homeRouteCodes();
+        notamRoute = codes.length > 1 && codes.some(c => c.icao === icao) ? codes : [];
+        closeHome();
+        $("#mapOv").hidden = true;
+        $("#routeScreen").hidden = true;
+        load(icao);
+      }
       // Action d'un clic à des coordonnées écran (px device) : inchangée, mais
       // extraite pour être partagée entre le canvas (chemin d'origine) et le
       // conteneur MapLibre (chemin vectoriel, où le canvas ne reçoit rien).
@@ -16826,16 +16842,16 @@ function renderInfo(icao) {
           if (h) openMapWxSide(h.icao);
           return;
         }
-        if (a) { $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(a.icao); return; }
+        if (a) { openNotamPage(a.icao); return; }
         const w = hitWorld(px, py);
         if (!w) return;
         if (w.saved) {
           // vert : on charge et on affiche les NOTAM sur la 1re page
-          $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+          openNotamPage(w.icao);
         } else if (netOnline()) {
           // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
           addWorldToRoute(w.icao);
-          $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+          openNotamPage(w.icao);
         } else {
           mapToast("Connexion requise pour charger " + w.icao);
         }
