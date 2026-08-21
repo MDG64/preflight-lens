@@ -5499,8 +5499,8 @@ body .stat .k{
         </div>
         <div class="map-legend">
           <span class="mleg wx"><i class="dot mred"></i>VIS ≤ 600 m or ceiling ≤ 300 ft</span>
-          <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 700 ft</span>
-          <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 700 ft</span>
+          <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 1 000 ft</span>
+          <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 1 000 ft</span>
           <span class="mleg wx"><i class="dot mgrey"></i>No usable data</span>
           <span class="mleg wx wd"><i class="wda g">↑</i>Wind/gust 3–10 kt</span>
           <span class="mleg wx wd"><i class="wda g">↑↑</i>Wind/gust 11–20 kt</span>
@@ -16025,7 +16025,7 @@ function renderInfo(icao) {
        individuel sont décodés ici, repris du serveur Weather Lens (wx-map.js),
        pour que la même couleur dise la même chose dans les deux apps :
          rouge  VIS ≤ 600 m ou plafond ≤ 300 ft
-         ambre  VIS ≤ 2 000 m ou plafond ≤ 700 ft
+         ambre  VIS ≤ 2 000 m ou plafond ≤ 1 000 ft
          vert   au-dessus des deux
          gris   pas de METAR exploitable, ou trop vieux */
     const MAP_WX_MAX_AGE = 210 * 60e3;   // au-delà, l'observation ne décrit plus le présent : gris
@@ -16085,7 +16085,7 @@ function renderInfo(icao) {
       const hasCeil = ceil != null;
       if (!hasVis && !hasCeil) return 0;
       if ((hasVis && vis <= 600) || (hasCeil && ceil <= 300)) return 3;
-      if ((hasVis && vis <= 2000) || (hasCeil && ceil <= 700)) return 2;
+      if ((hasVis && vis <= 2000) || (hasCeil && ceil <= 1000)) return 2;
       return 1;
     }
 
