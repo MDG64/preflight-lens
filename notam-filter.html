@@ -18754,8 +18754,10 @@ window.addEventListener("scroll", hidePop, true);
         if (/H$/.test(id)) continue;   // piste hélico : pas de vent à juger ici
         const deg = (parseInt(id, 10) % 36 || 36) * 10;
         const c = rwxComp(deg, w, false);
+        /* `sign` vient de rwxComp : il donne le côté d'où souffle la
+           traversière, donc le sens de la flèche du résumé. */
         if (!best || c.head > best.head || (c.head === best.head && c.cross < best.cross))
-          best = { id, head: c.head, cross: c.cross };
+          best = { id, head: c.head, cross: c.cross, sign: c.sign };
       }
       return best;
     }
@@ -18784,14 +18786,21 @@ window.addEventListener("scroll", hidePop, true);
       const body = !p
         ? `<div class="favwx-none">No METAR available.</div>`
         : (() => {
+            /* Plus d'étiquettes devant les valeurs : chacune se nomme
+               elle-même — les degrés et les kt pour le vent, le ° pour la
+               température, BKN et les ft pour le plafond, km ou SM pour la
+               visi, le Q du QNH. Seul le QFU garde la sienne, sans quoi le
+               numéro de piste ne dirait rien. Les composantes passent aux
+               flèches du tableau Runways : ↓ le vent de face, ↑ l'arrière,
+               ← et → le côté où la traversière pousse. */
             const c = favWxComp(icao, p.wind);
             return `<div class="favwx-data">`
-              + `<span class="d"><i>Wind</i>${favWxWindTxt(p.wind)}</span>`
-              + (c ? `<span class="d"><i>Rwy ${c.id}</i>${c.head >= 0 ? "HW" : "TW"} ${Math.abs(c.head)} kt · XW ${c.cross} kt</span>` : "")
-              + `<span class="d"><i>T</i>${p.temp != null ? p.temp + "°" : "—"}</span>`
-              + `<span class="d"><i>Ceil</i>${favWxBaseTxt(p)}</span>`
-              + `<span class="d"><i>Vis</i>${favWxVisTxt(p)}</span>`
-              + `<span class="d"><i>QNH</i>${p.qnh ? "Q" + p.qnh : (p.alt ? "A" + p.alt.toFixed(2) : "—")}</span>`
+              + `<span class="d">${favWxWindTxt(p.wind)}</span>`
+              + (c ? `<span class="d"><i>Rwy ${c.id}</i>${c.head >= 0 ? "↓" : "↑"}${Math.abs(c.head)} kt · ${c.sign >= 0 ? "←" : "→"}${c.cross} kt</span>` : "")
+              + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
+              + `<span class="d">${favWxBaseTxt(p)}</span>`
+              + `<span class="d">${favWxVisTxt(p)}</span>`
+              + `<span class="d">${p.qnh ? "Q" + p.qnh : (p.alt ? "A" + p.alt.toFixed(2) : "—")}</span>`
               + `</div>`;
           })();
       return `<div class="favwx-row"><div class="favwx-pic" data-pic="${icao}"></div>`
