@@ -36,13 +36,15 @@ const ASSETS = [
   // OBLIGATOIRE : la règle 6 les sert « cache d'abord » mais ne dépose jamais
   // rien — sans cette liste, la typo tomberait en police système hors ligne.
   // Noms versionnés (v20/v23) : immuables, mêmes règles que les icônes -v2.
+  // Suffixe "-v2" sur les Mono latin (2026-08-21) : glyphes retouchés pour
+  // ôter le point au centre du zéro — nouveau contenu, donc nouveau nom.
   "./fonts/ibm-plex-sans-v23-latin-wght.woff2",
   "./fonts/ibm-plex-sans-v23-latin-ext-wght.woff2",
-  "./fonts/ibm-plex-mono-v20-latin-400.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-400-v2.woff2",
   "./fonts/ibm-plex-mono-v20-latin-ext-400.woff2",
-  "./fonts/ibm-plex-mono-v20-latin-500.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-500-v2.woff2",
   "./fonts/ibm-plex-mono-v20-latin-ext-500.woff2",
-  "./fonts/ibm-plex-mono-v20-latin-600.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-600-v2.woff2",
   "./fonts/ibm-plex-mono-v20-latin-ext-600.woff2"
 ];
 
