@@ -4573,14 +4573,27 @@ body.light .stat.on {
       color: var(--muted);
       font-style: normal;
       text-transform: uppercase;
-      margin-right: 3px;
+      margin-right: 4px;
+    }
+    /* Le relevé de piste est un bloc : QFU, vent de face et traversière
+       tiennent dans un cadre creusé dans la ligne, sans quoi ses trois
+       morceaux se lisent comme trois valeurs indépendantes. Dedans, tout se
+       resserre — l'unité colle au chiffre, le point de séparation n'a plus
+       qu'un cheveu de chaque côté. */
+    .favwx-data .d.rwy {
+      display: inline-flex;
+      align-items: baseline;
+      background: var(--bg2);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 2px 6px;
+      margin: -2px 0;
     }
     /* Seule la flèche prend la couleur : la valeur reste dans le gris du
-       texte, sinon le groupe QFU vire au bloc coloré et ne se lit plus. Le
-       point de séparation se resserre pour que le relevé tienne d'un seul
-       tenant. */
+       texte, sinon le bloc vire au pavé coloré et ne se lit plus. */
     .favwx-data .d b { font-weight: 500 }
-    .favwx-data .d em { font-style: normal; color: var(--muted2); margin: 0 2px }
+    .favwx-data .d u { text-decoration: none; margin-left: 2px }
+    .favwx-data .d em { font-style: normal; color: var(--muted2); margin: 0 1px }
     .favwx-data .w-ok { color: var(--green) }
     .favwx-data .w-warn { color: var(--amber) }
     .favwx-data .w-bad { color: var(--red) }
@@ -18889,9 +18902,9 @@ window.addEventListener("scroll", hidePop, true);
             const c = favWxComp(icao, p.wind);
             return `<div class="favwx-data">`
               + `<span class="d">${favWxWindTxt(p.wind)}</span>`
-              + (c ? `<span class="d"><i>Rwy ${c.id}</i>`
-                  + `<b class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">${c.head >= 0 ? "↓" : "↑"}</b>${Math.abs(c.head)} kt`
-                  + `<em>·</em><b class="${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}</b>${c.cross} kt</span>` : "")
+              + (c ? `<span class="d rwy"><i>Rwy ${c.id}</i>`
+                  + `<b class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">${c.head >= 0 ? "↓" : "↑"}</b>${Math.abs(c.head)}<u>kt</u>`
+                  + `<em>·</em><b class="${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}</b>${c.cross}<u>kt</u></span>` : "")
               + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
               + `<span class="d">${favWxBaseTxt(p)}</span>`
               + `<span class="d">${favWxVisTxt(p)}</span>`
