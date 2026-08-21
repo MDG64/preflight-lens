@@ -16466,13 +16466,15 @@ function renderInfo(icao) {
           + `<pre class="wx-raw${d && d.metar && d.metar.raw ? "" : " empty"}">${d && d.metar && d.metar.raw ? wxSevHtml(d.metar.raw) : "No METAR available for " + icao + "."}</pre></div>`
           + `<div class="wx-block"><h3>TAF <span class="wx-age${ta && ta.min > 7 * 60 ? " warn" : ""}">${ta ? "issued " + ta.txt : ""}</span></h3>`
           + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? wxSevHtml(tafPretty(d.taf.raw)) : "No TAF published for " + icao + "."}</pre></div>`
-          + `<div class="wx-block" id="dwxSec" hidden></div>`
           + wxRunwaysHtml(icao, d)
+          + `<div class="wx-block" id="dwxSec" hidden></div>`
           + `<p class="mapwx-hint">Swipe down to close.</p>`;
         fitMapWxSide();
-        /* La bande du jour se glisse sous le TAF quand elle arrive — et chaque
-           nouvel appel de render() (copie fraîche, copie de secours) repart de
-           la même promesse, sans nouvel aller-retour. */
+        /* La bande du jour se glisse en pied de panneau quand elle arrive —
+           après les vents par QFU, qui parlent à la décision quand elle ne
+           fait que camper la journée. Chaque nouvel appel de render() (copie
+           fraîche, copie de secours) repart de la même promesse, sans nouvel
+           aller-retour. */
         dayP.then(dw => {
           if (seq !== mapWxSideSeq || !dw || !Array.isArray(dw.slots) || !dw.slots.some(Boolean)) return;
           const sec = $("#dwxSec");
@@ -18451,8 +18453,8 @@ window.addEventListener("scroll", hidePop, true);
       renderWxAges();
     }
     // La bande du jour d'UNE section : elle part en parallèle du relevé et se
-    // glisse sous le TAF quand elle arrive ; son échec la laisse simplement
-    // absente — elle est un plus, jamais une condition.
+    // glisse en pied de section quand elle arrive, après les vents par QFU ;
+    // son échec la laisse simplement absente — un plus, jamais une condition.
     function loadWxDaySec(icao, my) {
       fetchDayWx(icao).then(d => {
         if (my !== wxToken) return;              // l'écran a changé de sujet
@@ -18527,8 +18529,8 @@ window.addEventListener("scroll", hidePop, true);
         <h3>TAF <span class="wx-age" data-age="taf"></span></h3>
         <pre class="wx-raw" data-raw="taf">—</pre>
       </div>
-      <div class="wx-block" data-daywx hidden></div>
       <div data-rwx></div>
+      <div class="wx-block" data-daywx hidden></div>
     </section>`;
       }).join("");
       // Après les sections : chaque case cherche la sienne au clic.
