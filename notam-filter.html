@@ -4358,6 +4358,38 @@ body.light .stat.on {
       visibility: visible
     }
 
+    /* Bouton d'INVERSION, entre Departure et Destination : deux fleches
+       empilees, celle du haut vers la droite, celle du bas vers la gauche —
+       le dessin dit le geste. Il se cale sur la hauteur d'une case comme
+       l'etoile de la route, sous une etiquette vide de meme hauteur. */
+    .home-field-swap {
+      align-self: stretch
+    }
+
+    .swapbtn {
+      flex: 1;
+      align-self: stretch;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font: 600 13px/1 var(--mono);
+      padding: 0 4px;
+      border-radius: 8px;
+      transition: color .12s
+    }
+
+    .swapbtn:hover,
+    .swapbtn:focus-visible {
+      color: var(--cyan)
+    }
+
     /* Étoile de la ROUTE : même glyphe que celles des cases, mais elle
        répond des trois codes à la fois. Elle se cale sur la hauteur d'une
        case (46 px) pour ne pas flotter au-dessus de la ligne. */
@@ -4577,11 +4609,11 @@ body.light .stat.on {
          entière lue d'un balayage. Elles maigrissent au lieu de se replier —
          un « Alternate » renvoyé seul à la ligne casse la lecture. */
       .home-route {
-        gap: 8px
+        gap: 6px
       }
 
       .home-route .scratch input {
-        width: 62px;
+        width: 58px;
         font-size: 16px;
         letter-spacing: .06em;
         padding: 11px 4px 11px 9px
@@ -4594,6 +4626,15 @@ body.light .stat.on {
       .route-star {
         font-size: 18px;
         padding: 0 4px
+      }
+
+      /* Le bouton d'inversion prend sa part sur la largeur du telephone : les
+         cases maigrissent de quatre points et l'ecart d'un, pour que les trois
+         codes et les deux fleches tiennent toujours sur UNE ligne a 360 px. */
+      .swapbtn {
+        font-size: 11px;
+        padding: 0;
+        width: 18px
       }
 
       .home-field-label {
@@ -5254,6 +5295,19 @@ body .stat .k{
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hFromSuggest" hidden></div>
           </div>
+        </div>
+        <!-- Inverser la route d'un geste : la fleche du haut part a droite, celle
+             du bas revient a gauche. Le degagement, choisi pour l'ancienne
+             destination, ne veut plus rien dire une fois la route retournee :
+             il s'efface plutot que de mentir. -->
+        <div class="home-field home-field-swap">
+          <span class="home-field-label" aria-hidden="true">&nbsp;</span>
+          <button class="swapbtn" id="hSwap" type="button"
+            aria-label="Swap departure and destination"
+            title="Swap departure and destination — the alternate is cleared">
+            <span aria-hidden="true">&#8594;</span>
+            <span aria-hidden="true">&#8592;</span>
+          </button>
         </div>
         <div class="home-field">
           <label class="home-field-label" for="hTo">Destination</label>
@@ -17760,6 +17814,20 @@ window.addEventListener("scroll", hidePop, true);
     $("#hToStar").onclick = () => toggleFavCode(homeFieldCode("#hTo"));
     $("#hAltStar").onclick = () => toggleFavCode(homeFieldCode("#hAlt"));
     $("#hRouteStar").onclick = toggleFavRoute;
+    /* ---- inversion depart <-> destination ----
+       Le retour du soir, c'est la meme route lue a l'envers : on echange les
+       deux codes au lieu de les retaper. Le degagement, lui, avait ete choisi
+       pour l'ancienne destination — il ne repond plus de rien une fois la
+       route retournee, donc il part. */
+    $("#hSwap").onclick = () => {
+      const from = rVal("#hFrom"), to = rVal("#hTo");
+      [["#hFrom", to], ["#hTo", from], ["#hAlt", ""]].forEach(([id, code]) => {
+        $(id).value = code;
+        const mir = RMIRROR[id.slice(1)]; if (mir) $(mir).value = code;
+        $(id).closest(".scratch").classList.remove("need");
+      });
+      refreshGo(); renderHomeChips(); renderHomeStars();
+    };
     $("#homeTabAd").onclick = () => homeSetFavTab("ad");
     $("#homeTabRoute").onclick = () => homeSetFavTab("route");
 
