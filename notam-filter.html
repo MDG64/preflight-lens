@@ -4583,9 +4583,11 @@ body.light .stat.on {
     /* Seule la flèche prend la couleur : la valeur reste dans le gris du
        texte, sinon le bloc vire au pavé coloré et ne se lit plus. */
     /* Les flèches portent seules l'état du vent : elles montent d'un cran en
-       corps, passent en gras et gagnent un filet de contour, sans quoi un
-       glyphe de mono à 12 px se perd entre deux chiffres. */
-    .favwx-data .d b { font: 700 14px/1 var(--mono); -webkit-text-stroke: .4px }
+       corps, passent en gras et gagnent un contour épais, sans quoi un
+       glyphe de mono se perd entre deux chiffres. Le trait du contour fait le
+       gros du travail : les mono ne donnent presque rien en graisse sur
+       ↓↑←→. */
+    .favwx-data .d b { font: 700 15px/1 var(--mono); -webkit-text-stroke: .9px }
     .favwx-data .d u { text-decoration: none; margin-left: 1px }
     /* Plus de point entre face et traversière : quatre pixels séparent les
        deux composantes, assez pour qu'elles ne se touchent pas, trop peu pour
