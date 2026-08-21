@@ -4574,9 +4574,6 @@ body.light .stat.on {
       font-style: normal;
       text-transform: uppercase;
       margin-right: 2px;
-      /* Rwy et son numéro font un mot : l'espace du mono, déjà élargi par
-         l'interlettrage, se rattrape ici. */
-      word-spacing: -3px;
     }
     /* Le relevé de piste est un bloc, mais sans cadre ni fond : c'est le
        resserrement qui le dit. Dedans plus rien ne respire — l'unité colle au
@@ -4587,7 +4584,10 @@ body.light .stat.on {
        texte, sinon le bloc vire au pavé coloré et ne se lit plus. */
     .favwx-data .d b { font-weight: 500 }
     .favwx-data .d u { text-decoration: none; margin-left: 1px }
-    .favwx-data .d em { font-style: normal; color: var(--muted2) }
+    /* Plus de point entre face et traversière : quatre pixels séparent les
+       deux composantes, assez pour qu'elles ne se touchent pas, trop peu pour
+       qu'on les prenne pour deux champs. */
+    .favwx-data .d b.xw { margin-left: 4px }
     .favwx-data .w-ok { color: var(--green) }
     .favwx-data .w-warn { color: var(--amber) }
     .favwx-data .w-bad { color: var(--red) }
@@ -18896,9 +18896,9 @@ window.addEventListener("scroll", hidePop, true);
             const c = favWxComp(icao, p.wind);
             return `<div class="favwx-data">`
               + `<span class="d">${favWxWindTxt(p.wind)}</span>`
-              + (c ? `<span class="d rwy"><i>Rwy ${c.id}</i>`
+              + (c ? `<span class="d rwy"><i>Rwy${c.id}</i>`
                   + `<b class="${c.head >= 0 ? "w-ok" : favWxTone(-c.head, null, 9)}">${c.head >= 0 ? "↓" : "↑"}</b>${Math.abs(c.head)}<u>kt</u>`
-                  + `<em>·</em><b class="${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}</b>${c.cross}<u>kt</u></span>` : "")
+                  + `<b class="xw ${favWxTone(c.cross, 20, 30)}">${c.sign >= 0 ? "←" : "→"}</b>${c.cross}<u>kt</u></span>` : "")
               + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
               + `<span class="d">${favWxBaseTxt(p)}</span>`
               + `<span class="d">${favWxVisTxt(p)}</span>`
