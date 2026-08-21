@@ -4582,7 +4582,10 @@ body.light .stat.on {
     .favwx-data .d.rwy { display: inline-flex; align-items: baseline }
     /* Seule la flèche prend la couleur : la valeur reste dans le gris du
        texte, sinon le bloc vire au pavé coloré et ne se lit plus. */
-    .favwx-data .d b { font-weight: 500 }
+    /* Les flèches portent seules l'état du vent : elles montent d'un cran en
+       corps, passent en gras et gagnent un filet de contour, sans quoi un
+       glyphe de mono à 12 px se perd entre deux chiffres. */
+    .favwx-data .d b { font: 700 14px/1 var(--mono); -webkit-text-stroke: .4px }
     .favwx-data .d u { text-decoration: none; margin-left: 1px }
     /* Plus de point entre face et traversière : quatre pixels séparent les
        deux composantes, assez pour qu'elles ne se touchent pas, trop peu pour
