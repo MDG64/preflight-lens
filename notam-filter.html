@@ -4873,33 +4873,14 @@ body.light .stat.on {
       color: var(--muted2)
     }
 
-    .dwx svg {
-      width: 26px;
-      height: 26px;
+    /* Pictogrammes officiels met.no (vendor/weather/) : dessinés pleins et en
+       couleurs par Yr, ils se lisent tels quels sur les deux thèmes — aucune
+       teinte à leur imposer. */
+    .dwx img {
+      width: 28px;
+      height: 28px;
       display: block;
-      margin: 3px auto 2px;
-      fill: none;
-      stroke: var(--muted);
-      stroke-width: 1.7;
-      stroke-linecap: round;
-      stroke-linejoin: round
-    }
-
-    /* Trois teintes seulement : l'astre en ambre, l'eau en cyan, l'éclair en
-       or — le nuage garde le gris du texte secondaire. La bande informe, elle
-       n'alerte pas : le rouge reste aux verdicts. */
-    .dwx .sun {
-      stroke: var(--amber)
-    }
-
-    .dwx .wet {
-      stroke: var(--cyan)
-    }
-
-    .dwx .bolt {
-      stroke: var(--gold);
-      fill: var(--gold);
-      stroke-width: 1
+      margin: 2px auto 1px
     }
 
     .dwx .tp {
@@ -16385,34 +16366,18 @@ function renderInfo(icao) {
        User-Agent identifiant, que le navigateur ne laisse pas poser. La bande
        ne retarde jamais le relevé : elle part en parallèle, se glisse sous le
        TAF quand elle arrive, et son échec la rend simplement absente. */
-    const DWX_CLOUD = "M18 10h-1.26A8 8 0 1 0 9 20h9a4 4 0 0 0 0-8z";
-    const DWX_ICONS = {
-      sun: `<g class="sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.5 1.5M17.1 17.1l1.5 1.5M18.6 5.4l-1.5 1.5M6.9 17.1l-1.5 1.5"/></g>`,
-      moon: `<path class="sun" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`,
-      suncloud: `<g class="sun"><circle cx="17" cy="6" r="2.6"/><path d="M17 1.2v1.5M20.9 6h1.6M14.5 3.5l1.1 1.1M19.5 3.5l-1.1 1.1"/></g><path transform="translate(0.5 3.5) scale(0.85)" d="${DWX_CLOUD}"/>`,
-      mooncloud: `<path class="sun" transform="translate(13 1) scale(0.42)" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/><path transform="translate(0.5 3.5) scale(0.85)" d="${DWX_CLOUD}"/>`,
-      cloud: `<path d="${DWX_CLOUD}"/>`,
-      fog: `<path transform="translate(1.2 -1.5) scale(0.9)" d="${DWX_CLOUD}"/><path d="M6 20h12M8 22.4h8"/>`,
-      rain: `<path transform="translate(1.2 -1.5) scale(0.9)" d="${DWX_CLOUD}"/><path class="wet" d="M8.5 19.5l-1 3M12.5 19.5l-1 3M16.5 19.5l-1 3"/>`,
-      sleet: `<path transform="translate(1.2 -1.5) scale(0.9)" d="${DWX_CLOUD}"/><path class="wet" d="M9 19.5l-1 3M14.8 19.8v2.4M13.6 21h2.4"/>`,
-      snow: `<path transform="translate(1.2 -1.5) scale(0.9)" d="${DWX_CLOUD}"/><path class="wet" d="M8 19.8v2.4M6.8 21h2.4M12 20.2v2.4M10.8 21.4h2.4M16 19.8v2.4M14.8 21h2.4"/>`,
-      storm: `<path transform="translate(1.2 -2.2) scale(0.9)" d="${DWX_CLOUD}"/><path class="bolt" d="M12.9 16l-2.7 4.2h2.2l-1.6 3.3 4.5-4.8H13l1.9-2.7z"/>`,
-    };
-    /* Du code symbole met.no (clearsky_day, heavyrainshowersandthunder…) au
-       pictogramme : l'ordre des tests fait la priorité — l'orage avant la
-       pluie qu'il contient, la neige avant l'averse qui la porte. */
-    function dwxPicto(sym) {
-      const s = String(sym || "");
-      const night = /_(night|polartwilight)/.test(s);
-      if (/thunder/.test(s)) return "storm";
-      if (/sleet/.test(s)) return "sleet";
-      if (/snow/.test(s)) return "snow";
-      if (/rain/.test(s)) return "rain";
-      if (/fog/.test(s)) return "fog";
-      if (/^cloudy/.test(s)) return "cloud";
-      if (/^(partlycloudy|fair)/.test(s)) return night ? "mooncloud" : "suncloud";
-      if (/^clearsky/.test(s)) return night ? "moon" : "sun";
-      return "cloud";
+    /* Pictogrammes OFFICIELS met.no (ceux de Yr, MIT), vendorisés dans
+       vendor/weather/ : le code symbole EST le nom du fichier — plus de table
+       de réduction, chaque nuance (petite averse, déluge, giboulée d'orage)
+       garde son dessin, jour, nuit et crépuscule polaire compris. Le chemin
+       vendor/ met aussi les icônes sous la règle 5 du service worker : mises
+       en cache au premier affichage, consultables hors ligne ensuite.
+       Garde-fou sur le nom avant de le poser dans une URL, et repli nuage si
+       un code inédit arrive. */
+    function dwxIconHtml(sym) {
+      const s = /^[a-z]+(?:_(?:day|night|polartwilight))?$/.test(String(sym || "")) ? sym : "cloudy";
+      return `<img src="vendor/weather/${s}.svg" alt=""
+        onerror="this.onerror=null;this.src='vendor/weather/cloudy.svg'">`;
     }
     /* Petit cache côté client : redemander le même terrain dans le quart
        d'heure — panneau rouvert, page météo rafraîchie — ne repaie ni le
@@ -16446,7 +16411,7 @@ function renderInfo(icao) {
           : `${String(Math.round(Number(s.z)) || 0).padStart(2, "0")}Z`;
         const t = Math.round(Number(s.t));
         return `<div><div class="z">${lbl}</div>`
-          + `<svg viewBox="0 0 24 24" aria-hidden="true">${DWX_ICONS[dwxPicto(s.s)]}</svg>`
+          + dwxIconHtml(s.s)
           + `<div class="tp">${Number.isFinite(t) ? t + "°" : "—"}</div></div>`;
       }).join("");
       return `<h3>Day weather${d.tomorrow ? " — tomorrow" : ""}${local ? " · local time" : ""}</h3>`
