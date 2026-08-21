@@ -4295,9 +4295,14 @@ body.light .stat.on {
       margin-bottom: -18px
     }
 
-    .clearRouteBtn.home-clear {
-      padding: 5px 9px;
-      font-size: 10px
+    /* Sur l'accueil, le Clear se voit : liseré de 2 px à la couleur pleine du
+       rouge, au lieu du filet sombre de la page Route. C'est le seul bouton de
+       la ligne qui detruit quelque chose — il s'annonce. */
+    .clearRouteBtn.home-clear,
+    body.light .clearRouteBtn.home-clear {
+      padding: 5px 10px;
+      font-size: 10px;
+      border: 2px solid var(--red)
     }
 
     /* Chaque case porte son rôle AU-DESSUS d'elle, en toutes lettres. Sortir
