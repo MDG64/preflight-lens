@@ -18719,7 +18719,10 @@ window.addEventListener("scroll", hidePop, true);
       if (!w || w.spd == null) return "—";
       if (!w.spd && !w.gust) return "Calm";
       const dir = w.dir != null ? String(w.dir).padStart(3, "0") + "°" : "VRB";
-      return `${dir} ${w.spd}${w.gust ? "G" + w.gust : ""} kt`;
+      /* Barre oblique entre le d'où et le combien : sans étiquette devant,
+         c'est elle qui sépare les deux nombres du vent au premier coup
+         d'œil. */
+      return `${dir}/${w.spd}${w.gust ? "G" + w.gust : ""} kt`;
     }
     /* Le « plafond » du résumé : la couche BKN la plus basse (OVC et VV
        comptent — plus couvert que BKN), sinon la SCT la plus basse, sinon la
