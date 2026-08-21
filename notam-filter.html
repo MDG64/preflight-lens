@@ -5021,6 +5021,13 @@ body.light .stat.on {
       color: var(--muted2)
     }
 
+    /* Marque du lendemain : la fenêtre glisse, une bande d'après-midi finit
+       par mélanger ce soir et demain matin. Le +1 le dit sans place perdue. */
+    .dwx .z .nx {
+      margin-left: 2px;
+      opacity: .75
+    }
+
     /* Pictogrammes officiels met.no (vendor/weather/) : dessinés pleins et en
        couleurs par Yr, ils se lisent tels quels sur les deux thèmes — aucune
        teinte à leur imposer. */
@@ -16599,15 +16606,19 @@ function renderInfo(icao) {
       /* Chaque case s'étiquette à l'heure LOCALE du terrain (`h`, calculée
          par le proxy avec le vrai fuseau — la même heure que la page Info) ;
          quand le fuseau n'a pas pu se résoudre, `h` manque et l'heure UTC
-         exacte reprend l'étiquette, suffixée Z pour le dire. */
+         exacte reprend l'étiquette, suffixée Z pour le dire. La fenêtre du
+         proxy ne retient que des échéances à venir : une case d'après-midi
+         peut donc tomber demain matin, et porte alors +1 — sauf quand le
+         titre dit déjà que toute la bande parle de demain. */
       const local = d.slots.some(s => s && s.h != null);
       const cells = d.slots.map(s => {
         if (!s) return `<div><div class="z">—</div></div>`;
         const lbl = s.h != null
           ? `${String(Math.round(Number(s.h)) || 0).padStart(2, "0")}h`
           : `${String(Math.round(Number(s.z)) || 0).padStart(2, "0")}Z`;
+        const nx = s.d === 1 && !d.tomorrow ? `<span class="nx">+1</span>` : "";
         const t = Math.round(Number(s.t));
-        return `<div><div class="z">${lbl}</div>`
+        return `<div><div class="z">${lbl}${nx}</div>`
           + dwxIconHtml(s.s)
           + `<div class="tp">${Number.isFinite(t) ? t + "°" : "—"}</div></div>`;
       }).join("");
@@ -18830,7 +18841,10 @@ window.addEventListener("scroll", hidePop, true);
       let best = null, dist = Infinity;
       for (const s of d.slots) {
         if (!s || !Number.isFinite(Number(s.z))) continue;
-        const z = Number(s.z) + (d.tomorrow ? 24 : 0);
+        /* `d` (0 aujourd'hui, 1 demain) désambiguïse une bande à cheval sur
+           deux jours ; `d.tomorrow` reste le repli pour une réponse d'avant. */
+        const nextDay = s.d != null ? s.d === 1 : !!d.tomorrow;
+        const z = Number(s.z) + (nextDay ? 24 : 0);
         const dd = Math.abs(z - nowZ);
         if (dd < dist) { dist = dd; best = s; }
       }
