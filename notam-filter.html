@@ -3152,32 +3152,54 @@
     }
 
     /* Panneau METAR/TAF de la vue Weather : au clic sur un point ou un code,
-       il entre par la gauche et se pose SUR la carte sans la couvrir — la
-       station cliquée et son voisinage restent lisibles à droite. Il se
-       referme comme il est venu : un glissement du doigt vers la gauche.
+       il monte du bas et se pose SUR la carte sans la couvrir — la station
+       cliquée et son voisinage restent lisibles au-dessus. Il se referme comme
+       il est venu : un glissement du doigt vers le bas.
        7 : au-dessus de la flèche ← (6) — panneau ouvert, la flèche disparaît
        dessous ; on sort du relevé par sa croix ou le glissement, pas de la
        carte. */
     .mapwx {
       position: absolute;
       left: 0;
-      top: 0;
+      right: 0;
       bottom: 0;
       z-index: 7;
-      width: min(340px, 86%);
+      max-height: min(70%, 540px);
       display: flex;
       flex-direction: column;
       background: var(--bg);
-      border-right: 1px solid var(--line2);
+      border-top: 1px solid var(--line2);
+      border-radius: 14px 14px 0 0;
       box-shadow: var(--elev-hi);
-      transform: translateX(-102%);          /* 102 % : l'ombre portée sort aussi du cadre */
+      transform: translateY(102%);           /* 102 % : l'ombre portée sort aussi du cadre */
       transition: transform .22s ease;
-      /* Le doigt garde le défilement vertical du relevé ; l'horizontale nous
-         revient — c'est le geste de fermeture. */
-      touch-action: pan-y;
     }
 
-    .mapwx.open { transform: translateX(0) }
+    .mapwx.open { transform: translateY(0) }
+
+    /* La poignée : une barre qu'on voit et qu'on saisit. `touch-action: none`
+       la réserve à nous — sinon le navigateur prend le glissement vers le bas
+       pour un défilement, aucun pointermove n'arrive et le panneau ne se ferme
+       jamais au doigt. */
+    .mapwx-grip {
+      flex: none;
+      height: 22px;
+      position: relative;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .mapwx-grip::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 9px;
+      width: 38px;
+      height: 4px;
+      margin-left: -19px;
+      border-radius: 2px;
+      background: var(--line2);
+    }
 
     /* Pendant le glissement, le panneau suit le doigt : plus de transition,
        sinon il traîne d'un cinquième de seconde derrière lui. Et plus de
@@ -3192,14 +3214,20 @@
       overflow-y: auto;
       /* Le corps EST le conteneur de défilement : c'est donc SA valeur de
          touch-action que le navigateur consulte, pas celle du panneau
-         au-dessus. Sans ce pan-y, le doigt qui part vers la gauche est
-         confisqué par le navigateur, aucun pointermove n'arrive, et le
-         panneau ne se ferme jamais sur mobile. */
+         au-dessus. Le pan-y lui laisse le défilement du relevé ; la
+         fermeture, elle, se prend par la poignée. `contain` garde le
+         défilement en bout de course pour lui, sans le laisser déborder sur
+         la carte. */
       touch-action: pan-y;
-      /* La flèche ← de la carte est passée SOUS le panneau : le contenu
-         reprend le haut du cadre, seule la croix garde son coin droit. */
-      padding: 14px 14px 16px;
+      overscroll-behavior: contain;
+      /* La poignée occupe déjà le haut du cadre ; seule la croix garde son
+         coin droit. */
+      padding: 2px 14px 16px;
     }
+
+    /* Relevé assez court pour tenir sans défiler : il n'y a plus de défilement
+       à protéger, le doigt ferme le panneau depuis n'importe où. */
+    .mapwx-body.short { touch-action: none }
 
     .mapwx-x {
       position: absolute;
@@ -5234,6 +5262,7 @@ body .stat .k{
            Il entre par la gauche au clic sur une station, se pose sur la
            carte sans la couvrir, et repart d'un glissement vers la gauche. -->
       <aside class="mapwx" id="mapWxSide" hidden aria-label="METAR and TAF of the selected aerodrome">
+        <div class="mapwx-grip" aria-hidden="true"></div>
         <button class="mapwx-x" id="mapWxSideX" aria-label="Close reports" title="Close reports">×</button>
         <div class="mapwx-body" id="mapWxSideBody"></div>
       </aside>
@@ -16003,7 +16032,7 @@ function renderInfo(icao) {
     $("#mapThemeBtn").onclick = () => $("#themeBtn").click();
     /* ---- Panneau METAR/TAF de la vue Weather ----
        Le clic en vue weather ne quitte plus la carte : le relevé vient se lire
-       sur place, dans un panneau qui entre par la gauche. `mapWxSideSeq`
+       sur place, dans un panneau qui monte du bas. `mapWxSideSeq`
        protège de deux clics rapprochés — la réponse d'un terrain abandonné
        n'écrase pas celle du terrain qu'on regarde. */
     let mapWxSideSeq = 0;
@@ -16013,8 +16042,15 @@ function renderInfo(icao) {
       el.classList.remove("open");
       el.style.transform = "";
       /* On attend la fin du glissement pour cacher : sinon le panneau
-         disparaît d'un coup au lieu de sortir par la gauche. */
+         disparaît d'un coup au lieu de sortir par le bas. */
       setTimeout(() => { if (!el.classList.contains("open")) el.hidden = true; }, 240);
+    }
+    /* Le relevé tient-il sans défiler ? Si oui, le doigt peut fermer le
+       panneau depuis n'importe où ; sinon le défilement garde le geste
+       vertical et seule la poignée ferme. */
+    function fitMapWxSide() {
+      const b = $("#mapWxSideBody"); if (!b) return;
+      b.classList.toggle("short", b.scrollHeight <= b.clientHeight + 1);
     }
     async function openMapWxSide(icao) {
       const el = $("#mapWxSide"), body = $("#mapWxSideBody");
@@ -16034,12 +16070,14 @@ function renderInfo(icao) {
           + `<div class="wx-block"><h3>TAF <span class="wx-age${ta && ta.min > 7 * 60 ? " warn" : ""}">${ta ? "issued " + ta.txt : ""}</span></h3>`
           + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? wxSevHtml(tafPretty(d.taf.raw)) : "No TAF published for " + icao + "."}</pre></div>`
           + wxRunwaysHtml(icao, d)
-          + `<p class="mapwx-hint">Swipe left to close.</p>`;
+          + `<p class="mapwx-hint">Swipe down to close.</p>`;
+        fitMapWxSide();
       };
       el.hidden = false;
       el.style.transform = "";
       body.scrollTop = 0;
       body.innerHTML = head + `<div class="mapwx-note">Loading…</div>`;
+      fitMapWxSide();
       /* Un calcul de style forcé entre `hidden = false` et la classe qui
          ouvre : sans lui le navigateur regroupe les deux changements, part du
          panneau déjà visible et n'anime rien. */
@@ -16058,45 +16096,49 @@ function renderInfo(icao) {
         const cached = wxLoad(icao);
         const note = wxFailNote(e, cached);
         if (cached) render(cached, note, "err");
-        else body.innerHTML = head + `<div class="mapwx-note err">${esc(note)}</div>`;
+        else { body.innerHTML = head + `<div class="mapwx-note err">${esc(note)}</div>`; fitMapWxSide(); }
       }
     }
-    (() => { // fermeture du panneau : croix, et glissement du doigt vers la gauche
+    (() => { // fermeture du panneau : croix, et glissement du doigt vers le bas
       const el = $("#mapWxSide"); if (!el) return;
       $("#mapWxSideX").onclick = closeMapWxSide;
       /* Le panneau vit dans le conteneur qui écoute les clics de la carte :
          on coupe la propagation pour qu'un geste sur le relevé ne clique pas
          le terrain qui se trouverait dessous — même règle que #mapTools. */
       el.addEventListener("pointerup", e => e.stopPropagation());
-      /* Glissement de fermeture. Le panneau ne suit le doigt que si le geste
-         part franchement vers la gauche : en deçà de GRAB_PX on ne sait pas
-         encore si l'utilisateur veut fermer ou faire défiler le relevé, et
-         trancher trop tôt lui volerait l'un ou l'autre. Vers la droite, rien
-         ne bouge — il n'y a rien à découvrir de ce côté. */
+      /* Glissement de fermeture, vers le bas. Le panneau ne suit le doigt que
+         si le geste part franchement vers le bas : en deçà de GRAB_PX on ne
+         sait pas encore si l'utilisateur veut fermer ou faire défiler le
+         relevé, et trancher trop tôt lui volerait l'un ou l'autre. Vers le
+         haut, rien ne bouge — il n'y a rien à découvrir de ce côté. */
       const GRAB_PX = 8, SHUT_PX = 55;
-      let pid = null, x0 = 0, y0 = 0, dx = 0, taken = false;
+      let pid = null, x0 = 0, y0 = 0, dy = 0, taken = false;
       el.addEventListener("pointerdown", e => {
         e.stopPropagation();                   // même règle que #mapTools
         if (pid !== null) return;
-        pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; dx = 0; taken = false;
+        /* Doigt posé dans un relevé qui défile : le geste appartient au
+           défilement, sauf s'il est déjà en haut de course. */
+        const body = $("#mapWxSideBody");
+        if (body && body.contains(e.target) && !body.classList.contains("short") && body.scrollTop > 0) return;
+        pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; dy = 0; taken = false;
       });
       el.addEventListener("pointermove", e => {
         if (e.pointerId !== pid) return;
-        dx = e.clientX - x0;
+        dy = e.clientY - y0;
         if (!taken) {
-          if (Math.abs(dx) < GRAB_PX && Math.abs(e.clientY - y0) < GRAB_PX) return;
-          /* Nettement plus vertical qu'horizontal, ou départ vers la
-             droite : c'est un défilement (ou une sélection), on rend la main
-             pour de bon. Le facteur 1.5 pardonne le doigt qui part en arc —
-             un glissement de fermeture n'est jamais parfaitement droit. */
-          if (dx > 0 || Math.abs(e.clientY - y0) > Math.abs(dx) * 1.5) { pid = null; return; }
+          if (Math.abs(dy) < GRAB_PX && Math.abs(e.clientX - x0) < GRAB_PX) return;
+          /* Nettement plus horizontal que vertical, ou départ vers le haut :
+             ce n'est pas une fermeture, on rend la main pour de bon. Le
+             facteur 1.5 pardonne le doigt qui part en arc — un glissement de
+             fermeture n'est jamais parfaitement droit. */
+          if (dy < 0 || Math.abs(e.clientX - x0) > Math.abs(dy) * 1.5) { pid = null; return; }
           taken = true;
           el.classList.add("drag");
           /* La capture garde les mouvements pour nous si le doigt sort du
              panneau — utile justement quand il le pousse hors de l'écran. */
           try { el.setPointerCapture(e.pointerId); } catch (_) { }
         }
-        el.style.transform = `translateX(${Math.min(0, dx)}px)`;
+        el.style.transform = `translateY(${Math.max(0, dy)}px)`;
       });
       const release = e => {
         if (e.pointerId !== pid) return;
@@ -16105,7 +16147,7 @@ function renderInfo(icao) {
         el.classList.remove("drag");
         /* Passé le seuil, on laisse le panneau finir sa sortie ; en deçà, il
            revient se coller au bord. */
-        if (dx <= -SHUT_PX) closeMapWxSide();
+        if (dy >= SHUT_PX) closeMapWxSide();
         else el.style.transform = "";
       };
       el.addEventListener("pointerup", release);
