@@ -4673,15 +4673,16 @@ body.light .stat.on {
        boite, pas etre recadre. Meme gabarit que les autres cases — c'est lui
        qui maigrit, l'alignement des trois ne bouge pas.
        Les deux voisines sont des photos qui remplissent leur vignette ; celle-ci
-       flottait dans le vide. Elle reçoit donc son propre fond, un ciel de nuit
-       du meme gabarit et du meme arrondi que les deux clichés — et le meme dans
-       les deux thèmes, puisque c'est une nuit. Le retrait laisse respirer le
-       dessin sans changer la taille de la vignette. */
+       flottait dans le vide. Elle reçoit donc son propre fond, le meme degrade
+       diagonal que l'icone de l'application : argent en haut a gauche, bleu de
+       nuit en bas a droite — meme gabarit et meme arrondi que les deux clichés,
+       et le meme dans les deux thèmes. Le retrait laisse respirer le dessin sans
+       changer la taille de la vignette. */
     .home-card img.hc-icon {
       object-fit: contain;
       box-sizing: border-box;
       padding: 12px;
-      background: radial-gradient(120% 90% at 50% 0%, #1d2c47 0%, #131c2e 45%, #0a0f1a 100%)
+      background: linear-gradient(135deg, #d4d8de 0%, #adb4bf 26%, #7c8593 50%, #414b5d 78%, #141d2f 100%)
     }
 
     /* La carte tient la ligne du dessous à elle seule, mais garde la taille
