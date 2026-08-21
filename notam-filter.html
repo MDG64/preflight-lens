@@ -18179,11 +18179,11 @@ window.addEventListener("scroll", hidePop, true);
        tout de suite le groupe qui sort de l'ordinaire, dans la base comme dans
        un TEMPO. Vent (rafale comprise) ≥ 30 kt ambre, ≥ 40 kt rouge ;
        visibilité et RVR < 2000 m ambre, < 600 m rouge ; plafond — BKN, OVC,
-       VV — < 700 ft ambre, < 300 ft rouge. Teinte légère : elle signale, elle
+       VV — < 1 000 ft ambre, < 300 ft rouge. Teinte légère : elle signale, elle
        ne juge pas. */
     const WXS_WIND = { amber: 30, red: 40 };     // kt, dès ce seuil
     const WXS_VIS  = { amber: 2000, red: 600 };  // m, en dessous — RVR comprise
-    const WXS_CEIL = { amber: 700, red: 300 };   // ft, en dessous
+    const WXS_CEIL = { amber: 1000, red: 300 };   // ft, en dessous
     const WXS_CLOUD = /^(FEW|SCT|BKN|OVC|VV)(\d{3}|\/{3})(CB|TCU|\/{3})?$/;  // AUTO : type nuageux « /// »
     const WXS_RVR   = /^R\d{2}[LCR]?\/[PM]?(\d{3,4})(?:V[PM]?(\d{3,4}))?(FT)?\/?[UDN]?$/;
 
