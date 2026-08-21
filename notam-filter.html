@@ -16434,15 +16434,22 @@ function renderInfo(icao) {
       }
     }
     function dayWxSecHtml(d) {
+      /* Chaque case s'étiquette à l'heure LOCALE du terrain (`h`, calculée
+         par le proxy avec le vrai fuseau — la même heure que la page Info) ;
+         quand le fuseau n'a pas pu se résoudre, `h` manque et l'heure UTC
+         exacte reprend l'étiquette, suffixée Z pour le dire. */
+      const local = d.slots.some(s => s && s.h != null);
       const cells = d.slots.map(s => {
         if (!s) return `<div><div class="z">—</div></div>`;
-        const z = String(Math.round(Number(s.z)) || 0).padStart(2, "0");
+        const lbl = s.h != null
+          ? `${String(Math.round(Number(s.h)) || 0).padStart(2, "0")}h`
+          : `${String(Math.round(Number(s.z)) || 0).padStart(2, "0")}Z`;
         const t = Math.round(Number(s.t));
-        return `<div><div class="z">${z}Z</div>`
+        return `<div><div class="z">${lbl}</div>`
           + `<svg viewBox="0 0 24 24" aria-hidden="true">${DWX_ICONS[dwxPicto(s.s)]}</svg>`
           + `<div class="tp">${Number.isFinite(t) ? t + "°" : "—"}</div></div>`;
       }).join("");
-      return `<h3>Day weather${d.tomorrow ? " — tomorrow" : ""}</h3>`
+      return `<h3>Day weather${d.tomorrow ? " — tomorrow" : ""}${local ? " · local time" : ""}</h3>`
         + `<div class="dwx">${cells}</div>`
         + `<div class="dwx-src">Model forecast · MET Norway (CC BY 4.0) — not an aviation weather product.</div>`;
     }
