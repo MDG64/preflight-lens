@@ -16100,6 +16100,9 @@ function renderInfo(icao) {
     $("#mapWindChk").onchange = e => {
       mapWindOn = e.target.checked;
       $("#mapOv").classList.toggle("wind-on", mapWindOn);
+      // Allumer le vent rallonge la légende de six lignes : on la replie du
+      // même geste. Le bandeau reste, l'œil la rappelle.
+      if (mapWindOn) $("#mapOv").classList.add("leg-off");
       if (!mapWindOn) setMapWindHour(0);
       drawMap();
     };
@@ -16129,6 +16132,10 @@ function renderInfo(icao) {
     function openMap(focusIcao) {
       if (!BORDERS) return;                          // frontières indispensables pour dessiner le fond
       $("#mapOv").hidden = false;
+      // La légende s'ouvre REPLIÉE : la carte se donne d'abord à voir, les
+      // explications ne prennent la place qu'à la demande — un coup d'œil sur
+      // le bandeau LEGEND les fait revenir.
+      $("#mapOv").classList.add("leg-off");
       // Pas de relevé hérité de la visite d'avant : le panneau repart caché.
       const side = $("#mapWxSide");
       if (side) { side.hidden = true; side.classList.remove("open"); side.style.transform = ""; }
