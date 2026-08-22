@@ -5035,7 +5035,7 @@ body.light .stat.on {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       text-align: center;
-      padding: 10px 12px 4px
+      padding: 10px 12px 13px
     }
 
     .dwx .z {
@@ -5066,11 +5066,6 @@ body.light .stat.on {
       color: var(--text)
     }
 
-    .dwx-src {
-      padding: 0 16px 13px;
-      font: 10px/1.4 var(--sans);
-      color: var(--muted2)
-    }
 
     /* Une section par terrain — la page sert aussi bien un terrain seul
        (l'en-tête de section se tait, celui de la page suffit) qu'une route
@@ -6051,7 +6046,12 @@ body .stat .k{
           <b>Aerodrome layouts</b> and <b>map background</b> — map data © <b>OpenStreetMap</b> contributors, available
           under the Open Database Licence (ODbL). Layouts are indicative, not AIP-compliant,
           and not for navigation.<br>
-          <b>Aerodrome and airspace reference data</b> — OurAirports and Natural Earth, public domain.
+          <b>Aerodrome and airspace reference data</b> — OurAirports and Natural Earth, public domain.<br>
+          <b>Day weather</b> (forecast strip and pictograms) — <a href="https://www.met.no/en" target="_blank"
+            rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank" rel="noopener">CC BY 4.0</a>; pictograms from the Yr weather symbol set (MIT).
+          Model forecast, <b>not an aviation weather product</b>: it gives the shape of the day, never a
+          value to plan on.
         </div>
 
         <div class="hd-sec">Legal</div>
@@ -16674,9 +16674,10 @@ function renderInfo(icao) {
           + dwxIconHtml(s.s)
           + `<div class="tp">${Number.isFinite(t) ? t + "°" : "—"}</div></div>`;
       }).join("");
+      /* Aucune ligne de source sous la bande : le crédit MET Norway et le
+         rappel « pas un produit aéro » vivent dans Data sources, page « ? ». */
       return `<h3>Day weather${d.tomorrow ? " — tomorrow" : ""}${local ? " · local time" : ""}</h3>`
-        + `<div class="dwx">${cells}</div>`
-        + `<div class="dwx-src">Model forecast · MET Norway (CC BY 4.0) — not an aviation weather product.</div>`;
+        + `<div class="dwx">${cells}</div>`;
     }
     async function openMapWxSide(icao) {
       const el = $("#mapWxSide"), body = $("#mapWxSideBody");
