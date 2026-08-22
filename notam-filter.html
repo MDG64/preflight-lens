@@ -155,6 +155,15 @@
       color: #5e3800;
     }
 
+    body.light .update-banner {
+      color: #1c4a63;
+      background: #e8f2f7;
+      border-color: #9dc2d6;
+    }
+
+    body.light .update-banner b { color: #0d2b3a; }
+    body.light .update-banner button { color: #fff; background: #2c6d8f; }
+
     body.light .stat.caut .n {
       color: #caa300;
     }
@@ -831,6 +840,35 @@
     .offline-banner b {
       color: #fff;
       font-weight: 700
+    }
+
+    /* Bandeau de mise à jour : même gabarit que le bandeau hors-ligne, couleur
+       cyan et non ambre. Les deux ne disent pas la même chose — l'ambre alerte
+       (« vous lisez une copie »), le cyan informe (« du neuf est arrivé »). */
+    .update-banner {
+      margin: 14px 0 4px;
+      font: 600 12px/1.5 var(--sans);
+      color: var(--cyan);
+      border: 1px solid var(--cyan-dim);
+      background: rgba(159, 193, 216, .10);
+      padding: 10px 14px;
+      border-radius: 8px;
+      display: flex;
+      gap: 10px;
+      align-items: center
+    }
+
+    .update-banner b { color: var(--text); font-weight: 700 }
+
+    .update-banner button {
+      margin-left: auto;
+      font: 700 12px/1 var(--sans);
+      color: var(--bg);
+      background: var(--cyan);
+      border: 0;
+      border-radius: 6px;
+      padding: 7px 12px;
+      cursor: pointer
     }
 
     /* ---------- summary ---------- */
@@ -5445,6 +5483,7 @@ body .stat .k{
     </div>
 
     <div class="offline-banner" id="offlineBanner" hidden></div>
+    <div class="update-banner" id="updateBanner" hidden></div>
 
     <div class="filters-tabbar">
       <div class="filters-tab">Filters</div>
@@ -14148,6 +14187,94 @@ E) ${e}`;
       el.innerHTML = `<span>⚠</span><span>OFFLINE — showing last saved data from <b>${stampZ(ts)}</b>. Reconnect to refresh; newer NOTAMs may exist.</span>`;
     }
     function hideOffline() { const el = $("#offlineBanner"); el.hidden = true; el.innerHTML = ""; }
+
+    /* ---- Revalidation en arriere-plan --------------------------------------
+       Le cache local etait un COURT-CIRCUIT : moins d'une heure, on affichait
+       et on ne demandait rien au reseau. Le probleme n'était pas le cache —
+       afficher instantanément est juste — mais le fait de ne pas aller voir.
+       L'app restait aveugle une heure pleine, quand bien même le proxy avait la
+       bonne reponse. Constaté le 2026-08-22 : LFPO A5412/26 était arrivé dans
+       le proxy, l'écran montrait encore les 17 NOTAM d'une copie de 54 min.
+
+       Désormais deux temps : on affiche le cache TOUT DE SUITE (même vitesse
+       qu'avant), et on interroge le réseau DERRIÈRE sans rien attendre. Si la
+       reponse est identique — le cas de très loin le plus fréquent — on ne
+       touche à rien.
+
+       Quand elle differe, on ne repeint PAS sous les yeux du lecteur. D'abord
+       parce que renderFromRaw() remet activeCats et activeSev à zéro : un
+       pilote ayant filtré sur ARRIVAL verrait son filtre sauter et la page
+       remonter, sans comprendre. Ensuite et surtout parce qu'un NOTAM qui
+       apparaît ou s'efface en silence est le mauvais mode de defaillance pour
+       cet outil. Un bandeau l'annonce, et c'est lui qui repeint.
+
+       EXCEPTION : au premier affichage, l'utilisateur n'a encore ni filtré ni
+       fait défiler — il vient de taper le code. Proposer « actualiser » une
+       demi-seconde après l'ouverture n'aurait aucun sens : on repeint
+       directement. Le critere est donc « le lecteur est-il engagé ». */
+    function memeListe(a, b) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      // Trie des copies : l'ordre de la source peut varier sans que le contenu
+      // change, et l'affichage retrie de toute façon par sévérité.
+      const x = a.slice().sort(), y = b.slice().sort();
+      return x.every((v, i) => v === y[i]);
+    }
+    // « Engagé » = a commencé à se servir de l'écran. Tant que ce n'est pas le
+    // cas, rien à préserver et rien à interrompre.
+    function lecteurEngage() {
+      if (activeCats.size || activeSev) return true;
+      return (window.scrollY || document.documentElement.scrollTop || 0) > 8;
+    }
+    function hideUpdated() { const el = $("#updateBanner"); el.hidden = true; el.innerHTML = ""; }
+    function showUpdated(appliquer) {
+      const el = $("#updateBanner");
+      el.hidden = false;
+      el.innerHTML = `<span>⟳</span><span>Newer NOTAMs received for <b>${esc(currentIcao)}</b>.</span><button type="button" id="applyUpdate">Update list</button>`;
+      el.querySelector("#applyUpdate").onclick = () => { hideUpdated(); appliquer(); };
+    }
+    // Ne renvoie rien et n'échoue jamais : une revalidation ne peut
+    // qu'améliorer l'écran, jamais le dégrader. Un reseau absent ou un proxy en
+    // panne laisse simplement la copie affichée telle quelle.
+    async function revalider(icao, monJeton, ancien) {
+      let frais;
+      try { frais = await fetchNotams(icao); }
+      catch (e) { return; }
+      if (monJeton !== loadToken) return;      // l'utilisateur a changé de terrain entre-temps
+      if (frais === null || memeListe(ancien, frais)) {
+        // Rien de neuf : on ré-horodate quand même, sinon le bandeau hors-ligne
+        // annoncerait plus tard une date plus vieille que la dernière
+        // vérification réellement faite.
+        if (frais !== null) saveOffline(icao, frais);
+        return;
+      }
+      saveOffline(icao, frais);
+      if (lecteurEngage()) showUpdated(() => { if (monJeton === loadToken) renderFromRaw(frais); });
+      else renderFromRaw(frais);
+    }
+
+    /* Route : même principe, UNE seule requête. Ouvrir une route affiche le
+       départ depuis le cache et revalide les trois terrains d'un coup par
+       /api/notams/batch — ceux qu'on n'affiche pas encore sont rafraîchis dans
+       leur cache, donc prêts et frais au moment où on tape leur onglet.
+       Le terrain AFFICHÉ suit exactement la même règle que la revalidation
+       simple : bandeau si le lecteur est engagé, repeinte sinon. */
+    async function revaliderRoute(icaos, icaoAffiche, monJeton) {
+      const liste = (icaos || []).filter(Boolean);
+      if (!liste.length) return;
+      let lots;
+      try { lots = await fetchNotamsBatch(liste); }
+      catch (e) { return; }
+      for (const [icao, frais] of Object.entries(lots)) {
+        if (!Array.isArray(frais)) continue;          // null = terrain sans donnée, on garde ce qu'on a
+        const avant = loadOffline(icao);
+        const change = !(avant && memeListe(avant.raw, frais));
+        saveOffline(icao, frais);                     // ré-horodate même sans changement
+        if (!change || icao !== icaoAffiche) continue;
+        if (monJeton !== loadToken) continue;         // l'utilisateur est parti ailleurs
+        if (lecteurEngage()) showUpdated(() => { if (monJeton === loadToken) renderFromRaw(frais); });
+        else renderFromRaw(frais);
+      }
+    }
     let favs = loadFavs();        // codes OACI favoris (persistés si possible)
     let favRoutes = loadFavRoutes();   // routes favorites : [[DEP, DEST, ALT], ...]
 
@@ -14466,7 +14593,7 @@ function renderInfo(icao) {
 
     let loadToken = 0;            // garde anti-course entre requêtes async
 
-    async function load(icao) {
+    async function load(icao, opts = {}) {
       icao = (icao || "").toUpperCase().trim();
       if (!icao) return;
       // Saisie directe d'un code IATA (3 lettres, ex. "ORY") sans passer par le
@@ -14479,21 +14606,24 @@ function renderInfo(icao) {
       renderChips();
       const my = ++loadToken;
       hideOffline();
+      hideUpdated();   // le bandeau du terrain précédent ne survit pas au changement
 
-      // ── Fraîcheur locale : si des NOTAMs sont en mémoire depuis moins d'1 h,
-      //    on les affiche directement — aucune requête réseau.
-      //    LE BANDEAU, LUI, S'AFFICHE DÈS QU'ON EST HORS LIGNE, même sur des
-      //    données toutes fraîches : sans lui, l'écran est identique à l'écran
-      //    en ligne et seule la pastille distingue les deux. Un pilote doit
-      //    savoir qu'il regarde une copie et qu'aucune mise à jour ne peut
+      // ── Copie locale : on l'affiche IMMÉDIATEMENT, quel que soit son âge,
+      //    puis on va voir au réseau derrière. Il n'y a plus de fenêtre pendant
+      //    laquelle l'app s'interdit de demander (voir revalider() plus haut).
+      //    LE BANDEAU HORS-LIGNE, LUI, S'AFFICHE DÈS QU'ON EST HORS LIGNE, même
+      //    sur des données toutes fraîches : sans lui, l'écran est identique à
+      //    l'écran en ligne et seule la pastille distingue les deux. Un pilote
+      //    doit savoir qu'il regarde une copie et qu'aucune mise à jour ne peut
       //    plus arriver — c'est la date affichée qui le lui dit.
-      const FRESH_MS = 60 * 60 * 1000;
-      const cachedFresh = loadOffline(icao);
-      if (cachedFresh && Array.isArray(cachedFresh.raw) && (Date.now() - cachedFresh.ts) < FRESH_MS) {
+      const copie = loadOffline(icao);
+      if (copie && Array.isArray(copie.raw)) {
         const up = netOnline();
         setBeacon(up);
-        renderFromRaw(cachedFresh.raw);
-        if (!up) showOffline(cachedFresh.ts);   // après le rendu : il vide la zone
+        renderFromRaw(copie.raw);
+        if (!up) { showOffline(copie.ts); return; }   // après le rendu : il vide la zone
+        if (opts.route) revaliderRoute(opts.route, icao, my);
+        else revalider(icao, my, copie.raw);          // ne bloque rien : pas de await
         return;
       }
 
@@ -14520,6 +14650,10 @@ function renderInfo(icao) {
       if (raw === null) { current = []; renderEmpty(icao); return; }
       saveOffline(icao, raw);                   // sauvegarde pour consultation hors-ligne
       renderFromRaw(raw);
+      // Pas de copie locale pour ce terrain, mais la route en a peut-être pour
+      // les autres : on les rafraîchit quand même, sans toucher à l'écran (le
+      // terrain affiché vient d'être récupéré à l'instant, il est à jour).
+      if (opts.route) revaliderRoute(opts.route.filter(c => c !== icao), null, my);
     }
 
     function renderFromRaw(raw) {
@@ -18589,7 +18723,12 @@ window.addEventListener("scroll", hidePop, true);
       if (!codes.length) { needHomeIcao(); return; }
       notamRoute = codes.length > 1 ? codes : [];
       closeHome();
-      load(codes[0].icao);                // le départ d'abord
+      // Une route revalide ses terrains EN UN LOT : le départ s'affiche depuis
+      // sa copie locale, et les trois codes partent ensemble dans un seul
+      // /api/notams/batch. Les onglets voisins sont donc frais avant même
+      // qu'on les touche.
+      const route = codes.length > 1 ? codes.map(c => c.icao) : null;
+      load(codes[0].icao, route ? { route } : {});   // le départ d'abord
     };
     // Weather : un seul code rempli, la page météo ne montre QUE ce terrain (elle
     // le reçoit sans rôle, c'est ce qui lui donne sa mise en page large).
