@@ -4784,41 +4784,36 @@ body.light .stat.on {
       /* Les trois cases tiennent sur UNE ligne, même à 360 px : c'est la route
          entière lue d'un balayage. Elles maigrissent au lieu de se replier —
          un « Alternate » renvoyé seul à la ligne casse la lecture. */
+      /* La flèche reste À DROITE de l'étoile, téléphone compris : c'est le
+         geste qu'on cherche du pouce au bout de la ligne. Tout le reste
+         maigrit d'autant — cases, écart, étoiles — pour que les trois codes,
+         le rond d'inversion, l'étoile et la flèche tiennent à 360 px. */
       .home-route {
-        gap: 5px
+        gap: 4px
       }
 
       .home-route .scratch input {
-        width: 56px;
-        font-size: 16px;
-        letter-spacing: .06em;
-        padding: 11px 4px 11px 9px
+        width: 49px;
+        font-size: 15px;
+        letter-spacing: .04em;
+        padding: 11px 3px 11px 6px
       }
 
       .home-star {
-        padding: 13px 7px 13px 2px
+        padding: 13px 4px 13px 1px
       }
 
       .route-star {
-        font-size: 18px;
-        padding: 0 4px
+        font-size: 17px;
+        padding: 0 2px
       }
 
-      /* Les deux boutons s'empilent : la colonne ne coûte plus qu'une largeur
-         de flèche, et les trois codes restent sur UNE ligne à 360 px. */
       .route-acts {
-        flex-direction: column;
         gap: 3px
       }
 
-      .route-star {
-        justify-content: center;
-        padding: 0
-      }
-
       .fav-arrow.route-arrow {
-        width: 28px;
-        flex: 1
+        width: 26px
       }
 
       .fav-arrow.route-arrow svg {
@@ -5613,7 +5608,6 @@ body .stat .k{
             </button>
           </div>
         </div>
-      </div>
       </div>
 
       <div>
