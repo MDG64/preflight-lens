@@ -6566,8 +6566,58 @@ body .stat .k{
       t = t.replace(/[ \t]+/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
       return t;
     }
+    /* Certains NOTAM arrivent EMBALLÉS : la source les republie à l'intérieur
+       d'un message qui les cite, et le vrai NOTAM commence après une
+       parenthèse ouvrante.
+
+           ORIGINAL NOTAM
+            (B0486/26 NOTAMN
+             Q) EDWW/QWPLW/...
+             ...
+             E) PJE 2NM RADIUS ...)
+
+       L'identifiant n'étant plus en tete, parseNotam() le cherchait en vain et
+       la carte s'affichait « (sans id) » — introuvable pour qui parcourt la
+       liste en cherchant un numéro, alors que le NOTAM est bien là, sous les
+       yeux. La parenthèse fermante de l'emballage restait collée a l'item E).
+       Cas déclencheur LFPO A4935/26, mais le relevé du 2026-08-22 sur 7767
+       NOTAM de 1248 terrains européens en compte 126 — pas un accident isolé.
+
+       DEUX rédactions dans le corpus, et une seule règle les couvre : l'en-tête
+       se termine toujours par les mots « ORIGINAL NOTAM » suivis de la
+       parenthèse. 124 fois ces deux mots seuls, 2 fois précédés d'un avis de
+       remplacement EUROCONTROL (« 250646 EUECYIYN NOTAM REPLACED BY A5141/26
+       ORIGINAL NOTAM (A4935/26 ... »). On coupe donc à cet endroit précis,
+       jamais sur la seule parenthèse : un NOTAM qui commence par « ( » sans
+       emballage est un format US légitime, déjà géré plus bas.
+
+       La fermante ne se retire que si elle est EN TROP (plus de fermantes que
+       d'ouvrantes une fois l'ouvrante de l'emballage partie) : bien des textes
+       finissent légitimement par une parenthèse equilibree, « ...(24.5NM ENE
+       FRIEDLAND DVOR/DME FLD). » — on compte, on ne suppose pas. */
+    function unwrapOriginalNotam(t) {
+      const m = /^[\s\S]*?\bORIGINAL NOTAM\b\s*\(/.exec(t);
+      if (!m) return t;
+      let dedans = t.slice(m[0].length).trim();
+      // Le comptage IGNORE les marqueurs d'items : « Q) », « A) », « B) »...
+      // sont eux-mêmes des parenthèses fermantes sans ouvrante, et les
+      // compter rendait tout NOTAM bien formé déséquilibré — la fermante
+      // finale sautait donc TOUJOURS, y compris quand elle appartenait au
+      // texte (« ... ARP (DAY AND NIGHT MARKED) », qui perdait sa fermante).
+      // Boucle et non test unique : la source double parfois la fermante,
+      // « ... OUTSIDE POITIERS ATS HOURS.)) » (LFBI B1634/26), et une seule
+      // passe en laissait une derrière elle.
+      for (;;) {
+        const sansItems = dedans.replace(/(^|\s)[A-GQ]\)/g, "$1");
+        const ouvre = (sansItems.match(/\(/g) || []).length;
+        const ferme = (sansItems.match(/\)/g) || []).length;
+        if (ferme <= ouvre || !dedans.endsWith(")")) break;
+        dedans = dedans.slice(0, -1).trimEnd();
+      }
+      return dedans;
+    }
     function parseNotam(raw) {
-      const text = cleanHtml(raw);
+      const text = unwrapOriginalNotam(cleanHtml(raw));
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
       // domestiques ont un ID cycle/séquence, sans lettre de série ni année.
       // Certains textes source (US) encadrent tout le message d'une
