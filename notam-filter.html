@@ -5030,8 +5030,19 @@ body.light .stat.on {
       text-transform: none
     }
 
+    /* L'âge du METAR se lit en pleine encre tant qu'il est courant : c'est une
+       information de décision, pas une mention de service. Le TAF garde le gris
+       de service : son heure d'émission ne se périme pas de la même façon. */
+    .wx-age.age-metar {
+      color: var(--text)
+    }
+
     .wx-age.warn {
       color: var(--amber)
+    }
+
+    .wx-age.stale {
+      color: var(--red)
     }
 
     .wx-raw {
@@ -17019,9 +17030,9 @@ function renderInfo(icao) {
         const ta = d && d.taf ? wxAge(d.taf.time) : null;
         body.innerHTML = head
           + (note ? `<div class="mapwx-note${noteCls ? " " + noteCls : ""}">${esc(note)}</div>` : "")
-          + `<div class="wx-block"><h3>METAR <span class="wx-age${ma && ma.min > 90 ? " warn" : ""}">${ma ? "observed " + ma.txt : ""}</span></h3>`
+          + `<div class="wx-block"><h3>METAR <span class="wx-age age-metar${ma ? " " + wxAgeCls(ma.min) : ""}">${ma ? ma.txt : ""}</span></h3>`
           + `<pre class="wx-raw${d && d.metar && d.metar.raw ? "" : " empty"}">${d && d.metar && d.metar.raw ? wxSevHtml(d.metar.raw) : "No METAR available for " + icao + "."}</pre></div>`
-          + `<div class="wx-block"><h3>TAF <span class="wx-age${ta && ta.min > 7 * 60 ? " warn" : ""}">${ta ? "issued " + ta.txt : ""}</span></h3>`
+          + `<div class="wx-block"><h3>TAF <span class="wx-age${ta && ta.min > 7 * 60 ? " warn" : ""}">${ta ? "issued " + ta.hm + " · " + ta.txt : ""}</span></h3>`
           + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? wxSevHtml(tafPretty(d.taf.raw)) : "No TAF published for " + icao + "."}</pre></div>`
           + wxRunwaysHtml(icao, d)
           + `<div class="wx-block" id="dwxSec" hidden></div>`
@@ -18953,9 +18964,17 @@ window.addEventListener("scroll", hidePop, true);
       const min = Math.max(0, Math.round((Date.now() - t) / 60000));
       const d = new Date(t);
       const hm = P(d.getUTCHours()) + ":" + P(d.getUTCMinutes()) + "Z";
-      const ago = min < 60 ? `${min} min ago` : `${Math.floor(min / 60)} h ${P(min % 60)} ago`;
-      return { txt: `${hm} · ${ago}`, min };
+      /* Seule l'ancienneté est affichée pour le METAR : l'heure d'observation
+         est déjà dans le texte brut juste en dessous, la redire n'ajoute rien.
+         `hm` reste disponible pour le TAF, dont l'heure d'émission, elle, ne
+         se lit pas d'un coup d'œil dans le texte. */
+      const txt = min < 60 ? `${min} min ago` : `${Math.floor(min / 60)} h ${P(min % 60)} ago`;
+      return { txt, hm, min };
     }
+    /* Les METAR tombent à HH:00 et HH:30 : jusqu'à 40 min, le relevé est
+       courant et se lit en noir. Au-delà, un cycle a été manqué (ambre) ; passé
+       l'heure, la station ou la chaîne de données a décroché (rouge). */
+    function wxAgeCls(min) { return min > 60 ? "stale" : min > 40 ? "warn" : ""; }
     function setWxStatus(msg, cls) {
       const el = $("#wxStatus");
       el.textContent = msg || "";
@@ -19018,9 +19037,10 @@ window.addEventListener("scroll", hidePop, true);
         const ma = d.metar ? wxAge(d.metar.time) : null;
         const ta = d.taf ? wxAge(d.taf.time) : null;
         const me = sec.querySelector('[data-age="metar"]'), te = sec.querySelector('[data-age="taf"]');
-        me.textContent = ma ? "observed " + ma.txt : "";
-        me.classList.toggle("warn", !!(ma && ma.min > 90));      // plus d'1 h 30 : vieillissant
-        te.textContent = ta ? "issued " + ta.txt : "";
+        me.textContent = ma ? ma.txt : "";
+        me.classList.toggle("warn", !!ma && wxAgeCls(ma.min) === "warn");
+        me.classList.toggle("stale", !!ma && wxAgeCls(ma.min) === "stale");
+        te.textContent = ta ? "issued " + ta.hm + " · " + ta.txt : "";
         te.classList.toggle("warn", !!(ta && ta.min > 7 * 60));  // au-delà du cycle de 6 h
       }
     }
@@ -19133,7 +19153,7 @@ window.addEventListener("scroll", hidePop, true);
       </div>
       <div class="wx-ap-note" hidden></div>
       <div class="wx-block">
-        <h3>METAR <span class="wx-age" data-age="metar"></span></h3>
+        <h3>METAR <span class="wx-age age-metar" data-age="metar"></span></h3>
         <pre class="wx-raw" data-raw="metar">—</pre>
       </div>
       <div class="wx-block">
