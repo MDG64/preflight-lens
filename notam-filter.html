@@ -19514,9 +19514,19 @@ window.addEventListener("scroll", hidePop, true);
     // de type/envergure, c'est une interdiction TOTALE). Le mot seul ne distingue
     // pas restriction partielle vs fermeture totale ; seule une vraie condition
     // (envergure, type d'appareil...) le fait — d'où la liste ci-dessous.
+    /* « WINGSPAN MORE » complétait le trio GREATER/ABOVE/OVER : sans lui, LFPO
+       A5411/26 « TWY W34 AND W4 PROHIBITED FOR ACFT WITH WINGSPAN MORE THAN OR
+       EQUAL TO 65 METERS » tombait sur le PROHIBITED nu et peignait les deux
+       voies comme FERMÉES, alors qu'elles restent ouvertes sous 65 m — quand
+       A5166/26, qui dit la même chose avec « WINGSPAN GREATER OR EQUAL TO 36M »,
+       sortait bien en ambre. Deux rédactions d'une même règle, deux couleurs.
+       Forme NUE (« WINGSPAN MORE »), comme « WINGSPAN GREATER » juste à côté :
+       elle couvre « MORE THAN » et « MORE OR EQUAL » d'un coup. Audit du
+       2026-08-22 sur 7767 NOTAM de 1248 terrains européens : 55 citent une
+       envergure, A5411/26 est le SEUL que ce mot fasse changer de rang. */
     const RESTRICT_TEXT = ["PROHIBITED TO", "LIMITED TO", "LTD TO",
-      "WINGSPAN GREATER", "WINGSPAN ABOVE", "WINGSPAN OVER", "WINGSPAN EXCEEDS",
-      "WINGSPAN HIGHER THAN", "NOT AVBL FOR ACFT", "ACFT TYPE"];
+      "WINGSPAN GREATER", "WINGSPAN MORE", "WINGSPAN ABOVE", "WINGSPAN OVER",
+      "WINGSPAN EXCEEDS", "WINGSPAN HIGHER THAN", "NOT AVBL FOR ACFT", "ACFT TYPE"];
     /* Deuxième forme de condition, aussi fréquente que l'envergure : le NOTAM
        NOMME les appareils visés par leur désignateur OACI (A388, B748, B77W,
        AT72, MD11…). Cas réel LFPO A5113/26 « RWY 06/24 PROHIBITED FOR ACFT A388
