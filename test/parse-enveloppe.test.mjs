@@ -29,13 +29,15 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const html = readFileSync(join(HERE, "..", "notam-filter.html"), "utf8").replace(/\r\n/g, "\n");
 
 async function chargerParseNotam() {
-  const fns = ["cleanHtml", "field", "unwrapOriginalNotam", "parseNotam"].map(nom => {
+  const ordre = /const ITEM_ORDRE = ("[A-Z]+");/.exec(html);
+  assert.ok(ordre, "ITEM_ORDRE introuvable dans notam-filter.html");
+  const fns = ["cleanHtml", "itemMarkers", "field", "innerBody", "unwrapOriginalNotam", "parseNotam"].map(nom => {
     const re = new RegExp(`function ${nom}\\([^)]*\\) \\{[\\s\\S]*?\\n {4}\\}`);
     const m = re.exec(html);
     assert.ok(m, `function ${nom}() introuvable dans notam-filter.html`);
     return m[0];
   });
-  const src = [...fns, "export { parseNotam };"].join("\n");
+  const src = ["const ITEM_ORDRE = " + ordre[1] + ";", ...fns, "export { parseNotam };"].join("\n");
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 

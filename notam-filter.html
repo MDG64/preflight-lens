@@ -6548,10 +6548,53 @@ body .stat .k{
     /* ============================================================
        2) PARSEUR DE NOTAM BRUT  (ligne Q) + items A/B/C/E)
        ============================================================ */
+    /* Les items d'un NOTAM se suivent dans un ORDRE fixe : Q, A, B, C, D, E,
+       F, G. La lecture s'appuie sur cette règle, parce que la seule forme
+       « X) » ne suffit pas à reconnaître un item — elle apparaît aussi au fil
+       du texte, et deux dégâts en découlaient.
+
+       1. UN ITEM INVENTÉ. LFPO A3704/26 n'a pas de champ D), mais son item E)
+          dit « ... SEQUENCING SYSTEM (GLD) : THE DEPARTURE ... » : le « D) »
+          de « (GLD) » était lu comme l'item D) et la carte affichait un horaire
+          « Schedule : THE DEPARTURE SEQUENCING ALGORITHM ... ». Un horaire
+          inventé est pire qu'un horaire absent : rien ne le distingue d'un vrai
+          à la lecture.
+       2. UN ITEM TRONQUÉ. LTAL G1813/14 énumère des minimas « ... 1676FT
+          (CAT D) VIS:3800M ... » : ce « D) »-la est précédé d'une espace, donc
+          il coupait AUSSI l'item E) à cet endroit. Les valeurs de visibilité
+          disparaissaient du texte pour réapparaître en faux horaire.
+
+       Le tri par l'ordre règle les deux d'un coup : on parcourt les candidats
+       et on ne retient que ceux qui AVANCENT dans la séquence. Un « D) » vu
+       après le E) n'est pas un item, c'est du texte — il est ignoré, et E)
+       court jusqu'au bout.
+
+       L'espace (ou le début du texte) reste exigée devant la lettre : elle
+       écarte les « X) » collés à un mot, comme le « (GLD) » ci-dessus, que
+       l'ordre seul ne verrait pas puisque D vient bien avant E. Les deux
+       garde-fous se complètent.
+
+       Le « ( » qui enveloppe tout le message au format US ne gêne pas : il ne
+       précède aucune lettre d'item. */
+    const ITEM_ORDRE = "QABCDEFG";
+    function itemMarkers(text) {
+      const re = /(?:^|\s)([A-GQ])\)/g;
+      const gardes = [];
+      let attendu = 0, m;
+      while ((m = re.exec(text))) {
+        const rang = ITEM_ORDRE.indexOf(m[1]);
+        if (rang < attendu) continue;
+        attendu = rang + 1;
+        gardes.push({ lettre: m[1], marqueur: m.index, debut: m.index + m[0].length });
+      }
+      return gardes;
+    }
     function field(text, letter) {
-      const re = new RegExp(letter + "\\)\\s*([\\s\\S]*?)(?=\\s[A-GQ]\\)|$)");
-      const m = text.match(re);
-      return m ? m[1].trim().replace(/\s+/g, " ") : "";
+      const gardes = itemMarkers(text);
+      const i = gardes.findIndex(g => g.lettre === letter);
+      if (i < 0) return "";
+      const fin = i + 1 < gardes.length ? gardes[i + 1].marqueur : text.length;
+      return text.slice(gardes[i].debut, fin).trim().replace(/\s+/g, " ");
     }
     // Nettoie le HTML que la source glisse dans certains NOTAM US (FDC/obstacles) :
     // <B>…</B>, <BR>, entités échappées. Sans ça ces balises cassent l'extraction
@@ -6616,6 +6659,27 @@ body .stat .k{
       }
       return dedans;
     }
+    /* CORPS DUPLIQUÉ. Certaines sources recopient le message ENTIER à
+       l'intérieur de son propre item E) : en-tête, Q), A), B), puis un second
+       E) qui porte enfin le texte utile.
+
+           A4288/26 NOTAMC A3937/26
+           Q) KZME/QMXXX/... A) KBNA B) 2608181739
+           E) A4288/26 NOTAMC A3937/26
+              Q) KZME/QMXXX/... A) KBNA B) 2608181739
+              E) TWY G4 CLSD CANCELED      <- le seul contenu qui compte
+
+       La carte n'affichait que l'écho d'en-tête « A4288/26 NOTAMC A3937/26 »
+       et PERDAIT « TWY G4 CLSD CANCELED ». Quand l'item E) commence par
+       l'identifiant du NOTAM lui-même suivi de NOTAMN/C/R, on relit donc son
+       contenu comme un NOTAM et on garde le E) intérieur. Condition volontai-
+       rement étroite : un NOTAM qui CITE un autre message (déclencheur, avis
+       de remplacement) ne commence pas par son PROPRE identifiant. */
+    function innerBody(e, id) {
+      if (!e || !id || id === "(sans id)") return e;
+      if (!new RegExp("^" + id + "\\s+NOTAM[CNR]\\b").test(e)) return e;
+      return field(e, "E") || e;
+    }
     function parseNotam(raw) {
       const text = unwrapOriginalNotam(cleanHtml(raw));
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
@@ -6630,7 +6694,8 @@ body .stat .k{
       if (qm) { const p = qm[1].split("/").map(s => s.trim()); qcode = p[1] || ""; traffic = p[2] || ""; purpose = p[3] || ""; scope = p[4] || ""; }
       return {
         id, raw: text, qcode, scope, traffic, purpose,
-        a: field(text, "A"), b: field(text, "B"), c: field(text, "C"), d: field(text, "D"), e: field(text, "E")
+        a: field(text, "A"), b: field(text, "B"), c: field(text, "C"), d: field(text, "D"),
+        e: innerBody(field(text, "E"), id)
       };
     }
 
