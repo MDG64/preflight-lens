@@ -15668,6 +15668,14 @@ function renderInfo(icao) {
           cover: "#232d26", road: "#465464", roadHi: "#617484"
         };
     }
+    // Mélange deux couleurs #rrggbb : t = 0 rend `a`, t = 1 rend `b`. Sert à
+    // atténuer une nappe SANS la rendre translucide — voir la couche d'eau.
+    function mix(a, b, t) {
+      const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+      const [ar, ag, ab] = rgb(a), [br, bg, bb] = rgb(b);
+      const c = (x, y) => Math.round(x + (y - x) * t).toString(16).padStart(2, "0");
+      return "#" + c(ar, br) + c(ag, bg) + c(ab, bb);
+    }
     function glStyle(light, offline, wx) {
       const C = glPalette(light);
       const cover = C.cover, road = C.road, roadHi = C.roadHi;
@@ -15721,8 +15729,14 @@ function renderInfo(icao) {
             paint: { "line-color": C.coast, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2.2] } },
           { id: "lake-edge", type: "line", source: "o", "source-layer": "water", filter: ["!=", ["get", "class"], "ocean"],
             paint: { "line-color": C.lakeEdge, "line-opacity": FB, "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2] } },
+          // L'eau doit rester OPAQUE, sinon la parade ci-dessus tombe : à 45 %
+          // d'opacité (vue WEATHER de jour), le remplissage ne masquait plus la
+          // couture dessinée dessous et la longue droite reparaissait en pleine
+          // mer. L'atténuation du jour est donc obtenue en mélangeant la couleur
+          // au blanc de la terre, pas en laissant voir au travers. À FB = 1
+          // (vue NOTAM, nuit), mix() rend la teinte d'origine : rien ne change.
           { id: "water", type: "fill", source: "o", "source-layer": "water",
-            paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], C.sea, C.lake], "fill-opacity": FB } },
+            paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], mix(C.land, C.sea, FB), mix(C.land, C.lake, FB)], "fill-opacity": 1 } },
           { id: "river", type: "line", source: "o", "source-layer": "waterway", minzoom: 5,
             paint: { "line-color": C.river, "line-opacity": FB * FR, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 12, 1.6] } },
           { id: "bnd", type: "line", source: "o", "source-layer": "boundary", filter: ["<=", ["get", "admin_level"], 2],
