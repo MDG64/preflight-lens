@@ -4425,10 +4425,11 @@ body.light .stat.on {
       cursor: default
     }
 
-    /* Étoile et flèche partagent la colonne du bout de ligne : en rang sur
-       écran large, empilées sur téléphone. Toutes deux prennent la hauteur
-       d'une case — même cible au doigt que les trois étoiles des cases. La
-       flèche s'éteint tant qu'aucune case ne porte de code complet. */
+    /* Étoile et flèche partagent la colonne du bout de ligne. L'étoile prend
+       toute la hauteur d'une case — même cible au doigt que les trois étoiles
+       des cases ; la flèche garde sa taille de bouton, celle qu'elle a dans
+       la case des favoris, et se centre sur la ligne. Elle s'éteint tant
+       qu'aucune case ne porte de code complet. */
     .route-acts {
       display: flex;
       align-items: stretch;
@@ -4438,7 +4439,8 @@ body.light .stat.on {
 
     .fav-arrow.route-arrow {
       width: 38px;
-      height: auto;
+      height: 31px;
+      align-self: center;
       flex: none
     }
 
@@ -4813,7 +4815,8 @@ body.light .stat.on {
       }
 
       .fav-arrow.route-arrow {
-        width: 26px
+        width: 26px;
+        height: 27px
       }
 
       .fav-arrow.route-arrow svg {
