@@ -479,7 +479,7 @@
     /* Terrains de la route, dans le bandeau à côté de la case ICAO. Ils en
        reprennent la FORME exacte — même cadre, même étiquette, même typo —
        pour que les cases se lisent comme un seul jeu ; seule la couleur de
-       l'étiquette distingue le rôle (celles de la page Weather). Le terrain
+       l'étiquette distingue le rôle. Le terrain
        affiché n'a pas sa case ici : son code est déjà dans la case ICAO, qui
        tient sa place dans la file DEP -> DEST -> ALT (voir renderStRoute :
        les cases d'avant vont dans #stRoutePre, celles d'après dans #stRoute). */
@@ -587,11 +587,12 @@
       padding-left: 12px
     }
 
-    /* Page Weather : le code de chaque case se change sur place — la page est
-       souvent le seul écran ouvert, et repasser par l'accueil pour lire un
-       autre terrain est un détour. La case devient la saisie — même cadre,
-       même typo, même place : rien ne bouge, seul le curseur dit qu'on peut
-       écrire, et le cadre s'allume au survol comme au focus. */
+    /* Page Weather : UNE case, toujours vide, qui ajoute un terrain aux
+       relevés affichés — la page est souvent le seul écran ouvert, et
+       repasser par l'accueil pour lire un terrain de plus est un détour. Elle
+       porte l'habit des cases voisines — même cadre, même typo : seul le
+       curseur dit qu'on peut écrire, et le cadre s'allume au survol comme au
+       focus. */
     .st-chip input.v {
       /* La largeur est celle des quatre lettres et de leur interlettrage — la
          case garde donc la taille qu'elle avait en simple texte. Elle se
@@ -4944,6 +4945,78 @@ body.light .stat.on {
       gap: 10px
     }
 
+    /* La case de la page météo reste vide : sans code à lire, c'est le mot
+       ICAO en gris qui dit ce qu'on attend d'elle. */
+    .wx-add input.v::placeholder {
+      color: var(--muted);
+      opacity: 1;
+      letter-spacing: .12em
+    }
+
+    /* Les terrains de la première page, sous la case : ils ne se remplissent
+       plus, ils se lisent — donc plus de cadre ni de couleur de saisie, le
+       code prend la couleur du texte (noir en jour, clair en nuit) et seule
+       l'étiquette de rôle garde ses couleurs DEP / DEST / ALT. Un appui
+       descend au relevé du terrain, ce que faisait le clic sur les cases. */
+    .wx-route-list {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      margin: 10px 0 0
+    }
+
+    .wx-route-list[hidden] {
+      display: none
+    }
+
+    .wx-jump {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      background: none;
+      border: 0;
+      /* Le code n'a plus de cadre : c'est ce creux au-dessus et au-dessous qui
+         lui garde une cible au doigt. */
+      padding: 6px 0;
+      cursor: pointer;
+      border-radius: 6px
+    }
+
+    .wx-jump .l {
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .18em;
+      color: var(--muted)
+    }
+
+    .wx-jump .l.dep {
+      color: var(--green)
+    }
+
+    .wx-jump .l.arr {
+      color: var(--cyan)
+    }
+
+    .wx-jump .l.alt {
+      color: var(--amber)
+    }
+
+    .wx-jump .v {
+      font: 600 19px/1 var(--mono);
+      letter-spacing: .18em;
+      color: var(--text)
+    }
+
+    .wx-jump:hover .v {
+      text-decoration: underline;
+      text-underline-offset: 4px
+    }
+
+    .wx-jump:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
+    }
+
     /* Au doigt, trois cases de route remplissent déjà la ligne : le bouton n'y
        tient qu'en perdant son mot. Le ↻ suffit — il est seul de son espèce sur
        cette page, et son nom reste dans l'infobulle et pour les lecteurs
@@ -5724,11 +5797,19 @@ body .stat .k{
         <!-- Le rafraîchissement suit les codes au lieu de rejoindre les
              pastilles : c'est sur ces relevés-là qu'il agit, et la main le
              trouve au bout de la route qu'elle vient de lire. -->
+        <!-- Une seule case, et toujours vide : elle AJOUTE un terrain aux
+             relevés déjà à l'écran, elle n'en remplace aucun. Les terrains
+             saisis sur la première page se lisent en dessous, à la couleur du
+             texte — un appui descend à leur relevé. -->
         <div class="wx-codes-row">
-          <div class="st-route wx-route" id="wxCodes" hidden></div>
+          <span class="st-chip plain wx-add"><input class="v" id="wxAdd" maxlength="4" size="4"
+              placeholder="ICAO" autocomplete="off" spellcheck="false"
+              title="Add an aerodrome — type its ICAO code and press Enter"
+              aria-label="Add an aerodrome — type its ICAO code and press Enter"></span>
           <button class="btn wx-refresh" id="wxRefresh" title="Refresh" aria-label="Refresh">↻<span
               class="wx-refresh-lbl"> Refresh</span></button>
         </div>
+        <div class="wx-route-list" id="wxCodes" hidden></div>
       </div>
       <div class="wx-status" id="wxStatus"></div>
       <div id="wxBody"></div>
@@ -18993,52 +19074,41 @@ window.addEventListener("scroll", hidePop, true);
     }
     function wxRoleLabel(role) { return role === "dep" ? "DEP" : role === "arr" ? "DEST" : role === "alt" ? "ALT" : ""; }
     function wxSection(icao) { return document.querySelector(`#wxBody .wx-ap[data-icao="${icao}"]`); }
-    /* Les codes de la route en en-tête, dans les cases du bandeau NOTAM — même
-       cadre, même étiquette de rôle colorée, même typo. Chaque case porte SON
-       code en saisie : quatre lettres et Entrée changent le terrain de cette
-       place-là — DEP, DEST ou ALT — sans repasser par l'accueil, et le terrain
-       seul se change pareil. Le geste d'avant n'est pas perdu : entrer dans la
-       case descend à la section du terrain, ce que faisait le clic.
-       Le changement ne vaut que pour cette page : la route enregistrée, elle,
-       se modifie sur l'accueil — on ne réécrit pas un plan de vol en allant
-       lire un METAR. */
+    /* Les terrains de l'écran, sous la case de saisie : ceux de la première
+       page d'abord — DEP, DEST, ALT, étiquetés et dans leur ordre — puis ceux
+       ajoutés ici. Ils se lisent à la couleur du texte : ce n'est plus une
+       saisie, la route se modifie sur l'accueil et nulle part ailleurs — on
+       ne réécrit pas un plan de vol en allant lire un METAR. Le geste
+       d'avant reste : un appui descend à la section du terrain. */
     function renderWxCodes(list) {
       const box = $("#wxCodes");
       box.hidden = !list.length;
-      box.innerHTML = list.map((a, i) => {
+      box.innerHTML = list.map(a => {
         const m = AIRPORTS[a.icao], role = wxRoleLabel(a.role);
-        const lab = role ? `${role} — type another ICAO code to change this station`
-                         : "Aerodrome ICAO code — type another to change station";
-        return `<span class="st-chip ${role ? a.role : "plain"}"
-      title="${role}${m ? (role ? " — " : "") + m.city : ""}"
-      >${role ? `<span class="l">${role}</span>` : ""}<input class="v" data-i="${i}"
-        value="${a.icao}" maxlength="4" size="4" autocomplete="off" spellcheck="false"
-        aria-label="${lab}"></span>`;
+        return `<button type="button" class="wx-jump" data-icao="${a.icao}"
+      title="${role}${m ? (role ? " — " : "") + m.city : (m ? m.city : "")}"
+      >${role ? `<span class="l ${a.role}">${role}</span>` : ""}<span class="v">${a.icao}</span></button>`;
       }).join("");
-      /* Un code incomplet, ou déjà tenu par une autre case, ne vaut pas une
-         requête : on remet celui qui est à l'écran plutôt que d'ouvrir une
-         page vide ou de doubler un terrain. Le même code que celui affiché ne
-         rouvre rien non plus — c'est Refresh qui recharge, pas la case. */
-      box.querySelectorAll("input.v").forEach(inp => {
-        const i = +inp.dataset.i, cur = list[i].icao;
-        const go = () => {
-          const v = inp.value.trim().toUpperCase();
-          if (!/^[A-Z]{4}$/.test(v) || v === cur ||
-              list.some((b, j) => j !== i && b.icao === v)) { inp.value = cur; return; }
-          openWx(list.map((b, j) => j === i ? { icao: v, role: b.role } : b));
-        };
-        inp.oninput = () => { inp.value = inp.value.toUpperCase().replace(/[^A-Z]/g, ""); };
-        inp.onkeydown = e => {
-          if (e.key === "Enter") { e.preventDefault(); go(); }
-          else if (e.key === "Escape") { inp.value = cur; inp.blur(); }
-        };
-        inp.onblur = go;
-        inp.onfocus = () => {
-          inp.select();
-          const sec = wxSection(cur);
-          if (sec && list.length > 1) sec.scrollIntoView({ behavior: "smooth", block: "start" });
-        };
+      box.querySelectorAll(".wx-jump").forEach(b => {
+        b.onclick = () => wxJumpTo(b.dataset.icao);
       });
+    }
+    function wxJumpTo(icao) {
+      const sec = wxSection(icao);
+      if (sec && wxList.length > 1) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    /* La case d'ajout. Quatre lettres et Entrée posent une section de plus au
+       bas de l'écran, sans toucher à celles déjà là : la route reste entière
+       et le terrain qu'on vient d'avoir en tête la rejoint. Un code incomplet
+       ne vaut pas une requête ; un code déjà à l'écran non plus — il descend
+       simplement à son relevé. La case se vide après coup, prête pour le
+       suivant. */
+    function wxAddStation() {
+      const inp = $("#wxAdd"), v = inp.value.trim().toUpperCase();
+      if (!/^[A-Z]{4}$/.test(v)) return;
+      inp.value = "";
+      if (wxList.some(a => a.icao === v)) { wxJumpTo(v); return; }
+      openWx(wxList.concat([{ icao: v }]));
     }
     // Les âges vivent à l'écran : re-rendus seuls, toutes les 30 s, sans réseau.
     function renderWxAges() {
@@ -19174,12 +19244,18 @@ window.addEventListener("scroll", hidePop, true);
       <div class="wx-block" data-daywx hidden></div>
     </section>`;
       }).join("");
-      // Après les sections : chaque case cherche la sienne au clic.
+      // Après les sections : chaque code cherche la sienne au clic.
       renderWxCodes(list);
+      $("#wxAdd").value = "";
       if (!wxTicker) wxTicker = setInterval(renderWxAges, 30000);
       await refreshWx();
     }
     $("#wxRefresh").onclick = () => refreshWx();
+    $("#wxAdd").oninput = e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ""); };
+    $("#wxAdd").onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); wxAddStation(); }
+      else if (e.key === "Escape") { e.target.value = ""; e.target.blur(); }
+    };
     // Retour à la première page. L'accueil vit DERRIÈRE la page météo (z 50
     // contre 52), donc la masquer suffirait à le redécouvrir — on appelle
     // quand même openHome() : il rafraîchit favoris, étoiles et miroir de
