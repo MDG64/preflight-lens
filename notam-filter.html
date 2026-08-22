@@ -3640,15 +3640,32 @@
       padding: 16px;
       border-bottom: 1px solid var(--line);
       display: flex;
-      justify-content: space-between;
+      gap: 10px;
       align-items: center;
+      flex-shrink: 0
+    }
+
+    .fir-header-nav {
+      display: flex;
+      gap: 8px;
       flex-shrink: 0
     }
 
     .fir-header h2 {
       margin: 0;
       font: 700 18px/1 var(--sans);
-      color: var(--text)
+      color: var(--text);
+      /* Un nom de FIR long ne doit pas repousser les sorties hors du panneau. */
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .fir-panel-home-btn .pict {
+      width: 16px;
+      height: 16px;
+      display: block
     }
 
     .fir-header .btn-icon {
@@ -3818,17 +3835,10 @@
       display: flex !important
     }
 
-    /* Masquer le bouton fermer du panneau sur desktop */
-    .fir-panel-close-btn {
-      display: none
-    }
-
-    /* Afficher le bouton fermer du panneau sur mobile */
-    @media (max-width: 640px) {
-      .fir-split.detail-open .fir-panel-close-btn {
-        display: flex
-      }
-    }
+    /* Les sorties du panneau restent affichées sur tous les écrans : sur
+       desktop elles doublent #firExpandBtn, sur mobile elles sont les seules
+       (la carte y disparaît sous le détail). La règle display vient de
+       `.fir-header .btn-icon` — rien à masquer ici. */
 
     @media (max-width: 640px) {
       .fir-split.detail-open .fir-map-wrap {
@@ -5703,9 +5713,16 @@ body .stat .k{
     <div class="fir-split" id="firSplit">
       <div class="fir-panel" id="firPanel" hidden>
         <div class="fir-header">
+          <!-- Les deux sorties du détail FIR, à gauche du titre comme le veut
+               l'habitude au doigt : la flèche remonte d'un cran (carte des
+               FIR), la maison quitte tout et rouvre la page d'accueil. Sur
+               mobile la carte — et donc #firExpandBtn — est masquée quand le
+               détail est ouvert : sans elles, la page n'aurait plus de sortie. -->
+          <div class="fir-header-nav">
+            <button class="btn-icon fir-panel-close-btn" id="firPanelClose" aria-label="Back to the FIR map" title="Back to the FIR map">←</button>
+            <button class="btn-icon fir-panel-home-btn" id="firPanelHome" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
+          </div>
           <h2 id="firTitle">---</h2>
-          <!-- Bouton fermer: visible en mode détail sur tous les écrans -->
-          <button class="btn-icon fir-panel-close-btn" id="firPanelClose" aria-label="Close and return to world map" title="Close and return to world map">✕</button>
         </div>
         <div class="fir-summary" id="firSummary"></div>
         <div class="fir-list" id="firList"></div>
@@ -17351,9 +17368,16 @@ function renderInfo(icao) {
       if ($("#firPanel").hidden) $("#firOv").hidden = true;
       else backToFirWorld();
     };
-    // Croix du panneau : sur mobile la carte (et donc #firExpandBtn) est masquée
-    // quand le détail est ouvert — c'est la seule sortie possible.
+    // Flèche du panneau : sur mobile la carte (et donc #firExpandBtn) est
+    // masquée quand le détail est ouvert — c'est la seule remontée possible.
     $("#firPanelClose").onclick = backToFirWorld;
+    // Maison du panneau : on quitte la vue FIR d'un coup et on rouvre la page
+    // d'accueil, sans repasser par la carte des FIR.
+    $("#firPanelHome").onclick = () => {
+      closeFirPanel();
+      $("#firOv").hidden = true;
+      openHome();
+    };
     // Bouton retour : ferme complètement la vue FIR et revient à l'app principale
     $("#firBackBtn").onclick = () => { $("#firOv").hidden = true; };
     // Fonction helper pour mettre à jour la visibilité du bouton retour
