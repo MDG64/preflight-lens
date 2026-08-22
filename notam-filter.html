@@ -6327,8 +6327,18 @@ body .stat .k{
     const WEAK_KEYWORDS = {
       sol: ["MAINT"],
     };
-    const CRITICAL_TEXT = ["CLSD", "CLOSED", "U/S", "UNSERVICEABLE", "UNSERV", "NOT AVBL",
-      "NOT AVAILABLE", "UNSAFE"];
+    /* « CLOSURE », le NOM, dit exactement ce que disent « CLSD » et « CLOSED » :
+       la surface est fermée. Il manquait ici, et le seul planKind() se l'était
+       ajouté dans son coin le 2026-07-27 (LFBO A4912/26). Résultat : le plan
+       peignait rouge pendant que la liste affichait ambre, sur le même NOTAM —
+       précisément la contradiction que le prédicat partagé hasClosureWord()
+       existe pour empêcher. Cas réel LFPO A2740/26 (QPDTT) « DUE TO THE CLOSURE
+       OF RUNWAY 06/24 FROM AUGUST 10 TO DECEMBER 17 » : plan « closed », liste
+       « caution ». Le mot remonte donc dans le prédicat commun, et planKind()
+       perd sa rustine locale — une fermeture de piste ou de taxiway est
+       Critical, quel que soit le mot que le rédacteur a choisi. */
+    const CRITICAL_TEXT = ["CLSD", "CLOSED", "CLOSURE", "U/S", "UNSERVICEABLE", "UNSERV",
+      "NOT AVBL", "NOT AVAILABLE", "UNSAFE"];
     /* « WITHDRAWN » retire quelque chose du service — encore faut-il savoir QUOI.
        Retirer une SURFACE (« RWY 05/23 WITHDRAWN », « TWY B WITHDRAWN ») est bien
        une fermeture. Retirer une DONNÉE PUBLIÉE ne ferme rien du tout : cas réel
@@ -19539,8 +19549,10 @@ window.addEventListener("scroll", hidePop, true);
       const T = (n.e || "").toUpperCase();
       // « CLOSURE » (nom) apparaît dans des NOTAM réels ("CLOSURE OF TAXIWAYS
       // ...") sans jamais contenir littéralement CLSD/CLOSED — vérifié le
-      // 2026-07-27 sur LFBO A4912/26, qui repeignait à tort en ambre.
-      if (hasClosureWord(T) || T.includes("CLOSURE")) return "closed";
+      // 2026-07-27 sur LFBO A4912/26, qui repeignait à tort en ambre. Le mot
+      // vit désormais dans CRITICAL_TEXT, donc dans hasClosureWord() : plan et
+      // liste le lisent enfin pareil, et le test local a disparu.
+      if (hasClosureWord(T)) return "closed";
       if (hasRestrictCond(T)) return "restricted";
       // PROHIBITED sans condition de type/envergure (déjà captée juste au-dessus
       // par RESTRICT_TEXT) est une interdiction TOTALE, pas une restriction
