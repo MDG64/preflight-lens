@@ -4425,6 +4425,30 @@ body.light .stat.on {
       cursor: default
     }
 
+    /* Étoile et flèche partagent la colonne du bout de ligne : en rang sur
+       écran large, empilées sur téléphone. Toutes deux prennent la hauteur
+       d'une case — même cible au doigt que les trois étoiles des cases. La
+       flèche s'éteint tant qu'aucune case ne porte de code complet. */
+    .route-acts {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      flex: 1
+    }
+
+    .fav-arrow.route-arrow {
+      width: 38px;
+      height: auto;
+      flex: none
+    }
+
+    .fav-arrow.route-arrow:disabled {
+      opacity: .35;
+      cursor: default;
+      border-color: var(--line2);
+      background: var(--panel)
+    }
+
     .route-star.on {
       border-style: solid;
       border-color: var(--gold)
@@ -4778,6 +4802,28 @@ body.light .stat.on {
       .route-star {
         font-size: 18px;
         padding: 0 4px
+      }
+
+      /* Les deux boutons s'empilent : la colonne ne coûte plus qu'une largeur
+         de flèche, et les trois codes restent sur UNE ligne à 360 px. */
+      .route-acts {
+        flex-direction: column;
+        gap: 3px
+      }
+
+      .route-star {
+        justify-content: center;
+        padding: 0
+      }
+
+      .fav-arrow.route-arrow {
+        width: 28px;
+        flex: 1
+      }
+
+      .fav-arrow.route-arrow svg {
+        width: 15px;
+        height: 15px
       }
 
       /* Le rond d'inversion prend sa part sur la largeur du telephone : les
@@ -5551,10 +5597,23 @@ body .stat .k{
              s'aligne sur les cases grâce à une étiquette vide de même hauteur. -->
         <div class="home-field home-field-route">
           <span class="home-field-label" aria-hidden="true">&nbsp;</span>
-          <button class="starbtn route-star" id="hRouteStar" type="button" aria-pressed="false"
-            aria-label="Add this route to favorites" title="Add / remove this route from favorites"
-            disabled>☆</button>
+          <!-- Deux gestes sur la même route, côte à côte : l'étoile la retient,
+               la flèche — celle de la case des favoris — en ouvre le résumé
+               météo, sur les terrains TAPÉS dans les trois cases. Sur téléphone
+               ils s'empilent : les trois codes gardent leur ligne. -->
+          <div class="route-acts">
+            <button class="starbtn route-star" id="hRouteStar" type="button" aria-pressed="false"
+              aria-label="Add this route to favorites" title="Add / remove this route from favorites"
+              disabled>☆</button>
+            <button class="fav-arrow route-arrow" id="hRouteWx" type="button" disabled
+              title="Weather summary of the aerodromes typed"
+              aria-label="Weather summary of the aerodromes typed" aria-haspopup="dialog">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
+            </button>
+          </div>
         </div>
+      </div>
       </div>
 
       <div>
@@ -6089,7 +6148,7 @@ body .stat .k{
 <div class="favwx-ov" id="favWxOv" hidden>
   <div class="favwx-sheet" role="dialog" aria-modal="true" aria-label="Favorites weather summary">
     <div class="favwx-head">
-      <span class="fav-tab on"><span class="star">★</span> Favorites — weather</span>
+      <span class="fav-tab on" id="favWxTitle"><span class="star">★</span> Favorites — weather</span>
       <button class="fav-arrow" id="favWxClose" type="button" title="Close"
         aria-label="Close the weather summary">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
@@ -18307,6 +18366,9 @@ window.addEventListener("scroll", hidePop, true);
       rb.classList.toggle("on", rfav);
       rb.setAttribute("aria-pressed", String(rfav));
       rb.setAttribute("aria-label", rfav ? "Remove this route from favorites" : "Add this route to favorites");
+      /* La flèche du résumé se contente d'UN code complet : un départ seul a
+         déjà une météo à montrer, là où l'étoile attend une vraie route. */
+      $("#hRouteWx").disabled = routeSlotsFilled(codes).length < 1;
       // Rien dans les cases : rien a effacer, le bouton s'eteint.
       $("#hClearBtn").disabled = !HOME_FIELDS.some(id => rVal(id));
     }
@@ -18314,6 +18376,7 @@ window.addEventListener("scroll", hidePop, true);
     $("#hToStar").onclick = () => toggleFavCode(homeFieldCode("#hTo"));
     $("#hAltStar").onclick = () => toggleFavCode(homeFieldCode("#hAlt"));
     $("#hRouteStar").onclick = toggleFavRoute;
+    $("#hRouteWx").onclick = routeWxOpen;
     /* ---- inversion depart <-> destination ----
        Le retour du soir, c'est la meme route lue a l'envers : on echange les
        deux codes au lieu de les retaper. Le degagement, lui, avait ete choisi
@@ -19012,14 +19075,19 @@ window.addEventListener("scroll", hidePop, true);
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5 8 10.5l5-5"/></svg>
       </button>`;
     }
-    function favWxOpen(e) {
-      if (!favs.length || !$("#favWxOv").hidden) return;
+    /* Le même volet sert deux listes : les favoris, et les terrains tapés
+       dans les trois cases de la route. Seuls changent la liste, le titre, et
+       la ligne d'où il se déploie — le reste du geste est identique. */
+    function favWxShow(e, list, label) {
+      if (!list.length || !$("#favWxOv").hidden) return;
       const ov = $("#favWxOv"), sheet = ov.querySelector(".favwx-sheet");
+      $("#favWxTitle").innerHTML = `<span class="star">★</span> ${label} — weather`;
+      sheet.setAttribute("aria-label", label + " weather summary");
       /* Le volet s'ancre au haut de la case d'où la flèche a été pressée —
          c'est d'elle qu'il se déploie. Plafonné à mi-écran : une case poussée
          tout en bas par le défilement laisserait au volet trop peu de hauteur
          pour lire quatre lignes. */
-      const box = e && e.currentTarget && e.currentTarget.closest(".fav-chips");
+      const box = e && e.currentTarget && e.currentTarget.closest(".fav-chips, .home-route");
       const top = box ? Math.min(Math.max(0, box.getBoundingClientRect().top), window.innerHeight * 0.5) : 0;
       ov.style.setProperty("--favwx-top", Math.round(top) + "px");
       ov.hidden = false;
@@ -19027,7 +19095,13 @@ window.addEventListener("scroll", hidePop, true);
          tombent dans la même frame et le volet apparaît sans se déployer. */
       void sheet.offsetHeight;
       ov.classList.add("open");
-      favWxFill(favs.slice());
+      favWxFill(list);
+    }
+    function favWxOpen(e) { favWxShow(e, favs.slice(), "Favorites"); }
+    /* La route lue de gauche à droite, trous sautés et doublons écartés : un
+       même terrain en départ et en dégagement ne mérite pas deux lignes. */
+    function routeWxOpen(e) {
+      favWxShow(e, [...new Set(routeSlotsFilled(homeRouteSlots()))], "Route");
     }
     function favWxClose() {
       const ov = $("#favWxOv"), sheet = ov.querySelector(".favwx-sheet");
