@@ -5464,14 +5464,16 @@ body .stat .k{
 
   <div class="wrap">
     <!-- Deux onglets sur la même liste, même habit qu'à l'accueil : les
-         terrains un à un, ou les routes entières. -->
-    <div class="fav-tabs page-tabs" role="tablist" aria-label="Favorites">
-      <button class="fav-tab on" id="tabFav" type="button" role="tab" aria-selected="true"><span
+         terrains un à un, ou les routes entières. La case est repliée au
+         départ : on ne voit que les deux titres et leur compte, et c'est le
+         titre qu'on touche qui déplie — ou referme — sa liste. -->
+    <div class="fav-tabs page-tabs">
+      <button class="fav-tab" id="tabFav" type="button" aria-expanded="false" aria-controls="chips"><span
           class="star">★</span> Favorites <span id="favCount">(0)</span></button>
-      <button class="fav-tab" id="tabRoute" type="button" role="tab" aria-selected="false"><span
+      <button class="fav-tab" id="tabRoute" type="button" aria-expanded="false" aria-controls="chips"><span
           class="star">★</span> Route <span id="routeCount">(0)</span></button>
     </div>
-    <div class="chips fav-chips" id="chips"></div>
+    <div class="chips fav-chips" id="chips" hidden></div>
 
     <div class="station" id="station" hidden>
       <span class="stationcode" id="stationCode">—</span>
@@ -5665,14 +5667,14 @@ body .stat .k{
 
       <div>
         <!-- Deux onglets sur la même liste : les terrains un à un, ou les
-             routes entières. -->
-        <div class="fav-tabs" role="tablist" aria-label="Favorites">
-          <button class="fav-tab on" id="homeTabAd" type="button" role="tab" aria-selected="true"><span
+             routes entières. Repliée au départ, comme sur la page NOTAM. -->
+        <div class="fav-tabs">
+          <button class="fav-tab" id="homeTabAd" type="button" aria-expanded="false" aria-controls="homeChips"><span
               class="star">★</span> Favorites <span id="homeAdCount"></span></button>
-          <button class="fav-tab" id="homeTabRoute" type="button" role="tab" aria-selected="false"><span
+          <button class="fav-tab" id="homeTabRoute" type="button" aria-expanded="false" aria-controls="homeChips"><span
               class="star">★</span> Route <span id="homeRouteCount"></span></button>
         </div>
-        <div class="chips fav-chips" id="homeChips"></div>
+        <div class="chips fav-chips" id="homeChips" hidden></div>
       </div>
 
       <div class="home-cards">
@@ -13991,7 +13993,7 @@ E) ${e}`;
     let timeWin = null;           // null = filtre horaire inactif ; sinon {start,end,h,m}
     let timeMode = null;          // null | 'time' | 'today' | 'tomorrow'
     let currentIcao = "";         // code OACI chargé
-    let tab = "fav";              // onglet actif : "fav"
+    let tab = null;               // onglet déplié : "fav", "route", ou aucun
     function loadFavs() { try { return JSON.parse(localStorage.getItem("notam_favs") || "[]"); } catch (e) { return []; } }
     function saveFavs(a) { try { localStorage.setItem("notam_favs", JSON.stringify(a)); } catch (e) { } }
     /* Routes favorites : une liste de listes de codes, dans l'ordre
@@ -14336,18 +14338,26 @@ E) ${e}`;
        Même paire d'onglets que sur la page d'accueil, et même liste derrière
        (favs, favRoutes) — seul le geste change : ici, une puce CHARGE les
        NOTAMs au lieu de remplir les cases et d'attendre. */
+    /* Le titre qu'on touche déplie sa liste ; le même titre retouché la
+       referme. Passer d'une liste à l'autre reste un seul geste. */
     function setTab(t) {
-      tab = t;
-      [["#tabFav", "fav"], ["#tabRoute", "route"]].forEach(([sel, k]) => {
-        $(sel).classList.toggle("on", t === k);
-        $(sel).setAttribute("aria-selected", String(t === k));
-      });
+      tab = (tab === t) ? null : t;
       renderChips();
+    }
+    function paintTabs() {
+      [["#tabFav", "fav"], ["#tabRoute", "route"]].forEach(([sel, k]) => {
+        $(sel).classList.toggle("on", tab === k);
+        $(sel).setAttribute("aria-expanded", String(tab === k));
+      });
     }
     function renderChips() {
       updateFavCount();
+      paintTabs();
+      const box = $("#chips");
+      box.hidden = !tab;
+      if (!tab) { box.innerHTML = ""; return; }
       if (tab === "route") return renderRouteChips();
-      const wrap = $("#chips");
+      const wrap = box;
       const codes = favs;
       if (!codes.length) {
         wrap.innerHTML = `<span class="hint">No favorites yet — load an aerodrome, then tap the ☆ star next to its code.</span>`;
@@ -18477,12 +18487,13 @@ window.addEventListener("scroll", hidePop, true);
     HOME_FIELDS.forEach(id => {
       $(id).addEventListener("focus", () => homeSelect(id));
     });
-    /* Onglet ouvert sous les cases : les terrains un à un ("ad"), ou les
-       routes entières ("route"). L'onglet ne se retient pas d'une session à
-       l'autre : l'accueil s'ouvre sur les terrains, le geste le plus courant. */
-    let homeFavTab = "ad";
+    /* Onglet déplié sous les cases : les terrains un à un ("ad"), les routes
+       entières ("route"), ou rien. L'accueil s'ouvre replié — deux titres et
+       leur compte — et rien ne se retient d'une session à l'autre : le titre
+       touché déplie sa liste, retouché il la referme. */
+    let homeFavTab = null;
     function homeSetFavTab(t) {
-      homeFavTab = t;
+      homeFavTab = (homeFavTab === t) ? null : t;
       renderHomeChips();
     }
     function renderHomeChips() {
@@ -18490,10 +18501,13 @@ window.addEventListener("scroll", hidePop, true);
       $("#homeRouteCount").textContent = "(" + favRoutes.length + ")";
       [["#homeTabAd", "ad"], ["#homeTabRoute", "route"]].forEach(([sel, t]) => {
         $(sel).classList.toggle("on", homeFavTab === t);
-        $(sel).setAttribute("aria-selected", String(homeFavTab === t));
+        $(sel).setAttribute("aria-expanded", String(homeFavTab === t));
       });
+      const box = $("#homeChips");
+      box.hidden = !homeFavTab;
+      if (!homeFavTab) { box.innerHTML = ""; return; }
       if (homeFavTab === "route") return renderHomeRouteChips();
-      const wrap = $("#homeChips");
+      const wrap = box;
       if (!favs.length) {
         wrap.innerHTML = `<span class="hint">No favorites yet — type an ICAO code above, then tap the ☆ star inside its box.</span>`;
         return;
@@ -19455,7 +19469,7 @@ window.addEventListener("scroll", hidePop, true);
     })();
 
     /* ---- démarrage ---- */
-    updateFavCount(); buildSeg(); setTab("fav");
+    updateFavCount(); buildSeg(); renderChips();   // volet replié : les deux titres, rien de plus
     /* L'accueil est l'écran d'ouverture : plus de chargement automatique du
        premier favori — les NOTAMs ne se téléchargent qu'à la demande (carte
        NOTAM). La route reprend la dernière enregistrée ; à défaut, le DÉPART se
