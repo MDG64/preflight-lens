@@ -19326,9 +19326,9 @@ window.addEventListener("scroll", hidePop, true);
                   + `<b class="xw ${favWxTone(c.cross, 20, 30)}">`
                   + `${c.sign >= 0 ? favWxArrow(90, "Crosswind from the right") : favWxArrow(270, "Crosswind from the left")}</b>`
                   + `${c.cross}<u>kt</u></span>` : "")
-              + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
               + `<span class="d">${favWxBaseTxt(p)}</span>`
               + `<span class="d">${favWxVisTxt(p)}</span>`
+              + `<span class="d">${p.temp != null ? p.temp + "°" : "—"}</span>`
               + `<span class="d">${p.qnh ? "Q" + p.qnh : (p.alt ? "A" + p.alt.toFixed(2) : "—")}</span>`
               + `</div>`;
           })();
