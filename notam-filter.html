@@ -4846,8 +4846,11 @@ body.light .stat.on {
         padding: 0 2px
       }
 
+      /* Au doigt, l'étoile et la flèche sont deux gestes opposés — favoriser
+         la route, ou dérouler le volet des favoris. Trois pixels d'écart, ça
+         se rate ; l'étoile est en `flex: 1`, c'est elle qui paie la marge. */
       .route-acts {
-        gap: 3px
+        gap: 8px
       }
 
       /* Les deux flèches — celle du bout de la route et celle de la case des
