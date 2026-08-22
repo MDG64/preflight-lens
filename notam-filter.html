@@ -4438,8 +4438,6 @@ body.light .stat.on {
     }
 
     .fav-arrow.route-arrow {
-      width: 38px;
-      height: 31px;
       align-self: center;
       flex: none
     }
@@ -4814,12 +4812,15 @@ body.light .stat.on {
         gap: 3px
       }
 
-      .fav-arrow.route-arrow {
+      /* Les deux flèches — celle du bout de la route et celle de la case des
+         favoris — gardent la même taille partout : c'est le même bouton, il
+         ouvre le même volet. */
+      .fav-arrow {
         width: 26px;
         height: 27px
       }
 
-      .fav-arrow.route-arrow svg {
+      .fav-arrow svg {
         width: 15px;
         height: 15px
       }
