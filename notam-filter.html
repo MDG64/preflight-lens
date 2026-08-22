@@ -4605,7 +4605,6 @@ body.light .stat.on {
     .favwx-data .w-warn { color: var(--amber) }
     .favwx-data .w-bad { color: var(--red) }
     .favwx-none { font: 500 12px/1.5 var(--sans); color: var(--muted); padding: 2px 0 }
-    .favwx-src { font: 400 10px/1.4 var(--sans); color: var(--muted2); padding: 0 16px 12px }
 
     /* Puce de route : les codes dans l'ordre, séparés par un chevron, et la
        croix qui la retire. Même habit que la puce de terrain. */
@@ -6047,10 +6046,11 @@ body .stat .k{
           under the Open Database Licence (ODbL). Layouts are indicative, not AIP-compliant,
           and not for navigation.<br>
           <b>Aerodrome and airspace reference data</b> — OurAirports and Natural Earth, public domain.<br>
-          <b>Day weather</b> (forecast strip and pictograms) — <a href="https://www.met.no/en" target="_blank"
+          <b>Weather pictograms and day forecast</b> — <a href="https://www.met.no/en" target="_blank"
             rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
             target="_blank" rel="noopener">CC BY 4.0</a>; pictograms from the Yr weather symbol set (MIT).
-          Model forecast, <b>not an aviation weather product</b>: it gives the shape of the day, never a
+          They carry the day weather strip and the favourites weather summary. The strip is a model
+          forecast, <b>not an aviation weather product</b>: it gives the shape of the day, never a
           value to plan on.
         </div>
 
@@ -6092,7 +6092,6 @@ body .stat .k{
       </button>
     </div>
     <div class="favwx-list" id="favWxList"></div>
-    <div class="favwx-src">Latest METAR per aerodrome · pictograms MET Norway (CC BY 4.0).</div>
   </div>
 </div>
 
