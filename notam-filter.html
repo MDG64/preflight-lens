@@ -14365,10 +14365,9 @@ E) ${e}`;
       }
       const cur = routeKey(homeRouteSlots());
       wrap.innerHTML = favRoutes.map((r, i) => {
-        const f = routeSlotsFilled(r);
         return `
         <button class="chip-ad chip-rt ${routeKey(r) === cur ? "on" : ""}" data-i="${i}"
-          aria-label="Show NOTAMs for route ${f.join(" to ")}">${f.map(c => `<span>${c}</span>`).join(`<span class="rt-arrow" aria-hidden="true">›</span>`)}<span
+          aria-label="Show NOTAMs for route ${routeChipLabel(r)}">${routeChipHtml(r)}<span
             class="rt-x" data-x="${i}" title="Remove route">×</span></button>`;
       }).join("");
       wrap.querySelectorAll(".chip-rt").forEach(b => b.onclick = e => {
@@ -18534,6 +18533,19 @@ window.addEventListener("scroll", hidePop, true);
     // pas tassé à gauche.
     function homeRouteSlots() { return HOME_FIELDS.map(homeFieldCode); }
     function routeSlotsFilled(r) { return r.filter(Boolean); }
+    /* Le troisième emplacement est le dégagement : il se lit « destination /
+       dégagement », pas comme une étape de plus. D'où la barre oblique à sa
+       place, le chevron partout ailleurs. */
+    function routeChipParts(r) { return r.map((code, i) => ({ code, alt: i === 2 })).filter(p => p.code); }
+    function routeChipHtml(r) {
+      return routeChipParts(r).map((p, n) =>
+        (n ? `<span class="rt-arrow" aria-hidden="true">${p.alt ? "/" : "›"}</span>` : "")
+        + `<span>${p.code}</span>`).join("");
+    }
+    function routeChipLabel(r) {
+      const parts = routeChipParts(r);
+      return parts.map((p, n) => (n ? (p.alt ? "alternate " : "to ") : "") + p.code).join(" ");
+    }
     function routeKey(r) { return r.join(">"); }
     function findFavRoute(codes) { const k = routeKey(codes); return favRoutes.findIndex(r => routeKey(r) === k); }
     function toggleFavRoute() {
@@ -18568,10 +18580,9 @@ window.addEventListener("scroll", hidePop, true);
       }
       const cur = routeKey(homeRouteSlots());
       wrap.innerHTML = favRoutes.map((r, i) => {
-        const f = routeSlotsFilled(r);
         return `
         <button class="chip-ad chip-rt ${routeKey(r) === cur ? "on" : ""}" data-i="${i}"
-          aria-label="Load route ${f.join(" to ")}">${f.map(c => `<span>${c}</span>`).join(`<span class="rt-arrow" aria-hidden="true">›</span>`)}<span
+          aria-label="Load route ${routeChipLabel(r)}">${routeChipHtml(r)}<span
             class="rt-x" data-x="${i}" title="Remove route">×</span></button>`;
       }).join("");
       wrap.querySelectorAll(".chip-rt").forEach(b => b.onclick = e => {
