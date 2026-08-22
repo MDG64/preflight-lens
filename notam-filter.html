@@ -14971,7 +14971,10 @@ function renderInfo(icao) {
     // Route rendait la nouvelle.
     // Globe du header (1re page) : on centre sur le terrain affiché. Si aucun
     // terrain n'est chargé, on retombe sur le cadrage route (ou monde).
-    $("#stationMapBtn").onclick = () => openMapOverlay(currentIcao || null);
+    // ... et la carte s'ouvre sur la vue de la page d'où l'on vient : depuis
+    // la page NOTAM, le curseur est déjà à droite, c'est la carte des NOTAMs
+    // qui s'affiche.
+    $("#stationMapBtn").onclick = () => openMapOverlay(currentIcao || null, "notam");
     function apMeta(a, st) {
       if (st === "ok") return "✓ NOTAMs saved";
       if (st === "fail") return "✕ failed";
@@ -16475,7 +16478,9 @@ function renderInfo(icao) {
     // assez dézoomé pour situer la route ou le terrain dans son pays, assez
     // près pour lire les codes OACI d'emblée.
     const OPEN_LAT_SPAN = 8;
-    function openMap(focusIcao) {
+    // `mode` : vue d'ouverture du curseur. Par défaut la vue weather, comme
+    // depuis toujours ; la page NOTAM, elle, ouvre directement sa carte.
+    function openMap(focusIcao, mode) {
       if (!BORDERS) return;                          // frontières indispensables pour dessiner le fond
       $("#mapOv").hidden = false;
       // La légende s'ouvre REPLIÉE : la carte se donne d'abord à voir, les
@@ -16521,9 +16526,10 @@ function renderInfo(icao) {
         world = true;
       }
       rebuildSavedSet();          // couleurs vert/rouge à jour à l'ouverture
-      // La carte s'ouvre en vue weather ; la météo de la route arrive en
-      // asynchrone et recolore les points au fil des réponses.
-      setMapMode("wx");
+      // La carte s'ouvre dans la vue demandée par le bouton d'où l'on vient.
+      // En weather, la météo de la route arrive en asynchrone et recolore les
+      // points au fil des réponses.
+      setMapMode(mode === "notam" ? "notam" : "wx");
       // Le vent repart toujours ÉTEINT : la carte s'ouvre sur les couleurs
       // des points, le faisceau ne revient que si on le rallume — le
       // navigateur peut restaurer la case cochée d'une visite passée, on ne
@@ -16534,8 +16540,10 @@ function renderInfo(icao) {
       setMapWindHour(0);
       mapWxTargets = routeOk ? curRoute.airports.map(a => a.icao) : [];
       if (focus && !mapWxTargets.includes(focus.icao)) mapWxTargets.push(focus.icao);
-      mapWxRefresh();
-      mapWxWorldRefresh();
+      // Rien à requêter en vue NOTAM : les couleurs viennent du cache des
+      // NOTAMs, pas du proxy météo. Le curseur basculé sur weather déclenchera
+      // ces mêmes appels.
+      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); }
       // MapLibre disponible : c'est LUI qui cadre, mapView suivra au 1er rendu.
       if (GL.active && GL.map) {
         $("#routeMapGL").classList.add("gl");
@@ -16555,13 +16563,13 @@ function renderInfo(icao) {
     // header (#stationMapBtn) et celui de la page Route (#mapBtn).
     // `focusIcao` : terrain à centrer (globe de la 1re page). Sans lui, on cadre
     // la route entière (globe de la page Route), comportement d'origine.
-    async function openMapOverlay(focusIcao) {
+    async function openMapOverlay(focusIcao, mode) {
       if (!(await ensureMapReady())) return;
       // Tentative de fond vectoriel. En cas d'échec (pas de WebGL2, script ou
       // archive absents hors ligne), GL.active reste faux et openMap() rend
       // exactement la carte d'avant — aucune régression sur ces appareils.
       try { await GL.ready(); } catch (e) { }
-      openMap(typeof focusIcao === "string" ? focusIcao : null);
+      openMap(typeof focusIcao === "string" ? focusIcao : null, mode);
     }
     $("#mapBtn").onclick = () => openMapOverlay();
     $("#mapClose").onclick = () => { $("#mapOv").hidden = true; };
@@ -18398,7 +18406,7 @@ window.addEventListener("scroll", hidePop, true);
         }
       }
       const codes = homeRouteCodes();
-      openMapOverlay(codes.length ? codes[0].icao : null);
+      openMapOverlay(codes.length ? codes[0].icao : null, "wx");
     }
     $("#homeMapCard").onclick = openHomeMap;
 
