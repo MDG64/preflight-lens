@@ -15431,6 +15431,74 @@ function renderInfo(icao) {
       } catch (e) { }
     }
 
+    /* ---- Rattrapage de route, en fond ----------------------------------------
+       Le lot répond désormais depuis l'index du proxy sans attendre l'amont :
+       les cases passent au vert en une requête, mais la copie servie peut dater
+       de plusieurs heures. Le proxy, lui, réinterroge ces terrains derrière,
+       à son rythme (un par seconde, priorité basse). Il reste donc à REPASSER
+       les cueillir — et ça n'a aucune raison d'attendre qu'on rouvre la page
+       Route : le rattrapage tourne tant que l'app est ouverte, quel que soit
+       l'écran affiché.
+       Il ne touche QUE le stockage hors ligne et l'état des cases. Le terrain
+       lu à l'écran suit la règle habituelle : bandeau si le lecteur est engagé,
+       repeinte sinon — jamais de texte qui bouge sous les yeux. */
+    // Un quart d'heure : le proxy ne rafraîchit un terrain qu'au-delà de 30 min
+    // (CACHE_MIN), donc rien à gagner à repasser plus vite — et un lot de 30
+    // terrains est une charge réelle sur un forfait mobile.
+    const ROUTE_CATCHUP_MS = 15 * 60e3;
+    let _catchupTimer = null, _catchupEnCours = false, _catchupAt = 0;
+    function markApCard(icao, st) {
+      const g = $("#apGrid"); if (!g || $("#routeScreen").hidden) return;
+      const card = g.querySelector(`[data-icao="${icao}"]`);
+      if (!card) return;
+      card.classList.remove("ok", "fail", "nodata");
+      if (st) card.classList.add(st);
+      const a = (curRoute && curRoute.airports.find(x => x.icao === icao)) || null;
+      if (a) card.querySelector(".mt").textContent = apMeta(a, st);
+      if (st === "ok") card.onclick = () => { $("#routeScreen").hidden = true; load(icao); };
+    }
+    async function routeCatchUp() {
+      // Un préchargement en cours a la main sur les mêmes terrains : on ne
+      // vient pas lui écrire dessus.
+      if (_catchupEnCours || preloading || !BACKEND_URL) return;
+      if (!navigator.onLine) return;
+      const r0 = activeRoute();
+      const codes = (r0 && Array.isArray(r0.icaos) ? r0.icaos : []).filter(c => /^[A-Z]{4}$/.test(c));
+      if (!codes.length) return;
+      _catchupEnCours = true;
+      try {
+        let lots;
+        try { lots = await fetchNotamsBatch(codes); } catch (e) { return; }
+        const r = activeRoute(); if (!r) return;
+        const st = r.status || {};
+        for (const [icao, frais] of Object.entries(lots)) {
+          if (!Array.isArray(frais)) continue;        // null = pas de donnée, on garde ce qu'on a
+          const avant = loadOffline(icao);
+          const change = !(avant && memeListe(avant.raw, frais));
+          saveOffline(icao, frais);                   // ré-horodate même sans changement
+          if (st[icao] !== "ok") { st[icao] = "ok"; }
+          markApCard(icao, "ok");
+          if (!change || icao !== currentIcao) continue;
+          if (lecteurEngage()) showUpdated(() => renderFromRaw(frais));
+          else renderFromRaw(frais);
+        }
+        r.status = st; store.set(ROUTE_KEY, r);
+        _catchupAt = Date.now();
+      } finally { _catchupEnCours = false; }
+    }
+    function startRouteCatchUp() {
+      if (_catchupTimer) return;
+      _catchupTimer = setInterval(() => { if (!document.hidden) routeCatchUp(); }, ROUTE_CATCHUP_MS);
+    }
+    // Reprise au premier plan : un téléphone rangé une heure a laissé au proxy
+    // tout le temps de rafraîchir la route, autant en profiter à l'ouverture
+    // plutôt qu'au prochain quart d'heure. Anti-rebond d'une minute, comme la
+    // sonde de version.
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && Date.now() - _catchupAt > 60e3) routeCatchUp();
+    });
+    window.addEventListener("online", () => { if (Date.now() - _catchupAt > 60e3) routeCatchUp(); });
+
     /* ============================================================
        7) UI ROUTE — page dédiée + overlay carte
        ============================================================ */
@@ -15684,6 +15752,8 @@ function renderInfo(icao) {
       refreshGo();
       const warn = bilan.failed.length ? ` · <span style="color:var(--red)">${bilan.failed.length} failed: ${bilan.failed.join(" ")}</span>` : "";
       $("#routeStatus").innerHTML = `${curRoute.dep} → ${curRoute.arr}${curRoute.alt ? " → " + curRoute.alt : ""} · <b>${curRoute.distNM} NM</b> · <b>${bilan.ok}/${bilan.total}</b> saved for offline use · route data from <b>${stampHM(bilan.ts)}</b>${warn}`;
+      _catchupAt = Date.now();     // le lot vient de servir : pas de rattrapage dans la foulée
+      startRouteCatchUp();
     }
     $("#routeBtn").onclick = openRoute;
     $("#routeClose").onclick = () => { $("#routeScreen").hidden = true; };
@@ -19914,6 +19984,13 @@ window.addEventListener("scroll", hidePop, true);
       $("#rFrom").value = bootRoute.dep; $("#rTo").value = bootRoute.arr || ""; $("#rAlt").value = bootRoute.alt || "";
     } else if (favs.length) {
       $("#rFrom").value = favs[0];
+    }
+    // Une route déjà enregistrée reprend son rattrapage de fond dès l'ouverture
+    // de l'app : ses terrains se remettent à jour sans qu'on repasse par la
+    // page Route. Trente secondes de calme d'abord — l'accueil s'affiche
+    // d'abord, le réseau ne travaille pas pendant qu'on regarde l'écran.
+    if (bootRoute && Array.isArray(bootRoute.icaos) && bootRoute.icaos.length) {
+      setTimeout(() => { routeCatchUp(); startRouteCatchUp(); }, 30e3);
     }
     openHome();
   </script>
