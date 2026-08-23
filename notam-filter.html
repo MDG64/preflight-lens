@@ -3954,31 +3954,35 @@
         font-size: 14px
       }
 
-      /* Au doigt, la première ligne du bandeau porte le nom de la page et les
-         quatre gestes qui ne quittent pas la lecture : l'accueil, l'autre
-         lecture du terrain (Weather), le jour/nuit et le « ? ». Ils sont poussés
-         contre le bord droit (marge automatique sur le premier), à la place
-         que le pouce leur connaît dans les autres bandeaux. Les trois
-         boutons qui ouvrent une carte ou un plan (Route, FIR, Map) passent en
-         dessous : ce sont des départs, ils méritent leur propre ligne.
-         La boîte d'actions s'efface (`display:contents`) pour que ses boutons
-         deviennent des objets de la ligne de titre : sans cela ils resteraient
-         solidaires dans une seule case et ne pourraient pas se séparer en deux
-         rangées. L'ordre d'affichage est donc écrit ici, et la coupure entre
-         les deux rangées est un objet vide de pleine largeur (::after). */
-      /* La deuxième rangée se centre : ses trois cases sont mises à la même
-         largeur — celle de ROUTE, la plus longue des trois — et forment un
-         bloc régulier sous le titre. Le centrage ne touche pas la première
-         rangée : sa marge automatique y a déjà mangé toute la place libre. */
-      .nt-titlerow {
-        gap: 6px;
-        justify-content: center
+      /* Au doigt, le bandeau se lit sur deux rangées au lieu de trois.
+         La première porte le nom de la page à gauche, puis contre le bord
+         droit les quatre gestes qui ne quittent pas la lecture : l'accueil,
+         l'autre lecture du terrain (Weather), le jour/nuit et le « ? ».
+         La seconde porte la case ICAO à gauche et, contre le bord droit, les
+         trois départs vers une carte ou un plan (Route, FIR, Map), mis à la
+         même largeur pour former un bloc régulier.
+         Pour que des objets de boîtes différentes se rangent sur une même
+         ligne, les deux boîtes intermédiaires s'effacent (`display:contents`) :
+         le titre et la boîte d'actions cessent d'être des cases, et leurs
+         boutons deviennent des objets du bandeau lui-même. L'ordre de lecture
+         est donc écrit ici, la coupure entre les deux rangées est un objet
+         vide de pleine largeur (::after), et chaque rangée est poussée à
+         droite par une marge automatique sur son premier bouton. */
+      .nt-bar {
+        display: flex;
+        row-gap: 8px
       }
 
-      .nt-titlerow #routeBtn,
-      .nt-titlerow #firMapBtn,
-      .nt-titlerow #stationMapBtn {
-        min-width: 58px
+      .nt-titlerow,
+      .nt-titlerow .hdr-actions {
+        display: contents
+      }
+
+      .nt-bar::after {
+        content: "";
+        order: 6;
+        flex: 0 0 100%;
+        height: 0
       }
 
       .nt-titlerow .beacon {
@@ -3988,10 +3992,6 @@
       .nt-titlerow .route-title {
         order: 1;
         margin-right: 4px
-      }
-
-      .nt-titlerow .hdr-actions {
-        display: contents
       }
 
       .nt-titlerow #homeBtn {
@@ -4011,23 +4011,59 @@
         order: 5
       }
 
-      .nt-titlerow::after {
-        content: "";
-        order: 6;
-        flex: 0 0 100%;
-        height: 0
-      }
-
-      .nt-titlerow #routeBtn {
+      .nt-icao-row {
         order: 7
       }
 
+      .nt-titlerow #routeBtn {
+        order: 8;
+        margin-left: auto
+      }
+
       .nt-titlerow #firMapBtn {
-        order: 8
+        order: 9
       }
 
       .nt-titlerow #stationMapBtn {
-        order: 9
+        order: 10
+      }
+
+      .nt-titlerow #routeBtn,
+      .nt-titlerow #firMapBtn,
+      .nt-titlerow #stationMapBtn {
+        min-width: 58px
+      }
+
+      /* La ligne des terrains de route garde la sienne, sous les deux
+         autres. */
+      .nt-bar .wx-route-line {
+        order: 11;
+        flex: 0 0 100%;
+        margin-top: 0
+      }
+
+      /* La case ICAO et sa flèche maigrissent : elles ne sont plus seules sur
+         leur ligne, elles la partagent avec trois boutons. La case garde la
+         place de ses quatre lettres, la flèche reste carrée et haute comme
+         elle. */
+      .nt-icao-row .entry {
+        gap: 6px
+      }
+
+      .nt-icao-row .scratch input {
+        width: 62px;
+        font-size: 14px;
+        padding: 7px 6px 7px 8px
+      }
+
+      .nt-icao-row .wx-go {
+        width: 34px
+      }
+
+      .nt-icao-row .wx-go .pict {
+        width: 16px;
+        height: 16px
+      }
       }
 
       /* Même pastille que le globe : le dessin la suit tout seul, il est
@@ -4760,7 +4796,7 @@ body.light .stat.on {
        la case qui les porte. */
     /* Liseré MARQUÉ autour de la vignette : sur un fond clair, une photo au
        ciel pâle se noyait dans la page et la case perdait son bord. Deux
-       pixels d'acier plutôt qu'un trait de séparation — il doit se voir de
+       pixels de cyan plutôt qu'un trait de séparation — il doit se voir de
        loin, dans les deux thèmes. box-sizing en border-box : le trait se prend
        dans les 128 px, le gabarit des trois images ne bouge pas d'un pixel. */
     .home-card img {
@@ -4768,7 +4804,7 @@ body.light .stat.on {
       aspect-ratio: 1;
       height: auto;
       object-fit: cover;
-      border: 2px solid var(--steel);
+      border: 2px solid var(--cyan);
       box-sizing: border-box;
       border-radius: 14px;
       display: block;
