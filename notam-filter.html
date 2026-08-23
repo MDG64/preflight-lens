@@ -15394,7 +15394,7 @@ function renderInfo(icao) {
       if (st) card.classList.add(st);
       const a = (curRoute && curRoute.airports.find(x => x.icao === icao)) || null;
       if (a) card.querySelector(".mt").textContent = apMeta(a, st);
-      if (st === "ok") card.onclick = () => { $("#routeScreen").hidden = true; load(icao); };
+      if (st === "ok") card.onclick = () => { $("#routeScreen").hidden = true; addToRoute(icao); };
     }
     async function routeCatchUp() {
       // Un préchargement en cours a la main sur les mêmes terrains : on ne
@@ -15569,8 +15569,12 @@ function renderInfo(icao) {
       <div class="suggest" id="addSuggest" hidden></div>
     </div>`;
       g.innerHTML = cards + addCard;
+      /* Un terrain du corridor REJOINT la file du bandeau, comme un favori, un
+         code tapé dans la case ou un terrain touché sur la carte : on vient ici
+         cueillir les terrains du trajet, et les perdre l'un après l'autre
+         obligeait à revenir sur cette page pour chacun d'eux. */
       g.querySelectorAll(".apcard.ok").forEach(b => b.onclick = () => {
-        $("#routeScreen").hidden = true; load(b.dataset.icao);
+        $("#routeScreen").hidden = true; addToRoute(b.dataset.icao);
       });
       wireAddInput();
     }
@@ -15681,7 +15685,7 @@ function renderInfo(icao) {
             if (p.status) card.classList.add(p.status);
             const a = curRoute.airports.find(x => x.icao === p.icao);
             card.querySelector(".mt").textContent = apMeta(a, p.status);
-            if (p.status === "ok") card.onclick = () => { $("#routeScreen").hidden = true; load(p.icao); };
+            if (p.status === "ok") card.onclick = () => { $("#routeScreen").hidden = true; addToRoute(p.icao); };
           }
           $("#routeStatus").innerHTML = `${curRoute.dep} → ${curRoute.arr}${curRoute.alt ? " → " + curRoute.alt : ""} · <b>${curRoute.distNM} NM</b> · downloading NOTAMs ${p.done}/${total}${p.retry ? " (retry)" : ""} — keep the app open`;
         }
