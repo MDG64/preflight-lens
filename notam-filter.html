@@ -4362,15 +4362,16 @@ body.light .stat.on {
       margin-bottom: -18px
     }
 
-    /* Sur l'accueil, le Clear se voit : liseré de 2 px, mais à l'encre de la
-       page — noir en mode jour, clair en mode nuit — au lieu du rouge de la
-       page Route. Il s'annonce par le trait, pas par la couleur. */
+    /* Sur l'accueil, le Clear s'annonce par le trait, pas par la couleur :
+       liseré de 2 px à l'encre de la page — noir en mode jour, clair en mode
+       nuit — au lieu du rouge de la page Route. Mais à demi-encre : posé au-
+       dessus des cases, à pleine intensité il se lisait avant les codes. */
     .clearRouteBtn.home-clear,
     body.light .clearRouteBtn.home-clear {
       padding: 5px 10px;
       font-size: 10px;
-      color: var(--text);
-      border: 2px solid var(--text)
+      color: color-mix(in srgb, var(--text) 72%, transparent);
+      border: 2px solid color-mix(in srgb, var(--text) 45%, transparent)
     }
 
     .clearRouteBtn.home-clear:hover {
@@ -4489,7 +4490,11 @@ body.light .stat.on {
       min-width: 44px;
       padding: 0 10px;
       border-radius: 8px;
-      border: 1px dashed var(--line)
+      /* Liseré à peine posé : la case doit se deviner, pas se disputer la
+         ligne avec les trois codes. Le trait garde la teinte des filets, mais
+         à demi-encre — il ne reprend son plein trait qu'une fois la route
+         retenue (`.route-star.on`, en doré). */
+      border: 1px dashed color-mix(in srgb, var(--line) 55%, transparent)
     }
 
     .route-star:disabled {
