@@ -4933,11 +4933,37 @@ body.light .stat.on {
       flex: none
     }
 
-    /* Les codes et le rafraîchissement partagent la deuxième ligne de
-       l'en-tête : le bouton se pose juste après la dernière case, séparé d'un
-       cran plus large que l'écart entre les cases pour qu'on ne le prenne pas
-       pour l'une d'elles. S'il n'y a pas la place, il passe dessous plutôt
-       que d'écraser les codes. */
+    /* La flèche est le geste de la case : elle envoie le code saisi, elle ne
+       relit rien. Symbole seul, toujours — un mot à côté d'un ICAO ferait lire
+       la ligne comme une phrase. */
+    .wx-go {
+      min-height: 34px;
+      flex: none;
+      font-size: 22px;
+      line-height: 1;
+      width: 44px;
+      padding: 0
+    }
+
+    /* Ancre du menu de propositions : la case elle-même rogne ce qui dépasse
+       (.st-chip a overflow:hidden), le menu se pend donc à ce cadre-ci. */
+    .wx-add-wrap {
+      position: relative;
+      display: flex
+    }
+
+    /* La ligne des codes en noir porte le rafraîchissement au bout : même
+       écart qu'entre deux codes, et il passe dessous plutôt que d'écraser la
+       route s'il n'y a pas la place. */
+    .wx-route-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      margin: 10px 0 0
+    }
+
+    /* La case et sa flèche partagent la deuxième ligne de l'en-tête. */
     .wx-codes-row {
       display: flex;
       align-items: center;
@@ -4963,7 +4989,7 @@ body.light .stat.on {
       align-items: baseline;
       flex-wrap: wrap;
       gap: 6px 18px;
-      margin: 10px 0 0
+      margin: 0
     }
 
     .wx-route-list[hidden] {
@@ -5794,22 +5820,34 @@ body .stat .k{
             <button class="help-btn" id="wxHelpBtn" aria-label="Information" title="Information">?</button>
           </div>
         </div>
-        <!-- Le rafraîchissement suit les codes au lieu de rejoindre les
-             pastilles : c'est sur ces relevés-là qu'il agit, et la main le
-             trouve au bout de la route qu'elle vient de lire. -->
         <!-- Une seule case, et toujours vide : elle AJOUTE un terrain aux
-             relevés déjà à l'écran, elle n'en remplace aucun. Les terrains
-             saisis sur la première page se lisent en dessous, à la couleur du
-             texte — un appui descend à leur relevé. -->
+             relevés déjà à l'écran, elle n'en remplace aucun. Dès la deuxième
+             lettre, les mêmes propositions que la première page. La flèche —
+             ou Entrée — pose le relevé EN TÊTE, au-dessus de ceux qui sont
+             déjà là : c'est celui qu'on vient de demander, il se lit sans
+             descendre. -->
         <div class="wx-codes-row">
-          <span class="st-chip plain wx-add"><input class="v" id="wxAdd" maxlength="4" size="4"
-              placeholder="ICAO" autocomplete="off" spellcheck="false"
-              title="Add an aerodrome — type its ICAO code and press Enter"
-              aria-label="Add an aerodrome — type its ICAO code and press Enter"></span>
+          <div class="wx-add-wrap">
+            <span class="st-chip plain wx-add"><input class="v" id="wxAdd" maxlength="4" size="4"
+                placeholder="ICAO" autocomplete="off" spellcheck="false"
+                title="Add an aerodrome — type its ICAO code, then press Enter or the arrow"
+                aria-label="Add an aerodrome — type its ICAO code, then press Enter or the arrow"></span>
+            <!-- Le menu vit HORS de la case : .st-chip rogne ce qui dépasse. -->
+            <div class="suggest" id="wxAddSuggest" hidden></div>
+          </div>
+          <button class="btn wx-go" id="wxGo" title="Add this aerodrome on top"
+              aria-label="Add this aerodrome on top">→</button>
+        </div>
+        <!-- Les terrains saisis sur la première page se lisent en dessous, à
+             la couleur du texte — un appui descend à leur relevé. Le
+             rafraîchissement les a rejoints : c'est sur ces relevés-là qu'il
+             agit, et la main le trouve au bout de la route qu'elle vient de
+             lire. -->
+        <div class="wx-route-line">
+          <div class="wx-route-list" id="wxCodes" hidden></div>
           <button class="btn wx-refresh" id="wxRefresh" title="Refresh" aria-label="Refresh">↻<span
               class="wx-refresh-lbl"> Refresh</span></button>
         </div>
-        <div class="wx-route-list" id="wxCodes" hidden></div>
       </div>
       <div class="wx-status" id="wxStatus"></div>
       <div id="wxBody"></div>
@@ -19097,18 +19135,43 @@ window.addEventListener("scroll", hidePop, true);
       const sec = wxSection(icao);
       if (sec && wxList.length > 1) sec.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-    /* La case d'ajout. Quatre lettres et Entrée posent une section de plus au
-       bas de l'écran, sans toucher à celles déjà là : la route reste entière
-       et le terrain qu'on vient d'avoir en tête la rejoint. Un code incomplet
-       ne vaut pas une requête ; un code déjà à l'écran non plus — il descend
-       simplement à son relevé. La case se vide après coup, prête pour le
-       suivant. */
-    function wxAddStation() {
-      const inp = $("#wxAdd"), v = inp.value.trim().toUpperCase();
+    /* La case d'ajout. Entrée, la flèche ou le choix d'une proposition posent
+       une section de plus EN TÊTE de l'écran, sans toucher à celles déjà là :
+       la route reste entière, et le terrain qu'on vient de demander se lit
+       tout de suite, sans dérouler ce qui le précédait. Un code IATA tapé tel
+       quel se traduit ; un code incomplet ne vaut pas une requête ; un code
+       déjà à l'écran non plus — il descend simplement à son relevé. La case se
+       vide après coup, prête pour le suivant. */
+    function wxAddStation(code) {
+      const inp = $("#wxAdd");
+      let v = String(code != null ? code : inp.value).trim().toUpperCase();
+      if (v.length === 3 && IATA_TO_ICAO[v]) v = IATA_TO_ICAO[v];
       if (!/^[A-Z]{4}$/.test(v)) return;
       inp.value = "";
+      hideWxSuggest();
       if (wxList.some(a => a.icao === v)) { wxJumpTo(v); return; }
-      openWx(wxList.concat([{ icao: v }]));
+      openWx([{ icao: v }].concat(wxList));
+    }
+    /* Les propositions de la case météo : la liste de la première page, mot
+       pour mot (suggestCodes, dès deux lettres), pour qu'un code se cherche
+       partout de la même façon. Le mousedown précède le blur et le neutralise
+       — le clic ne se perd pas dans la fermeture du menu. */
+    function hideWxSuggest() {
+      const box = $("#wxAddSuggest"); if (box) { box.hidden = true; box.innerHTML = ""; }
+    }
+    function renderWxSuggest(q) {
+      const box = $("#wxAddSuggest"); if (!box) return;
+      const matches = suggestCodes(q);
+      if (!matches.length) { hideWxSuggest(); return; }
+      box.innerHTML = matches.map(c => {
+        const m = AIRPORTS[c];
+        const star = favs.includes(c) ? `<span class="sg-star">★</span>` : "";
+        const iata = m.iata ? `<span class="sg-iata">${m.iata}</span>` : "";
+        return `<button class="sg-row" data-code="${c}">
+      <span class="sg-code">${c}</span>${iata}<span class="sg-city">${m.city} · ${m.cc}</span>${star}</button>`;
+      }).join("");
+      box.hidden = false;
+      box.querySelectorAll(".sg-row").forEach(r => r.onmousedown = e => { e.preventDefault(); wxAddStation(r.dataset.code); });
     }
     // Les âges vivent à l'écran : re-rendus seuls, toutes les 30 s, sans réseau.
     function renderWxAges() {
@@ -19247,14 +19310,21 @@ window.addEventListener("scroll", hidePop, true);
       // Après les sections : chaque code cherche la sienne au clic.
       renderWxCodes(list);
       $("#wxAdd").value = "";
+      hideWxSuggest();
       if (!wxTicker) wxTicker = setInterval(renderWxAges, 30000);
       await refreshWx();
     }
     $("#wxRefresh").onclick = () => refreshWx();
-    $("#wxAdd").oninput = e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ""); };
+    $("#wxGo").onclick = () => wxAddStation();
+    $("#wxAdd").oninput = e => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
+      renderWxSuggest(e.target.value);
+    };
+    $("#wxAdd").onfocus = e => renderWxSuggest(e.target.value);
+    $("#wxAdd").onblur = () => setTimeout(hideWxSuggest, 150);
     $("#wxAdd").onkeydown = e => {
       if (e.key === "Enter") { e.preventDefault(); wxAddStation(); }
-      else if (e.key === "Escape") { e.target.value = ""; e.target.blur(); }
+      else if (e.key === "Escape") { e.target.value = ""; hideWxSuggest(); e.target.blur(); }
     };
     // Retour à la première page. L'accueil vit DERRIÈRE la page météo (z 50
     // contre 52), donc la masquer suffirait à le redécouvrir — on appelle
