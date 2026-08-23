@@ -17493,16 +17493,23 @@ function renderInfo(icao) {
          s'ouvre par-dessus lui (z 60 > 50), et le seul fait de la cacher
          rendait l'accueil à l'écran pendant que la page chargée restait
          derrière, invisible : on cliquait un terrain et on retombait sur la
-         page d'accueil. Le terrain reprend au passage le contexte de route de
-         l'accueil quand il en fait partie, pour retrouver les mêmes onglets
-         DEP/DEST/ALT qu'en passant par la carte NOTAM. */
+         page d'accueil.
+
+         Le terrain touché REJOINT la file du bandeau au lieu de la remplacer,
+         comme un favori ou un code tapé dans la case : on ouvre la carte pour
+         aller chercher un terrain de plus, pas pour perdre ceux qu'on lisait.
+         Quand la file est vide, elle reprend d'abord la route de l'accueil si
+         le terrain en fait partie — c'est ce qui donnait à la carte son ordre
+         DEP -> DEST -> ALT. */
       function openNotamPage(icao) {
-        const codes = homeRouteCodes();
-        notamRoute = codes.length > 1 && codes.some(c => c.icao === icao) ? codes : [];
+        if (!notamRoute.length) {
+          const codes = homeRouteCodes();
+          if (codes.length > 1 && codes.some(c => c.icao === icao)) notamRoute = codes;
+        }
         closeHome();
         $("#mapOv").hidden = true;
         $("#routeScreen").hidden = true;
-        load(icao);
+        addToRoute(icao);
       }
       // Action d'un clic à des coordonnées écran (px device) : inchangée, mais
       // extraite pour être partagée entre le canvas (chemin d'origine) et le
