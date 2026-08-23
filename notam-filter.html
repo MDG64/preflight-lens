@@ -3956,9 +3956,9 @@
 
       /* Au doigt, la première ligne du bandeau porte le nom de la page et les
          quatre gestes qui ne quittent pas la lecture : l'accueil, l'autre
-         lecture du terrain (Weather), le jour/nuit et le « ? ». Ils se rangent
-         à gauche, contre le mot NOTAM — le pouce les trouve là où l'oeil vient
-         de lire, au lieu d'aller les chercher au bord opposé. Les trois
+         lecture du terrain (Weather), le jour/nuit et le « ? ». Ils sont poussés
+         contre le bord droit (marge automatique sur le premier), à la place
+         que le pouce leur connaît dans les autres bandeaux. Les trois
          boutons qui ouvrent une carte ou un plan (Route, FIR, Map) passent en
          dessous : ce sont des départs, ils méritent leur propre ligne.
          La boîte d'actions s'efface (`display:contents`) pour que ses boutons
@@ -3984,7 +3984,8 @@
       }
 
       .nt-titlerow #homeBtn {
-        order: 2
+        order: 2;
+        margin-left: auto
       }
 
       .nt-titlerow #wxPageBtn {
