@@ -16941,7 +16941,7 @@ function renderInfo(icao) {
       }
       if (!aChercher.length) return;
       // UN appel pour toute la route (/api/wx?ids=…) : la carte s'ouvre et se
-      // rafraîchit souvent, et elle partage le seau de 60/min avec la page
+      // rafraîchit souvent, et elle partage le seau météo du proxy avec la page
       // Weather. Hors ligne : la copie semée reste, le point dit ce qu'on sait.
       let stations = {};
       try { stations = await wxFetchGroup(aChercher); } catch (e) { return; }
@@ -19149,13 +19149,15 @@ window.addEventListener("scroll", hidePop, true);
     function wxStore(icao, d) { try { localStorage.setItem(WX_STORE_PREFIX + icao, JSON.stringify(d)); } catch (e) { } }
     function wxLoad(icao) { try { const s = localStorage.getItem(WX_STORE_PREFIX + icao); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
     /* Toute une liste de terrains en UN appel : /api/wx?ids=…
-       Le proxy limite à 60 requêtes par minute et par IP, et TOUTES ses routes
-       partagent ce seau. Une page Weather à cinq terrains le mordait à cinq
-       jetons (dix avec les pictogrammes du jour) ; deux ou trois
-       rafraîchissements suffisaient à le vider, et les PREMIÈRES requêtes du
-       paquet suivant repartaient en 429 pendant que les dernières passaient —
-       d'où des terrains qui semblaient muets alors que l'AWC répondait très
-       bien. Le refus venait de chez nous. Un lot = un jeton.
+       Le proxy limite le nombre de requêtes par minute et par IP. La météo a
+       désormais son propre seau, plus large que celui des NOTAM (qui sont
+       chers et contraints en amont), mais elle se consomme par écran : une
+       page Weather à cinq terrains mordait à cinq jetons, dix avec les
+       pictogrammes du jour. Quand les deux flux buvaient au même seau, deux ou
+       trois rafraîchissements suffisaient à le vider, et les PREMIÈRES
+       requêtes du paquet suivant repartaient en 429 pendant que les dernières
+       passaient — d'où des terrains qui semblaient muets alors que l'AWC
+       répondait très bien. Le refus venait de chez nous. Un lot = un jeton.
        Le lot est découpé à la borne du proxy ; en pratique une route ou une
        liste de favoris tient largement dans un seul. */
     const WX_BATCH_MAX = 40;
@@ -19860,7 +19862,7 @@ window.addEventListener("scroll", hidePop, true);
       const my = ++favWxToken;
       el.innerHTML = `<div class="favwx-none">Requesting ${list.length} station${list.length > 1 ? "s" : ""}…</div>`;
       /* UN appel pour toute la liste (/api/wx?ids=…) : le volet des favoris
-         partage le seau de 60/min avec la page Weather et la carte, et il
+         partage le seau météo du proxy avec la page Weather et la carte, et il
          s'ouvre souvent — une requête par terrain le vidait pour les écrans
          suivants. L'échec d'une station retombe sur sa copie locale, comme la
          page Weather. */
