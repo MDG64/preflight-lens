@@ -17115,17 +17115,96 @@ function renderInfo(icao) {
        réseau ni le proxy. L'échec se retient aussi, cinq minutes : un
        Refresh insistant ne doit pas rejouer la requête qui vient d'échouer. */
     const dwxCache = new Map();
+    function dwxFresh(hit) {
+      /* Une copie de secours ne vaut pas une copie fraîche : on la garde cinq
+         minutes seulement, comme un échec — le temps que la connexion revienne
+         sans qu'un Refresh insistant rejoue la requête qui vient d'échouer. */
+      return hit && Date.now() - hit.at < (hit.data && !hit.saved ? 15 : 5) * 60e3;
+    }
+    /* Copie gardée en localStorage, comme les relevés (wxStore/wxLoad) : hors
+       ligne, la bande ne doit pas disparaître — elle décrit la journée, pas la
+       minute, et une journée se lit encore quand le réseau est parti. Un seul
+       objet, les douze derniers terrains, chacun daté ; quand la requête
+       échoue, la copie reprend la place, rognée de ses échéances passées et
+       marquée « saved ». */
+    const DWX_STORE_KEY = "notam_daywx";
+    const DWX_STORE_MAX = 12;           // terrains gardés
+    const DWX_STORE_TTL = 24 * 3600e3;  /* au-delà, la copie vient d'un modèle
+       vieux d'un jour, rejoué plusieurs fois depuis : ses cases restent à
+       venir, mais ce n'est plus une prévision, c'est un souvenir. */
+    const DWX_GRACE = 30 * 60e3;        // même retard toléré que le proxy
+    function dwxStoreRead() {
+      try {
+        const o = JSON.parse(localStorage.getItem(DWX_STORE_KEY) || "{}");
+        return o && typeof o === "object" ? o : {};
+      } catch (e) { return {}; }
+    }
+    function dwxStoreWrite(icao, data) {
+      try {
+        const o = dwxStoreRead();
+        o[icao] = { at: Date.now(), data };
+        /* Bornage par la date : le stockage n'a pas à garder la trace de tous
+           les terrains jamais consultés. */
+        const keys = Object.keys(o).sort((a, b) => (o[b].at || 0) - (o[a].at || 0));
+        for (const k of keys.slice(DWX_STORE_MAX)) delete o[k];
+        localStorage.setItem(DWX_STORE_KEY, JSON.stringify(o));
+      } catch (e) { }
+    }
+    /* Remonter une copie du stockage, et surtout la remettre à l'heure. Les
+       cases ne portent pas d'instant, seulement leur heure UTC `z` : rejouées
+       dans l'ordre depuis la capture, chacune ne peut tomber qu'à un seul
+       endroit du temps. On jette alors les cases passées — une bande de
+       secours ne doit pas promettre un après-midi déjà vécu — et on recalcule
+       les marques `+1` sur l'instant retrouvé : la copie parle toujours des
+       mêmes échéances, mais « demain » se dit depuis aujourd'hui. */
+    function dwxRevive(hit) {
+      const d = hit && hit.data;
+      const at = Number(hit && hit.at) || 0;
+      if (!d || !Array.isArray(d.slots) || !at) return null;
+      const now = Date.now();
+      if (now - at > DWX_STORE_TTL) return null;
+      let t = at - DWX_GRACE;
+      const keep = [];
+      for (const s of d.slots) {
+        const z = s ? Number(s.z) : NaN;
+        if (!Number.isFinite(z)) continue;      // case vide : rien à replacer
+        const u = new Date(t);
+        let when = Date.UTC(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), z);
+        while (when < t) when += 86400e3;
+        t = when;
+        if (when >= now - DWX_GRACE) keep.push({ s, when });
+      }
+      if (!keep.length) return null;
+      /* Décalage local du terrain, lu sur une case : `h` moins `z`. La case a
+         pu être prise à une heure de sa cible, l'écart vaut donc à l'heure
+         près — assez pour compter les minuits, qui sont à des heures de nos
+         échéances. */
+      const ref = (keep.find(k => k.s.h != null) || {}).s
+        || d.slots.find(s => s && s.h != null);
+      const off = ref ? ((Number(ref.h) - Number(ref.z) + 12) % 24 + 24) % 24 - 12 : 0;
+      const civilDay = ms => Math.floor((ms + off * 3600e3) / 86400e3);
+      const today = civilDay(now);
+      const slots = keep.map(k => Object.assign({}, k.s, { d: civilDay(k.when) - today }));
+      return Object.assign({}, d, {
+        slots, tomorrow: slots.every(s => s.d === 1), savedAt: at });
+    }
     async function fetchDayWx(icao) {
       const hit = dwxCache.get(icao);
-      if (hit && Date.now() - hit.at < (hit.data ? 15 : 5) * 60e3) return hit.data;
+      if (dwxFresh(hit)) return hit.data;
       try {
         const r = await fetch(`${BACKEND_URL}/api/daywx/${encodeURIComponent(icao)}`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
         dwxCache.set(icao, { at: Date.now(), data });
+        dwxStoreWrite(icao, data);
         return data;
       } catch (e) {
-        dwxCache.set(icao, { at: Date.now(), data: null });
+        /* Le réseau a manqué : la copie locale prend le relais, et ne devient
+           une absence que lorsqu'il n'y en a pas — ou qu'elle ne parle plus
+           que du passé. */
+        const saved = dwxRevive(dwxStoreRead()[icao]);
+        dwxCache.set(icao, { at: Date.now(), data: saved, saved: true });
+        if (saved) return saved;
         throw e;
       }
     }
@@ -17151,7 +17230,11 @@ function renderInfo(icao) {
       }).join("");
       /* Aucune ligne de source sous la bande : le crédit MET Norway et le
          rappel « pas un produit aéro » vivent dans Data sources, page « ? ». */
-      return `<h3>Day weather${d.tomorrow ? " — tomorrow" : ""}${local ? " · local time" : ""}</h3>`
+      /* Une bande remontée du stockage le dit : les cases restent à venir,
+         mais le modèle qui les a dessinées a l'âge annoncé. */
+      const sv = d.savedAt ? wxAge(new Date(d.savedAt).toISOString()) : null;
+      return `<h3>Day weather${d.tomorrow ? " — tomorrow" : ""}${local ? " · local time" : ""}`
+        + `${sv ? " · saved copy · " + sv.txt : ""}</h3>`
         + `<div class="dwx">${cells}</div>`;
     }
     async function openMapWxSide(icao) {
