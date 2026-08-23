@@ -3954,9 +3954,69 @@
         font-size: 14px
       }
 
-      /* Le bandeau empile désormais ses trois lignes de lui-même (voir
-         .nt-bar) : plus rien à réordonner au doigt, la boîte des actions garde
-         donc sa forme et se colle simplement au bord droit du titre. */
+      /* Au doigt, la première ligne du bandeau porte le nom de la page et les
+         quatre gestes qui ne quittent pas la lecture : l'accueil, l'autre
+         lecture du terrain (Weather), le jour/nuit et le « ? ». Ils se rangent
+         à gauche, contre le mot NOTAM — le pouce les trouve là où l'oeil vient
+         de lire, au lieu d'aller les chercher au bord opposé. Les trois
+         boutons qui ouvrent une carte ou un plan (Route, FIR, Map) passent en
+         dessous : ce sont des départs, ils méritent leur propre ligne.
+         La boîte d'actions s'efface (`display:contents`) pour que ses boutons
+         deviennent des objets de la ligne de titre : sans cela ils resteraient
+         solidaires dans une seule case et ne pourraient pas se séparer en deux
+         rangées. L'ordre d'affichage est donc écrit ici, et la coupure entre
+         les deux rangées est un objet vide de pleine largeur (::after). */
+      .nt-titlerow {
+        gap: 6px
+      }
+
+      .nt-titlerow .beacon {
+        order: 0
+      }
+
+      .nt-titlerow .route-title {
+        order: 1;
+        margin-right: 4px
+      }
+
+      .nt-titlerow .hdr-actions {
+        display: contents
+      }
+
+      .nt-titlerow #homeBtn {
+        order: 2
+      }
+
+      .nt-titlerow #wxPageBtn {
+        order: 3
+      }
+
+      .nt-titlerow #themeBtn {
+        order: 4
+      }
+
+      .nt-titlerow #helpBtn {
+        order: 5
+      }
+
+      .nt-titlerow::after {
+        content: "";
+        order: 6;
+        flex: 0 0 100%;
+        height: 0
+      }
+
+      .nt-titlerow #routeBtn {
+        order: 7
+      }
+
+      .nt-titlerow #firMapBtn {
+        order: 8
+      }
+
+      .nt-titlerow #stationMapBtn {
+        order: 9
+      }
 
       /* Même pastille que le globe : le dessin la suit tout seul, il est
          mesuré en pourcentage de son rond. */
