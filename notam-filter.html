@@ -4747,11 +4747,17 @@ body.light .stat.on {
        pictogramme Weather est carré par nature, les deux photos s'alignent
        sur lui — trois images de meme gabarit, quelle que soit la largeur de
        la case qui les porte. */
+    /* Liseré fin autour de la vignette : sur un fond clair, une photo au ciel
+       pâle se noyait dans la page et la case perdait son bord. box-sizing en
+       border-box — le trait se prend dans les 128 px, le gabarit des trois
+       images ne bouge pas d'un pixel. */
     .home-card img {
       width: min(128px, 100%);
       aspect-ratio: 1;
       height: auto;
       object-fit: cover;
+      border: 1px solid var(--line2);
+      box-sizing: border-box;
       border-radius: 14px;
       display: block;
       background: none
