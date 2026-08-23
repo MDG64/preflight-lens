@@ -14474,7 +14474,7 @@ E) ${e}`;
         // des favoris et rien d'autre — surtout pas charger ses NOTAMs au passage.
         const x = e.target.dataset.x;
         if (x !== undefined) { toggleFavCode(x); return; }
-        load(b.dataset.code);
+        addToRoute(b.dataset.code);
       });
     }
     /* ---- puces de route sur la page NOTAM ----
@@ -19013,7 +19013,7 @@ window.addEventListener("scroll", hidePop, true);
         // ligne vide qui ne dit plus rien, et le ⌂ est déjà là pour partir.
         const x = notamRoute.length > 1
           ? `<span class="wx-x" data-x="${a.icao}" title="Remove ${a.icao} from this screen">×</span>` : "";
-        return `<button type="button" class="wx-jump ${a.role}${on ? " on" : ""}" data-code="${a.icao}"
+        return `<button type="button" class="wx-jump ${a.role || ""}${on ? " on" : ""}" data-code="${a.icao}"
       title="${m ? m.city : ""}" aria-label="Show NOTAMs for ${a.icao}"
       ><span class="v">${a.icao}</span>${x}</button>`;
       }).join("");
@@ -19035,6 +19035,32 @@ window.addEventListener("scroll", hidePop, true);
       notamRoute = notamRoute.filter(a => a.icao !== icao);
       if (icao === currentIcao) load(notamRoute[0].icao);
       else renderStRoute();
+    }
+    /* Un terrain touché dans les favoris REJOINT la file au lieu de la
+       remplacer : il s'affiche, et son code s'ajoute à la ligne du bandeau
+       juste au-dessus — d'où on le retrouve d'un appui, et d'où sa croix le
+       retire. Même geste qu'à la page Weather, où la case d'ajout pose un
+       relevé de plus sans toucher à ceux déjà là.
+
+       Il entre EN QUEUE, pas en tête : les premiers codes sont ceux de la
+       route, dans l'ordre DEP -> DEST -> ALT, et cet ordre est tout ce qui les
+       nomme depuis que les étiquettes sont parties. Un favori posé devant
+       ferait passer une escale pour le départ.
+
+       La file ne se montre qu'à partir de deux codes : quand elle est vide, le
+       terrain déjà à l'écran y entre le premier, sinon l'ajout resterait
+       invisible. Un terrain qui y est déjà ne s'y met pas deux fois — on
+       l'affiche, c'est tout. */
+    function addToRoute(icao) {
+      const v = (icao || "").toUpperCase().trim();
+      if (!/^[A-Z]{4}$/.test(v)) return;
+      if (!notamRoute.some(a => a.icao === v)) {
+        const role = c => (homeRouteCodes().find(x => x.icao === c) || {}).role;
+        if (!notamRoute.length && currentIcao && currentIcao !== v)
+          notamRoute = [{ icao: currentIcao, role: role(currentIcao) }];
+        notamRoute = notamRoute.concat([{ icao: v, role: role(v) }]);
+      }
+      load(v);
     }
     $("#homeNotamCard").onclick = () => {
       const codes = homeRouteCodes();
