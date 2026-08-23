@@ -5576,13 +5576,9 @@ body .stat .k{
       </div>
       <!-- Les terrains de la route se lisent en dessous, à la couleur du texte
            — un appui ouvre les NOTAM de celui qu'on touche, celui qui est à
-           l'écran se lit souligné. Le rafraîchissement les a rejoints : il
-           redemande au réseau les NOTAM du terrain affiché, et la main le
-           trouve au bout de la route qu'elle vient de lire. -->
+           l'écran se lit souligné. -->
       <div class="wx-route-line">
         <div class="wx-route-list" id="stRoute" hidden></div>
-        <button class="btn wx-refresh" id="ntRefresh" title="Refresh" aria-label="Refresh">↻<span
-            class="wx-refresh-lbl"> Refresh</span></button>
       </div>
     </div>
   </header>
@@ -19042,34 +19038,6 @@ window.addEventListener("scroll", hidePop, true);
       if (icao === currentIcao) load(notamRoute[0].icao);
       else renderStRoute();
     }
-    /* Le rafraîchissement de la ligne de route : il redemande au réseau les
-       NOTAM du terrain AFFICHÉ et repeint sans passer par le bandeau « Newer
-       NOTAMs received » — on vient de le demander à la main, l'écran doit
-       suivre tout de suite. Un échec laisse la lecture en place : la copie à
-       l'écran vaut toujours mieux qu'une page vide. */
-    let ntRefreshing = false;
-    async function refreshNotams() {
-      if (!currentIcao || ntRefreshing) return;
-      const btn = $("#ntRefresh");
-      ntRefreshing = true;
-      if (btn) btn.disabled = true;
-      const my = ++loadToken;
-      try {
-        const frais = await fetchNotams(currentIcao);
-        if (my !== loadToken) return;
-        setBeacon(true);
-        hideOffline(); hideUpdated();
-        if (frais === null) { current = []; renderEmpty(currentIcao); return; }
-        saveOffline(currentIcao, frais);
-        renderFromRaw(frais);
-      } catch (e) {
-        setBeacon(false);
-      } finally {
-        ntRefreshing = false;
-        if (btn) btn.disabled = false;
-      }
-    }
-    $("#ntRefresh").onclick = () => refreshNotams();
     $("#homeNotamCard").onclick = () => {
       const codes = homeRouteCodes();
       if (!codes.length) { needHomeIcao(); return; }
