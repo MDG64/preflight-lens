@@ -14702,7 +14702,7 @@ function renderInfo(icao) {
       <span class="sg-code">${c}</span>${iata}<span class="sg-city">${m.city} · ${m.cc}</span>${star}</button>`;
       }).join("");
       box.hidden = false;
-      box.querySelectorAll(".sg-row").forEach(r => r.onmousedown = e => { e.preventDefault(); load(r.dataset.code); });
+      box.querySelectorAll(".sg-row").forEach(r => r.onmousedown = e => { e.preventDefault(); addToRoute(r.dataset.code); });
     }
 
     function buildSeg() {
@@ -14985,9 +14985,14 @@ function renderInfo(icao) {
     /* La flèche est le geste de la case : elle envoie le code saisi, comme
        Entrée. Elle se montre au lieu de se dire — la main la trouve où elle
        vient d'écrire, sans chercher la touche. */
-    $("#icaoGo").onclick = () => { $("#suggest").hidden = true; load($("#icao").value); };
+    /* La flèche, Entrée et les propositions AJOUTENT le terrain à la file du
+       bandeau au lieu de la remplacer — même geste qu'une puce de favori, et
+       même geste que la case d'ajout de la page Weather. La case reste ce
+       qu'elle a toujours été : on y demande un terrain de plus, et celui qu'on
+       lisait reste à portée d'un appui juste au-dessus. */
+    $("#icaoGo").onclick = () => { $("#suggest").hidden = true; addToRoute($("#icao").value); };
     $("#icao").addEventListener("keydown", e => {
-      if (e.key === "Enter") { $("#suggest").hidden = true; load($("#icao").value); }
+      if (e.key === "Enter") { $("#suggest").hidden = true; addToRoute($("#icao").value); }
       else if (e.key === "Escape") { $("#suggest").hidden = true; }
     });
     $("#star").onclick = toggleFav;
@@ -19052,7 +19057,11 @@ window.addEventListener("scroll", hidePop, true);
        invisible. Un terrain qui y est déjà ne s'y met pas deux fois — on
        l'affiche, c'est tout. */
     function addToRoute(icao) {
-      const v = (icao || "").toUpperCase().trim();
+      let v = (icao || "").toUpperCase().trim();
+      // Code IATA tapé tel quel dans la case : on le traduit AVANT de ranger
+      // le terrain dans la file, sinon « ORY » y entrerait à côté du « LFPO »
+      // que load() finirait par afficher.
+      if (v.length === 3 && IATA_TO_ICAO[v]) v = IATA_TO_ICAO[v];
       if (!/^[A-Z]{4}$/.test(v)) return;
       if (!notamRoute.some(a => a.icao === v)) {
         const role = c => (homeRouteCodes().find(x => x.icao === c) || {}).role;
