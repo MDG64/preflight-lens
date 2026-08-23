@@ -4011,50 +4011,55 @@
         margin-right: auto
       }
 
-      #firMapBtn {
+      /* Weather garde sa place de la version large : juste à gauche de FIR. */
+      #wxPageBtn {
         order: 2
+      }
+
+      #firMapBtn {
+        order: 3
       }
 
       /* MAP garde sa place de la version large : juste à droite de FIR. */
       #stationMapBtn {
-        order: 3
-      }
-
-      #themeBtn {
         order: 4
       }
 
-      #helpBtn {
+      #themeBtn {
         order: 5
+      }
+
+      #helpBtn {
+        order: 6
       }
 
       /* La cale : hauteur nulle, largeur pleine — elle ne se voit pas, elle
          coupe seulement la ligne. */
       .bar::after {
         content: "";
-        order: 6;
+        order: 7;
         flex: 0 0 100%;
         height: 0
       }
 
       .bar > .beacon {
-        order: 7
-      }
-
-      #stRoutePre {
         order: 8
       }
 
-      .entry {
+      #stRoutePre {
         order: 9
       }
 
-      #stRoute {
+      .entry {
         order: 10
       }
 
-      #routeBtn {
+      #stRoute {
         order: 11
+      }
+
+      #routeBtn {
+        order: 12
       }
 
       /* Même pastille que le globe : le dessin la suit tout seul, il est
@@ -5600,6 +5605,10 @@ body .stat .k{
       </div>
       <div class="st-route" id="stRoute" hidden></div>
       <button class="routebtn" id="routeBtn">Route</button>
+      <!-- Weather se pose à gauche de FIR : les deux lectures d'un même
+           terrain — ce qui est publié, ce qu'il fait — se touchent du même
+           pouce, sans repasser par l'accueil. -->
+      <button class="routebtn" id="wxPageBtn" aria-label="Weather — METAR and TAF" title="Weather — METAR and TAF">Weather</button>
       <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
       <button class="routebtn" id="stationMapBtn" aria-label="Show route map" title="Show route map">MAP</button>
       <div class="hdr-actions">
@@ -5862,6 +5871,9 @@ body .stat .k{
           <span class="wx-name" id="wxName"></span>
           <div class="hdr-actions">
             <button class="help-btn wx-home" id="wxHome" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
+            <!-- NOTAM entre la maison et MAP : depuis un relevé, la liste des
+                 NOTAM des MÊMES terrains, sans repasser par l'accueil. -->
+            <button class="help-btn mapword" id="wxNotamBtn" aria-label="NOTAM of the aerodromes shown" title="NOTAM">NOTAM</button>
             <button class="help-btn mapword" id="wxMapBtn" aria-label="Show map" title="Map">MAP</button>
             <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
             <button class="help-btn" id="wxHelpBtn" aria-label="Information" title="Information">?</button>
@@ -6102,6 +6114,12 @@ body .stat .k{
           <div class="hd-vis"><span class="hd-chip">Route</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Open the <b>Route</b> page — see below.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-chip">Weather</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Open the <b>Weather</b> page — METAR and TAF of the aerodrome shown, or of the whole
+            route when one is loaded.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-chip">FIR</span></div>
@@ -15526,6 +15544,16 @@ function renderInfo(icao) {
     // la page NOTAM, le curseur est déjà à droite, c'est la carte des NOTAMs
     // qui s'affiche.
     $("#stationMapBtn").onclick = () => openMapOverlay(currentIcao || null, "notam");
+    /* Weather : le même contexte, l'autre lecture. Une route en cours donne ses
+       terrains à la page météo — DEP, DEST, ALT alignés ; sinon c'est le
+       terrain affiché, seul, et sa mise en page large. Rien à l'écran, rien à
+       ouvrir : la page météo ne s'ouvre pas à vide. */
+    $("#wxPageBtn").onclick = () => {
+      const list = notamRoute.length ? notamRoute.slice()
+                 : (currentIcao ? [{ icao: currentIcao }] : []);
+      if (!list.length) return;
+      openWx(list);
+    };
     function apMeta(a, st) {
       if (st === "ok") return "✓ NOTAMs saved";
       if (st === "fail") return "✕ failed";
@@ -19594,13 +19622,30 @@ window.addEventListener("scroll", hidePop, true);
     // contre 52), donc la masquer suffirait à le redécouvrir — on appelle
     // quand même openHome() : il rafraîchit favoris, étoiles et miroir de
     // route, et il ramène l'accueil même si on est arrivé ici autrement.
-    function closeWx() {
+    function wxTeardown() {
       $("#wxScreen").hidden = true;
       wxToken++;                                 // coupe les requêtes en cours
       if (wxTicker) { clearInterval(wxTicker); wxTicker = null; }
+    }
+    function closeWx() {
+      wxTeardown();
       openHome();
     }
     $("#wxHome").onclick = closeWx;
+    /* NOTAM : les MÊMES terrains, l'autre lecture — et sans détour par
+       l'accueil, qui vit derrière la page météo et resurgirait au premier
+       masquage. On le referme donc explicitement. Une route garde ses onglets
+       DEP/DEST/ALT et part en un seul lot, comme depuis la case NOTAM de
+       l'accueil ; un terrain seul part seul. */
+    $("#wxNotamBtn").onclick = () => {
+      const list = wxList.slice();
+      if (!list.length) return;
+      wxTeardown();
+      closeHome();
+      notamRoute = list.length > 1 ? list : [];
+      const route = list.length > 1 ? list.map(a => a.icao) : null;
+      load(list[0].icao, route ? { route } : {});
+    };
     $("#wxMapBtn").onclick = openHomeMap;
     $("#wxThemeBtn").onclick = () => $("#themeBtn").click();
 
