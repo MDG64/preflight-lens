@@ -4467,12 +4467,17 @@ body.light .stat.on {
       align-self: stretch
     }
 
+    /* La case est large : au bout d'une ligne de codes, une étoile serrée
+       dans un cadre étroit se lit comme une décoration ; il faut qu'elle se
+       voie comme une case, et qu'elle se vise au doigt sans viser le glyphe. */
     .route-star {
       font-size: 20px;
       flex: 1;
       display: flex;
       align-items: center;
-      padding: 0 8px;
+      justify-content: center;
+      min-width: 44px;
+      padding: 0 10px;
       border-radius: 8px;
       border: 1px dashed var(--line)
     }
@@ -4494,8 +4499,12 @@ body.light .stat.on {
       flex: 1
     }
 
+    /* La flèche descend au bas de la colonne au lieu de se centrer sur la
+       case : deux gestes opposés — retenir la route, ou en ouvrir le résumé —
+       se ratent l'un pour l'autre quand ils sont à la même hauteur. Elle
+       s'aligne sur le bas des cases, l'étoile garde le haut. */
     .fav-arrow.route-arrow {
-      align-self: center;
+      align-self: flex-end;
       flex: none
     }
 
@@ -4862,8 +4871,13 @@ body.light .stat.on {
         padding: 13px 4px 13px 1px
       }
 
+      /* Sur téléphone la case ne s'élargit pas : à 360 px, les trois codes,
+         le rond d'inversion, l'étoile et la flèche tiennent sur UNE ligne à
+         deux pixels près. Un cadre plus large les ferait passer à la ligne —
+         la ligne unique vaut mieux que la case large. */
       .route-star {
         font-size: 17px;
+        min-width: 0;
         padding: 0 2px
       }
 
