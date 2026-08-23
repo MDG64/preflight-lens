@@ -109,7 +109,7 @@
     }
 
     body.light header {
-      background: rgba(255, 255, 255, .92);
+      background: transparent;
     }
 
     body.light .help-btn {
@@ -247,8 +247,13 @@
        revenir à la case ICAO est le même sur les deux pages. */
     header {
       z-index: 20;
-      background: linear-gradient(180deg, rgba(10, 18, 27, .96), rgba(10, 18, 27, .86));
-      border-bottom: 1px solid var(--line);
+      /* Aucun fond propre, aucun trait de fin : l'en-tête est posé sur le
+         carbone de la page, comme celui de la page Weather (.wx-head), qui
+         n'est qu'un bloc de texte sur le fond. Le bandeau plein le découpait
+         en rectangle sombre alors que le reste de l'écran est tramé, et le
+         passage d'une page à l'autre changeait de décor. */
+      background: transparent;
+      border-bottom: 0;
     }
 
     .bar {
