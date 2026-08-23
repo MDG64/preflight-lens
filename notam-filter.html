@@ -445,6 +445,24 @@
       letter-spacing: 0
     }
 
+    /* La croix d'un terrain favori, comme celle des routes (.rt-x) : DANS le
+       bouton — deux boutons emboîtés ne sont pas du HTML — et c'est le clic qui
+       trie sur son data-x. Le creux lui donne la hauteur de la puce et son bord
+       droit ; la marge négative reprend ce creux à droite, la puce ne grandit
+       pas d'un pixel. Sans lui, la cible ferait 9 px de large et le doigt
+       poserait le terrain dans la route au lieu de le retirer des favoris. */
+    .chip-ad .rt-x {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1;
+      margin: 0 -10px 0 3px;
+      padding: 6px 10px 6px 5px
+    }
+
+    .chip-ad .rt-x:hover {
+      color: var(--red)
+    }
+
     /* ---------- tabs/favorites/station/suggest ---------- */
     /* La ligne d'onglets de la page NOTAM prend l'air de celle de l'accueil
        (.fav-tabs) ; il ne lui reste que sa respiration en haut du bandeau. */
@@ -18628,7 +18646,8 @@ window.addEventListener("scroll", hidePop, true);
       const cur = HOME_FIELDS.map(rVal);
       wrap.innerHTML = favArrowHtml() + favs.map(code => {
         const m = AIRPORTS[code] || { city: "" };
-        return `<button class="chip-ad ${cur.includes(code) ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
+        return `<button class="chip-ad ${cur.includes(code) ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small><span
+          class="rt-x" data-x="${code}" title="Remove ${code} from favorites">×</span></button>`;
       }).join("");
       const ar = wrap.querySelector(".fav-arrow");
       if (ar) ar.onclick = favWxOpen;
@@ -18638,7 +18657,11 @@ window.addEventListener("scroll", hidePop, true);
       // puis alternate : trois clics bâtissent la route. Toutes pleines, la
       // quatrième puce reprend au départ, la cinquième à la destination, et
       // ainsi de suite. Le choix Weather / NOTAM reste à faire.
-      wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => {
+      wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = e => {
+        // La croix d'abord : elle retire le terrain des favoris et rien
+        // d'autre — surtout pas le poser dans la route au passage.
+        const x = e.target.dataset.x;
+        if (x !== undefined) { toggleFavCode(x); return; }
         // Terrain déjà dans la route, sans case désignée : rien à faire. Le
         // reposer plus loin le RETIRERAIT de sa case actuelle (un code, une
         // seule case) — on se contente de montrer où il est. Pour le déplacer
