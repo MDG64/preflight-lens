@@ -5010,7 +5010,9 @@ body.light .stat.on {
     .wx-jump {
       display: flex;
       align-items: baseline;
-      gap: 7px;
+      /* Serré : il ne reste que le code et sa croix, et c'est le creux de la
+         croix elle-même qui les écarte pour le doigt. */
+      gap: 2px;
       background: none;
       border: 0;
       /* Le code n'a plus de cadre : c'est ce creux au-dessus et au-dessous qui
@@ -5034,6 +5036,24 @@ body.light .stat.on {
     .wx-jump:focus-visible {
       outline: 2px solid var(--cyan);
       outline-offset: 2px
+    }
+
+    /* La croix d'un code, à la manière des puces de route (.rt-x) : DANS le
+       bouton et non à côté — deux boutons emboîtés ne sont pas du HTML — et
+       c'est le clic qui fait le tri sur son data-x. Grise au repos : elle
+       n'est pas ce qu'on vient faire sur cette page, elle attend d'être
+       cherchée. */
+    .wx-x {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1;
+      /* Le signe est petit, sa cible ne doit pas l'être : ce creux lui donne
+         25 x 27 px sous le pouce sans le grossir à l'oeil. */
+      padding: 6px
+    }
+
+    .wx-x:hover {
+      color: var(--red)
     }
 
     /* Au doigt, trois cases de route remplissent déjà la ligne : le bouton n'y
@@ -19100,11 +19120,37 @@ window.addEventListener("scroll", hidePop, true);
       box.innerHTML = list.map(a => {
         const m = AIRPORTS[a.icao];
         return `<button type="button" class="wx-jump" data-icao="${a.icao}"
-      title="${m ? m.city : ""}"><span class="v">${a.icao}</span></button>`;
+      title="${m ? m.city : ""}"><span class="v">${a.icao}</span>${list.length > 1
+            ? `<span class="wx-x" data-x="${a.icao}" title="Remove ${a.icao} from this screen">×</span>`
+            : ""}</button>`;
       }).join("");
       box.querySelectorAll(".wx-jump").forEach(b => {
-        b.onclick = () => wxJumpTo(b.dataset.icao);
+        b.onclick = e => {
+          const x = e.target.dataset.x;
+          if (x !== undefined) { wxDrop(x); return; }
+          wxJumpTo(b.dataset.icao);
+        };
       });
+    }
+    /* Retirer un terrain de CET écran. Le plan de vol ne bouge pas : la route
+       se modifie sur l'accueil, et un code reposé dans la case revient ici
+       quand on le veut. On ne redemande rien au réseau non plus — les autres
+       relevés sont déjà à l'écran et n'ont aucune raison de clignoter parce
+       qu'un voisin est parti.
+       Le dernier ne porte pas de croix : un écran météo sans terrain ne dit
+       plus rien, et le ⌂ est déjà là pour partir. */
+    function wxDrop(icao) {
+      if (wxList.length < 2) return;
+      wxList = wxList.filter(a => a.icao !== icao);
+      delete wxShown[icao];
+      const sec = wxSection(icao); if (sec) sec.remove();
+      /* Un terrain seul et sans rôle retrouve l'en-tête de page : son nom
+         remonte au titre et sa section cesse de le répéter (voir openWx). */
+      const single = wxList.length === 1 && !wxList[0].role;
+      const first = AIRPORTS[wxList[0].icao];
+      $("#wxBody").classList.toggle("single", single);
+      $("#wxName").textContent = single && first ? `${first.city} · ${first.cc}` : "";
+      renderWxCodes(wxList);
     }
     function wxJumpTo(icao) {
       const sec = wxSection(icao);
