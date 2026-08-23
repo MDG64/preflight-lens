@@ -4490,26 +4490,22 @@ body.light .stat.on {
       min-width: 44px;
       padding: 0 10px;
       border-radius: 8px;
-      /* Liseré à peine posé : la case doit se deviner, pas se disputer la
-         ligne avec les trois codes. Le trait garde la teinte des filets, mais
-         à demi-encre — il ne reprend son plein trait qu'une fois la route
-         retenue (`.route-star.on`, en doré). */
-      border: 1px dashed color-mix(in srgb, var(--line) 55%, transparent)
+      /* La case se voit : même filet que les trois cases de code voisines
+         (--line2), en pointillé pour dire qu'elle n'attend pas une saisie.
+         Un pointillé de 1 px est déjà le trait le plus discret de la ligne —
+         l'affaiblir encore l'effaçait purement et simplement, sur les deux
+         thèmes. Il ne passe au trait plein doré qu'une fois la route retenue
+         (`.route-star.on`). */
+      border: 1px dashed var(--line2)
     }
 
-    /* Au-delà du téléphone, le demi-trait disparaît : sur un écran large et
-       vu de loin, un pointillé de 1 px à demi-encre ne se voit plus, et
-       l'étoile flotte sans case au bout de la ligne. Elle reprend donc le
-       filet des cases de code voisines (--line2, plein) — même cadre, même
-       rang : trois codes et une étoile, quatre cases sur une ligne. */
-    @media (min-width: 421px) {
-      .route-star {
-        border-color: var(--line2)
-      }
-    }
-
+    /* Éteinte, l'étoile PÂLIT SANS EMPORTER SA CASE : l'`opacity` d'antan
+       s'appliquait à l'élément entier, liseré compris, et la case disparaissait
+       tant qu'aucune route n'était tapée — c'est-à-dire à l'ouverture de l'app,
+       le seul moment où l'on cherche justement où l'on peut appuyer. Seul le
+       glyphe se met en veilleuse. */
     .route-star:disabled {
-      opacity: .35;
+      color: var(--muted2);
       cursor: default
     }
 
