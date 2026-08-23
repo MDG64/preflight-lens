@@ -4853,18 +4853,21 @@ body.light .stat.on {
 
     /* Sur une route, le nom du terrain se tait — il y en a trois à nommer, et
        chaque section le fait sous son propre code. Vide, il ne doit pas garder
-       sa place : les cases sont larges, l'en-tête a besoin de ces pixels. */
+       sa place : sinon le rafraîchissement s'écarterait du code sans raison. */
     .wx-name:empty {
       display: none
     }
 
+    /* Le nom suit le code du terrain, dans la même ligne que lui : un seul
+       endroit à lire pour savoir de quel terrain on parle. Il ne pousse pas —
+       il rétrécit et s'abrège, pour que le bouton reste collé à sa droite. */
     .wx-name {
       font: 500 12px/1.3 var(--sans);
       color: var(--muted);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      flex: 1;
+      flex: 0 1 auto;
       min-width: 0
     }
 
@@ -4903,9 +4906,9 @@ body.light .stat.on {
       display: flex
     }
 
-    /* La ligne des codes en noir porte le rafraîchissement au bout : même
-       écart qu'entre deux codes, et il passe dessous plutôt que d'écraser la
-       route s'il n'y a pas la place. */
+    /* La ligne des codes en noir porte le nom du terrain puis le
+       rafraîchissement au bout : même écart qu'entre deux codes, et ils
+       passent dessous plutôt que d'écraser la route s'il n'y a pas la place. */
     .wx-route-line {
       display: flex;
       align-items: center;
@@ -5766,7 +5769,6 @@ body .stat .k{
       <div class="wx-head">
         <div class="route-head">
           <span class="route-title">Weather</span>
-          <span class="wx-name" id="wxName"></span>
           <div class="hdr-actions">
             <button class="help-btn wx-home" id="wxHome" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
             <!-- NOTAM entre la maison et MAP : depuis un relevé, la liste des
@@ -5801,9 +5803,12 @@ body .stat .k{
              la couleur du texte — un appui descend à leur relevé. Le
              rafraîchissement les a rejoints : c'est sur ces relevés-là qu'il
              agit, et la main le trouve au bout de la route qu'elle vient de
-             lire. -->
+             lire. Quand il n'y a qu'un terrain, son nom se lit juste après son
+             code — le code et le nom d'un seul coup d'œil — et le bouton se
+             range à la suite. -->
         <div class="wx-route-line">
           <div class="wx-route-list" id="wxCodes" hidden></div>
+          <span class="wx-name" id="wxName"></span>
           <button class="btn wx-refresh" id="wxRefresh" title="Refresh" aria-label="Refresh">↻<span
               class="wx-refresh-lbl"> Refresh</span></button>
         </div>
