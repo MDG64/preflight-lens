@@ -4497,6 +4497,17 @@ body.light .stat.on {
       border: 1px dashed color-mix(in srgb, var(--line) 55%, transparent)
     }
 
+    /* Au-delà du téléphone, le demi-trait disparaît : sur un écran large et
+       vu de loin, un pointillé de 1 px à demi-encre ne se voit plus, et
+       l'étoile flotte sans case au bout de la ligne. Elle reprend donc le
+       filet des cases de code voisines (--line2, plein) — même cadre, même
+       rang : trois codes et une étoile, quatre cases sur une ligne. */
+    @media (min-width: 421px) {
+      .route-star {
+        border-color: var(--line2)
+      }
+    }
+
     .route-star:disabled {
       opacity: .35;
       cursor: default
