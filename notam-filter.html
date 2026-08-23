@@ -529,32 +529,9 @@
       min-height: 0
     }
 
-    /* Le rôle devant le code, sur la ligne de route : mêmes trois couleurs que
-       l'étiquette de la case ICAO, en plus petit — c'est un repère, pas une
-       saisie. */
-    .wx-jump .l {
-      font: 500 9px/1 var(--mono);
-      letter-spacing: .18em;
-      color: var(--muted)
-    }
-
-    .wx-jump.dep .l {
-      color: var(--green)
-    }
-
-    .wx-jump.arr .l {
-      color: var(--cyan)
-    }
-
-    .wx-jump.alt .l {
-      color: var(--amber)
-    }
-
-    /* Au doigt, la ligne de route se resserre : trois codes qui portent en
-       plus leur rôle (DEP, DEST, ALT) ne tiennent pas à la chasse de la page
-       Weather, qui n'en affiche pas. D'un cran plus petits et moins écartés,
-       ils tiennent sur une ligne au lieu de trois — et le bandeau ne mange
-       plus le tiers de l'écran avant que la liste ne commence. */
+    /* Au doigt, la ligne de route se resserre d'un cran : les codes tiennent
+       sur une ligne au lieu de deux, et le bandeau ne mange plus le tiers de
+       l'écran avant que la liste ne commence. */
     @media (max-width:560px) {
       header .wx-route-line {
         gap: 4px 10px
@@ -562,11 +539,6 @@
 
       header .wx-jump .v {
         font-size: 15px;
-        letter-spacing: .10em
-      }
-
-      header .wx-jump .l {
-        font-size: 8px;
         letter-spacing: .10em
       }
 
@@ -607,42 +579,6 @@
 
     .st-chip.dep .l {
       color: var(--green)
-    }
-
-    /* Le terrain AFFICHÉ porte son rôle dans la case ICAO. Sans cette
-       étiquette, passer de la case DEST à la lecture de DEST effaçait le mot
-       « DEST » de l'écran : la file DEP -> DEST -> ALT se lisait amputée
-       d'une case, et rien ne disait plus quelle place tenait le terrain sous
-       les yeux. Même étiquette que les cases voisines, mêmes couleurs. */
-    .entry .scratch .st-role {
-      font: 500 9px/1 var(--mono);
-      letter-spacing: .18em;
-      color: var(--muted);
-      padding: 0 0 0 12px;
-      /* L'étiquette tient la MÊME largeur d'un rôle à l'autre — celle du plus
-         long, DEST — sinon la case ICAO enflait et maigrissait sous le doigt
-         à chaque changement de terrain, et le bandeau bougeait avec elle. En
-         police à chasse fixe, quatre lettres font 4ch plus leur interlettrage
-         (compté aussi après la dernière). */
-      flex: none;
-      box-sizing: content-box;
-      width: calc(4ch + 4 * .18em)
-    }
-
-    .entry .scratch .st-role[hidden] {
-      display: none
-    }
-
-    .entry .scratch .st-role.dep {
-      color: var(--green)
-    }
-
-    .entry .scratch .st-role.arr {
-      color: var(--cyan)
-    }
-
-    .entry .scratch .st-role.alt {
-      color: var(--amber)
     }
 
     .st-chip.arr .l {
@@ -4038,17 +3974,11 @@
         gap: 5px
       }
 
-      /* La case ICAO maigrit d'un cran au doigt : son étiquette de rôle et
-         son code prennent la taille des cases de la page Route. */
-      .st-chip .l,
-      .entry .scratch .st-role {
+      /* Les cases de la page Route maigrissent d'un cran au doigt. */
+      .st-chip .l {
         font-size: 8px;
         letter-spacing: .10em;
         padding-left: 7px
-      }
-
-      .entry .scratch .st-role {
-        width: calc(4ch + 4 * .10em)
       }
 
       .st-chip .v {
@@ -5570,7 +5500,6 @@ body .stat .k{
       <div class="wx-codes-row nt-icao-row">
         <div class="entry">
           <div class="scratch">
-            <span class="st-role" id="icaoRole" hidden></span>
             <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
               aria-label="Aerodrome ICAO code">
           </div>
@@ -19067,32 +18996,26 @@ window.addEventListener("scroll", hidePop, true);
     function renderStRoute() {
       const el = $("#stRoute");
       // La route se lit d'un bloc, sur sa propre ligne, dans l'ordre
-      // DEP -> DEST -> ALT : le terrain affiché y garde sa place et se
+      // DEP -> DEST -> ALT : la file garde cet ordre, le terrain affiché s'y
       // souligne, les autres attendent un appui. La case ICAO, elle, est
       // au-dessus et sert à en demander un nouveau — elle n'est plus une case
       // de la file, elle ne se range donc plus dedans.
       //
-      // La case ICAO garde malgré tout l'étiquette du terrain qu'elle montre —
-      // DEP, DEST ou ALT : c'est le rôle du terrain sous les yeux, et il se lit
-      // là où on vient de taper son code. Terrain hors route (ou consultation
-      // d'un terrain seul) : pas de rôle à nommer, l'étiquette s'efface.
-      const i = notamRoute.findIndex(a => a.icao === currentIcao);
-      const roleEl = $("#icaoRole"), lab = i < 0 ? "" : wxRoleLabel(notamRoute[i].role);
-      roleEl.textContent = lab;
-      roleEl.className = "st-role" + (lab ? " " + notamRoute[i].role : "");
-      roleEl.hidden = !lab;
+      // Plus de DEP / DEST / ALT écrits, ni sur la file ni dans la case, comme
+      // à la page Weather : le rôle d'un terrain se décide sur l'accueil et s'y
+      // lit. Redit ici, il doublait la chasse de chaque code pour un mot que
+      // l'ordre de la file dit déjà.
       el.hidden = !notamRoute.length;
       el.innerHTML = notamRoute.map(a => {
         const m = AIRPORTS[a.icao];
-        const role = wxRoleLabel(a.role);
         const on = a.icao === currentIcao;
         // Un seul terrain : pas de croix. Retirer le dernier laisserait une
         // ligne vide qui ne dit plus rien, et le ⌂ est déjà là pour partir.
         const x = notamRoute.length > 1
           ? `<span class="wx-x" data-x="${a.icao}" title="Remove ${a.icao} from this screen">×</span>` : "";
         return `<button type="button" class="wx-jump ${a.role}${on ? " on" : ""}" data-code="${a.icao}"
-      title="${role}${m ? " — " + m.city : ""}" aria-label="Show NOTAMs for ${a.icao}"
-      ><span class="l">${role}</span><span class="v">${a.icao}</span>${x}</button>`;
+      title="${m ? m.city : ""}" aria-label="Show NOTAMs for ${a.icao}"
+      ><span class="v">${a.icao}</span>${x}</button>`;
       }).join("");
       el.querySelectorAll(".wx-jump").forEach(b => {
         b.onclick = e => {
@@ -19349,7 +19272,6 @@ window.addEventListener("scroll", hidePop, true);
       el.textContent = msg || "";
       el.className = "wx-status" + (cls ? " " + cls : "");
     }
-    function wxRoleLabel(role) { return role === "dep" ? "DEP" : role === "arr" ? "DEST" : role === "alt" ? "ALT" : ""; }
     function wxSection(icao) { return document.querySelector(`#wxBody .wx-ap[data-icao="${icao}"]`); }
     /* Les terrains de l'écran, sous la case de saisie : ceux de la première
        page d'abord, dans leur ordre, puis ceux ajoutés ici. Ils se lisent à la
