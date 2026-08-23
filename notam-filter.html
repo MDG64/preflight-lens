@@ -3966,8 +3966,19 @@
          solidaires dans une seule case et ne pourraient pas se séparer en deux
          rangées. L'ordre d'affichage est donc écrit ici, et la coupure entre
          les deux rangées est un objet vide de pleine largeur (::after). */
+      /* La deuxième rangée se centre : ses trois cases sont mises à la même
+         largeur — celle de ROUTE, la plus longue des trois — et forment un
+         bloc régulier sous le titre. Le centrage ne touche pas la première
+         rangée : sa marge automatique y a déjà mangé toute la place libre. */
       .nt-titlerow {
-        gap: 6px
+        gap: 6px;
+        justify-content: center
+      }
+
+      .nt-titlerow #routeBtn,
+      .nt-titlerow #firMapBtn,
+      .nt-titlerow #stationMapBtn {
+        min-width: 58px
       }
 
       .nt-titlerow .beacon {
