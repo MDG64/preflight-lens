@@ -5858,6 +5858,19 @@ body .stat .k{
           <button class="btn wx-refresh" id="wxRefresh" title="Refresh" aria-label="Refresh">↻<span
               class="wx-refresh-lbl"> Refresh</span></button>
         </div>
+        <!-- Mêmes deux onglets que sur la première page et sur la page NOTAM :
+             les terrains un à un, ou les routes entières. Repliés au départ ;
+             le titre touché déplie sa liste, retouché il la referme. Ici une
+             puce POSE le relevé du terrain en tête de l'écran — le geste de la
+             case ICAO juste au-dessus — et une puce de route pose la route
+             entière. -->
+        <div class="fav-tabs page-tabs">
+          <button class="fav-tab" id="wxTabFav" type="button" aria-expanded="false" aria-controls="wxChips"><span
+              class="star">★</span> Favorites <span id="wxFavCount">(0)</span></button>
+          <button class="fav-tab" id="wxTabRoute" type="button" aria-expanded="false" aria-controls="wxChips"><span
+              class="star">★</span> Route <span id="wxRouteCount">(0)</span></button>
+        </div>
+        <div class="chips fav-chips" id="wxChips" hidden></div>
       </div>
       <div class="wx-status" id="wxStatus"></div>
       <div id="wxBody"></div>
@@ -14496,11 +14509,18 @@ E) ${e}`;
       }
       wrap.innerHTML = favArrowHtml() + codes.map(code => {
         const m = AIRPORTS[code] || { city: "" };
-        return `<button class="chip-ad ${code === currentIcao ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small></button>`;
+        return `<button class="chip-ad ${code === currentIcao ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small><span
+          class="rt-x" data-x="${code}" title="Remove ${code} from favorites">×</span></button>`;
       }).join("");
       const ar = wrap.querySelector(".fav-arrow");
       if (ar) ar.onclick = favWxOpen;
-      wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = () => load(b.dataset.code));
+      wrap.querySelectorAll(".chip-ad").forEach(b => b.onclick = e => {
+        // La croix d'abord, comme sur la première page : elle retire le terrain
+        // des favoris et rien d'autre — surtout pas charger ses NOTAMs au passage.
+        const x = e.target.dataset.x;
+        if (x !== undefined) { toggleFavCode(x); return; }
+        load(b.dataset.code);
+      });
     }
     /* ---- puces de route sur la page NOTAM ----
        Une puce rejoue la route entière : les trois cases se remplissent
@@ -14526,7 +14546,7 @@ E) ${e}`;
         if (x !== undefined) {
           favRoutes = favRoutes.filter((_, n) => n !== Number(x));
           saveFavRoutes(favRoutes);
-          renderChips(); renderHomeChips(); renderHomeStars();
+          renderChips(); renderHomeChips(); renderHomeStars(); renderWxChips();
           return;
         }
         homeApplyRoute(favRoutes[Number(b.dataset.i)]);
@@ -14695,7 +14715,7 @@ function renderInfo(icao) {
       saveFavs(favs);
       updateFavCount(); renderChips();
       if (code === currentIcao) updateStar();
-      renderHomeStars(); renderHomeChips();
+      renderHomeStars(); renderHomeChips(); renderWxChips();
     }
     function toggleFav() { if (currentIcao) toggleFavCode(currentIcao); }
 
@@ -18800,6 +18820,7 @@ window.addEventListener("scroll", hidePop, true);
       renderHomeStars();
       renderHomeChips();
       renderChips();          // la liste de la page NOTAM tient le même compte
+      renderWxChips();        // ... et celle de la page Weather aussi
     }
     // Une puce de route remplit les TROIS cases d'un coup — elle remplace ce
     // qui s'y trouvait : c'est une route entière, pas un terrain de plus. La
@@ -18833,7 +18854,7 @@ window.addEventListener("scroll", hidePop, true);
         if (x !== undefined) {
           favRoutes = favRoutes.filter((_, n) => n !== Number(x));
           saveFavRoutes(favRoutes);
-          renderHomeChips(); renderHomeStars();
+          renderHomeChips(); renderHomeStars(); renderChips(); renderWxChips();
           return;
         }
         homeApplyRoute(favRoutes[Number(b.dataset.i)]);
@@ -19257,6 +19278,7 @@ window.addEventListener("scroll", hidePop, true);
       $("#wxBody").classList.toggle("single", single);
       $("#wxName").textContent = single && first ? `${first.city} · ${first.cc}` : "";
       renderWxCodes(wxList);
+      renderWxChips();
     }
     function wxJumpTo(icao) {
       const sec = wxSection(icao);
@@ -19434,6 +19456,7 @@ window.addEventListener("scroll", hidePop, true);
       }).join("");
       // Après les sections : chaque code cherche la sienne au clic.
       renderWxCodes(list);
+      renderWxChips();                 // puces allumées : les relevés déjà à l'écran
       $("#wxAdd").value = "";
       hideWxSuggest();
       if (!wxTicker) wxTicker = setInterval(renderWxAges, 30000);
@@ -19451,6 +19474,83 @@ window.addEventListener("scroll", hidePop, true);
       if (e.key === "Enter") { e.preventDefault(); wxAddStation(); }
       else if (e.key === "Escape") { e.target.value = ""; hideWxSuggest(); e.target.blur(); }
     };
+    /* ---- onglets + puces (Favoris / Route) de la page Weather ----
+       Mêmes deux listes que la première page et que la page NOTAM (favs,
+       favRoutes), même pliage : le titre touché déplie la sienne, retouché il
+       la referme. Seul le geste change — ici, une puce POSE le relevé du
+       terrain EN TÊTE de l'écran, exactement comme la case ICAO juste
+       au-dessus ; la croix, elle, retire le terrain des favoris sans rien
+       afficher. */
+    let wxFavTab = null;
+    function wxSetFavTab(t) {
+      wxFavTab = (wxFavTab === t) ? null : t;
+      renderWxChips();
+    }
+    function renderWxChips() {
+      const box = $("#wxChips");
+      if (!box) return;
+      $("#wxFavCount").textContent = "(" + favs.length + ")";
+      $("#wxRouteCount").textContent = "(" + favRoutes.length + ")";
+      [["#wxTabFav", "ad"], ["#wxTabRoute", "route"]].forEach(([sel, t]) => {
+        $(sel).classList.toggle("on", wxFavTab === t);
+        $(sel).setAttribute("aria-expanded", String(wxFavTab === t));
+      });
+      box.hidden = !wxFavTab;
+      if (!wxFavTab) { box.innerHTML = ""; return; }
+      if (wxFavTab === "route") return renderWxRouteChips();
+      if (!favs.length) {
+        box.innerHTML = `<span class="hint">No favorites yet — type an ICAO code above, then tap the ☆ star inside its box.</span>`;
+        return;
+      }
+      // Allumées : celles dont le relevé est déjà à l'écran.
+      const shown = wxList.map(a => a.icao);
+      box.innerHTML = favArrowHtml() + favs.map(code => {
+        const m = AIRPORTS[code] || { city: "" };
+        return `<button class="chip-ad ${shown.includes(code) ? "on" : ""}" data-code="${code}">${code}<small>${m.city || ""}</small><span
+          class="rt-x" data-x="${code}" title="Remove ${code} from favorites">×</span></button>`;
+      }).join("");
+      const ar = box.querySelector(".fav-arrow");
+      if (ar) ar.onclick = favWxOpen;
+      box.querySelectorAll(".chip-ad").forEach(b => b.onclick = e => {
+        // La croix d'abord : elle retire des favoris et rien d'autre.
+        const x = e.target.dataset.x;
+        if (x !== undefined) { toggleFavCode(x); return; }
+        // Terrain déjà à l'écran : wxAddStation descend à son relevé plutôt
+        // que de le poser deux fois.
+        wxAddStation(b.dataset.code);
+      });
+    }
+    /* Une puce de route rejoue la route entière : les trois cases de l'accueil
+       se remplissent — la route se décide là-bas et nulle part ailleurs — et
+       l'écran météo repart sur ces terrains, comme la carte Weather de la
+       première page. La croix retire la route de la liste sans rien ouvrir. */
+    function renderWxRouteChips() {
+      const box = $("#wxChips");
+      if (!favRoutes.length) {
+        box.innerHTML = `<span class="hint">No route yet — open the start page, type the codes, then tap the ☆ star at the end of the line.</span>`;
+        return;
+      }
+      const cur = routeKey(homeRouteSlots());
+      box.innerHTML = favRoutes.map((r, i) => `
+        <button class="chip-ad chip-rt ${routeKey(r) === cur ? "on" : ""}" data-i="${i}"
+          aria-label="Show weather for route ${routeChipLabel(r)}">${routeChipHtml(r)}<span
+            class="rt-x" data-x="${i}" title="Remove route">×</span></button>`).join("");
+      box.querySelectorAll(".chip-rt").forEach(b => b.onclick = e => {
+        const x = e.target.dataset.x;
+        if (x !== undefined) {
+          favRoutes = favRoutes.filter((_, n) => n !== Number(x));
+          saveFavRoutes(favRoutes);
+          renderWxChips(); renderChips(); renderHomeChips(); renderHomeStars();
+          return;
+        }
+        homeApplyRoute(favRoutes[Number(b.dataset.i)]);
+        const codes = homeRouteCodes();
+        if (!codes.length) return;
+        openWx(codes.length === 1 ? [{ icao: codes[0].icao }] : codes);
+      });
+    }
+    $("#wxTabFav").onclick = () => wxSetFavTab("ad");
+    $("#wxTabRoute").onclick = () => wxSetFavTab("route");
     // Retour à la première page. L'accueil vit DERRIÈRE la page météo (z 50
     // contre 52), donc la masquer suffirait à le redécouvrir — on appelle
     // quand même openHome() : il rafraîchit favoris, étoiles et miroir de
