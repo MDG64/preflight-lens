@@ -17261,10 +17261,46 @@ function renderInfo(icao) {
       return Object.assign({}, d, {
         slots, tomorrow: slots.every(s => s.d === 1), savedAt: at });
     }
+    /* Les bandes du jour d'un écran entier en UN appel (/api/daywx?ids=…).
+       met.no travaille par position : le serveur fait toujours autant
+       d'allers-retours amont, mais l'écran ne dépense qu'un jeton au lieu d'un
+       par terrain — et c'était le dernier poste qui comptait, une fois les
+       relevés groupés.
+       Le résultat n'est pas rendu ici : chaque terrain reste servi par
+       fetchDayWx(), qui trouve désormais sa bande déjà en route. Les sections
+       s'affichent donc dans le même ordre et par le même chemin qu'avant. */
+    const DWX_BATCH_MAX = 20;
+    const dwxPending = new Map();             // icao -> promesse du lot en cours
+    function prefetchDayWx(ids) {
+      const manquants = [...new Set(ids)].filter(i => !dwxFresh(dwxCache.get(i)) && !dwxPending.has(i));
+      for (let i = 0; i < manquants.length; i += DWX_BATCH_MAX) {
+        const lot = manquants.slice(i, i + DWX_BATCH_MAX);
+        const p = fetch(`${BACKEND_URL}/api/daywx?ids=${lot.map(encodeURIComponent).join(",")}`)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .then(d => (d && d.stations) || {});
+        for (const icao of lot) {
+          const q = p.then(st => {
+            const data = st[icao];
+            if (!data || data.error) throw new Error((data && data.error) || "empty");
+            dwxCache.set(icao, { at: Date.now(), data });
+            dwxStoreWrite(icao, data);
+            return data;
+          });
+          // Le retrait est différé au règlement : tant que le lot vole, un
+          // second appelant doit tomber sur la MÊME promesse, pas en relancer un.
+          q.catch(() => { }).then(() => { if (dwxPending.get(icao) === q) dwxPending.delete(icao); });
+          dwxPending.set(icao, q);
+        }
+      }
+    }
     async function fetchDayWx(icao) {
       const hit = dwxCache.get(icao);
       if (dwxFresh(hit)) return hit.data;
       try {
+        // Un lot est peut-être déjà en route pour ce terrain : on l'attend au
+        // lieu d'ouvrir une deuxième requête pour la même bande.
+        const encours = dwxPending.get(icao);
+        if (encours) return await encours;
         const r = await fetch(`${BACKEND_URL}/api/daywx/${encodeURIComponent(icao)}`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
@@ -19534,6 +19570,7 @@ window.addEventListener("scroll", hidePop, true);
       const my = ++wxToken;
       setWxStatus("Requesting " + wxList.map(a => a.icao).join(" · ") + "…");
       $("#wxRefresh").disabled = true;
+      prefetchDayWx(wxList.map(a => a.icao));   // les bandes du jour en un appel
       wxList.forEach(a => loadWxDaySec(a.icao, my));
       let stations = null, err = null;
       try { stations = await wxFetchGroup(wxList.map(a => a.icao)); }
@@ -19878,6 +19915,7 @@ window.addEventListener("scroll", hidePop, true);
       /* Les pictogrammes se glissent à leur place quand met.no répond : la
          liste est déjà lisible sans eux, et le cache rend la réouverture
          immédiate. */
+      prefetchDayWx(list);                      // les pictogrammes en un appel
       list.forEach(f => fetchDayWx(f).then(d => {
         if (my !== favWxToken) return;
         const cell = el.querySelector(`[data-pic="${f}"]`);
