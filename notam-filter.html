@@ -4463,8 +4463,18 @@ body.light .stat.on {
        l'étiquette : sa cible fait la hauteur d'une case, comme les trois
        autres étoiles. La hauteur exacte d'un <input> varie d'un moteur à
        l'autre — on la recopie au lieu de la deviner. */
+    /* La colonne du bout PREND TOUT CE QUI RESTE sur la ligne : la largeur
+       utile change d'un téléphone à l'autre (360, 375, 393, 412…), et une
+       valeur fixe serait tantôt trop serrée, tantôt en deçà de la place
+       disponible. En `flex: 1`, la case de l'étoile s'élargit d'elle-même
+       jusqu'au bord — et à 360 px, où il ne reste rien, elle ne pousse
+       personne à la ligne. Le plafond la retient quand la colonne passe à la
+       ligne (autour de 500 px) : seule sur sa rangée, elle prendrait sinon
+       toute la largeur de la page pour un seul glyphe. */
     .home-field-route {
-      align-self: stretch
+      align-self: stretch;
+      flex: 1;
+      max-width: 104px
     }
 
     /* La case est large : au bout d'une ligne de codes, une étoile serrée
@@ -4871,10 +4881,10 @@ body.light .stat.on {
         padding: 13px 4px 13px 1px
       }
 
-      /* Sur téléphone la case ne s'élargit pas : à 360 px, les trois codes,
-         le rond d'inversion, l'étoile et la flèche tiennent sur UNE ligne à
-         deux pixels près. Un cadre plus large les ferait passer à la ligne —
-         la ligne unique vaut mieux que la case large. */
+      /* Aucune largeur minimale sur téléphone : à 360 px la ligne est pleine
+         à deux pixels près, et un plancher la ferait passer à la ligne. La
+         case prend la place restante quand il y en a (`flex: 1` plus haut),
+         et rien de plus quand il n'y en a pas. */
       .route-star {
         font-size: 17px;
         min-width: 0;
