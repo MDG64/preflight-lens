@@ -239,13 +239,15 @@
       padding: 0 20px 64px
     }
 
-    /* ---------- header ---------- */
+    /* ---------- header ----------
+       Il ne colle plus au haut de l'écran : à trois lignes — le nom de la page,
+       la case ICAO, la route — il prenait le quart d'un téléphone en
+       permanence. C'est l'en-tête de la page Weather, et comme lui il se
+       laisse remonter : la liste des NOTAM a l'écran entier, et le geste pour
+       revenir à la case ICAO est le même sur les deux pages. */
     header {
-      position: sticky;
-      top: 0;
       z-index: 20;
       background: linear-gradient(180deg, rgba(10, 18, 27, .96), rgba(10, 18, 27, .86));
-      backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--line);
     }
 
@@ -326,7 +328,10 @@
     .entry {
       display: flex;
       align-items: stretch;
-      gap: 8px
+      gap: 8px;
+      /* Ancre du menu de propositions : sans elle il se pendait au <header>
+         collant et s'ouvrait au bord gauche de l'écran, loin de la case. */
+      position: relative
     }
 
     .scratch {
@@ -470,11 +475,6 @@
       margin-top: 10px
     }
 
-    /* Le nom de la page, comme sur Route et Weather. */
-    .page-head {
-      margin: 14px 0 0
-    }
-
     .chips {
       display: flex;
       gap: 7px;
@@ -499,30 +499,85 @@
       margin: 18px 0 0
     }
 
-    /* Terrains de la route, dans le bandeau à côté de la case ICAO. Ils en
-       reprennent la FORME exacte — même cadre, même étiquette, même typo —
-       pour que les cases se lisent comme un seul jeu ; seule la couleur de
-       l'étiquette distingue le rôle. Le terrain
-       affiché n'a pas sa case ici : son code est déjà dans la case ICAO, qui
-       tient sa place dans la file DEP -> DEST -> ALT (voir renderStRoute :
-       les cases d'avant vont dans #stRoutePre, celles d'après dans #stRoute). */
-    .st-route {
-      display: flex;
-      align-items: stretch;
-      gap: 8px;
-      flex-wrap: wrap;
-      flex: none;
-      /* Les cases se calent sur la hauteur de la ligne du bandeau — donc sur
-         la case ICAO, l'élément le plus haut. Recopier sa hauteur en dur
-         raterait : un <input> a un plancher de hauteur propre au navigateur
-         (46 px ici pour 41 px demandés), et il varie d'un moteur à l'autre. */
-      align-self: stretch
+    /* ---------- en-tête de la page NOTAM ----------
+       Le bandeau ne tient plus sur une ligne : il en empile trois, exactement
+       comme l'en-tête de la page Weather (.wx-head). Les cases de route qui
+       encadraient la case ICAO ont laissé la place à la ligne de codes du bas,
+       et les quatre boutons à pilule (Route, Weather, FIR, MAP) ont pris
+       l'habit court des pastilles du bord droit (.mapword) : à sept objets, la
+       rangée ne tenait plus au doigt en pleine largeur. */
+    .nt-bar {
+      display: block
     }
 
-    /* `hidden` ne suffit pas : une règle d'auteur `display:flex` l'emporte
-       toujours sur le [hidden] de la feuille du navigateur. */
-    .st-route[hidden] {
-      display: none
+    .nt-titlerow {
+      flex-wrap: wrap;
+      margin-bottom: 10px
+    }
+
+    /* La flèche prend la hauteur de la case plutôt que le plancher de 34 px
+       des boutons météo : ici la case ICAO est haute (19 px de chasse fixe et
+       ses marges), et une flèche plus courte se lirait comme un objet d'un
+       autre rang. */
+    .nt-icao-row .wx-go {
+      align-self: stretch;
+      min-height: 0
+    }
+
+    /* Le rôle devant le code, sur la ligne de route : mêmes trois couleurs que
+       l'étiquette de la case ICAO, en plus petit — c'est un repère, pas une
+       saisie. */
+    .wx-jump .l {
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .18em;
+      color: var(--muted)
+    }
+
+    .wx-jump.dep .l {
+      color: var(--green)
+    }
+
+    .wx-jump.arr .l {
+      color: var(--cyan)
+    }
+
+    .wx-jump.alt .l {
+      color: var(--amber)
+    }
+
+    /* Au doigt, la ligne de route se resserre : trois codes qui portent en
+       plus leur rôle (DEP, DEST, ALT) ne tiennent pas à la chasse de la page
+       Weather, qui n'en affiche pas. D'un cran plus petits et moins écartés,
+       ils tiennent sur une ligne au lieu de trois — et le bandeau ne mange
+       plus le tiers de l'écran avant que la liste ne commence. */
+    @media (max-width:560px) {
+      header .wx-route-line {
+        gap: 4px 10px
+      }
+
+      header .wx-jump .v {
+        font-size: 15px;
+        letter-spacing: .10em
+      }
+
+      header .wx-jump .l {
+        font-size: 8px;
+        letter-spacing: .10em
+      }
+
+      header .wx-x {
+        padding: 6px 3px
+      }
+    }
+
+    /* Le terrain qu'on est en train de lire : souligné en permanence, comme il
+       l'est au survol. Rien d'autre ne le distingue — il reste un code de la
+       même file, à la même place. */
+    .wx-jump.on .v {
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      text-decoration-thickness: 2px;
+      color: var(--cyan)
     }
 
     .st-chip {
@@ -667,11 +722,10 @@
       transition: transform .12s, color .12s, text-shadow .12s
     }
 
-    /* MAP a quitté le groupe de droite pour se poser à droite de FIR : les
-       trois boutons Route · FIR · MAP ouvrent chacun une page, ils portent
-       donc le même habit (.routebtn) — même taille, même couleur, même
-       pilule. Il ne garde en propre que son signal : le liseré vert quand
-       une route est chargée. */
+    /* MAP se pose à droite de FIR : les quatre boutons Route · Weather · FIR
+       · MAP ouvrent chacun une page, ils portent donc le même habit (.mapword)
+       — même taille, même couleur, même case. Il ne garde en propre que son
+       signal : le liseré vert quand une route est chargée. */
     #stationMapBtn.hasroute {
       border-color: #34d39a;
       box-shadow: 0 0 0 1px #34d39a inset, 0 0 6px rgba(52,211,154,.3)
@@ -685,10 +739,8 @@
        bouge pas — la case reste alignée sur les ronds de la même rangée. Le
        `grayscale`, écrit pour éteindre les couleurs de l'émoji, n'a plus
        d'objet sur du texte : c'est l'opacité qui dit désormais l'état inerte.
-       Le mot prend la taille de Route et FIR (14 px, graisse 600) : les trois
+       Le mot prend la taille de Route et FIR (14 px, graisse 600) : les
        boutons ouvrent chacun une page, aucun n'est d'un rang inférieur.
-       (Le MAP du haut, lui, est devenu un .routebtn ordinaire — ces règles ne
-       concernent plus que les MAP de la page Route et du panneau météo.)
        Le troisième sélecteur pèse ce que pèsent les grosses pastilles du
        bandeau (.hdr-actions .help-btn, largeur 38 px, police 19 px) : sans
        lui, leur gabarit l'emportait sur celui-ci et le mot débordait de sa
@@ -2602,39 +2654,6 @@
       border-radius: 4px
     }
 
-    /* ---------- bouton Route (dans le header) ---------- */
-    .routebtn {
-      font: 600 14px/1 var(--sans);
-      letter-spacing: .08em;
-      color: var(--text);
-      border: 1px solid var(--line2);
-      background: var(--panel2);
-      border-radius: 20px;
-      padding: 11px 19px;
-      cursor: pointer;
-      transition: background .15s, border-color .15s;
-      white-space: nowrap
-    }
-
-    .routebtn:hover {
-      background: var(--panel);
-      border-color: var(--muted)
-    }
-
-    .routebtn:focus-visible {
-      outline: 2px solid var(--cyan);
-      outline-offset: 2px
-    }
-
-    body.light .routebtn {
-      background: #f2f5f8;
-      color: #1b2228
-    }
-
-    body.light .routebtn:hover {
-      background: #e8edf1
-    }
-
     .route-screen {
       position: fixed;
       inset: 0;
@@ -3994,78 +4013,9 @@
         font-size: 14px
       }
 
-      /* Au doigt, les pastilles montent sur une rangée à elles, au-dessus des
-         cases ICAO : dès qu'une route est saisie, DEST et ALT prenaient toute
-         la largeur et repoussaient les symboles sur une deuxième ligne mal
-         rangée. On assume donc les deux lignes — d'abord les départs et les
-         réglages (⌂, FIR, MAP, jour/nuit, ?), ensuite les codes — au lieu de
-         les laisser se bousculer. `display:contents` efface la boîte du groupe
-         pour que ses boutons deviennent des éléments de la barre : on peut
-         alors les ordonner avec le FIR et les codes, et glisser entre les deux
-         séries une cale de pleine largeur qui force le retour à la ligne. */
-      .hdr-actions {
-        display: contents
-      }
-
-      /* La maison reste seule à gauche — c'est la sortie ; le reste (FIR,
-         MAP, jour/nuit, ?) se range au bord droit, poussé par le ressort de
-         la marge automatique. */
-      #homeBtn {
-        order: 1;
-        margin-left: 0;
-        margin-right: auto
-      }
-
-      /* Weather garde sa place de la version large : juste à gauche de FIR. */
-      #wxPageBtn {
-        order: 2
-      }
-
-      #firMapBtn {
-        order: 3
-      }
-
-      /* MAP garde sa place de la version large : juste à droite de FIR. */
-      #stationMapBtn {
-        order: 4
-      }
-
-      #themeBtn {
-        order: 5
-      }
-
-      #helpBtn {
-        order: 6
-      }
-
-      /* La cale : hauteur nulle, largeur pleine — elle ne se voit pas, elle
-         coupe seulement la ligne. */
-      .bar::after {
-        content: "";
-        order: 7;
-        flex: 0 0 100%;
-        height: 0
-      }
-
-      .bar > .beacon {
-        order: 8
-      }
-
-      #stRoutePre {
-        order: 9
-      }
-
-      .entry {
-        order: 10
-      }
-
-      #stRoute {
-        order: 11
-      }
-
-      #routeBtn {
-        order: 12
-      }
+      /* Le bandeau empile désormais ses trois lignes de lui-même (voir
+         .nt-bar) : plus rien à réordonner au doigt, la boîte des actions garde
+         donc sa forme et se colle simplement au bord droit du titre. */
 
       /* Même pastille que le globe : le dessin la suit tout seul, il est
          mesuré en pourcentage de son rond. */
@@ -4083,15 +4033,8 @@
         gap: 5px
       }
 
-      /* Les cases de route se rangent sur la ligne de la case ICAO, à côté
-         d'elle : c'est la même famille d'objets, elles se lisent d'un seul
-         balayage. Pour cela elles maigrissent — étiquette et code d'un cran
-         plus petits, marges resserrées — au lieu de déborder sur une
-         deuxième ligne qui repousserait tout l'écran vers le bas. */
-      .st-route {
-        gap: 5px
-      }
-
+      /* La case ICAO maigrit d'un cran au doigt : son étiquette de rôle et
+         son code prennent la taille des cases de la page Route. */
       .st-chip .l,
       .entry .scratch .st-role {
         font-size: 8px;
@@ -4107,11 +4050,6 @@
         font-size: 14px;
         letter-spacing: .10em;
         padding: 9px 7px 9px 5px
-      }
-
-      .routebtn {
-        padding: 7px 10px;
-        font-size: 11.5px
       }
 
       .meta .src {
@@ -5597,38 +5535,59 @@ body .stat .k{
   </defs>
 </svg>
   <header>
-    <div class="bar">
-      <span class="beacon" aria-hidden="true"></span>
-      <div class="st-route" id="stRoutePre" hidden></div>
-      <div class="entry">
-        <div class="scratch">
-          <span class="st-role" id="icaoRole" hidden></span>
-          <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
-            aria-label="Aerodrome ICAO code">
+    <!-- L'en-tête de la page Weather, mot pour mot : le nom de la page et les
+         départs sur la première ligne, la case ICAO sur la deuxième, les
+         terrains de la route et le rafraîchissement sur la troisième. Les deux
+         pages se lisent donc de la même façon, et le pouce retrouve chaque
+         geste à la même place en passant de l'une à l'autre. Seul le mot du
+         milieu change de côté : ici c'est WEATHER qui mène à l'autre lecture
+         du même terrain. -->
+    <div class="bar nt-bar">
+      <div class="route-head nt-titlerow">
+        <span class="beacon" aria-hidden="true"></span>
+        <span class="route-title">NOTAM</span>
+        <div class="hdr-actions">
+          <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
+          <button class="help-btn mapword" id="routeBtn" aria-label="Route — plan the flight" title="Route — plan the flight">ROUTE</button>
+          <!-- Weather garde sa place à gauche de FIR : les deux lectures d'un
+               même terrain — ce qui est publié, ce qu'il fait — se touchent du
+               même pouce, sans repasser par l'accueil. -->
+          <button class="help-btn mapword" id="wxPageBtn" aria-label="Weather — METAR and TAF" title="Weather — METAR and TAF">WEATHER</button>
+          <button class="help-btn mapword" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
+          <button class="help-btn mapword" id="stationMapBtn" aria-label="Show route map" title="Show route map">MAP</button>
+          <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+          <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
         </div>
-        <div class="suggest" id="suggest" hidden></div>
       </div>
-      <div class="st-route" id="stRoute" hidden></div>
-      <button class="routebtn" id="routeBtn">Route</button>
-      <!-- Weather se pose à gauche de FIR : les deux lectures d'un même
-           terrain — ce qui est publié, ce qu'il fait — se touchent du même
-           pouce, sans repasser par l'accueil. -->
-      <button class="routebtn" id="wxPageBtn" aria-label="Weather — METAR and TAF" title="Weather — METAR and TAF">Weather</button>
-      <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
-      <button class="routebtn" id="stationMapBtn" aria-label="Show route map" title="Show route map">MAP</button>
-      <div class="hdr-actions">
-        <button class="help-btn" id="homeBtn" aria-label="Start page" title="Start page"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
-        <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
-        <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
+      <!-- La case et sa flèche partagent la deuxième ligne. La flèche envoie
+           le code saisi : c'est le geste de la case, et il se montre au lieu
+           de se dire — même signe qu'à la page Weather. -->
+      <div class="wx-codes-row nt-icao-row">
+        <div class="entry">
+          <div class="scratch">
+            <span class="st-role" id="icaoRole" hidden></span>
+            <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false"
+              aria-label="Aerodrome ICAO code">
+          </div>
+          <div class="suggest" id="suggest" hidden></div>
+        </div>
+        <button class="btn wx-go" id="icaoGo" title="Show NOTAMs for this aerodrome"
+            aria-label="Show NOTAMs for this aerodrome"><svg class="pict" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 12h15M12 5.4l6.6 6.6L12 18.6"/></svg></button>
+      </div>
+      <!-- Les terrains de la route se lisent en dessous, à la couleur du texte
+           — un appui ouvre les NOTAM de celui qu'on touche, celui qui est à
+           l'écran se lit souligné. Le rafraîchissement les a rejoints : il
+           redemande au réseau les NOTAM du terrain affiché, et la main le
+           trouve au bout de la route qu'elle vient de lire. -->
+      <div class="wx-route-line">
+        <div class="wx-route-list" id="stRoute" hidden></div>
+        <button class="btn wx-refresh" id="ntRefresh" title="Refresh" aria-label="Refresh">↻<span
+            class="wx-refresh-lbl"> Refresh</span></button>
       </div>
     </div>
   </header>
 
   <div class="wrap">
-    <!-- La page dit son nom, comme Route et Weather disent le leur. -->
-    <div class="route-head page-head">
-      <span class="route-title">NOTAM</span>
-    </div>
     <!-- Deux onglets sur la même liste, même habit qu'à l'accueil : les
          terrains un à un, ou les routes entières. La case est repliée au
          départ : on ne voit que les deux titres et leur compte, et c'est le
@@ -15093,6 +15052,10 @@ function renderInfo(icao) {
     $("#icao").addEventListener("focus", e => renderSuggest(e.target.value));
     selectAllOnFocus($("#icao"));
     $("#icao").addEventListener("blur", () => setTimeout(() => { $("#suggest").hidden = true; }, 150));
+    /* La flèche est le geste de la case : elle envoie le code saisi, comme
+       Entrée. Elle se montre au lieu de se dire — la main la trouve où elle
+       vient d'écrire, sans chercher la touche. */
+    $("#icaoGo").onclick = () => { $("#suggest").hidden = true; load($("#icao").value); };
     $("#icao").addEventListener("keydown", e => {
       if (e.key === "Enter") { $("#suggest").hidden = true; load($("#icao").value); }
       else if (e.key === "Escape") { $("#suggest").hidden = true; }
@@ -19031,44 +18994,82 @@ window.addEventListener("scroll", hidePop, true);
     // que d'ouvrir à vide.
     let notamRoute = [];                  // [{icao, role}] — contexte route de la page NOTAM
     function renderStRoute() {
-      const pre = $("#stRoutePre"), el = $("#stRoute");
-      // Le terrain affiché ne prend pas de case : son code est déjà dans la
-      // case ICAO, le répéter n'apprendrait rien. Une route de trois terrains
-      // montre donc toujours trois cases en tout, quelle que soit celle qu'on
-      // regarde.
+      const el = $("#stRoute");
+      // La route se lit d'un bloc, sur sa propre ligne, dans l'ordre
+      // DEP -> DEST -> ALT : le terrain affiché y garde sa place et se
+      // souligne, les autres attendent un appui. La case ICAO, elle, est
+      // au-dessus et sert à en demander un nouveau — elle n'est plus une case
+      // de la file, elle ne se range donc plus dedans.
       //
-      // Mais l'ordre DEP -> DEST -> ALT ne bouge pas d'un terrain à l'autre :
-      // la case ICAO se range à SA place dans la file plutôt que de rester
-      // collée à gauche. Les cases qui précèdent le terrain affiché passent
-      // donc avant elle (#stRoutePre), les suivantes après (#stRoute). Chaque
-      // terrain garde ainsi sa colonne : un clic sur DEST n'envoie pas ALT
-      // ailleurs sous le doigt.
+      // La case ICAO garde malgré tout l'étiquette du terrain qu'elle montre —
+      // DEP, DEST ou ALT : c'est le rôle du terrain sous les yeux, et il se lit
+      // là où on vient de taper son code. Terrain hors route (ou consultation
+      // d'un terrain seul) : pas de rôle à nommer, l'étiquette s'efface.
       const i = notamRoute.findIndex(a => a.icao === currentIcao);
-      const cut = i < 0 ? notamRoute.length : i;   // terrain hors route : tout devant
-      // La case ICAO prend l'étiquette du terrain qu'elle montre — DEP, DEST
-      // ou ALT — pour que la file reste complète : c'est la seule case dont
-      // le rôle changeait de nom en cours de route, et il disparaissait.
-      // Terrain hors route (ou consultation d'un terrain seul) : pas de rôle
-      // à nommer, l'étiquette s'efface.
       const roleEl = $("#icaoRole"), lab = i < 0 ? "" : wxRoleLabel(notamRoute[i].role);
       roleEl.textContent = lab;
       roleEl.className = "st-role" + (lab ? " " + notamRoute[i].role : "");
       roleEl.hidden = !lab;
-      const chip = a => {
+      el.hidden = !notamRoute.length;
+      el.innerHTML = notamRoute.map(a => {
         const m = AIRPORTS[a.icao];
         const role = wxRoleLabel(a.role);
-        return `<button class="st-chip ${a.role}" data-code="${a.icao}"
+        const on = a.icao === currentIcao;
+        // Un seul terrain : pas de croix. Retirer le dernier laisserait une
+        // ligne vide qui ne dit plus rien, et le ⌂ est déjà là pour partir.
+        const x = notamRoute.length > 1
+          ? `<span class="wx-x" data-x="${a.icao}" title="Remove ${a.icao} from this screen">×</span>` : "";
+        return `<button type="button" class="wx-jump ${a.role}${on ? " on" : ""}" data-code="${a.icao}"
       title="${role}${m ? " — " + m.city : ""}" aria-label="Show NOTAMs for ${a.icao}"
-      ><span class="l">${role}</span><span class="v">${a.icao}</span></button>`;
-      };
-      const fill = (box, list) => {
-        box.hidden = !list.length;
-        box.innerHTML = list.map(chip).join("");
-        box.querySelectorAll(".st-chip").forEach(b => b.onclick = () => load(b.dataset.code));
-      };
-      fill(pre, notamRoute.slice(0, cut));
-      fill(el, notamRoute.slice(cut).filter(a => a.icao !== currentIcao));
+      ><span class="l">${role}</span><span class="v">${a.icao}</span>${x}</button>`;
+      }).join("");
+      el.querySelectorAll(".wx-jump").forEach(b => {
+        b.onclick = e => {
+          const x = e.target.dataset.x;
+          if (x !== undefined) { dropFromRoute(x); return; }
+          if (b.dataset.code !== currentIcao) load(b.dataset.code);
+        };
+      });
     }
+    /* Retirer un terrain de CETTE lecture. Le plan de vol ne bouge pas : la
+       route se modifie sur l'accueil, et un code reposé dans la case revient
+       ici quand on le veut. Retirer celui qu'on lit ouvre le premier des
+       restants — l'écran ne peut pas rester sur un terrain qui n'est plus dans
+       la file. */
+    function dropFromRoute(icao) {
+      if (notamRoute.length < 2) return;
+      notamRoute = notamRoute.filter(a => a.icao !== icao);
+      if (icao === currentIcao) load(notamRoute[0].icao);
+      else renderStRoute();
+    }
+    /* Le rafraîchissement de la ligne de route : il redemande au réseau les
+       NOTAM du terrain AFFICHÉ et repeint sans passer par le bandeau « Newer
+       NOTAMs received » — on vient de le demander à la main, l'écran doit
+       suivre tout de suite. Un échec laisse la lecture en place : la copie à
+       l'écran vaut toujours mieux qu'une page vide. */
+    let ntRefreshing = false;
+    async function refreshNotams() {
+      if (!currentIcao || ntRefreshing) return;
+      const btn = $("#ntRefresh");
+      ntRefreshing = true;
+      if (btn) btn.disabled = true;
+      const my = ++loadToken;
+      try {
+        const frais = await fetchNotams(currentIcao);
+        if (my !== loadToken) return;
+        setBeacon(true);
+        hideOffline(); hideUpdated();
+        if (frais === null) { current = []; renderEmpty(currentIcao); return; }
+        saveOffline(currentIcao, frais);
+        renderFromRaw(frais);
+      } catch (e) {
+        setBeacon(false);
+      } finally {
+        ntRefreshing = false;
+        if (btn) btn.disabled = false;
+      }
+    }
+    $("#ntRefresh").onclick = () => refreshNotams();
     $("#homeNotamCard").onclick = () => {
       const codes = homeRouteCodes();
       if (!codes.length) { needHomeIcao(); return; }
