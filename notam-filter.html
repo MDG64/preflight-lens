@@ -4490,13 +4490,16 @@ body.light .stat.on {
       min-width: 44px;
       padding: 0 10px;
       border-radius: 8px;
-      /* La case se voit : même filet que les trois cases de code voisines
-         (--line2), en pointillé pour dire qu'elle n'attend pas une saisie.
-         Un pointillé de 1 px est déjà le trait le plus discret de la ligne —
-         l'affaiblir encore l'effaçait purement et simplement, sur les deux
-         thèmes. Il ne passe au trait plein doré qu'une fois la route retenue
-         (`.route-star.on`). */
-      border: 1px dashed var(--line2)
+      /* La case se voit AVANT d'être retenue : c'est là qu'elle sert, à
+         montrer où appuyer. Le filet des cases de code (--line2) restait sous
+         le seuil — un pointillé de 1 px n'a pas la surface d'un cadre de
+         saisie de 46 px de haut, et à teinte égale il ne se lit pas. Il prend
+         donc la teinte des glyphes éteints (--muted2), et la case son fond de
+         panneau, comme la flèche voisine : deux cases au bout de la ligne,
+         également visibles. Le pointillé, lui, reste — il dit que rien n'est
+         encore retenu ; c'est le trait PLEIN doré qui l'annonce (.on). */
+      background: var(--panel);
+      border: 1px dashed var(--muted2)
     }
 
     /* Éteinte, l'étoile PÂLIT SANS EMPORTER SA CASE : l'`opacity` d'antan
