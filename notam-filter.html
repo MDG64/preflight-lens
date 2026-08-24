@@ -16772,7 +16772,7 @@ function renderInfo(icao) {
       // l'orage se voit toujours. Même seuil de dézoom que les flèches
       // (échelle 11.25 = zoom 3 de Weather Lens), mêmes cotes, même écart —
       // les deux apps posent le même éclair au même endroit.
-      const CB_R = 24;
+      const CB_R = 16;   // serré au plus près du point, comme sur Minima Lens
       const cbBolt = (icao, x, y) => {
         if (mapMode !== "wx") return;
         if (v.scale < 11.25) return;
