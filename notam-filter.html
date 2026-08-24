@@ -6017,7 +6017,7 @@ body .stat .k{
           <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 1 000 ft</span>
           <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 1 000 ft</span>
           <span class="mleg wx"><i class="dot mgrey"></i>No usable data</span>
-          <span class="mleg wx"><i class="wda cb">⚡</i>CB reported (METAR) or forecast within 3 h (TAF)</span>
+          <span class="mleg wx"><i class="wda cb">⚡</i>CB — reported (now) or forecast by the TAF at the selected hour</span>
           <span class="mleg wx wd"><i class="wda g">↑</i>Wind/gust 3–10 kt</span>
           <span class="mleg wx wd"><i class="wda g">↑↑</i>Wind/gust 11–20 kt</span>
           <span class="mleg wx wd"><i class="wda a">↑↑↑</i>Wind/gust 21–30 kt</span>
@@ -17124,14 +17124,22 @@ function renderInfo(icao) {
       return false;
     }
 
-    // CB à ce terrain : le relevé individuel de la route quand il est frais
-    // (il survit hors ligne, semé par la copie locale), sinon — et en plus —
-    // la liste du flux mondial, qui pèse aussi le TAF des trois heures qui
-    // viennent. Les deux se cumulent : un orage annoncé d'un côté et pas de
-    // l'autre reste un orage.
+    // CB à ce terrain, sur l'horizon choisi — même règle que mapWindOf, à qui
+    // l'éclair emprunte son sélecteur : sur un horizon prévu (+1/+2/+3 h),
+    // c'est le CB que le TAF annonce pour cette heure-là ; et faute d'un TAF
+    // qui gouverne cet instant — ce que dit mapWxFc en valant 0, exactement
+    // comme pour le vent — le CB du METAR reste. Sur NOW, deux sources comme
+    // la couleur du point : le relevé individuel de la route quand il est
+    // frais (il survit hors ligne, semé par la copie locale), sinon la liste
+    // du flux mondial.
     function mapCbOf(icao) {
+      if (mapWindHour > 0) {
+        if (mapWxCbFc[mapWindHour - 1] && mapWxCbFc[mapWindHour - 1].has(icao)) return true;
+        const f = mapWxFc.get(icao);
+        if (f && f[mapWindHour - 1]) return false;      // le TAF parle, et il ne dit pas de CB
+      }
       const e = mapWx.get(icao);
-      if (e && e.cb && e.t && Date.now() - e.t <= MAP_WX_MAX_AGE) return true;
+      if (e && e.t && Date.now() - e.t <= MAP_WX_MAX_AGE) return !!e.cb;
       return mapWxCb.has(icao);
     }
 
@@ -17206,7 +17214,8 @@ function renderInfo(icao) {
     let mapWxWorld = new Map(), mapWxWorldAt = 0;   // icao -> cat (0..3)
     let mapWxWind = new Map();                      // icao -> [wdir, wspd kt] — queue de ligne du flux
     let mapWxFc = new Map();                        // icao -> vents TAF [+1h,+2h,+3h], triplets [dir,spd,gst] ou 0
-    let mapWxCb = new Set();                        // OACI à cumulonimbus — METAR frais ou TAF des 3 h qui viennent
+    let mapWxCb = new Set();                        // OACI à CB observé au METAR (horizon NOW)
+    let mapWxCbFc = [new Set(), new Set(), new Set()];  // idem prévus par TAF, un jeu par horizon +1/+2/+3 h
     /* `force` : la minuterie de la carte ouverte passe outre l'anti-rebond —
        elle bat au même pas que lui, s'y soumettre ferait sauter un tick sur
        deux. Les appels d'ouverture et de bascule, eux, le gardent. */
@@ -17232,9 +17241,12 @@ function renderInfo(icao) {
         // re-requêter.
         const fc = new Map();
         if (d.winds) for (const k in d.winds) fc.set(k, d.winds[k]);
-        // d.cb : les OACI à cumulonimbus, observé au METAR ou annoncé par le
-        // TAF pour les trois heures qui viennent — l'éclair jaune de la carte.
+        // L'éclair jaune du cumulonimbus, en deux temps comme le vent : d.cb
+        // porte le CB OBSERVÉ au METAR (l'horizon NOW), d.cbf trois listes —
+        // une par horizon — des terrains dont le TAF annonce un CB à cette
+        // heure-là.
         mapWxWorld = m; mapWxWind = w; mapWxFc = fc; mapWxCb = new Set(d.cb || []);
+        mapWxCbFc = [0, 1, 2].map(i => new Set((d.cbf && d.cbf[i]) || []));
         mapWxWorldAt = Date.now();
         if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
       } catch (_) { }
