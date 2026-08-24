@@ -16764,18 +16764,20 @@ function renderInfo(icao) {
       const WORLD_DOT_R = 4.5;
       // Seuil d'apparition des codes OACI, commun aux deux couches : au dézoom
       // la carte ne montre que des couleurs, les codes viennent avec le détail.
-      // En vue Weather les codes arrivent désormais dès l'échelle 11,25 — le
-      // zoom 3, celui des flèches de vent et celui de la carte de Weather
-      // Lens : à ce cran on tient l'Europe de l'Ouest à l'écran, et c'est déjà
-      // là qu'on veut lire des codes plutôt que compter des disques. Ce qui
-      // rendait ce dézoom illisible n'était pas le seuil mais la règle
+      // En vue Weather les codes arrivent désormais dès l'échelle 23 — le
+      // zoom 4 : à ce cran on tient un pays entier à l'écran et c'est déjà là
+      // qu'on veut lire des codes plutôt que compter des disques. Un cran plus
+      // bas (l'échelle 11,25, le zoom 3, celui des flèches de vent) a été
+      // essayé et repris : la moitié d'un continent tient à l'écran, les
+      // capsules couvrent tout ce qui n'est pas mer et plus rien ne se lit.
+      // Ce qui rendait ce dézoom illisible n'était pas que le seuil, la règle
       // « jamais de disparition » : trois cents capsules forcées les unes sur
       // les autres. Sous l'ANCIEN seuil, une étiquette qui ne trouve pas de
       // place est donc abandonnée (`labelsMayDrop`) — le point, lui, reste :
       // même arbitrage que MapLibre sur Weather Lens (text-allow-overlap),
       // on lit moins de codes mais on les lit. En vue NOTAM rien ne change,
       // les codes sont ce qu'on cherche des yeux.
-      const showLabels = v.scale > (mapMode === "wx" ? 11.25 : 58);   // un cran de molette = ×1.18
+      const showLabels = v.scale > (mapMode === "wx" ? 23 : 58);   // un cran de molette = ×1.18
       const labelsMayDrop = mapMode === "wx" && v.scale <= 58 * 1.18 ** 5;
       {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
