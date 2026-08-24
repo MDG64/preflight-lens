@@ -26,8 +26,8 @@ const ASSETS = [
   // l'URL, donc le cache la rate et va la chercher — sans purger la clé, ce qui
   // aurait effacé les plans hors ligne des pilotes. Même geste à la prochaine
   // refonte d'icône : incrémenter le suffixe, ne pas écraser.
-  "./icon-192-v2.png", "./icon-512-v2.png", "./icon-maskable-512-v2.png",
-  "./apple-touch-icon-180-v2.png", "./favicon-32-v2.png",
+  "./icons/icon-192-v3.png", "./icons/icon-512-v3.png", "./icons/icon-maskable-192-v3.png", "./icons/icon-maskable-512-v3.png",
+  "./icons/icon-180-v3.png", "./icons/favicon-32-v3.png", "./icons/favicon-16-v3.png", "./favicon.ico",
   // Photos des trois cases d'accueil (19 aout 2026). Meme regle que les icones :
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
   // refonte d'image change le suffixe, on n'ecrase jamais en place.
