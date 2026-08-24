@@ -3601,6 +3601,12 @@
       color: var(--muted)
     }
 
+    /* L'éclair du CB : le jaune du danger orageux, qu'aucune flèche de vent
+       n'emploie — l'œil ne peut pas les confondre. */
+    .mleg .wda.cb {
+      color: var(--gold)
+    }
+
     /* Chaque vue n'affiche que les lignes qu'elle explique. */
     .mleg.nt {
       display: none
@@ -6011,6 +6017,7 @@ body .stat .k{
           <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 1 000 ft</span>
           <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 1 000 ft</span>
           <span class="mleg wx"><i class="dot mgrey"></i>No usable data</span>
+          <span class="mleg wx"><i class="wda cb">⚡</i>CB reported (METAR) or forecast within 3 h (TAF)</span>
           <span class="mleg wx wd"><i class="wda g">↑</i>Wind/gust 3–10 kt</span>
           <span class="mleg wx wd"><i class="wda g">↑↑</i>Wind/gust 11–20 kt</span>
           <span class="mleg wx wd"><i class="wda a">↑↑↑</i>Wind/gust 21–30 kt</span>
@@ -16755,6 +16762,49 @@ function renderInfo(icao) {
         }
         windBoxes.push([bx0, by0, bx1, by1]);
       };
+      // --- éclair du cumulonimbus (vue Weather) ---
+      // CB observé au METAR ou annoncé par le TAF dans les trois heures : un
+      // petit éclair JAUNE à côté du terrain. Il prend le TRAVERS du vent —
+      // à 90° du faisceau —, le seul secteur que rien ne réclame : les
+      // flèches vivent au vent du terrain, le triangle « ! » au bout de ce
+      // faisceau, et le code OACI sous le vent. Vent éteint ou absent, il se
+      // range à droite du point. Il ne dépend PAS de l'interrupteur WIND :
+      // l'orage se voit toujours. Même seuil de dézoom que les flèches
+      // (échelle 11.25 = zoom 3 de Weather Lens), mêmes cotes, même écart —
+      // les deux apps posent le même éclair au même endroit.
+      const CB_R = 24;
+      const cbBolt = (icao, x, y) => {
+        if (mapMode !== "wx") return;
+        if (v.scale < 11.25) return;
+        if (!mapCbOf(icao)) return;
+        const cap = mapTouchUI ? 2.2 : 1.6;
+        const zk = Math.log2(v.scale / 1.4222);
+        const s2 = dpr * Math.min(cap, Math.max(1, 1 + (zk - 8) * (cap - 1) / 3));
+        const w = (mapWindOn && mapMode === "wx") ? mapWindOf(icao) : null;
+        const th = w ? w[0] * Math.PI / 180 : 0;   // direction d'où VIENT le vent
+        const bx = x + CB_R * s2 * Math.cos(th), by = y + CB_R * s2 * Math.sin(th);
+        const halo = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
+        const col = light ? "#c98a08" : "#f6c945";   // --gold des deux thèmes
+        const bolt = () => {
+          ctx.beginPath();
+          ctx.moveTo(bx + 1.8 * s2, by - 8 * s2);
+          ctx.lineTo(bx - 3.8 * s2, by + 1.4 * s2);
+          ctx.lineTo(bx - 0.1 * s2, by + 1.4 * s2);
+          ctx.lineTo(bx - 1.7 * s2, by + 8 * s2);
+          ctx.lineTo(bx + 4 * s2, by - 1.4 * s2);
+          ctx.lineTo(bx + 0.3 * s2, by - 1.4 * s2);
+          ctx.closePath();
+        };
+        ctx.save();
+        ctx.lineJoin = "round"; ctx.lineCap = "round";
+        ctx.strokeStyle = halo; ctx.lineWidth = 3.4 * s2; bolt(); ctx.stroke();
+        ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1.2 * s2;
+        bolt(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+        // L'éclair occupe la place au même titre qu'un faisceau : les codes
+        // OACI, qui consultent windBoxes, ne se poseront pas dessus.
+        windBoxes.push([bx - 5.5 * s2, by - 9.5 * s2, bx + 5.5 * s2, by + 9.5 * s2]);
+      };
       // Rayon commun à tous les points de la carte. En vue Weather il vaut
       // pour tout le monde, route comprise : la carte météo ne dit qu'une
       // chose, la couleur du dernier relevé, et un point plus gros ferait
@@ -16812,7 +16862,7 @@ function renderInfo(icao) {
         world.sort((p, q) => dotPri(p.a.icao) - dotPri(q.a.icao));
         // Toutes les flèches d'abord, tous les points ensuite : un faisceau ne
         // passe jamais par-dessus le disque d'un voisin.
-        for (const p of world) windArrow(p.a.icao, p.x, p.y);
+        for (const p of world) { windArrow(p.a.icao, p.x, p.y); cbBolt(p.a.icao, p.x, p.y); }
         // Les faisceaux comptent comme des occupants : une étiquette qui les
         // aurait chevauchés cherche un autre côté du point.
         placed.push(...windBoxes);
@@ -16907,6 +16957,7 @@ function renderInfo(icao) {
         const depArr = a.role !== "alt";
         const col = dotCol(a.icao);
         windArrow(a.icao, x, y);           // le faisceau sous le disque, comme la couche mondiale
+        cbBolt(a.icao, x, y);              // et l'éclair du CB, au travers du vent
         ctx.fillStyle = col;
         // En vue NOTAM, la route garde un cran d'avance sur les 4,5 px de la
         // couche mondiale ; en vue Weather elle rentre dans le rang, liseré
@@ -17057,6 +17108,33 @@ function renderInfo(icao) {
       return best;
     }
 
+    // Un cumulonimbus s'annonce par un groupe de nuages suffixé CB :
+    // « SCT025CB », « BKN///CB », « //////CB » d'un AUTO mutilé. C'est CE
+    // jeton qu'on cherche — pas les phénomènes orageux (TS…), qui décrivent ce
+    // qui tombe, pas le nuage qui le fabrique. Les groupes d'évolution du
+    // METAR (TEMPO, BECMG) comptent : « TEMPO SCT020CB » est un CB annoncé
+    // pour tout à l'heure, exactement ce que l'éclair doit dire. Le TAF, lui,
+    // se lit côté proxy (wx-map.js), qui envoie sa liste dans le flux.
+    const WX_CB_RE = /^(?:FEW|SCT|BKN|OVC|\/{3})(?:\d{3}|\/{3})CB$/;
+    function wxHasCbRaw(raw) {
+      for (const t of String(raw || "").toUpperCase().replace(/=/g, " ").split(/\s+/)) {
+        if (t === "RMK") break;
+        if (WX_CB_RE.test(t)) return true;
+      }
+      return false;
+    }
+
+    // CB à ce terrain : le relevé individuel de la route quand il est frais
+    // (il survit hors ligne, semé par la copie locale), sinon — et en plus —
+    // la liste du flux mondial, qui pèse aussi le TAF des trois heures qui
+    // viennent. Les deux se cumulent : un orage annoncé d'un côté et pas de
+    // l'autre reste un orage.
+    function mapCbOf(icao) {
+      const e = mapWx.get(icao);
+      if (e && e.cb && e.t && Date.now() - e.t <= MAP_WX_MAX_AGE) return true;
+      return mapWxCb.has(icao);
+    }
+
     // Le vent d'un terrain, deux sources comme la couleur de son point : le
     // relevé individuel de la route quand il est frais (plus récent), sinon le
     // flux mondial du proxy. La vitesse rendue est le vent le plus FORT
@@ -17084,7 +17162,8 @@ function renderInfo(icao) {
       const vc = m && m.raw ? wxVisCeil(m.raw) : { vis: null, ceil: null };
       const w = m && m.raw ? wxWindOfRaw(m.raw) : null;
       mapWx.set(icao, { vis: vc.vis, ceil: vc.ceil, wdir: w ? w.dir : null, wspd: w ? w.spd : 0,
-                        wgst: w ? w.gst : 0, t: m ? (Date.parse(m.time || "") || 0) : 0, at });
+                        wgst: w ? w.gst : 0, cb: !!(m && m.raw && wxHasCbRaw(m.raw)),
+                        t: m ? (Date.parse(m.time || "") || 0) : 0, at });
     }
 
     function mapWxCatOf(icao) {
@@ -17127,6 +17206,7 @@ function renderInfo(icao) {
     let mapWxWorld = new Map(), mapWxWorldAt = 0;   // icao -> cat (0..3)
     let mapWxWind = new Map();                      // icao -> [wdir, wspd kt] — queue de ligne du flux
     let mapWxFc = new Map();                        // icao -> vents TAF [+1h,+2h,+3h], triplets [dir,spd,gst] ou 0
+    let mapWxCb = new Set();                        // OACI à cumulonimbus — METAR frais ou TAF des 3 h qui viennent
     /* `force` : la minuterie de la carte ouverte passe outre l'anti-rebond —
        elle bat au même pas que lui, s'y soumettre ferait sauter un tick sur
        deux. Les appels d'ouverture et de bascule, eux, le gardent. */
@@ -17152,7 +17232,10 @@ function renderInfo(icao) {
         // re-requêter.
         const fc = new Map();
         if (d.winds) for (const k in d.winds) fc.set(k, d.winds[k]);
-        mapWxWorld = m; mapWxWind = w; mapWxFc = fc; mapWxWorldAt = Date.now();
+        // d.cb : les OACI à cumulonimbus, observé au METAR ou annoncé par le
+        // TAF pour les trois heures qui viennent — l'éclair jaune de la carte.
+        mapWxWorld = m; mapWxWind = w; mapWxFc = fc; mapWxCb = new Set(d.cb || []);
+        mapWxWorldAt = Date.now();
         if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
       } catch (_) { }
     }
