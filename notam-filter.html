@@ -16508,7 +16508,12 @@ function renderInfo(icao) {
           // détail que l'archive OpenFreeMap, mais une carte, et c'est le sujet.
           this.map.on("error", ev => {
             if (this.offline) return;
-            if (ev && ev.sourceId && ev.sourceId !== "o") return;
+            /* SEULES les erreurs de tuile du fond (sourceId "o") déclenchent
+               la bascule. L'ancienne garde laissait passer toute erreur SANS
+               sourceId — style, image, WebGL —, et une seule suffisait à
+               coller l'archive z6 pour toute la vie de l'app : sur téléphone,
+               où l'app vit des jours, c'était le fond grossier permanent. */
+            if (!ev || ev.sourceId !== "o") return;
             this.offline = true;
             try { this.map.setStyle(glStyle(document.body.classList.contains("light"), true, mapMode === "wx")); }
             catch (_) { }
@@ -16517,6 +16522,21 @@ function renderInfo(icao) {
           this.active = true;
           return true;
         })();
+        /* Un échec ne se fige plus : autrefois la promesse restait en place
+           et toute la session retombait sur le canvas — sur téléphone, un
+           seul téléchargement d'archive raté (21 Mo sur données mobiles) et
+           le vieux fond durait des jours. On efface la trace, la PROCHAINE
+           ouverture retente tout ; l'archive ratée (false) redevient null
+           pour être retéléchargée — le service worker la sert du cache dès
+           qu'un téléchargement a réussi une fois. Une tentative par geste
+           d'ouverture, jamais de boucle. */
+        this._loading = this._loading.then(ok => {
+          if (!ok) {
+            this._loading = null;
+            if (this.archive === false) this.archive = null;
+          }
+          return ok;
+        });
         return this._loading;
       },
       // Affine écran <- Mercator, calibrée avec DEUX map.project() par image.
@@ -17253,6 +17273,17 @@ function renderInfo(icao) {
       if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); }
       // MapLibre disponible : c'est LUI qui cadre, mapView suivra au 1er rendu.
       if (GL.active && GL.map) {
+        /* La bascule sur l'archive z6 était SANS RETOUR : un trou de réseau
+           en vol, et la carte restait grossière des jours durant, tant que
+           l'app vivait. Chaque OUVERTURE retente donc le fond en ligne quand
+           le réseau est là — une tentative par geste, pas de boucle : si les
+           tuiles échouent vraiment, le gestionnaire d'erreur ci-dessus
+           rebascule sur l'archive, comme au premier jour. */
+        if (GL.offline && netOnline()) {
+          GL.offline = false;
+          try { GL.map.setStyle(glStyle(document.body.classList.contains("light"), false, mapMode === "wx")); }
+          catch (_) { GL.offline = true; }
+        }
         $("#routeMapGL").classList.add("gl");
         $("#routeMapAttr").hidden = false;
         GL.map.resize();
