@@ -17083,8 +17083,11 @@ function renderInfo(icao) {
     let mapWxWorld = new Map(), mapWxWorldAt = 0;   // icao -> cat (0..3)
     let mapWxWind = new Map();                      // icao -> [wdir, wspd kt] — queue de ligne du flux
     let mapWxFc = new Map();                        // icao -> vents TAF [+1h,+2h,+3h], triplets [dir,spd,gst] ou 0
-    async function mapWxWorldRefresh() {
-      if (Date.now() - mapWxWorldAt < MAP_WXWORLD_TTL) return;
+    /* `force` : la minuterie de la carte ouverte passe outre l'anti-rebond —
+       elle bat au même pas que lui, s'y soumettre ferait sauter un tick sur
+       deux. Les appels d'ouverture et de bascule, eux, le gardent. */
+    async function mapWxWorldRefresh(force) {
+      if (!force && Date.now() - mapWxWorldAt < MAP_WXWORLD_TTL) return;
       try {
         const r = await fetch(`${BACKEND_URL}/api/wx/map`);
         if (!r.ok) throw new Error("HTTP " + r.status);
@@ -17128,6 +17131,24 @@ function renderInfo(icao) {
       else closeMapWxSide();       // le relevé appartient à la vue weather
       drawMap();
     };
+    /* Une carte OUVERTE se rafraîchit toute seule — même pas que la carte de
+       Minima Lens (60 s). Sans cette minuterie, la couche mondiale et les
+       points de la route gardaient les couleurs de l'OUVERTURE : sur un
+       téléphone où l'app reste des heures en vie, la carte laissée affichée
+       (ou retrouvée au retour au premier plan) montrait la météo d'avant.
+       La minuterie est permanente et ne mord que carte visible, en vue
+       weather, page au premier plan ; elle force l'anti-rebond du flux
+       mondial, qui bat au même pas qu'elle. Au retour au premier plan on
+       repasse par l'anti-rebond : les allers-retours rapides d'onglet ne
+       déclenchent rien, une vraie absence rafraîchit dans la minute. */
+    const MAP_WX_REFRESH_MS = 60e3;
+    function mapWxTick(force) {
+      if (document.hidden || $("#mapOv").hidden || mapMode !== "wx") return;
+      mapWxRefresh();
+      mapWxWorldRefresh(force);
+    }
+    setInterval(() => mapWxTick(true), MAP_WX_REFRESH_MS);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) mapWxTick(false); });
     // Interrupteur des flèches de vent : l'état vit dans la classe du
     // conteneur (pour la légende) et dans mapWindOn (pour le dessin).
     // L'éteindre ramène l'horizon sur NOW — au rallumage, la carte repart du
@@ -19708,6 +19729,42 @@ window.addEventListener("scroll", hidePop, true);
       $("#wxRefresh").disabled = false;
       setWxStatus("");
     }
+    /* ---- rafraîchissement automatique, comme la page de Minima Lens ----
+       Le proxy se met à jour tout seul ; sans minuterie l'écran, lui, restait
+       sur le relevé lu à l'OUVERTURE — l'âge vieillissait, la donnée jamais.
+       Silencieux sur trois points, chacun compte :
+         · pas de bandeau « Requesting… », pas de bouton grisé — rien ne
+           clignote toutes les minutes ;
+         · une section ne se réécrit que si SON relevé a réellement changé ;
+         · en cas d'échec (réseau, service), rien ne bouge : ce qui est à
+           l'écran reste, et c'est l'âge qui vieillit qui donne l'alerte.
+       Un lot = un jeton : la minute coûte une seule requête, souvent servie
+       par le cache du proxy. */
+    async function refreshWxSilent() {
+      if (document.hidden || $("#wxScreen").hidden || !wxList.length) return;
+      const my = wxToken;                        // on s'aligne, on ne coupe personne
+      let stations;
+      try { stations = await wxFetchGroup(wxList.map(a => a.icao)); }
+      catch (e) { return; }
+      if (my !== wxToken || $("#wxScreen").hidden) return;
+      for (const a of wxList) {
+        const d = stations[a.icao];
+        if (!d || d.error) continue;             // échec local : la section garde son relevé
+        wxStore(a.icao, d);
+        const cur = wxShown[a.icao];
+        if (cur && JSON.stringify([cur.metar, cur.taf]) === JSON.stringify([d.metar, d.taf])) continue;
+        renderWxAirport(a.icao, d);
+        if (!d.metar && !d.taf) setWxNote(a.icao, "No reports available — this station may not publish METAR/TAF.");
+        else if (d.stale) setWxNote(a.icao, "Source unreachable — showing the server's last copy.", "warn");
+        else setWxNote(a.icao, "");
+      }
+    }
+    const WX_REFRESH_MS = 60e3;
+    let wxAutoTimer = null;
+    // Retour au premier plan : c'est précisément là que le relevé affiché
+    // risque d'être vieux — un téléphone rangé une heure revient sur l'écran
+    // tel qu'il l'a laissé. On rafraîchit tout de suite, sans attendre le tick.
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshWxSilent(); });
     // `list` : [{icao, role?}] — un terrain seul (case ICAO, l'en-tête de page
     // suffit) ou la route entière (sections DEP / DEST / ALT). Les sections se
     // construisent tout de suite, chacune se remplit dès que SA réponse arrive.
@@ -19746,6 +19803,7 @@ window.addEventListener("scroll", hidePop, true);
       $("#wxAdd").value = "";
       hideWxSuggest();
       if (!wxTicker) wxTicker = setInterval(renderWxAges, 30000);
+      if (!wxAutoTimer) wxAutoTimer = setInterval(refreshWxSilent, WX_REFRESH_MS);
       await refreshWx();
     }
     $("#wxRefresh").onclick = () => refreshWx();
@@ -19845,6 +19903,7 @@ window.addEventListener("scroll", hidePop, true);
       $("#wxScreen").hidden = true;
       wxToken++;                                 // coupe les requêtes en cours
       if (wxTicker) { clearInterval(wxTicker); wxTicker = null; }
+      if (wxAutoTimer) { clearInterval(wxAutoTimer); wxAutoTimer = null; }
     }
     function closeWx() {
       wxTeardown();
