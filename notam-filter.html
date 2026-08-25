@@ -6014,7 +6014,7 @@ body .stat .k{
           </button>
         </div>
         <div class="map-legend">
-          <span class="mleg wx"><i class="dot mred"></i>VIS ≤ 600 m or ceiling ≤ 300 ft</span>
+          <span class="mleg wx"><i class="dot mred"></i>VIS ≤ 1 000 m or ceiling ≤ 500 ft</span>
           <span class="mleg wx"><i class="dot mamber"></i>VIS ≤ 2 000 m or ceiling ≤ 1 000 ft</span>
           <span class="mleg wx"><i class="dot mgreen"></i>VIS &gt; 2 000 m and ceiling &gt; 1 000 ft</span>
           <span class="mleg wx"><i class="dot mgrey"></i>No usable data</span>
@@ -16687,7 +16687,10 @@ function renderInfo(icao) {
         // Trois flèches au plus — la légende ne parle pas d'autre chose :
         // ↑, ↑↑, ↑↑↑. Au-delà, le rouge dit déjà tout.
         const n = Math.min(3, Math.ceil(ws / 10));
-        const col = WXPAL[ws > 30 ? 3 : ws >= 20 ? 2 : 1];
+        // La couleur suit le NOMBRE de flèches, jamais l'inverse : ambre à la
+        // troisième, donc au-DESSUS de 20 kt et non à partir de 20 — sinon
+        // 20 kt pile donnait deux flèches ambre, que la légende ne connaît pas.
+        const col = WXPAL[ws > 30 ? 3 : ws > 20 ? 2 : 1];
         const halo = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
         // Passé le zoom ville, le faisceau grossit avec la carte — même courbe
         // que Weather Lens (×1 au zoom MapLibre 8, plafond atteint au zoom 11) :
@@ -17017,7 +17020,7 @@ function renderInfo(icao) {
        /api/wx/map, catégories calculées côté proxy. VIS et plafond du relevé
        individuel sont décodés ici, repris du serveur Weather Lens (wx-map.js),
        pour que la même couleur dise la même chose dans les deux apps :
-         rouge  VIS ≤ 600 m ou plafond ≤ 300 ft
+         rouge  VIS ≤ 1 000 m ou plafond ≤ 500 ft
          ambre  VIS ≤ 2 000 m ou plafond ≤ 1 000 ft
          vert   au-dessus des deux
          gris   pas de METAR exploitable, ou trop vieux */
@@ -17077,7 +17080,7 @@ function renderInfo(icao) {
       const hasVis = Number.isFinite(vis);
       const hasCeil = ceil != null;
       if (!hasVis && !hasCeil) return 0;
-      if ((hasVis && vis <= 600) || (hasCeil && ceil <= 300)) return 3;
+      if ((hasVis && vis <= 1000) || (hasCeil && ceil <= 500)) return 3;
       if ((hasVis && vis <= 2000) || (hasCeil && ceil <= 1000)) return 2;
       return 1;
     }
