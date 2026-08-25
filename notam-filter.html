@@ -19509,12 +19509,13 @@ window.addEventListener("scroll", hidePop, true);
        Lecture brute du message, sans minima ni terrain : l'œil doit accrocher
        tout de suite le groupe qui sort de l'ordinaire, dans la base comme dans
        un TEMPO. Vent (rafale comprise) ≥ 30 kt ambre, ≥ 40 kt rouge ;
-       visibilité et RVR < 2000 m ambre, < 600 m rouge ; plafond — BKN, OVC,
-       VV — < 1 000 ft ambre, < 300 ft rouge. Teinte légère : elle signale, elle
-       ne juge pas. */
+       visibilité et RVR ≤ 2 000 m ambre, ≤ 1 000 m rouge ; plafond — BKN, OVC,
+       VV — ≤ 1 000 ft ambre, ≤ 500 ft rouge. Teinte légère : elle signale, elle
+       ne juge pas. Visibilité et plafond tiennent les seuils EXACTS des
+       pastilles de la carte : la même valeur y dit la même couleur. */
     const WXS_WIND = { amber: 30, red: 40 };     // kt, dès ce seuil
-    const WXS_VIS  = { amber: 2000, red: 600 };  // m, en dessous — RVR comprise
-    const WXS_CEIL = { amber: 1000, red: 300 };   // ft, en dessous
+    const WXS_VIS  = { amber: 2000, red: 1000 }; // m, dès ce seuil vers le bas — RVR comprise
+    const WXS_CEIL = { amber: 1000, red: 500 };   // ft, dès ce seuil vers le bas
     const WXS_CLOUD = /^(FEW|SCT|BKN|OVC|VV)(\d{3}|\/{3})(CB|TCU|\/{3})?$/;  // AUTO : type nuageux « /// »
     const WXS_RVR   = /^R\d{2}[LCR]?\/[PM]?(\d{3,4})(?:V[PM]?(\d{3,4}))?(FT)?\/?[UDN]?$/;
     /* Orage et cumulonimbus : un groupe de temps présent dont le descripteur
@@ -19522,8 +19523,8 @@ window.addEventListener("scroll", hidePop, true);
     const WXS_TS    = /^(?:[-+]|VC)?TS(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|SQ|FC|SS|DS)*$/;
 
     const wxSevOf = (v, sc, below) =>
-      (below ? v < sc.red : v >= sc.red) ? "red"
-      : (below ? v < sc.amber : v >= sc.amber) ? "amber" : null;
+      (below ? v <= sc.red : v >= sc.red) ? "red"
+      : (below ? v <= sc.amber : v >= sc.amber) ? "amber" : null;
 
     /* `prev` sert au seul cas où une valeur tient en deux jetons : la
        visibilité anglo-saxonne « 1 1/2SM ». */
