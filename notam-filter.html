@@ -18246,8 +18246,8 @@ function renderInfo(icao) {
       { id: "AS", minLon: 44, maxLon: 150, minLat: 2, maxLat: 73 },
       { id: "OC", minLon: 110, maxLon: 180, minLat: -48, maxLat: 2 },
     ];
-    // Repli sans favori : Europe + Afrique d'un seul tenant.
-    const EU_AF_BOX = { id: "EUAF", minLon: -25, maxLon: 55, minLat: -35, maxLat: 71 };
+    // Repli sans favori : l'Europe seule.
+    const EU_BOX = CONTINENT_BOXES[0];
     function continentBoxFor(lat, lon) {
       const inside = CONTINENT_BOXES.filter(b =>
         lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon);
@@ -18255,7 +18255,7 @@ function renderInfo(icao) {
       if (inside.length) return inside.sort((a, b) => area(a) - area(b))[0];
       // Hors de toute boîte (îles isolées, hautes latitudes) : la plus proche,
       // plutôt qu'un repli Europe qui enverrait un favori du Pacifique à côté.
-      let best = EU_AF_BOX, bestD = Infinity;
+      let best = EU_BOX, bestD = Infinity;
       for (const b of CONTINENT_BOXES) {
         const dx = Math.max(b.minLon - lon, 0, lon - b.maxLon);
         const dy = Math.max(b.minLat - lat, 0, lat - b.maxLat);
@@ -18276,7 +18276,7 @@ function renderInfo(icao) {
     }
     // Vue d'ouverture : le continent du 1er favori — c'est le terrain que l'app
     // charge d'elle-même au démarrage, donc la zone que le pilote regarde.
-    // Sans favori (ou coordonnées inconnues), repli Europe-Afrique.
+    // Sans favori (ou coordonnées inconnues), repli Europe.
     function firHomeView(r) {
       // 1er favori dont on connaît la position : un favori absent de la base
       // mondiale ne doit pas faire retomber tout le monde sur le repli.
@@ -18285,22 +18285,7 @@ function renderInfo(icao) {
         const g = GEO[code];
         if (g && Number.isFinite(g.lat) && Number.isFinite(g.lon)) { home = g; break; }
       }
-      return firViewForBox(r, home ? continentBoxFor(home.lat, home.lon) : EU_AF_BOX);
-    }
-    function firWorldDefaultView(r) {
-      // vue monde par défaut, même cadrage que la carte route sans itinéraire.
-      // En portrait (mobile), l'échelle est contrainte par la largeur : viser
-      // les 330° de longitude du cadrage paysage réduit la carte à une bande
-      // minuscule, et le centrage sur l'Europe (lon 10) rejette les Amériques
-      // au bord. On recentre donc sur l'Atlantique avec une plage plus courte,
-      // pour avoir Amériques ET Europe lisibles à l'ouverture.
-      const portrait = r.height > r.width * 1.15;
-      const cy = portrait ? 20 : 25;
-      const cx = portrait ? -50 : 10;
-      const lonSpan = portrait ? 220 : 330;
-      const kx0 = Math.cos(cy * Math.PI / 180);
-      const scale = Math.max(1, Math.min((r.height * 0.9) / 150, (r.width * 0.9) / (lonSpan * kx0)));
-      return { cx, cy, scale };
+      return firViewForBox(r, home ? continentBoxFor(home.lat, home.lon) : EU_BOX);
     }
     function openFirMap() {
       $("#firOv").hidden = false;
@@ -18316,16 +18301,19 @@ function renderInfo(icao) {
     }
     $("#firMapBtn").onclick = async () => { if (await ensureFirReady()) openFirMap(); };
     // Icône unique (coin haut-droit de la carte) : 1er clic depuis le détail
-    // d'une FIR -> referme le panneau et revient à la vue monde ; un 2e clic,
-    // déjà sur la vue monde, quitte entièrement la vue FIR.
-    // Referme le détail d'une FIR et remet la carte au cadrage monde.
+    // d'une FIR -> referme le panneau et revient à la carte ; un 2e clic,
+    // déjà sur la carte, quitte entièrement la vue FIR.
+    // Referme le détail d'une FIR et remet la carte au cadrage d'ouverture :
+    // le continent du 1er favori (Europe sans favori), comme openFirMap() —
+    // pas une vue monde, qui obligerait à re-zoomer chez soi après chaque
+    // consultation.
     // L'ordre compte : sur mobile la carte est en display:none tant que
     // .detail-open est posée, elle mesurerait 0×0. On referme d'abord (ce qui
     // la réaffiche et retaille son buffer), on cadre ensuite.
     function backToFirWorld() {
       closeFirPanel();
       const r = $("#firMap").getBoundingClientRect();
-      if (firView && r.width > 0) Object.assign(firView, firWorldDefaultView(r));
+      if (firView && r.width > 0) Object.assign(firView, firHomeView(r));
       scheduleFirDraw();
     }
     $("#firExpandBtn").onclick = () => {
