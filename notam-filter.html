@@ -17989,7 +17989,11 @@ function renderInfo(icao) {
       return base;
     }
     async function openFirPanel(firId) {
-      if (!FIR_NOTAMS || !FIR_NOTAMS[firId]) return;
+      // PAS de garde sur FIR_NOTAMS[firId] : une FIR fermée par le NOTAM d'un
+      // AUTRE État (ORBB/OSTT/HAAA, champ « via » des fermetures) n'a aucun
+      // NOTAM de sujet AF déposé chez elle, donc aucune entrée dans
+      // /api/fir/notams — mais son étiquette rouge est bien cliquable et le
+      // détail /api/fir/notams/:fir, lui, a des NOTAM à montrer.
       const title = $("#firTitle");
       const summary = $("#firSummary");
       const list = $("#firList");
@@ -18015,7 +18019,7 @@ function renderInfo(icao) {
       } catch (e) {}
 
       // Fallback: utiliser les NOTAM en mémoire
-      if (!notams.length && FIR_NOTAMS[firId] && FIR_NOTAMS[firId].notams) {
+      if (!notams.length && FIR_NOTAMS && FIR_NOTAMS[firId] && FIR_NOTAMS[firId].notams) {
         notams = FIR_NOTAMS[firId].notams;
       }
 
