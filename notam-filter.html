@@ -14483,6 +14483,8 @@ E) ${e}`;
     const PLAN_LOCKS = {
       timeFilter: "Time filters — <b>Now</b>, <b>Today</b>, <b>Tomorrow</b> and the UTC hour — come with the full version.",
       windHours: "Forecast wind at <b>+1h</b>, <b>+2h</b> and <b>+3h</b> comes with the full version. Observed wind stays free.",
+      phaseFilter: "Filtering by <b>flight phase</b> comes with the full version. The counts stay visible.",
+      sevFilter: "Filtering by <b>severity</b> comes with the full version. The counts stay visible.",
     };
     /* Vrai si le geste doit être ARRÊTÉ. Un seul appel en tête de gestionnaire :
        `if (planBlocked("timeFilter")) return;` */
@@ -15125,7 +15127,11 @@ function renderInfo(icao) {
         b.className = "cat"; b.dataset.cat = c; b.setAttribute("aria-pressed", "false");
         b.title = CAT_LABEL[c];
         b.innerHTML = `<span class="cat-label">${CAT_LABEL[c]}</span><span class="cnt" data-cnt="${c}">0</span>`;
-        b.onclick = () => { activeCats.has(c) ? activeCats.delete(c) : activeCats.add(c); render(); };
+        // Le compte par phase reste AFFICHÉ (span .cnt) : seul le tri est borné.
+        b.onclick = () => {
+          if (planBlocked("phaseFilter")) return;
+          activeCats.has(c) ? activeCats.delete(c) : activeCats.add(c); render();
+        };
         seg.appendChild(b);
       });
     }
@@ -15296,6 +15302,13 @@ function renderInfo(icao) {
     <div class="stat info${activeSev === "info" ? " on" : ""}" data-sev="info"><div class="row"><span class="led"></span><span class="n">${c.info}</span></div><div class="k">Information</div></div>`;
       summary.querySelectorAll(".stat").forEach(el => el.onclick = () => {
         const s = el.dataset.sev;
+        // « all » n'est pas un tri mais sa remise à zéro : en plan gratuit
+        // activeSev vaut déjà null, le clic n'y fait rien et n'a pas à être
+        // refusé. Les trois autres, si — sans toucher aux chiffres, qui sont
+        // un relevé avant d'être un bouton : masquer un compte de NOTAM
+        // critiques serait nuisible, et le voir sans pouvoir l'isoler est ce
+        // qui donne envie de la version complète.
+        if (s !== "all" && planBlocked("sevFilter")) return;
         activeSev = (s === "all") ? null : (activeSev === s ? null : s);
         render();
       });
