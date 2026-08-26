@@ -17770,9 +17770,9 @@ function renderInfo(icao) {
         body.innerHTML = head
           + (note ? `<div class="mapwx-note${noteCls ? " " + noteCls : ""}">${esc(note)}</div>` : "")
           + `<div class="wx-block"><h3>METAR <span class="wx-age${ma ? " " + wxAgeCls(ma.min) : ""}">${ma ? ma.txt : ""}</span></h3>`
-          + `<pre class="wx-raw${d && d.metar && d.metar.raw ? "" : " empty"}">${d && d.metar && d.metar.raw ? wxSevHtml(d.metar.raw) : "No METAR available for " + icao + "."}</pre></div>`
+          + `<pre class="wx-raw${d && d.metar && d.metar.raw ? "" : " empty"}">${d && d.metar && d.metar.raw ? wxSevHtml(d.metar.raw) : esc(wxAbsent("metar", icao, d))}</pre></div>`
           + `<div class="wx-block"><h3>TAF <span class="wx-age">${ta ? ta.txt : ""}</span></h3>`
-          + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? wxSevHtml(tafPretty(d.taf.raw)) : "No TAF published for " + icao + "."}</pre></div>`
+          + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? wxSevHtml(tafPretty(d.taf.raw)) : esc(wxAbsent("taf", icao, d))}</pre></div>`
           + wxRunwaysHtml(icao, d)
           + `<div class="wx-block" id="dwxSec" hidden></div>`
           + `<p class="mapwx-hint">Swipe down to close.</p>`;
@@ -17808,7 +17808,7 @@ function renderInfo(icao) {
         if (seq !== mapWxSideSeq) return;      // panneau refermé ou rouvert ailleurs
         if (!d || d.error) throw Object.assign(new Error((d && d.error) || "empty"), { svc: true });
         wxStore(icao, d);                      // même copie locale que la page Weather
-        render(d, d.stale ? "Source unreachable — showing the server's last copy." : "", "warn");
+        render(d, d.stale ? wxStaleNote(d) : "", "warn");
       } catch (e) {
         if (seq !== mapWxSideSeq) return;
         const cached = wxLoad(icao);
@@ -19978,6 +19978,25 @@ window.addEventListener("scroll", hidePop, true);
       const g = cached ? wxAge(cached.at) : null;
       return wxFailCause(err) + (g ? " — copy fetched " + g.txt + "." : " — no local copy for this station.");
     }
+    /* Un relevé absent de la réponse : DEUX causes que le pilote ne doit pas
+       confondre — le terrain n'en publie pas, ou la source n'a rien dit. Le
+       proxy les distingue depuis qu'un flux muet n'emporte plus l'autre
+       (2026-08-26) : `mute` nomme celui qui n'a pas répondu. « No TAF
+       published » sur un terrain qui en publie serait le pire des mensonges,
+       parce qu'il se lit comme une information. */
+    function wxAbsent(flux, icao, d) {
+      if (d && d.mute === flux) return flux.toUpperCase() + " unavailable — the source did not answer.";
+      return flux === "metar" ? "No METAR available for " + icao + "."
+                              : "No TAF published for " + icao + ".";
+    }
+    // La note du haut dit la même chose que la boîte vide : quand un seul flux
+    // s'est tu, l'autre est frais, et parler de « copie » pour l'ensemble
+    // vieillirait à tort le relevé qui vient d'arriver.
+    function wxStaleNote(d) {
+      if (d && d.mute === "taf") return "TAF source unreachable — the METAR is current.";
+      if (d && d.mute === "metar") return "METAR source unreachable — the TAF is current.";
+      return "Source unreachable — showing the server's last copy.";
+    }
     function setWxNote(icao, msg, cls) {
       const sec = wxSection(icao); if (!sec) return;
       const n = sec.querySelector(".wx-ap-note");
@@ -19990,9 +20009,9 @@ window.addEventListener("scroll", hidePop, true);
       wxShown[icao] = d;
       const mEl = sec.querySelector('[data-raw="metar"]'), tEl = sec.querySelector('[data-raw="taf"]');
       if (d.metar && d.metar.raw) { mEl.innerHTML = wxSevHtml(d.metar.raw); mEl.classList.remove("empty"); }
-      else { mEl.textContent = "No METAR available for " + icao + "."; mEl.classList.add("empty"); }
+      else { mEl.textContent = wxAbsent("metar", icao, d); mEl.classList.add("empty"); }
       if (d.taf && d.taf.raw) { tEl.innerHTML = wxSevHtml(tafPretty(d.taf.raw)); tEl.classList.remove("empty"); }
-      else { tEl.textContent = "No TAF published for " + icao + "."; tEl.classList.add("empty"); }
+      else { tEl.textContent = wxAbsent("taf", icao, d); tEl.classList.add("empty"); }
       sec.querySelector("[data-rwx]").innerHTML = wxRunwaysHtml(icao, d);
       renderWxAges();
     }
@@ -20018,7 +20037,7 @@ window.addEventListener("scroll", hidePop, true);
         wxStore(icao, d);
         renderWxAirport(icao, d);
         if (!d.metar && !d.taf) setWxNote(icao, "No reports available — this station may not publish METAR/TAF.");
-        else if (d.stale) setWxNote(icao, "Source unreachable — showing the server's last copy.", "warn");
+        else if (d.stale) setWxNote(icao, wxStaleNote(d), "warn");
         else setWxNote(icao, "");
       } else {
         // échec : la dernière copie locale, datée, et la cause nommée
@@ -20067,7 +20086,7 @@ window.addEventListener("scroll", hidePop, true);
         if (cur && JSON.stringify([cur.metar, cur.taf]) === JSON.stringify([d.metar, d.taf])) continue;
         renderWxAirport(a.icao, d);
         if (!d.metar && !d.taf) setWxNote(a.icao, "No reports available — this station may not publish METAR/TAF.");
-        else if (d.stale) setWxNote(a.icao, "Source unreachable — showing the server's last copy.", "warn");
+        else if (d.stale) setWxNote(a.icao, wxStaleNote(d), "warn");
         else setWxNote(a.icao, "");
       }
     }
