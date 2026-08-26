@@ -15164,7 +15164,7 @@ function renderInfo(icao) {
         <div class="shead">
           <span class="sled"></span>
           <span class="nid">${n.id}</span>
-          <span class="qc gl" role="button" tabindex="0" data-q="${esc(n.qcode || "")}" data-t="${esc(n.traffic || "")}" data-p="${esc(n.purpose || "")}" data-s="${esc(n.scope || "")}">${n.qcode || "—"}</span>
+          <span class="qc gl" role="button" tabindex="0" data-q="${esc(n.qcode || "")}" data-t="${esc(n.traffic || "")}" data-p="${esc(n.purpose || "")}" data-s="${esc(n.scope || "")}">${esc(n.qcode || "—")}</span>
           <div class="tags">${tags}</div>
         </div>
         <div class="etext">${annotate(n.e || n.raw)}</div>
@@ -15186,7 +15186,10 @@ function renderInfo(icao) {
     <p>The data source returned no active NOTAM for this aerodrome, or it isn't covered by the source.</p>
   </div>`;
     }
-    function esc(s) { return (s || "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+    /* Guillemets compris : esc() sert aussi dans des attributs à guillemets
+       doubles (data-q="${esc(...)}") — sans &quot;, un " venu d'un NOTAM
+       permettrait de sortir de l'attribut. */
+    function esc(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
     /* Un NOTAM « sol » (.strip.ground) ouvre le plan CENTRÉ sur l'élément
        concerné — pas besoin de connaître à l'avance si sa ref sera trouvée
