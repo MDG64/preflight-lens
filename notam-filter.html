@@ -2082,6 +2082,31 @@
       gap: 5px
     }
 
+    /* Crédit ODbL du plan : le dessin est une œuvre produite des données OSM,
+       les directives d'attribution veulent le crédit visible sur l'œuvre
+       elle-même, sans interaction — comme le coin de la carte (#routeMapAttr),
+       dont il reprend l'habit. C'est lui qui porte la conformité des plans :
+       la page « ? » n'en dit plus rien. */
+    .plan-attr {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      z-index: 3;
+      font: 400 9px/1.3 var(--sans);
+      color: var(--muted);
+      background: rgba(8, 11, 14, .62);
+      padding: 3px 6px;
+      border-radius: 5px
+    }
+
+    body.light .plan-attr {
+      background: rgba(255, 255, 255, .75)
+    }
+
+    .plan-attr a {
+      color: inherit
+    }
+
     .plan-zoom button {
       width: 34px;
       height: 34px;
@@ -6381,20 +6406,18 @@ body .stat .k{
           corridor in one go — that is the way to prepare a flight before departure.</div>
 
         <div class="hd-sec">Data sources</div>
-        <!-- Réduit au minimum que les licences exigent. Restent les deux crédits
-             sans autre abri : l'ODbL, parce que les plans de terrain sont dessinés
-             d'OSM sans cartouche de crédit propre (la carte, elle, porte le sien
-             dans son coin), et le CC BY de MET Norway, que la bande du jour
-             n'affiche plus. Le domaine public — NOAA, OurAirports, Natural
-             Earth — et le service NOTAM n'exigent rien : partis. -->
+        <!-- Une seule ligne : le CC BY de MET Norway, sans autre abri depuis que
+             la bande du jour n'affiche plus sa source. Les crédits OSM/ODbL
+             vivent sur les œuvres elles-mêmes, comme les directives
+             d'attribution OSM l'exigent : coin de la carte (#routeMapAttr),
+             coin du plan de terrain (.plan-attr). Les pictos Yr (MIT) portent
+             leur notice dans vendor/weather/LICENSE : rien à afficher. Le
+             domaine public — NOAA, OurAirports, Natural Earth — et le service
+             NOTAM n'exigent rien. -->
         <div class="hd-note">
-          <b>Aerodrome layouts</b> and <b>map background</b> — map data © <a
-            href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
-          contributors (<a href="https://opendatacommons.org/licenses/odbl/" target="_blank"
-            rel="noopener">ODbL</a>).<br>
           <b>Weather pictograms and day forecast</b> — <a href="https://www.met.no/en" target="_blank"
             rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
-            target="_blank" rel="noopener">CC BY 4.0</a>; pictograms from the Yr weather symbol set (MIT).
+            target="_blank" rel="noopener">CC BY 4.0</a>.
           The strip is a model forecast, <b>not an aviation weather product</b>.
         </div>
 
@@ -23437,6 +23460,8 @@ window.addEventListener("scroll", hidePop, true);
             <button id="planZout" aria-label="Zoom out" title="Zoom out">−</button>
             <button id="planZfit" aria-label="Fit"      title="Fit to screen">⤢</button>
           </div>
+          <div class="plan-attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank"
+            rel="noopener">OpenStreetMap</a></div>
         </div>
         <div class="plan-tally" id="planTally"></div>
         <div class="plan-pick" id="planPick"></div>
