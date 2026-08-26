@@ -26,8 +26,10 @@ const ASSETS = [
   // l'URL, donc le cache la rate et va la chercher — sans purger la clé, ce qui
   // aurait effacé les plans hors ligne des pilotes. Même geste à la prochaine
   // refonte d'icône : incrémenter le suffixe, ne pas écraser.
-  "./icons/icon-192-v3.png", "./icons/icon-512-v3.png", "./icons/icon-maskable-192-v3.png", "./icons/icon-maskable-512-v3.png",
-  "./icons/icon-180-v3.png", "./icons/favicon-32-v3.png", "./icons/favicon-16-v3.png", "./favicon.ico",
+  // Suffixe "-v4" (26 août 2026) : PREFLIGHT agrandi. Les favicons "PL" n'ont
+  // pas changé, ils restent en v3.
+  "./icons/icon-192-v4.png", "./icons/icon-512-v4.png", "./icons/icon-maskable-192-v4.png", "./icons/icon-maskable-512-v4.png",
+  "./icons/icon-180-v4.png", "./icons/favicon-32-v3.png", "./icons/favicon-16-v3.png", "./favicon.ico",
   // Photos des trois cases d'accueil (19 aout 2026). Meme regle que les icones :
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
   // refonte d'image change le suffixe, on n'ecrase jamais en place.
