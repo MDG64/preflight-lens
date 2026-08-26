@@ -15986,7 +15986,7 @@ function renderInfo(icao) {
       if (st) card.classList.add(st);
       const a = (curRoute && curRoute.airports.find(x => x.icao === icao)) || null;
       if (a) card.querySelector(".mt").textContent = apMeta(a, st);
-      if (st === "ok") card.onclick = () => { $("#routeScreen").hidden = true; addToRoute(icao); };
+      if (st === "ok") card.onclick = () => leaveRouteFor(icao);
     }
     async function routeCatchUp() {
       // Un préchargement en cours a la main sur les mêmes terrains : on ne
@@ -16166,9 +16166,7 @@ function renderInfo(icao) {
          code tapé dans la case ou un terrain touché sur la carte : on vient ici
          cueillir les terrains du trajet, et les perdre l'un après l'autre
          obligeait à revenir sur cette page pour chacun d'eux. */
-      g.querySelectorAll(".apcard.ok").forEach(b => b.onclick = () => {
-        $("#routeScreen").hidden = true; addToRoute(b.dataset.icao);
-      });
+      g.querySelectorAll(".apcard.ok").forEach(b => b.onclick = () => leaveRouteFor(b.dataset.icao));
       wireAddInput();
     }
     function wireAddInput() {
@@ -16283,7 +16281,7 @@ function renderInfo(icao) {
             if (p.status) card.classList.add(p.status);
             const a = curRoute.airports.find(x => x.icao === p.icao);
             card.querySelector(".mt").textContent = apMeta(a, p.status);
-            if (p.status === "ok") card.onclick = () => { $("#routeScreen").hidden = true; addToRoute(p.icao); };
+            if (p.status === "ok") card.onclick = () => leaveRouteFor(p.icao);
           }
           $("#routeStatus").innerHTML = `${curRoute.dep} → ${curRoute.arr}${curRoute.alt ? " → " + curRoute.alt : ""} · <b>${curRoute.distNM} NM</b> · downloading NOTAMs ${p.done}/${total}${p.retry ? " (retry)" : ""} — keep the app open`;
         }
@@ -19946,6 +19944,21 @@ window.addEventListener("scroll", hidePop, true);
        terrain déjà à l'écran y entre le premier, sinon l'ajout resterait
        invisible. Un terrain qui y est déjà ne s'y met pas deux fois — on
        l'affiche, c'est tout. */
+    /* Un terrain touché SUR L'ÉCRAN ROUTE quitte cet écran pour la liste d'un
+       AUTRE terrain : elle doit se lire depuis son en-tête, comme celle qui
+       s'ouvre depuis l'accueil. La page NOTAM est la seule à vivre dans le
+       flux du document — tous les autres écrans sont des calques fixés au
+       viewport — donc elle seule garde le défilement où on l'avait laissée, et
+       elle seule peut réapparaître décapitée.
+
+       La croix de l'écran Route ne passe PAS par ici, et c'est voulu : elle ne
+       change pas de terrain, elle rend la liste qu'on était en train de lire.
+       L'y ramener en haut ferait perdre sa place au lecteur. */
+    function leaveRouteFor(icao) {
+      $("#routeScreen").hidden = true;
+      window.scrollTo(0, 0);
+      addToRoute(icao);
+    }
     function addToRoute(icao) {
       let v = (icao || "").toUpperCase().trim();
       // Code IATA tapé tel quel dans la case : on le traduit AVANT de ranger
