@@ -19598,16 +19598,22 @@ window.addEventListener("scroll", hidePop, true);
        dans un TAF, ou FMddhhmm : ces jetons précèdent toujours le vent qu'ils
        datent. Seuls les groupes ddhh/ddhh (période TEMPO/BECMG/validité)
        n'ont pas de minute — c'est là qu'on rajoute 00, pas sur un METAR ou un
-       FM dont la minute est réelle. */
+       FM dont la minute est réelle.
+       Un VRB porté par un TEMPO ou un PROB (grain d'orage, typiquement) n'a
+       pas de direction exploitable : son pire cas mettrait toute la rafale en
+       arrière et en travers de chaque piste — on l'écarte des composantes. */
     function rwxWinds(raw) {
       const out = [];
-      let t = null;
+      let t = null, tempo = false;
       for (const tok of String(raw || "").trim().split(/\s+/)) {
         let m;
-        if ((m = /^(\d{2})(\d{2})(\d{2})Z$/.exec(tok)) ||
-            (m = /^FM(\d{2})(\d{2})(\d{2})$/.exec(tok))) { t = { d: +m[1], h: +m[2], mi: +m[3] }; continue; }
+        if (tok === "TEMPO" || /^PROB\d{2}$/.test(tok)) { tempo = true; continue; }
+        if (tok === "BECMG") { tempo = false; continue; }
+        if ((m = /^(\d{2})(\d{2})(\d{2})Z$/.exec(tok))) { t = { d: +m[1], h: +m[2], mi: +m[3] }; continue; }
+        if ((m = /^FM(\d{2})(\d{2})(\d{2})$/.exec(tok))) { tempo = false; t = { d: +m[1], h: +m[2], mi: +m[3] }; continue; }
         if ((m = /^(\d{2})(\d{2})\/\d{4}$/.exec(tok))) { t = { d: +m[1], h: +m[2], mi: 0 }; continue; }
         if (!(m = RWX_WIND.exec(tok))) continue;
+        if (tempo && m[1] === "VRB") continue;
         const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
         out.push({
           dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) : null,
