@@ -40,13 +40,17 @@ const ASSETS = [
   // Noms versionnés (v20/v23) : immuables, mêmes règles que les icônes -v2.
   // Suffixe "-v2" sur les Mono latin (2026-08-21) : glyphes retouchés pour
   // ôter le point au centre du zéro — nouveau contenu, donc nouveau nom.
+  // Passage à "-v3" (2026-08-26) : ces mêmes fichiers sortent du Reserved Font
+  // Name « Plex » que l'OFL protège (une version modifiée ne peut pas garder le
+  // nom réservé) — la famille interne devient « Preflight Mono », le CSS suit.
+  // Les latin-ext ne sont pas retouchés : mêmes octets, donc même nom.
   "./fonts/ibm-plex-sans-v23-latin-wght.woff2",
   "./fonts/ibm-plex-sans-v23-latin-ext-wght.woff2",
-  "./fonts/ibm-plex-mono-v20-latin-400-v2.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-400-v3.woff2",
   "./fonts/ibm-plex-mono-v20-latin-ext-400.woff2",
-  "./fonts/ibm-plex-mono-v20-latin-500-v2.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-500-v3.woff2",
   "./fonts/ibm-plex-mono-v20-latin-ext-500.woff2",
-  "./fonts/ibm-plex-mono-v20-latin-600-v2.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-600-v3.woff2",
   "./fonts/ibm-plex-mono-v20-latin-ext-600.woff2"
 ];
 

@@ -11,3 +11,50 @@ copyright holder.
 This software is provided "as is", without warranty of any kind. It is
 intended to assist decision-making and does not replace official
 aeronautical briefing sources.
+
+
+THIRD-PARTY COMPONENTS
+----------------------
+
+The reservation above covers the author's own work only. This repository
+also redistributes third-party software and data, which remain under
+their own licenses and are expressly excluded from it. Where those
+licenses grant you rights, nothing above takes them away.
+
+  vendor/maplibre-gl-5.6.0.js, vendor/maplibre-gl-5.6.0.css
+      MapLibre GL JS — BSD 3-Clause, © MapLibre contributors.
+      Full text: vendor/maplibre-gl-5.6.0-LICENSE.txt
+
+  vendor/weather/*.svg
+      Yr weather symbols — MIT, © 2015-2017 Yr (NRK / MET Norway).
+      Full text: vendor/weather/LICENSE
+
+  fonts/ibm-plex-*.woff2
+      IBM Plex — SIL Open Font License 1.1, © 2017 IBM Corp., with
+      Reserved Font Name "Plex". Full text: fonts/OFL.txt
+      The three Mono latin subsets (ibm-plex-mono-v20-latin-{400,500,
+      600}-v3.woff2) are MODIFIED versions: the dot inside the zero has
+      been removed (see fonts/strip-zero-dot.py). As the OFL requires of
+      a modified version, they no longer carry the Reserved Font Name —
+      their internal family is "Preflight Mono". The other files are
+      unmodified.
+
+  layouts/*.json, tiles/basemap-z6-v1.pmtiles
+      Derived from OpenStreetMap data — © OpenStreetMap contributors,
+      licensed under the Open Database License (ODbL) 1.0.
+      https://www.openstreetmap.org/copyright
+      As derivative databases, these files are available under the ODbL.
+
+  fir/boundaries.json
+      Derived (simplified) from the VAT-Spy Data Project boundaries —
+      Creative Commons Attribution-ShareAlike 4.0 International.
+      https://github.com/vatsimnetwork/vatspy-data-project
+      https://creativecommons.org/licenses/by-sa/4.0/
+      As an adaptation, this file is available under CC BY-SA 4.0.
+
+  Embedded datasets (airports, runways, coastlines)
+      OurAirports and Natural Earth — public domain.
+
+NOTAM, METAR and TAF texts served through the application originate from
+official aeronautical sources and remain the property of their issuing
+authorities; they are not covered by the reservation above.

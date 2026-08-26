@@ -12,9 +12,9 @@
 <style>
 @font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:100 700;font-display:swap;src:url(./fonts/ibm-plex-sans-v23-latin-wght.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 @font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:100 700;font-display:swap;src:url(./fonts/ibm-plex-sans-v23-latin-ext-wght.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(./fonts/ibm-plex-mono-v20-latin-400-v2.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(./fonts/ibm-plex-mono-v20-latin-500-v2.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:swap;src:url(./fonts/ibm-plex-mono-v20-latin-600-v2.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Preflight Mono';font-style:normal;font-weight:400;font-display:swap;src:url(./fonts/ibm-plex-mono-v20-latin-400-v3.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Preflight Mono';font-style:normal;font-weight:500;font-display:swap;src:url(./fonts/ibm-plex-mono-v20-latin-500-v3.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Preflight Mono';font-style:normal;font-weight:600;font-display:swap;src:url(./fonts/ibm-plex-mono-v20-latin-600-v3.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 </style>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32-v2.png">
 <meta name="theme-color" content="#0d1117">
@@ -26,7 +26,7 @@
   --cyan:#9fc1d8; --cyan-dim:#46606f;
   --red:#ff5d6c; --amber:#f6b23e; --green:#34d39a;
   --radius:10px;
-  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --mono:'Preflight Mono',ui-monospace,Menlo,Consolas,monospace;
   --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
 }
 body.light{
@@ -80,6 +80,7 @@ li{margin-bottom:5px}
 b,strong{font-weight:600}
 a{color:var(--cyan)}
 .small{font-size:12px;color:var(--muted)}
+code{font-family:var(--mono);font-size:12.5px}
 .ph{color:var(--amber);font-family:var(--mono);font-size:12.5px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin:0 0 14px}
 .warn{border:1px solid var(--red);border-radius:var(--radius);padding:14px 16px;margin:0 0 16px;
@@ -121,7 +122,7 @@ footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
   </div>
 
   <h1>Mentions légales &amp; Conditions Générales d'Utilisation</h1>
-  <p class="docmeta">Version 1.1 · 6 août 2026 · applicable au site, à la PWA et aux applications mobiles Preflight Lens</p>
+  <p class="docmeta">Version 1.2 · 26 août 2026 · applicable au site, à la PWA et aux applications mobiles Preflight Lens</p>
 
   <div class="warn">
     <p class="wt">⚠ Decision support only — English summary</p>
@@ -160,6 +161,7 @@ footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
 
   <h3>Article 2 — Description du Service</h3>
   <p>Preflight Lens est un <b>outil d'aide à la décision pré-vol</b> destiné aux pilotes. Il récupère les NOTAMs publiés pour un aérodrome donné, les classe automatiquement par sévérité et par phase de vol sur la base des Q-codes OACI et d'une analyse textuelle, et permet de les filtrer par catégorie, sévérité et fenêtre temporelle. Le Service ne modifie ni ne supprime aucun NOTAM : il en propose une <b>hiérarchisation visuelle</b>. L'intégralité des NOTAMs récupérés reste consultable par l'utilisateur.</p>
+  <p>Le Service présente également, à titre complémentaire et dans les mêmes conditions : les <b>observations et prévisions météorologiques</b> d'aérodrome (METAR, TAF) et une bande de <b>prévision du jour</b> issue d'un modèle météorologique ; un <b>plan schématique</b> de certains aérodromes, destiné à situer les NOTAMs « sol » ; une <b>carte de préparation de route</b> et un affichage des <b>NOTAMs de région d'information de vol (FIR)</b>. Ces éléments relèvent du même avertissement que les NOTAMs (article 3) : aucun d'eux n'est un produit météorologique ou aéronautique certifié, et le plan d'aérodrome n'est pas conforme à l'AIP et ne sert pas à la navigation.</p>
 
   <h3>Article 3 — Avertissement aéronautique essentiel</h3>
   <div class="warn">
@@ -183,7 +185,16 @@ footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
   </ol>
 
   <h3>Article 5 — Sources de données</h3>
-  <p>Les NOTAMs sont obtenus auprès d'un <b>service officiel de distribution internationale des NOTAMs</b>, qui agrège les NOTAMs à diffusion internationale émis par les autorités aéronautiques nationales. D'autres sources pourront être ajoutées ; le cas échéant, la liste des sources en vigueur est tenue à jour sur cette page. L'Éditeur n'est ni l'émetteur ni le producteur de ces données : il ne contrôle ni leur contenu, ni leur exactitude, ni leur disponibilité, dont les autorités émettrices demeurent seules responsables.</p>
+  <p>Les NOTAMs sont obtenus auprès d'un <b>service officiel de distribution internationale des NOTAMs</b>, qui agrège les NOTAMs à diffusion internationale émis par les autorités aéronautiques nationales. L'Éditeur n'est ni l'émetteur ni le producteur de ces données : il ne contrôle ni leur contenu, ni leur exactitude, ni leur disponibilité, dont les autorités émettrices demeurent seules responsables.</p>
+  <p>Les autres données présentées proviennent des sources suivantes, dont la liste est tenue à jour sur cette page :</p>
+  <ul>
+    <li><b>METAR et TAF</b> — <i>Aviation Weather Center</i> de la NOAA / National Weather Service (États-Unis), domaine public.</li>
+    <li><b>Prévision du jour et pictogrammes</b> — <a href="https://www.met.no/en" target="_blank" rel="noopener">MET Norway</a>, sous licence <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Il s'agit d'une prévision de modèle, <b>non d'un produit météorologique aéronautique</b>.</li>
+    <li><b>Plans d'aérodrome et fond de carte</b> — données <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, © les contributeurs OpenStreetMap, sous licence ODbL 1.0.</li>
+    <li><b>Frontières FIR</b> — <a href="https://github.com/vatsimnetwork/vatspy-data-project" target="_blank" rel="noopener">VAT-Spy Data Project</a>, sous licence <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>, tracés simplifiés pour l'affichage.</li>
+    <li><b>Aérodromes, pistes et traits de côte</b> — jeux de données OurAirports et Natural Earth, domaine public.</li>
+  </ul>
+  <p>Le détail des licences des composants tiers redistribués (bibliothèques, polices, jeux de données) figure dans le fichier <code>LICENSE</code> du dépôt public du Service.</p>
 
   <h3>Article 6 — Disponibilité du Service</h3>
   <p>Le Service est fourni « en l'état » et « selon disponibilité ». L'Éditeur ne garantit ni la continuité, ni l'absence d'interruption, d'erreur ou d'anomalie. Le Service peut être suspendu à tout moment, notamment pour maintenance, mise à jour, ou en cas d'indisponibilité des sources de données ou des hébergeurs, sans que la responsabilité de l'Éditeur puisse être engagée à ce titre, sous réserve, lorsque l'offre payante sera activée, des droits des consommateurs abonnés (Partie III).</p>
@@ -194,6 +205,20 @@ footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
   <p><b>7.3.</b> Rien dans les présentes n'exclut ni ne limite la responsabilité de l'Éditeur en cas de dol, de faute lourde, de dommage corporel causé par sa négligence prouvée, ou dans tout autre cas où la loi interdit une telle limitation. À l'égard des consommateurs, les présentes ne privent pas l'utilisateur des garanties légales d'ordre public.</p>
 
   <h3 id="privacy">Article 8 — Données personnelles (RGPD) — Politique de confidentialité</h3>
+  <div class="card">
+    <p class="small" style="margin:0"><b>Privacy policy — English summary.</b>
+    Preflight Lens works <b>without any user account</b>. It does not collect personal
+    data for commercial purposes, contains <b>no advertising, analytics or third-party
+    tracker</b>, and never accesses your device location. Favourites, theme, planned
+    route and NOTAMs saved for offline use stay <b>on your device</b> and can be erased
+    at any time by clearing the app's data. When you look up an aerodrome, technical
+    data (IP address, timestamp, requested ICAO code) transits to our intermediate
+    server and may appear briefly in the hosting providers' technical logs; the same
+    applies to your IP address towards the map tile server. Those logs are never
+    profiled or sold. Fonts are self-hosted, so no font service is contacted.
+    Contact for any privacy request: dev@feyndev.com. The French text below is the
+    legally binding version.</p>
+  </div>
   <p><b>8.1. Principe de minimisation.</b> Le Service est conçu pour fonctionner <b>sans compte utilisateur</b> et sans collecte de données personnelles à des fins commerciales.</p>
   <p><b>8.2. Données stockées localement.</b> Les favoris, le thème d'affichage, la route de vol en préparation, les NOTAMs sauvegardés pour la consultation hors-ligne et la file locale des signalements en attente d'envoi (8.8) sont stockés <b>exclusivement sur l'appareil de l'utilisateur</b> (stockage local). Ils ne sont jamais transmis à l'Éditeur — à l'exception des signalements décrits en 8.8, dont l'envoi est déclenché par l'utilisateur — et peuvent être effacés à tout moment par l'utilisateur (effacement des données du site ou de l'application).</p>
   <p><b>8.3. Données techniques de connexion.</b> Lors des requêtes au serveur intermédiaire, des données techniques (adresse IP, horodatage, code aérodrome demandé) peuvent transiter et figurer temporairement dans les journaux techniques des hébergeurs (Railway, GitHub), sur la base de l'intérêt légitime de l'Éditeur (fonctionnement, sécurité, lutte contre les abus). Il en va de même de l'adresse IP vis-à-vis du serveur de tuiles cartographiques OpenFreeMap lors du chargement du fond de carte de la préparation de route. Ces journaux ne font l'objet d'aucun profilage ni d'aucune exploitation commerciale.</p>
@@ -202,6 +227,7 @@ footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
   <p><b>8.6. Droits.</b> Conformément au RGPD et à la loi n° 78-17 du 6 janvier 1978 modifiée, l'utilisateur dispose de droits d'accès, de rectification, d'effacement, de limitation et d'opposition, exerçables auprès de dev@feyndev.com. Réclamation possible auprès de la CNIL (cnil.fr).</p>
   <p><b>8.7. Transferts hors UE.</b> Les hébergeurs étant établis aux États-Unis, les données techniques mentionnées en 8.3 peuvent être traitées hors de l'Union européenne, dans le cadre des mécanismes de transfert applicables (décision d'adéquation UE–États-Unis / clauses contractuelles types des hébergeurs).</p>
   <p><b>8.8. Signalements de lacunes de plan.</b> Lorsque l'utilisateur signale d'un clic une lacune du plan d'un aérodrome, l'application transmet au serveur intermédiaire le code OACI du terrain, les références concernées et le texte des NOTAMs qui les mentionnent — <b>ni position, ni identifiant d'utilisateur ou d'appareil, ni route chargée</b>. Ces signalements, comptés par terrain, servent uniquement à prioriser les corrections cartographiques ; l'adresse IP transite dans les conditions du 8.3. Un signalement émis hors connexion est conservé localement (8.2) puis envoyé au retour du réseau.</p>
+  <p><b>8.9. Amélioration du classement.</b> Lorsqu'un NOTAM consulté n'est reconnu par aucune règle de classement embarquée, l'application transmet au serveur intermédiaire son <b>texte brut</b> et le code OACI concerné, afin qu'une règle de classement soit proposée puis relue par l'Éditeur. Cette transmission ne comporte <b>aucun identifiant d'utilisateur ou d'appareil</b> et ne porte que sur des textes NOTAM, qui sont des données publiques ; l'adresse IP transite dans les conditions du 8.3.</p>
 
   <h3>Article 9 — Droit applicable et litiges</h3>
   <p>Les présentes CGU sont régies par le <b>droit français</b>. En cas de litige, l'utilisateur est invité à contacter préalablement l'Éditeur à dev@feyndev.com en vue d'une résolution amiable.</p>
@@ -227,7 +253,7 @@ footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
   <p>L'Éditeur peut faire évoluer les fonctionnalités du Service. En cas de modification substantielle défavorable ou d'arrêt de l'offre payante, les abonnés en seront informés avec un préavis raisonnable ; les sommes correspondant à toute période payée et non fournie seront remboursées.</p>
 
   <footer>
-    Preflight Lens · Legal v1.1 · 6 août 2026 · © 2026 Laurent LANGLA<br>
+    Preflight Lens · Legal v1.2 · 26 août 2026 · © 2026 Laurent LANGLA<br>
     Textes de référence : LCEN art. 6-III · RGPD &amp; loi 78-17 · C. conso L.221-18, L.221-28, L.215-1, L.612-1 s. · Annexe 15 OACI &amp; règlement (UE) 2017/373 (cadre auquel le Service ne se substitue pas) · Règlement (UE) 965/2012 &amp; AMC 20-25A.
   </footer>
 </div>
