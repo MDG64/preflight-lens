@@ -4474,6 +4474,20 @@ body.light .stat.on {
       gap: 6px
     }
 
+    /* Les trois cases de code se PARTAGENT la largeur restante au lieu de la
+       fixer : la ligne doit tenir d'un bord à l'autre quelle que soit la
+       largeur de la page. Avec une largeur figée, tout ce qui descendait sous
+       560 px — tablette de 8 pouces, grand téléphone — renvoyait l'étoile de
+       la route et sa flèche À LA LIGNE, seules sous Departure, alors que la
+       place manquait de quelques pixels. Elles maigrissent donc ensemble,
+       comme les cases du téléphone.
+       Le plancher garde le code lisible : en dessous, « LFPG » se ferait
+       rogner, et il vaut mieux replier la ligne que tronquer un terrain. */
+    .home-field-code {
+      flex: 1 1 0;
+      min-width: 93px
+    }
+
     .home-field-label {
       font: 500 10px/1 var(--mono);
       letter-spacing: .16em;
@@ -4482,8 +4496,12 @@ body.light .stat.on {
       padding-left: 2px
     }
 
+    /* `min-width: 0` lève la largeur intrinsèque d'un <input>, qui refuse
+       sinon de descendre sous une vingtaine de caractères : sans lui, la case
+       ne maigrit pas et la ligne se replie quand même. */
     .home-route .scratch input {
-      width: 84px;
+      flex: 1 1 0;
+      min-width: 0;
       font-size: 18px;
       letter-spacing: .08em;
       padding: 11px 6px 11px 12px
@@ -4550,18 +4568,15 @@ body.light .stat.on {
        l'étiquette : sa cible fait la hauteur d'une case, comme les trois
        autres étoiles. La hauteur exacte d'un <input> varie d'un moteur à
        l'autre — on la recopie au lieu de la deviner. */
-    /* La colonne du bout PREND TOUT CE QUI RESTE sur la ligne : la largeur
-       utile change d'un téléphone à l'autre (360, 375, 393, 412…), et une
-       valeur fixe serait tantôt trop serrée, tantôt en deçà de la place
-       disponible. En `flex: 1`, la case de l'étoile s'élargit d'elle-même
-       jusqu'au bord — et à 360 px, où il ne reste rien, elle ne pousse
-       personne à la ligne. Le plafond la retient quand la colonne passe à la
-       ligne (autour de 500 px) : seule sur sa rangée, elle prendrait sinon
-       toute la largeur de la page pour un seul glyphe. */
+    /* La colonne du bout NE PREND QUE CE QU'IL LUI FAUT — l'étoile à son
+       plancher, la flèche à sa taille — et tout le reste va aux codes. Elle
+       s'élargissait autrefois jusqu'au bord ; c'est maintenant l'inverse,
+       depuis que les trois cases se partagent la ligne : ce sont elles qui
+       s'étirent, et la colonne du bout qui tient sa place au bout, sur la
+       même ligne, à toutes les largeurs. */
     .home-field-route {
       align-self: stretch;
-      flex: 1;
-      max-width: 104px
+      flex: none
     }
 
     /* La case est large : au bout d'une ligne de codes, une étoile serrée
@@ -4985,7 +5000,36 @@ body.light .stat.on {
       outline-offset: 1px
     }
 
-    @media (max-width: 420px) {
+    /* ---------- entre le téléphone et la pleine largeur (480 → 559 px) -----
+       La page n'a pas encore ses 560 px, mais elle en a assez pour garder la
+       typo et les boutons de la version large. Il suffit de resserrer les
+       écarts et la case de l'étoile — quelques pixels, exactement ce qui
+       manquait pour que l'étoile et la flèche restent sur la ligne des trois
+       codes au lieu de tomber dessous. */
+    @media (min-width: 480px) and (max-width: 559px) {
+      .home-route {
+        gap: 7px
+      }
+
+      .route-acts {
+        gap: 5px
+      }
+
+      .route-star {
+        min-width: 34px;
+        padding: 0 4px
+      }
+
+      .swapbtn.home-swap {
+        margin: auto 2px 1px
+      }
+    }
+
+    /* Écrans étroits — le téléphone, et la tablette de poche jusqu'à 479 px :
+       en dessous de 480 px la typo de 18 px ne laisse plus de quoi écrire un
+       code dans les trois cases. Tout maigrit d'un cran, plutôt que de
+       replier la ligne. */
+    @media (max-width: 479px) {
       /* La grille reste à DEUX colonnes sur téléphone : Weather et NOTAM côte
          à côte, Map centrée dessous à la même largeur. Depuis que l'image est
          une vignette de 128 px, une seule colonne étirait les cases sans rien
@@ -5003,10 +5047,14 @@ body.light .stat.on {
       }
 
       .home-route .scratch input {
-        width: 49px;
         font-size: 15px;
         letter-spacing: .04em;
         padding: 11px 3px 11px 6px
+      }
+
+      /* Le plancher suit la typo : 15 px demandent moins de largeur que 18. */
+      .home-field-code {
+        min-width: 72px
       }
 
       .home-star {
@@ -5967,7 +6015,7 @@ body .stat .k{
       </div>
 
       <div class="home-route">
-        <div class="home-field">
+        <div class="home-field home-field-code">
           <label class="home-field-label" for="hFrom">Departure</label>
           <div class="scratch rf-anchor">
             <input id="hFrom" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"
@@ -5993,7 +6041,7 @@ body .stat .k{
             </svg>
           </button>
         </div>
-        <div class="home-field">
+        <div class="home-field home-field-code">
           <label class="home-field-label" for="hTo">Destination</label>
           <div class="scratch rf-anchor">
             <input id="hTo" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"
@@ -6003,7 +6051,7 @@ body .stat .k{
             <div class="suggest" id="hToSuggest" hidden></div>
           </div>
         </div>
-        <div class="home-field">
+        <div class="home-field home-field-code">
           <label class="home-field-label" for="hAlt">Alternate</label>
           <div class="scratch rf-anchor">
             <input id="hAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"
