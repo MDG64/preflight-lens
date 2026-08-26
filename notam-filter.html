@@ -889,6 +889,32 @@
       cursor: pointer
     }
 
+    /* ---------- plafond du plan gratuit ---------- */
+    /* Pastille brève, posée par-dessus l'écran courant : un favori se pose
+       aussi bien depuis l'accueil que depuis la page NOTAM ou la page Weather,
+       et aucune de ces vues n'a de place réservée pour un message. Or (et non
+       rouge) parce que ce n'est pas une panne, c'est une borne. z-index au
+       dessus des recouvrements (500) : l'étoile existe aussi dans le résumé
+       météo des favoris. */
+    .plan-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      z-index: 600;
+      max-width: min(420px, calc(100vw - 32px));
+      font: 600 12.5px/1.5 var(--sans);
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--gold);
+      border-radius: 10px;
+      box-shadow: var(--elev-hi);
+      padding: 11px 15px;
+      text-align: center
+    }
+
+    .plan-toast b { color: var(--gold); font-weight: 700 }
+
     /* ---------- summary ---------- */
     .summary {
       display: grid;
@@ -14355,6 +14381,50 @@ E) ${e}`;
     }
     function saveFavRoutes(a) { try { localStorage.setItem("notam_fav_routes", JSON.stringify(a)); } catch (e) { } }
 
+    /* ---- plan gratuit / plan complet -------------------------------------
+       UN SEUL point de vérité pour tout ce qui est borné. isPro() répond
+       toujours faux aujourd'hui : rien n'est encore vendu. La couche existe
+       pour que l'achat s'y branche en un endroit, plus tard, sans rouvrir une
+       à une les fonctions bornées.
+
+       Ces plafonds sont ceux de l'INTERFACE, et c'est tout ce qu'ils peuvent
+       être : ce fichier est public et modifiable depuis la console. Ils bornent
+       l'usage normal, ils n'empêchent pas de forcer la main. Le plafond qui
+       contraint vraiment suppose de savoir QUI demande — il faut un compte, il
+       viendra avec l'achat, côté proxy. Borner la taille des lots côté proxy
+       n'y suffirait pas : wxFetchGroup() découpe déjà (WX_BATCH_MAX), refuser
+       les gros lots ne ferait qu'en faire des petits. */
+    const FREE_MAX_FAVS = 5;        // terrains favoris
+    const FREE_MAX_ROUTES = 2;      // routes favorites
+    function isPro() { return false; }
+    function maxFavs() { return isPro() ? Infinity : FREE_MAX_FAVS; }
+    function maxRoutes() { return isPro() ? Infinity : FREE_MAX_ROUTES; }
+
+    /* Les compteurs des trois écrans (accueil, NOTAM, Weather) portent le
+       plafond tant qu'il y en a un : « (3/5) » se lit sans explication et
+       prévient AVANT le refus, au lieu de le subir. */
+    function planCount(n, max) { return "(" + n + (max === Infinity ? "" : "/" + max) + ")"; }
+    function favCountLabel() { return planCount(favs.length, maxFavs()); }
+    function routeCountLabel() { return planCount(favRoutes.length, maxRoutes()); }
+
+    /* Créée à la demande : elle ne sert qu'au refus, et un élément de plus dans
+       le corps du document se paierait à chaque ouverture. */
+    let planToastTimer = null;
+    function planToast(html) {
+      let el = document.getElementById("planToast");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "plan-toast";
+        el.id = "planToast";
+        el.setAttribute("role", "status");
+        document.body.appendChild(el);
+      }
+      el.innerHTML = html;
+      el.hidden = false;
+      clearTimeout(planToastTimer);
+      planToastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+    }
+
     /* ---- stockage hors-ligne des NOTAM consultés (avec horodatage) ---- */
     const OFFLINE_MAX = 30;                       // nb max d'aérodromes gardés hors-ligne (hors route active)
     function offlineIdx() { try { return JSON.parse(localStorage.getItem("notam_data_idx") || "[]"); } catch (e) { return []; } }
@@ -14761,8 +14831,8 @@ E) ${e}`;
       });
     }
     function updateFavCount() {
-      $("#favCount").textContent = "(" + favs.length + ")";
-      $("#routeCount").textContent = "(" + favRoutes.length + ")";
+      $("#favCount").textContent = favCountLabel();
+      $("#routeCount").textContent = routeCountLabel();
     }
 
     // Copie exacte de l'algorithme testé et validé, à intégrer dans le fichier.
@@ -14914,7 +14984,16 @@ function renderInfo(icao) {
     // bas). Chaque vue qui liste ou reflète les favoris se rafraîchit d'ici.
     function toggleFavCode(code) {
       if (!/^[A-Z]{4}$/.test(code)) return;
-      favs = favs.includes(code) ? favs.filter(c => c !== code) : [...favs, code];
+      const enleve = favs.includes(code);
+      // Le plafond ne borne que l'AJOUT. Quelqu'un dont la liste dépasse déjà
+      // (elle est antérieure à la borne) garde ses terrains et peut les
+      // retirer : on ne supprime pas en silence ce que l'utilisateur a posé,
+      // on l'empêche seulement d'en poser un de plus.
+      if (!enleve && favs.length >= maxFavs()) {
+        planToast(`Free version keeps <b>${FREE_MAX_FAVS} favorite aerodromes</b>. Remove one to add another.`);
+        return;
+      }
+      favs = enleve ? favs.filter(c => c !== code) : [...favs, code];
       saveFavs(favs);
       updateFavCount(); renderChips();
       if (code === currentIcao) updateStar();
@@ -19226,8 +19305,8 @@ window.addEventListener("scroll", hidePop, true);
       renderHomeChips();
     }
     function renderHomeChips() {
-      $("#homeAdCount").textContent = "(" + favs.length + ")";
-      $("#homeRouteCount").textContent = "(" + favRoutes.length + ")";
+      $("#homeAdCount").textContent = favCountLabel();
+      $("#homeRouteCount").textContent = routeCountLabel();
       [["#homeTabAd", "ad"], ["#homeTabRoute", "route"]].forEach(([sel, t]) => {
         $(sel).classList.toggle("on", homeFavTab === t);
         $(sel).setAttribute("aria-expanded", String(homeFavTab === t));
@@ -19310,6 +19389,11 @@ window.addEventListener("scroll", hidePop, true);
       const codes = homeRouteSlots();
       if (routeSlotsFilled(codes).length < 2) return;
       const i = findFavRoute(codes);
+      // Même règle que les terrains : seul l'ajout est borné, voir toggleFavCode().
+      if (i < 0 && favRoutes.length >= maxRoutes()) {
+        planToast(`Free version keeps <b>${FREE_MAX_ROUTES} favorite routes</b>. Remove one to add another.`);
+        return;
+      }
       favRoutes = i < 0 ? [...favRoutes, codes] : favRoutes.filter((_, n) => n !== i);
       saveFavRoutes(favRoutes);
       renderHomeStars();
@@ -20189,8 +20273,8 @@ window.addEventListener("scroll", hidePop, true);
     function renderWxChips() {
       const box = $("#wxChips");
       if (!box) return;
-      $("#wxFavCount").textContent = "(" + favs.length + ")";
-      $("#wxRouteCount").textContent = "(" + favRoutes.length + ")";
+      $("#wxFavCount").textContent = favCountLabel();
+      $("#wxRouteCount").textContent = routeCountLabel();
       [["#wxTabFav", "ad"], ["#wxTabRoute", "route"]].forEach(([sel, t]) => {
         $(sel).classList.toggle("on", wxFavTab === t);
         $(sel).setAttribute("aria-expanded", String(wxFavTab === t));
