@@ -889,6 +889,15 @@
       cursor: pointer
     }
 
+    /* ---------- fonctions réservées au plan complet ---------- */
+    /* Atténuées, mais TOUJOURS cliquables : c'est le clic qui explique, et un
+       attribut disabled ne dirait rien. La classe vit sur <body> — un seul
+       basculement au lieu d'un parcours d'éléments, et le CSS reste la seule
+       description de ce qui se voit borné. */
+    body.plan-free .timebar .scratch.time,
+    body.plan-free .timebar .tmodes .btn,
+    body.plan-free .map-wind-hours .wh:not([data-h="0"]) { opacity: .5 }
+
     /* ---------- plafond du plan gratuit ---------- */
     /* Pastille brève, posée par-dessus l'écran courant : un favori se pose
        aussi bien depuis l'accueil que depuis la page NOTAM ou la page Weather,
@@ -14450,6 +14459,7 @@ E) ${e}`;
         if (code) planPro = (await planSha(code)) === PLAN_HASH;
       } catch (e) { planPro = false; }   // contexte non sécurisé, stockage bloqué : plan gratuit
       if (annonce) planToast(annonce);
+      planPaint();
       updateFavCount(); renderChips(); renderWxChips(); renderHomeChips();
     }
     function maxFavs() { return isPro() ? Infinity : FREE_MAX_FAVS; }
@@ -14461,6 +14471,28 @@ E) ${e}`;
     function planCount(n, max) { return "(" + n + (max === Infinity ? "" : "/" + max) + ")"; }
     function favCountLabel() { return planCount(favs.length, maxFavs()); }
     function routeCountLabel() { return planCount(favRoutes.length, maxRoutes()); }
+
+    /* Ce qui est réservé au plan complet. UNE clé par fonction bornée : poser
+       ou lever un verrou tient sur une ligne, et le message vit à côté de la
+       clé plutôt que dispersé dans les gestionnaires.
+       Ces deux-là ne consomment RIEN côté serveur — les vents TAF sont déjà
+       dans le flux de la carte, les filtres de temps ne font que redessiner
+       une liste déjà téléchargée. Le verrou est donc du même bois que le
+       plafond des favoris : il tient pour qui se sert de l'app, pas pour qui
+       ouvre la console. C'est assumé, faute de compte. */
+    const PLAN_LOCKS = {
+      timeFilter: "Time filters — <b>Now</b>, <b>Today</b>, <b>Tomorrow</b> and the UTC hour — come with the full version.",
+      windHours: "Forecast wind at <b>+1h</b>, <b>+2h</b> and <b>+3h</b> comes with the full version. Observed wind stays free.",
+    };
+    /* Vrai si le geste doit être ARRÊTÉ. Un seul appel en tête de gestionnaire :
+       `if (planBlocked("timeFilter")) return;` */
+    function planBlocked(cle) {
+      if (isPro()) return false;
+      planToast(PLAN_LOCKS[cle]);
+      return true;
+    }
+    /* Ce que le plan change à l'écran, en un basculement. */
+    function planPaint() { document.body.classList.toggle("plan-free", !isPro()); }
 
     /* Créée à la demande : elle ne sert qu'au refus, et un élément de plus dans
        le corps du document se paierait à chaque ouverture. */
@@ -15391,18 +15423,30 @@ function renderInfo(icao) {
       const h = Math.min(23, +m[1]), mi = Math.min(59, +m[2]);
       timeWin = windowFor(h, mi); timeMode = "time"; render();
     }
-    $("#htime").addEventListener("input", e => applyTime(e.target.value));
+    // Le champ d'heure se ferme AVANT la frappe : intercepter la saisie
+    // obligerait à effacer sous les doigts, ce qui se lit comme une panne.
+    // L'écoute de `input` reste en garde-fou pour l'arrivée au clavier (Tab).
+    $("#htime").addEventListener("pointerdown", e => {
+      if (planBlocked("timeFilter")) { e.preventDefault(); e.target.blur(); }
+    });
+    $("#htime").addEventListener("input", e => {
+      if (planBlocked("timeFilter")) { e.target.value = ""; return; }
+      applyTime(e.target.value);
+    });
     $("#now").onclick = () => {
+      if (planBlocked("timeFilter")) return;
       const d = new Date();
       $("#htime").value = P(d.getUTCHours()) + ":" + P(d.getUTCMinutes());
       applyTime($("#htime").value);
     };
     $("#todayBtn").onclick = () => {
+      if (planBlocked("timeFilter")) return;
       if (timeMode === "today") { timeWin = null; timeMode = null; }
       else { $("#htime").value = ""; timeWin = dayWindow(0); timeMode = "today"; }
       render();
     };
     $("#tomBtn").onclick = () => {
+      if (planBlocked("timeFilter")) return;
       if (timeMode === "tomorrow") { timeWin = null; timeMode = null; }
       else { $("#htime").value = ""; timeWin = dayWindow(1); timeMode = "tomorrow"; }
       render();
@@ -17559,7 +17603,13 @@ function renderInfo(icao) {
         b.classList.toggle("on", +b.dataset.h === h));
     }
     document.querySelectorAll("#mapWindHours .wh").forEach(b => {
-      b.onclick = () => { setMapWindHour(+b.dataset.h); drawMap(); };
+      b.onclick = () => {
+        // « now » (h=0) reste gratuit : c'est le vent OBSERVÉ, sans quoi
+        // l'interrupteur de vent n'aurait plus rien à montrer. Seules les
+        // prévisions TAF sont bornées.
+        if (+b.dataset.h !== 0 && planBlocked("windHours")) return;
+        setMapWindHour(+b.dataset.h); drawMap();
+      };
     });
     // L'œil replie la légende ; il ne touche à rien d'autre.
     $("#mapLegEye").onclick = () => $("#mapOv").classList.toggle("leg-off");
@@ -20728,6 +20778,7 @@ window.addEventListener("scroll", hidePop, true);
       setTimeout(() => { routeCatchUp(); startRouteCatchUp(); }, 30e3);
     }
     openHome();
+    planPaint();    // borné par défaut : l'empreinte du code n'est pas encore calculée
     planInit();     // asynchrone : ne retarde rien, redessine les compteurs derrière
   </script>
   <script>
