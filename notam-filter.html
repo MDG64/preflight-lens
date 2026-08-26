@@ -16064,6 +16064,7 @@ function renderInfo(icao) {
       $("#goBtn").classList.toggle("ready", ok);
       $("#goBtn").disabled = !ok;
       $("#clearRouteBtn").disabled = preloading;   // pas d'effacement pendant un téléchargement en cours
+      scheduleAutoRoute();   // la route complète part toute seule (voir armRoute)
     }
     function refreshMapBtn() {
       const hasRoute = !!(curRoute && curRoute.ok);      // route insérée -> symbole vert
@@ -16244,12 +16245,17 @@ function renderInfo(icao) {
         curRoute = computeRoute(saved.dep, saved.arr, saved.alt, { width: saved.width });
         if (curRoute.ok) {
           renderApGrid(saved.status || {});
-          $("#routeStatus").innerHTML = `${curRoute.dep} → ${curRoute.arr}${curRoute.alt ? " → " + curRoute.alt : ""} · <b>${curRoute.distNM} NM</b> · ${curRoute.airports.length} aerodromes · route data from <b>${stampHM(saved.ts)}</b>`;
+          // Un lot est peut-être en train de tourner en fond (route armée
+          // depuis l'accueil) : son compteur dit la vérité, pas l'horodatage
+          // de la copie précédente.
+          if (!preloading)
+            $("#routeStatus").innerHTML = `${curRoute.dep} → ${curRoute.arr}${curRoute.alt ? " → " + curRoute.alt : ""} · <b>${curRoute.distNM} NM</b> · ${curRoute.airports.length} aerodromes · route data from <b>${stampHM(saved.ts)}</b>`;
         }
       } else {
         $("#routeStatus").textContent = "";
       }
       refreshGo(); refreshMapBtn();
+      armRouteNow();      // on vient ici pour les terrains : ils descendent sans le temps mort
     }
     async function goRoute() {
       if (!routeInputsValid() || preloading) return;
@@ -16284,6 +16290,76 @@ function renderInfo(icao) {
       $("#routeStatus").innerHTML = `${curRoute.dep} → ${curRoute.arr}${curRoute.alt ? " → " + curRoute.alt : ""} · <b>${curRoute.distNM} NM</b> · <b>${bilan.ok}/${bilan.total}</b> saved for offline use · route data from <b>${stampHM(bilan.ts)}</b>${warn}`;
       _catchupAt = Date.now();     // le lot vient de servir : pas de rattrapage dans la foulée
       startRouteCatchUp();
+    }
+
+    /* ---- La route s'arme toute seule ------------------------------------
+       La route se pose sur la PREMIÈRE page, et tout part de là : la page
+       NOTAM reçoit ses terrains dans la foulée, et le corridor s'en va se
+       télécharger derrière sans qu'on ait ouvert quoi que ce soit. Arriver
+       sur la page Route, c'est alors trouver les cases déjà remplies — GO
+       ne sert plus qu'à refaire le tour à la main.
+       Trois gardes, parce que c'est du réseau déclenché sans qu'on l'ait
+       demandé :
+       - un temps mort après la dernière frappe, plus long tant que la main
+         est encore sur la ligne : une route se tape code par code, on n'en
+         télécharge pas trois ;
+       - la même route ne repart jamais deux fois (clé DEP>DEST>ALT), et
+         celle qui est déjà complète en boîte se remonte du stockage au lieu
+         de redescendre ;
+       - hors ligne, ou pendant un lot en cours, on ne fait rien : le bouton
+         GO reste là pour reprendre. */
+    const AUTO_ROUTE_MS = 1200;          // la frappe s'est arrêtée
+    const AUTO_ROUTE_TYPING_MS = 3000;   // ... mais le curseur est encore dans une case
+    const AUTO_ROUTE_FIELDS = ["#rFrom", "#rTo", "#rAlt", "#hFrom", "#hTo", "#hAlt"];
+    let autoRouteKey = null, autoRouteTimer = null;
+    /* Les trois codes de la ligne, et seulement s'ils forment une route
+       complète. Mêmes règles que routeInputsValid(), la base aérodromes en
+       moins : elle n'est pas encore chargée quand la route se tape sur
+       l'accueil, et c'est justement ce qu'on veut déclencher. */
+    function autoRouteSlots() {
+      const four = c => /^[A-Z]{4}$/.test(c);
+      const f = rVal("#rFrom"), t = rVal("#rTo"), a = rVal("#rAlt");
+      if (!four(f) || !four(t) || f === t) return null;
+      if (a && (!four(a) || a === f || a === t)) return null;
+      return { dep: f, arr: t, alt: a || null };
+    }
+    function autoRouteKeyOf(s) { return s.dep + ">" + s.arr + ">" + (s.alt || ""); }
+    function scheduleAutoRoute() {
+      clearTimeout(autoRouteTimer);
+      const s = autoRouteSlots();
+      // Ligne incomplète (on efface, on retape) : l'armement repart de zéro,
+      // sinon la même route reposée ensuite ne redescendrait plus rien.
+      if (!s) { autoRouteKey = null; return; }
+      if (autoRouteKeyOf(s) === autoRouteKey) return;
+      const typing = AUTO_ROUTE_FIELDS.some(id => $(id) === document.activeElement);
+      autoRouteTimer = setTimeout(armRoute, typing ? AUTO_ROUTE_TYPING_MS : AUTO_ROUTE_MS);
+    }
+    function armRouteNow() { clearTimeout(autoRouteTimer); armRoute(); }
+    async function armRoute() {
+      const s = autoRouteSlots();
+      if (!s) return;
+      const key = autoRouteKeyOf(s);
+      if (key === autoRouteKey || preloading) return;
+      autoRouteKey = key;
+      /* 1) La page NOTAM prend la route SUR-LE-CHAMP : il n'y a pas une
+            requête là-dedans, ses onglets sont posés avant qu'on y aille. */
+      const codes = homeRouteCodes();
+      notamRoute = codes.length > 1 ? codes : [];
+      renderStRoute();
+      // 2) Le corridor, lui, part se télécharger derrière.
+      if (!navigator.onLine) { autoRouteKey = null; return; }
+      try { await loadGeoData(); } catch (e) { autoRouteKey = null; return; }
+      const still = autoRouteSlots();
+      if (!still || autoRouteKeyOf(still) !== key) return;   // la ligne a bougé pendant le chargement
+      if (!routeInputsValid()) { autoRouteKey = null; return; }   // un code hors base : GO le dira
+      const saved = activeRoute();
+      if (saved && saved.complete && saved.dep === s.dep && saved.arr === s.arr && (saved.alt || null) === s.alt) {
+        restoreSavedRoute();                  // tracé en mémoire pour la carte
+        renderApGrid(saved.status || {});     // ... et grille prête pour la page Route
+        refreshMapBtn();
+        return;
+      }
+      await goRoute();
     }
     $("#routeBtn").onclick = openRoute;
     $("#routeClose").onclick = () => { $("#routeScreen").hidden = true; };
