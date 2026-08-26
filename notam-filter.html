@@ -14396,7 +14396,62 @@ E) ${e}`;
        les gros lots ne ferait qu'en faire des petits. */
     const FREE_MAX_FAVS = 5;        // terrains favoris
     const FREE_MAX_ROUTES = 2;      // routes favorites
-    function isPro() { return false; }
+    /* ---- déverrouillage propriétaire -------------------------------------
+       Le code n'est PAS dans ce fichier : seule son empreinte SHA-256 y est.
+       Lire le source ne le donne donc pas. Ça ne rend pas la borne
+       infalsifiable — rien ne le peut ici, voir le commentaire ci-dessus —
+       mais ça évite qu'elle se lève par simple curiosité.
+
+       Une fois par appareil, ouvrir l'app avec le code en FRAGMENT :
+           https://notam.feyndev.com/notam-filter.html#unlock=LE-CODE
+       Le fragment n'est jamais envoyé au serveur, ne part pas dans un
+       Referer et n'atterrit pas dans le cache du service worker — contrairement
+       à un ?paramètre. Il est retiré de la barre d'adresse aussitôt lu ; le
+       code reste dans localStorage, les ouvertures suivantes n'ont rien à
+       refaire.
+       Pour rendre l'appareil au plan gratuit : #unlock= (rien après le =). */
+    const PLAN_KEY = "notam_plan";
+    const PLAN_HASH = "341711df51ac69b04b658734db3a24c6b88ceec528254700d6b7c01f012565e3";
+    let planPro = false;
+    function isPro() { return planPro; }
+
+    async function planSha(txt) {
+      const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
+      return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+    }
+    /* Asynchrone parce que crypto.subtle l'est. Le premier dessin des compteurs
+       a donc déjà eu lieu quand l'empreinte tombe : on redessine derrière, sinon
+       un appareil déverrouillé afficherait « /5 » pendant quelques millisecondes
+       — et garderait ce « /5 » jusqu'au prochain rendu. */
+    async function planInit() {
+      let annonce = null;
+      try {
+        const m = (location.hash || "").match(/^#unlock=(.*)$/);
+        if (m) {
+          const saisi = decodeURIComponent(m[1]).trim().toUpperCase();
+          // Le fragment part de la barre d'adresse AVANT toute vérification :
+          // qu'il soit bon ou non, il n'a rien à faire dans l'historique du
+          // navigateur ni dans un partage de lien.
+          history.replaceState(null, "", location.pathname + location.search);
+          if (!saisi) {
+            localStorage.removeItem(PLAN_KEY);
+            annonce = "Back to the free version on this device.";
+          } else if (await planSha(saisi) === PLAN_HASH) {
+            localStorage.setItem(PLAN_KEY, saisi);
+            annonce = "Full version unlocked on this device.";
+          } else {
+            // Une frappe de travers ne DÉVERROUILLE pas, mais ne reverrouille
+            // pas non plus : le code déjà rangé reste en place, sinon la moindre
+            // faute obligerait à ressaisir le code entier.
+            annonce = "Unlock code not recognised.";
+          }
+        }
+        const code = localStorage.getItem(PLAN_KEY);
+        if (code) planPro = (await planSha(code)) === PLAN_HASH;
+      } catch (e) { planPro = false; }   // contexte non sécurisé, stockage bloqué : plan gratuit
+      if (annonce) planToast(annonce);
+      updateFavCount(); renderChips(); renderWxChips(); renderHomeChips();
+    }
     function maxFavs() { return isPro() ? Infinity : FREE_MAX_FAVS; }
     function maxRoutes() { return isPro() ? Infinity : FREE_MAX_ROUTES; }
 
@@ -20673,6 +20728,7 @@ window.addEventListener("scroll", hidePop, true);
       setTimeout(() => { routeCatchUp(); startRouteCatchUp(); }, 30e3);
     }
     openHome();
+    planInit();     // asynchrone : ne retarde rien, redessine les compteurs derrière
   </script>
   <script>
 
