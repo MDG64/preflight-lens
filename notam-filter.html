@@ -5327,6 +5327,14 @@ body.light .stat.on {
       margin-left: 2px
     }
 
+    /* Rafale VRB d'un TEMPO/PROB, écartée des composantes : rappelée sous la
+       table — le triangle, l'heure du groupe et le vent. */
+    .rwx .vrb {
+      grid-column: 1/-1;
+      color: var(--amber);
+      font-size: 12px
+    }
+
     /* Bande météo du jour : quatre instantanés — heure, pictogramme,
        température — sous le TAF du panneau carte. Les échéances visent le
        matin, le midi, l'après-midi et le soir SOLAIRES du terrain (déduits de
@@ -19601,7 +19609,9 @@ window.addEventListener("scroll", hidePop, true);
        FM dont la minute est réelle.
        Un VRB porté par un TEMPO ou un PROB (grain d'orage, typiquement) n'a
        pas de direction exploitable : son pire cas mettrait toute la rafale en
-       arrière et en travers de chaque piste — on l'écarte des composantes. */
+       arrière et en travers de chaque piste — on l'écarte des composantes.
+       Au-delà de 10 kt il ne s'efface pas pour autant : il ressort dans
+       `out.vrb`, que la table rappelle en garde — heure du groupe et vent. */
     function rwxWinds(raw) {
       const out = [];
       let t = null, tempo = false;
@@ -19613,14 +19623,17 @@ window.addEventListener("scroll", hidePop, true);
         if ((m = /^FM(\d{2})(\d{2})(\d{2})$/.exec(tok))) { tempo = false; t = { d: +m[1], h: +m[2], mi: +m[3] }; continue; }
         if ((m = /^(\d{2})(\d{2})\/\d{4}$/.exec(tok))) { t = { d: +m[1], h: +m[2], mi: 0 }; continue; }
         if (!(m = RWX_WIND.exec(tok))) continue;
-        if (tempo && m[1] === "VRB") continue;
         const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
-        out.push({
-          dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) : null,
-          spd: Math.round(parseInt(m[2], 10) * k),
-          gust: m[3] ? Math.round(parseInt(m[3], 10) * k) : null,
-          t,
-        });
+        const spd = Math.round(parseInt(m[2], 10) * k);
+        const gust = m[3] ? Math.round(parseInt(m[3], 10) * k) : null;
+        if (tempo && m[1] === "VRB") {
+          if (Math.max(spd, gust || 0) > 10) {
+            if (!out.vrb) out.vrb = [];
+            out.vrb.push({ spd, gust, t });
+          }
+          continue;
+        }
+        out.push({ dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) : null, spd, gust, t });
       }
       return out;
     }
@@ -19654,8 +19667,10 @@ window.addEventListener("scroll", hidePop, true);
     function wxRunwaysHtml(icao, d) {
       const s = RUNWAYS[icao];
       if (!s) return "";
-      const metarW = rwxWinds(d && d.metar && d.metar.raw)[0] || null;
-      const all = (metarW ? [metarW] : []).concat(rwxWinds(d && d.taf && d.taf.raw));
+      const metarWs = rwxWinds(d && d.metar && d.metar.raw);
+      const metarW = metarWs[0] || null;
+      const tafWs = rwxWinds(d && d.taf && d.taf.raw);
+      const all = (metarW ? [metarW] : []).concat(tafWs);
       if (!all.length) return "";
       const refDay = metarW && metarW.t ? metarW.t.d : (all[0].t ? all[0].t.d : null);
       const rows = [];
@@ -19679,9 +19694,15 @@ window.addEventListener("scroll", hidePop, true);
       if (!rows.length) return "";     // terrain tout hélico : rien à montrer
       // Le meilleur QFU en tête : le plus de vent de face au METAR d'abord.
       rows.sort((a, b) => (b.now ? b.now.head : b.max.head) - (a.now ? a.now.head : a.max.head));
+      /* Les rafales VRB écartées des composantes reviennent en garde sous la
+         table : l'heure de leur groupe et le vent, toutes directions possibles. */
+      const vrb = (metarWs.vrb || []).concat(tafWs.vrb || []);
+      const vrbHtml = vrb.map(w =>
+        `<span class="vrb">⚠️ ${w.t ? (w.t.d === refDay ? "" : P(w.t.d) + "/") + P(w.t.h) + P(w.t.mi) + "Z " : ""}VRB${w.spd}${w.gust != null ? "G" + w.gust : ""}kt</span>`).join("");
       return `<div class="wx-block"><h3>Runways</h3><div class="rwx">
         <span></span><span class="h">METAR</span><span class="h">Max today</span>
         ${rows.map(r => `<span class="id">${r.id}:</span>${rwxCell(r.now, refDay)}${rwxCell(r.max, refDay)}`).join("")}
+        ${vrbHtml}
       </div></div>`;
     }
     function wxAge(iso) {
