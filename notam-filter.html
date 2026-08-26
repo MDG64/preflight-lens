@@ -14355,27 +14355,56 @@ E) ${e}`;
       return Array.isArray(data.notams) ? data.notams : null;
     }
 
-    // Batch endpoint : récupère les NOTAMs pour plusieurs terrains en une seule requête
+    /* Batch endpoint : les NOTAMs de plusieurs terrains en une requête — mais
+       DÉCOUPÉS. Le proxy borne un lot à 50 codes (BATCH_MAX_ICAOS, garde contre
+       les codes forgés) et répond 400 au-delà, sans regarder son index. Or le
+       corridor de ±200 NM dépasse 50 terrains dès qu'on sort du court-courrier :
+       mesure du 2026-08-26 sur la base embarquée — LFPO->GCFV 54 après filtres,
+       LFMN->EGLL 66, LFPO->LEMG 54. Un envoi en bloc partait donc en 400, TOUT
+       le préchargement basculait sur la reprise terrain par terrain à 1,5 s, et
+       chaque terrain brûlait un créneau FAA que l'index avait déjà en mémoire.
+       40, pas 50 : de la marge si la borne amont se resserre un jour.
+       Séquentiel, pas en parallèle : le proxy sert l'index tout de suite, mais
+       un bloc contenant des terrains absents de l'index attend l'amont (1,1 s
+       pièce, canal sériel) — deux blocs de front ne vont pas plus vite et
+       doublent la charge vue du serveur.
+       Un bloc en échec ne fait pas tomber les autres : ses terrains ressortent
+       à `false` — distinct de `null`, qui veut dire « pas de donnée pour ce
+       terrain » — et l'appelant les repasse en reprise individuelle. Tous les
+       blocs en échec : on relève l'erreur, comme avant. */
+    const BATCH_CHUNK = 40;
     async function fetchNotamsBatch(icaos) {
       if (!BACKEND_URL) {
         const result = {};
         icaos.forEach(icao => { result[icao] = DB[icao] || null; });
         return result;
       }
-      const r = await fetch(`${BACKEND_URL}/api/notams/batch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ icaos })
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      // Le proxy renvoie { from, results: { ICAO: { notams:[...] } } }
-      const map = (data && data.results) ? data.results : data;
+      const blocs = [];
+      for (let i = 0; i < icaos.length; i += BATCH_CHUNK) blocs.push(icaos.slice(i, i + BATCH_CHUNK));
       const result = {};
-      icaos.forEach(icao => {
-        const entry = map[icao];
-        result[icao] = (entry && Array.isArray(entry.notams)) ? entry.notams : null;
-      });
+      let derniere = null, servis = 0;
+      for (const bloc of blocs) {
+        try {
+          const r = await fetch(`${BACKEND_URL}/api/notams/batch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ icaos: bloc })
+          });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          // Le proxy renvoie { from, results: { ICAO: { notams:[...] } } }
+          const map = (data && data.results) ? data.results : data;
+          bloc.forEach(icao => {
+            const entry = map[icao];
+            result[icao] = (entry && Array.isArray(entry.notams)) ? entry.notams : null;
+          });
+          servis++;
+        } catch (e) {
+          derniere = e;
+          bloc.forEach(icao => { result[icao] = false; });
+        }
+      }
+      if (!servis && derniere) throw derniere;
       return result;
     }
 
@@ -15867,19 +15896,23 @@ function renderInfo(icao) {
       store.set(ROUTE_KEY, { ...meta, icaos, ts: Date.now(), complete: false, status: {} });
       const status = {};
 
-      // --- Batch pull : récupère tous les NOTAMs en une seule requête ---
+      // --- Batch pull : les NOTAMs par lots (fetchNotamsBatch découpe) -------
+      // `false` = le lot de CE terrain n'est pas passé (bloc en échec) ; il part
+      // en reprise individuelle. `null` = le proxy a répondu, sans donnée pour
+      // ce terrain : rien à retenter, un appel de plus n'en sortirait pas.
       let done = 0;
       try {
         const notamsByIcao = await fetchNotamsBatch(icaos);
         for (const [icao, raw] of Object.entries(notamsByIcao)) {
           if (_abort) break;
-          if (raw === null) { status[icao] = "nodata"; }
-          else { saveOffline(icao, raw); status[icao] = "ok"; }
-          done++;
+          if (raw === false) { status[icao] = "fail"; }
+          else if (raw === null) { status[icao] = "nodata"; done++; }
+          else { saveOffline(icao, raw); status[icao] = "ok"; done++; }
           onProgress({ done, total: icaos.length, icao, status: status[icao], retry: false });
         }
       } catch (e) {
-        // Fallback : si batch échoue, marquer tous en fail et retenter individuellement
+        // Aucun bloc servi : réseau absent ou proxy en panne. Tous en fail, la
+        // seconde passe reprend terrain par terrain.
         icaos.forEach(icao => { status[icao] = "fail"; });
       }
 
@@ -15893,6 +15926,9 @@ function renderInfo(icao) {
           if (raw === null) { status[icao] = "nodata"; }
           else { saveOffline(icao, raw); status[icao] = "ok"; }
         } catch (e) { status[icao] = "fail"; }
+        // Le compteur ne bougeait pas ici : un lot entier en échec laissait le
+        // bandeau figé sur « 0/54 (retry) » pendant toute la reprise.
+        if (status[icao] !== "fail") done++;
         onProgress({ done, total: icaos.length, icao, status: status[icao], retry: true });
       }
 
