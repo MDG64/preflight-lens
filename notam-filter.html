@@ -4977,18 +4977,89 @@ body.light .stat.on {
     }
 
     /* ===== PAGE WEATHER (METAR / TAF) ==================================== */
+    /* La page se lit en deux étages : l'en-tête (titre, case ICAO, route,
+       favoris) reste en haut, et les relevés vivent dans une fenêtre qui
+       monte du bas de l'écran et s'arrête sous les favoris (.wx-sheet).
+       C'est ELLE qui défile ; l'écran, lui, ne bouge plus. */
     .wx-screen {
       position: fixed;
       inset: 0;
       z-index: 52;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch
+      display: flex;
+      flex-direction: column;
+      overflow: hidden
     }
 
     .wx-inner {
+      width: 100%;
       max-width: 760px;
       margin: 0 auto;
-      padding: 14px 20px 44px
+      padding: 14px 20px 4px;
+      flex: none;
+      /* Si l'en-tête déborde (petit écran, listes dépliées), il défile seul
+         plutôt que de pousser la fenêtre hors de vue. */
+      overflow-y: auto
+    }
+
+    /* La fenêtre des relevés : le tiroir de la carte (.mapwx), posé ici en
+       pied de page — même fond, même bord, même glissement. Fermée, elle
+       attend sous l'écran ; ouverte, elle occupe tout ce que l'en-tête
+       laisse. Un terrain à la fois s'y lit (.wx-ap.active). */
+    .wx-sheet {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--bg);
+      border: 1px solid var(--line2);
+      border-bottom: 0;
+      border-radius: 14px 14px 0 0;
+      box-shadow: var(--elev-hi);
+      transform: translateY(102%);           /* 102 % : l'ombre sort aussi du cadre */
+      transition: transform .26s ease
+    }
+
+    .wx-sheet.open {
+      transform: translateY(0)
+    }
+
+    /* La croix flotte au coin de la fenêtre : elle ne ferme que la fenêtre,
+       l'en-tête reste — le geste inverse d'un code touché, qui la rouvre. */
+    .wx-sheet-x {
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      z-index: 2;
+      margin-left: 0;
+      font-size: 17px
+    }
+
+    /* Le défilement vit DANS la fenêtre : la croix reste posée sur son coin
+       pendant que le relevé passe dessous. */
+    .wx-sheet-scroll {
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 20px calc(28px + env(safe-area-inset-bottom))
+    }
+
+    /* Un seul terrain se lit à la fois : sa section, les autres attendent
+       leur tour sans quitter l'écran — leurs relevés restent chargés et se
+       rafraîchissent, le retour est instantané. */
+    .wx-sheet .wx-ap {
+      display: none
+    }
+
+    .wx-sheet .wx-ap.active {
+      display: block;
+      margin-top: 4px
+    }
+
+    /* L'en-tête de section passe sous la croix : il lui laisse le coin. */
+    .wx-sheet .wx-ap-head {
+      padding-right: 44px
     }
 
     /* Les codes de l'en-tête météo sont les cases du bandeau NOTAM, à
@@ -5982,10 +6053,20 @@ body .stat .k{
         </div>
         <div class="chips fav-chips" id="wxChips" hidden></div>
       </div>
-      <div class="wx-status" id="wxStatus"></div>
-      <div id="wxBody"></div>
-      <div class="wx-src">Source: NOAA/NWS Aviation Weather Center (aviationweather.gov). Decision support only —
-        this display does not replace the official briefing of your company.</div>
+    </div>
+    <!-- La fenêtre des relevés : elle monte du bas à l'ouverture d'un
+         terrain, s'arrête sous les favoris, et repart vers le bas à la
+         croix. Un terrain à la fois s'y lit — METAR, TAF, pistes et bande du
+         jour ; toucher un autre code de la route la remplit de lui. Sans
+         terrain, elle reste rangée : la page n'est que l'en-tête. -->
+    <div class="wx-sheet" id="wxSheet" hidden>
+      <button class="help-btn wx-sheet-x" id="wxSheetX" aria-label="Close the report" title="Close">×</button>
+      <div class="wx-sheet-scroll" id="wxSheetScroll">
+        <div class="wx-status" id="wxStatus"></div>
+        <div id="wxBody"></div>
+        <div class="wx-src">Source: NOAA/NWS Aviation Weather Center (aviationweather.gov). Decision support only —
+          this display does not replace the official briefing of your company.</div>
+      </div>
     </div>
   </div>
 
@@ -15679,12 +15760,12 @@ function renderInfo(icao) {
     $("#stationMapBtn").onclick = () => openMapOverlay(currentIcao || null, "notam");
     /* Weather : le même contexte, l'autre lecture. Une route en cours donne ses
        terrains à la page météo — DEP, DEST, ALT alignés ; sinon c'est le
-       terrain affiché, seul, et sa mise en page large. Rien à l'écran, rien à
-       ouvrir : la page météo ne s'ouvre pas à vide. */
+       terrain affiché, seul, et sa mise en page large. Rien à l'écran, la
+       page s'ouvre nue : l'en-tête et la case ICAO, prêts pour le premier
+       code. */
     $("#wxPageBtn").onclick = () => {
       const list = notamRoute.length ? notamRoute.slice()
                  : (currentIcao ? [{ icao: currentIcao }] : []);
-      if (!list.length) return;
       openWx(list);
     };
     function apMeta(a, st) {
@@ -19443,11 +19524,11 @@ window.addEventListener("scroll", hidePop, true);
     };
     // Weather : un seul code rempli, la page météo ne montre QUE ce terrain (elle
     // le reçoit sans rôle, c'est ce qui lui donne sa mise en page large).
-    // Plusieurs codes, elle aligne DEP, DEST et ALT. Sans code exploitable, pas
-    // d'ouverture à vide. L'accueil reste derrière (z 50 < 52).
+    // Plusieurs codes, elle aligne DEP, DEST et ALT. Sans code exploitable,
+    // elle s'ouvre nue : l'en-tête et sa case ICAO suffisent à commencer.
+    // L'accueil reste derrière (z 50 < 52).
     $("#homeWxCard").onclick = () => {
       const codes = homeRouteCodes();
-      if (!codes.length) { needHomeIcao(); return; }
       openWx(codes.length === 1 ? [{ icao: codes[0].icao }] : codes);
     };
     // Terrains saisis sur l'accueil, validés et dédoublonnés (un ALT égal au DEST
@@ -19724,6 +19805,37 @@ window.addEventListener("scroll", hidePop, true);
       el.className = "wx-status" + (cls ? " " + cls : "");
     }
     function wxSection(icao) { return document.querySelector(`#wxBody .wx-ap[data-icao="${icao}"]`); }
+    /* ---- la fenêtre des relevés ----
+       Un terrain à la fois : wxShowSheet() rend SA section visible et fait
+       monter la fenêtre si elle était rangée. Les autres sections restent
+       dans la page, cachées — leurs relevés se rafraîchissent en silence, le
+       terrain suivant s'ouvre sans rien redemander. La croix ne ferme que la
+       fenêtre : l'en-tête reste, et un code touché la rouvre. */
+    let wxActive = null;                      // l'ICAO que la fenêtre montre
+    function wxShowSheet(icao) {
+      wxActive = icao;
+      document.querySelectorAll("#wxBody .wx-ap")
+        .forEach(s => s.classList.toggle("active", s.dataset.icao === icao));
+      renderWxCodes(wxList);                  // le code lu se souligne (.on)
+      const sh = $("#wxSheet");
+      $("#wxSheetScroll").scrollTop = 0;      // chaque terrain se lit du haut
+      if (sh.hidden) {
+        sh.hidden = false;
+        void sh.offsetHeight;                 // reflow : la position de départ est
+        sh.classList.add("open");             // prise AVANT de glisser
+      }
+    }
+    function wxCloseSheet(instant) {
+      wxActive = null;
+      renderWxCodes(wxList);                  // plus de code souligné
+      const sh = $("#wxSheet");
+      if (sh.hidden) return;
+      sh.classList.remove("open");
+      if (instant) { sh.hidden = true; return; }
+      /* hidden APRÈS la glissade — et seulement si personne ne l'a rouverte. */
+      setTimeout(() => { if (!sh.classList.contains("open")) sh.hidden = true; }, 300);
+    }
+    $("#wxSheetX").onclick = () => wxCloseSheet();
     /* Les terrains de l'écran, sous la case de saisie : ceux de la première
        page d'abord, dans leur ordre, puis ceux ajoutés ici. Ils se lisent à la
        couleur du texte : ce n'est plus une saisie, la route se modifie sur
@@ -19739,7 +19851,7 @@ window.addEventListener("scroll", hidePop, true);
       box.hidden = !list.length;
       box.innerHTML = list.map(a => {
         const m = AIRPORTS[a.icao];
-        return `<button type="button" class="wx-jump" data-icao="${a.icao}"
+        return `<button type="button" class="wx-jump${a.icao === wxActive ? " on" : ""}" data-icao="${a.icao}"
       title="${m ? m.city : ""}"><span class="v">${a.icao}</span>${list.length > 1
             ? `<span class="wx-x" data-x="${a.icao}" title="Remove ${a.icao} from this screen">×</span>`
             : ""}</button>`;
@@ -19770,12 +19882,16 @@ window.addEventListener("scroll", hidePop, true);
       const first = AIRPORTS[wxList[0].icao];
       $("#wxBody").classList.toggle("single", single);
       $("#wxName").textContent = single && first ? `${first.city} · ${first.cc}` : "";
+      /* La fenêtre ne peut pas rester sur un terrain parti : elle passe au
+         premier des restants — comme la file NOTAM le fait déjà. */
+      if (wxActive === icao) wxShowSheet(wxList[0].icao);
       renderWxCodes(wxList);
       renderWxChips();
     }
+    /* Un code touché ne descend plus à sa section : il la pose dans la
+       fenêtre — c'est elle qui montre les relevés désormais. */
     function wxJumpTo(icao) {
-      const sec = wxSection(icao);
-      if (sec && wxList.length > 1) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (wxSection(icao)) wxShowSheet(icao);
     }
     /* La case d'ajout. Entrée, la flèche ou le choix d'une proposition posent
        une section de plus EN TÊTE de l'écran, sans toucher à celles déjà là :
@@ -19956,6 +20072,20 @@ window.addEventListener("scroll", hidePop, true);
       wxList = list;
       for (const k in wxShown) delete wxShown[k];
       $("#wxScreen").hidden = false;
+      /* Sans terrain, la page s'ouvre quand même : l'en-tête et la case ICAO
+         vide, rien d'autre — la fenêtre reste rangée et attend le premier
+         code. C'est l'écran qu'on obtient depuis un accueil encore vierge. */
+      if (!list.length) {
+        wxCloseSheet(true);
+        $("#wxBody").innerHTML = "";
+        $("#wxBody").classList.remove("single");
+        $("#wxName").textContent = "";
+        renderWxCodes(list);
+        renderWxChips();
+        $("#wxAdd").value = "";
+        hideWxSuggest();
+        return;
+      }
       const single = list.length === 1 && !list[0].role;
       const first = AIRPORTS[list[0].icao];
       $("#wxName").textContent = single && first ? `${first.city} · ${first.cc}` : "";
@@ -19981,8 +20111,10 @@ window.addEventListener("scroll", hidePop, true);
       <div class="wx-block" data-daywx hidden></div>
     </section>`;
       }).join("");
-      // Après les sections : chaque code cherche la sienne au clic.
-      renderWxCodes(list);
+      // Après les sections : la fenêtre monte sur le PREMIER terrain — le
+      // départ d'une route, ou le code qu'on vient de poser en tête. Elle
+      // redessine aussi la ligne des codes, avec le terrain lu souligné.
+      wxShowSheet(list[0].icao);
       renderWxChips();                 // puces allumées : les relevés déjà à l'écran
       $("#wxAdd").value = "";
       hideWxSuggest();
@@ -20085,6 +20217,7 @@ window.addEventListener("scroll", hidePop, true);
     // route, et il ramène l'accueil même si on est arrivé ici autrement.
     function wxTeardown() {
       $("#wxScreen").hidden = true;
+      wxCloseSheet(true);                        // la fenêtre repart rangée
       wxToken++;                                 // coupe les requêtes en cours
       if (wxTicker) { clearInterval(wxTicker); wxTicker = null; }
       if (wxAutoTimer) { clearInterval(wxAutoTimer); wxAutoTimer = null; }
