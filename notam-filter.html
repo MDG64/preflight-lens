@@ -20177,6 +20177,15 @@ window.addEventListener("scroll", hidePop, true);
       wxFavTab = (wxFavTab === t) ? null : t;
       renderWxChips();
     }
+    /* Une puce choisie referme sa liste. La fenêtre des relevés s'arrête sous
+       les favoris : dépliés, ils lui mangent la hauteur au moment précis où
+       l'on vient de demander un METAR. La croix, elle, laisse la liste
+       ouverte — on en retire souvent plusieurs de suite. */
+    function wxCloseFavTab() {
+      if (wxFavTab === null) return;
+      wxFavTab = null;
+      renderWxChips();
+    }
     function renderWxChips() {
       const box = $("#wxChips");
       if (!box) return;
@@ -20206,9 +20215,13 @@ window.addEventListener("scroll", hidePop, true);
         // La croix d'abord : elle retire des favoris et rien d'autre.
         const x = e.target.dataset.x;
         if (x !== undefined) { toggleFavCode(x); return; }
+        // Le code est lu AVANT la fermeture, qui reconstruit la liste et
+        // détache le bouton.
+        const code = b.dataset.code;
+        wxCloseFavTab();
         // Terrain déjà à l'écran : wxAddStation descend à son relevé plutôt
         // que de le poser deux fois.
-        wxAddStation(b.dataset.code);
+        wxAddStation(code);
       });
     }
     /* Une puce de route rejoue la route entière : les trois cases de l'accueil
@@ -20234,7 +20247,9 @@ window.addEventListener("scroll", hidePop, true);
           renderWxChips(); renderChips(); renderHomeChips(); renderHomeStars();
           return;
         }
-        homeApplyRoute(favRoutes[Number(b.dataset.i)]);
+        const i = Number(b.dataset.i);
+        wxCloseFavTab();
+        homeApplyRoute(favRoutes[i]);
         const codes = homeRouteCodes();
         if (!codes.length) return;
         openWx(codes.length === 1 ? [{ icao: codes[0].icao }] : codes);
