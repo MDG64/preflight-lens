@@ -75,15 +75,22 @@ self.addEventListener("fetch", e => {
 
   // 2) Pages HTML / navigation : réseau d'abord -> les mises à jour apparaissent
   //    dès qu'on est en ligne ; repli sur le cache si hors-ligne.
-  //    fetch(url, {cache:"no-store"}) plutôt que fetch(e.request) : sinon, en
+  //    fetch(url, {cache:"no-cache"}) plutôt que fetch(e.request) : sinon, en
   //    mode "navigate", le navigateur peut servir sa propre copie HTTP en
   //    cache (Cache-Control: max-age=600 côté GitHub Pages) sans même
   //    toucher le réseau — une réouverture d'app dans les 10 minutes suivant
   //    un déploiement resterait alors bloquée sur l'ancienne version.
+  //    "no-cache" et pas "no-store" : les deux consultent le réseau à CHAQUE
+  //    navigation, mais no-store partait sans If-None-Match, donc chaque
+  //    démarrage à froid re-téléchargeait le corps entier (~0,8 Mo gzip) même
+  //    inchangé — c'est ce poste qui plafonnait GitHub Pages (100 Go/mois).
+  //    Avec no-cache, Pages répond 304 tant que rien n'a changé ; après un
+  //    304, le fetch() rend quand même un 200 complet (copie HTTP du
+  //    navigateur), donc le c.put() ci-dessous continue de fonctionner.
   const isHTML = e.request.mode === "navigate" || url.endsWith(".html") || url.endsWith("/");
   if (isHTML) {
     e.respondWith(
-      fetch(url, { cache: "no-store" }).then(r => {
+      fetch(url, { cache: "no-cache" }).then(r => {
         const copy = r.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
         return r;
@@ -114,12 +121,12 @@ self.addEventListener("fetch", e => {
   //    de démarrage, nom repris par le wrapper store). En cache d'abord il
   //    restait figé jusqu'au prochain changement de CACHE — un renommage de
   //    l'app n'atteignait jamais les appareils déjà installés. Réseau d'abord
-  //    donc, et avec {cache:"no-store"} pour la même raison qu'en règle 2 :
+  //    donc, et avec {cache:"no-cache"} pour la même raison qu'en règle 2 :
   //    sans lui, le navigateur sert sa propre copie HTTP et le renommage
-  //    reste invisible même avec le réseau.
+  //    reste invisible même avec le réseau ; le 304 suffit quand rien n'a bougé.
   if (url.endsWith("/manifest.json")) {
     e.respondWith(
-      fetch(url, { cache: "no-store" }).then(r => {
+      fetch(url, { cache: "no-cache" }).then(r => {
         if (r && r.ok) {
           const copy = r.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
