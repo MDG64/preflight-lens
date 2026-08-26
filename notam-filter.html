@@ -4932,6 +4932,30 @@ body.light .stat.on {
       width: calc(50% - 7px)
     }
 
+    /* ---------- version tablette : les trois cases sur UNE ligne ----------
+       Des que la page atteint sa largeur pleine (560 px), Weather, NOTAM et
+       Map se lisent de gauche a droite, dans l'ordre ou on les ouvre. Chacune
+       prend le TIERS exact de la grille et sa vignette remplit sa colonne :
+       la bande des trois images se cale au pixel sur la ligne des codes et sur
+       la case des favoris, au-dessus — une seule largeur pour toute la page.
+       Le telephone garde ses deux colonnes et Map centree dessous : a moins de
+       560 px, trois vignettes cote a cote seraient des timbres. */
+    @media (min-width: 560px) {
+      .home-cards {
+        grid-template-columns: repeat(3, 1fr)
+      }
+
+      .home-card-wide {
+        grid-column: auto;
+        justify-self: stretch;
+        width: auto
+      }
+
+      .home-card img {
+        width: 100%
+      }
+    }
+
     .hc-name {
       font: 700 14px/1 var(--sans);
       letter-spacing: .16em;
