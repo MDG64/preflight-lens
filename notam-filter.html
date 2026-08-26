@@ -4386,6 +4386,11 @@ body.light .stat.on {
       inset: 0;
       z-index: 50;
       overflow-y: auto;
+      /* Le glissement s'arrête à l'accueil. Sur grand écran il tient dans la
+         hauteur : sans cette ligne, n'ayant rien à faire défiler pour
+         lui-même, il passait le geste à la page NOTAM de derrière, qui
+         défilait à l'aveugle sous l'accueil. */
+      overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch
     }
 
@@ -19786,7 +19791,18 @@ window.addEventListener("scroll", hidePop, true);
       homeMarkSel();
       $("#homeScreen").hidden = false;
     }
-    function closeHome() { $("#homeScreen").hidden = true; }
+    /* L'accueil se retire TOUJOURS sur une page NOTAM remise en haut. La
+       page vit sous l'accueil (position:fixed), elle garde donc le
+       défilement où on l'avait laissée : on revenait à l'accueil depuis le
+       bas d'une liste, on repartait sur un terrain, et l'en-tête — nom de la
+       page, case ICAO, file des terrains — restait au-dessus du bord. Sur
+       tablette c'est le cas courant, parce que l'accueil y tient dans
+       l'écran : n'ayant rien à faire défiler pour lui-même, le moindre
+       glissement dessus allait faire défiler la page de derrière. */
+    function closeHome() {
+      $("#homeScreen").hidden = true;
+      window.scrollTo(0, 0);
+    }
     $("#homeBtn").onclick = openHome;
     $("#homeThemeBtn").onclick = () => $("#themeBtn").click();
 
