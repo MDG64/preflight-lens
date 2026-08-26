@@ -889,23 +889,45 @@
       cursor: pointer
     }
 
-    /* ---------- fonctions réservées au plan complet ---------- */
+    /* ---------- saisie du code propriétaire ---------- */
+    /* Construite à la demande, comme la pastille : elle ne sert qu'une fois par
+       appareil. Réutilise .modal-ov / .modal / .btn, qui n'attendent qu'un
+       intérieur — .modal est en overflow:hidden et sans marge propre. */
+    .gate-dialog { padding: 22px; display: grid; gap: 12px }
+
+    .gate-dialog .gate-in {
+      width: 100%;
+      font: 600 15px/1 var(--mono);
+      letter-spacing: .08em;
+      text-align: center;
+      text-transform: uppercase;
+      color: var(--text);
+      background: var(--panel2);
+      border: 1px solid var(--line2);
+      border-radius: 8px;
+      padding: 13px 10px
+    }
+
+    .gate-dialog .gate-in:focus { outline: none; border-color: var(--cyan-dim) }
+    .gate-dialog .btn { height: 38px }
+
+    /* ---------- fonctions réservées à la formule complète ---------- */
     /* Atténuées, mais TOUJOURS cliquables : c'est le clic qui explique, et un
        attribut disabled ne dirait rien. La classe vit sur <body> — un seul
        basculement au lieu d'un parcours d'éléments, et le CSS reste la seule
        description de ce qui se voit borné. */
-    body.plan-free .timebar .scratch.time,
-    body.plan-free .timebar .tmodes .btn,
-    body.plan-free .map-wind-hours .wh:not([data-h="0"]) { opacity: .5 }
+    body.gate-free .timebar .scratch.time,
+    body.gate-free .timebar .tmodes .btn,
+    body.gate-free .map-wind-hours .wh:not([data-h="0"]) { opacity: .5 }
 
-    /* ---------- plafond du plan gratuit ---------- */
+    /* ---------- plafond de la formule gratuite ---------- */
     /* Pastille brève, posée par-dessus l'écran courant : un favori se pose
        aussi bien depuis l'accueil que depuis la page NOTAM ou la page Weather,
        et aucune de ces vues n'a de place réservée pour un message. Or (et non
        rouge) parce que ce n'est pas une panne, c'est une borne. z-index au
        dessus des recouvrements (500) : l'étoile existe aussi dans le résumé
        météo des favoris. */
-    .plan-toast {
+    .gate-toast {
       position: fixed;
       left: 50%;
       bottom: 24px;
@@ -922,7 +944,7 @@
       text-align: center
     }
 
-    .plan-toast b { color: var(--gold); font-weight: 700 }
+    .gate-toast b { color: var(--gold); font-weight: 700 }
 
     /* ---------- summary ---------- */
     .summary {
@@ -14390,7 +14412,7 @@ E) ${e}`;
     }
     function saveFavRoutes(a) { try { localStorage.setItem("notam_fav_routes", JSON.stringify(a)); } catch (e) { } }
 
-    /* ---- plan gratuit / plan complet -------------------------------------
+    /* ---- formule gratuite / formule complete -------------------------------------
        UN SEUL point de vérité pour tout ce qui est borné. isPro() répond
        toujours faux aujourd'hui : rien n'est encore vendu. La couche existe
        pour que l'achat s'y branche en un endroit, plus tard, sans rouvrir une
@@ -14419,12 +14441,12 @@ E) ${e}`;
        code reste dans localStorage, les ouvertures suivantes n'ont rien à
        refaire.
        Pour rendre l'appareil au plan gratuit : #unlock= (rien après le =). */
-    const PLAN_KEY = "notam_plan";
-    const PLAN_HASH = "341711df51ac69b04b658734db3a24c6b88ceec528254700d6b7c01f012565e3";
-    let planPro = false;
-    function isPro() { return planPro; }
+    const GATE_KEY = "notam_plan";
+    const GATE_HASH = "341711df51ac69b04b658734db3a24c6b88ceec528254700d6b7c01f012565e3";
+    let gatePro = false;
+    function isPro() { return gatePro; }
 
-    async function planSha(txt) {
+    async function gateSha(txt) {
       const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
       return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
     }
@@ -14432,35 +14454,122 @@ E) ${e}`;
        a donc déjà eu lieu quand l'empreinte tombe : on redessine derrière, sinon
        un appareil déverrouillé afficherait « /5 » pendant quelques millisecondes
        — et garderait ce « /5 » jusqu'au prochain rendu. */
-    async function planInit() {
+    /* Applique un code, d'où qu'il vienne — fragment d'URL ou saisie dans
+       l'app — et rend l'annonce à afficher. Un seul chemin de vérification pour
+       les deux portes : ce qui vaut de l'une vaut de l'autre. */
+    async function gateApply(saisi) {
+      saisi = (saisi || "").trim().toUpperCase();
+      let annonce;
+      if (!saisi) {
+        localStorage.removeItem(GATE_KEY);
+        annonce = "Back to the free version on this device.";
+      } else if (await gateSha(saisi) === GATE_HASH) {
+        localStorage.setItem(GATE_KEY, saisi);
+        annonce = "Full version unlocked on this device.";
+      } else {
+        // Une frappe de travers ne DÉVERROUILLE pas, mais ne reverrouille pas
+        // non plus : le code déjà rangé reste en place, sinon la moindre faute
+        // obligerait à ressaisir le code entier.
+        annonce = "Unlock code not recognised.";
+      }
+      const code = localStorage.getItem(GATE_KEY);
+      gatePro = code ? (await gateSha(code)) === GATE_HASH : false;
+      gateRefresh();
+      return annonce;
+    }
+    /* Tout ce que la formule change à l'écran. Les gestionnaires de tri, eux,
+       lisent isPro() au moment du clic : ils n'ont rien à redessiner. */
+    function gateRefresh() {
+      gatePaint();
+      updateFavCount(); renderChips(); renderWxChips(); renderHomeChips();
+    }
+
+    async function gateInit() {
       let annonce = null;
       try {
         const m = (location.hash || "").match(/^#unlock=(.*)$/);
         if (m) {
-          const saisi = decodeURIComponent(m[1]).trim().toUpperCase();
           // Le fragment part de la barre d'adresse AVANT toute vérification :
           // qu'il soit bon ou non, il n'a rien à faire dans l'historique du
           // navigateur ni dans un partage de lien.
           history.replaceState(null, "", location.pathname + location.search);
-          if (!saisi) {
-            localStorage.removeItem(PLAN_KEY);
-            annonce = "Back to the free version on this device.";
-          } else if (await planSha(saisi) === PLAN_HASH) {
-            localStorage.setItem(PLAN_KEY, saisi);
-            annonce = "Full version unlocked on this device.";
-          } else {
-            // Une frappe de travers ne DÉVERROUILLE pas, mais ne reverrouille
-            // pas non plus : le code déjà rangé reste en place, sinon la moindre
-            // faute obligerait à ressaisir le code entier.
-            annonce = "Unlock code not recognised.";
-          }
+          annonce = await gateApply(decodeURIComponent(m[1]));
+        } else {
+          const code = localStorage.getItem(GATE_KEY);
+          if (code) gatePro = (await gateSha(code)) === GATE_HASH;
         }
-        const code = localStorage.getItem(PLAN_KEY);
-        if (code) planPro = (await planSha(code)) === PLAN_HASH;
-      } catch (e) { planPro = false; }   // contexte non sécurisé, stockage bloqué : plan gratuit
-      if (annonce) planToast(annonce);
-      planPaint();
-      updateFavCount(); renderChips(); renderWxChips(); renderHomeChips();
+      } catch (e) { gatePro = false; }   // contexte non sécurisé, stockage bloqué : formule gratuite
+      if (annonce) gateToast(annonce);
+      gateRefresh();
+    }
+
+    /* ---- la porte d'entrée quand il n'y a pas de barre d'adresse ----------
+       Sur iOS, une app posée sur l'écran d'accueil a son stockage PROPRE,
+       séparé de Safari : déverrouiller dans le navigateur n'y change rien, et
+       l'app installée n'offre nulle part où taper #unlock=. Le geste, lui,
+       marche partout — navigateur, PWA installée, futur emballage de magasin.
+
+       Cinq appuis sur le numéro de version, dans les trois secondes. Le numéro
+       vit au fond du panneau « How to use » : personne n'y arrive par hasard,
+       et rien dans l'interface n'annonce que le geste existe. */
+    let gateTaps = 0, gateTapsAt = 0;
+    (() => {
+      const v = document.getElementById("hdVersion");
+      if (!v) return;
+      v.addEventListener("click", () => {
+        const t = Date.now();
+        gateTaps = (t - gateTapsAt > 3000) ? 1 : gateTaps + 1;
+        gateTapsAt = t;
+        if (gateTaps < 5) return;
+        gateTaps = 0;
+        // .hd-version est en user-select:all : les cinq appuis ont sélectionné
+        // le numéro au passage. On rend la sélection avant d'ouvrir la saisie.
+        try { getSelection().removeAllRanges(); } catch (e) { }
+        gateAskCode();
+      });
+    })();
+
+    /* Le préfixe est « gate » et non « plan » : dans ce fichier, plan* désigne
+       le PLAN DE TERRAIN (#planOv, planDraw, planScope…). Un #planOv de plus
+       aurait ouvert le plan de terrain à la place de cette saisie. */
+    function gateAskCode() {
+      let ov = document.getElementById("gateOv");
+      if (!ov) {
+        ov = document.createElement("div");
+        ov.className = "modal-ov";
+        ov.id = "gateOv";
+        ov.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-label="Unlock code">'
+          + '<button class="modal-x" id="gateX" type="button" aria-label="Close">\u00d7</button>'
+          + '<div class="gate-dialog">'
+          + '<h2 class="hd-title">Unlock code</h2>'
+          + '<div class="hd-desc">Enter the owner code to unlock the full version <b>on this device</b>.'
+          + ' Leave it empty and apply to go back to the free version.</div>'
+          + '<input id="gateIn" class="gate-in" type="text" autocomplete="off" autocapitalize="characters"'
+          + ' autocorrect="off" spellcheck="false" aria-label="Unlock code" placeholder="XXXX-XXXX-XXXX-XXXX">'
+          + '<button class="btn" id="gateOk" type="button">Apply</button>'
+          + '</div></div>';
+        document.body.appendChild(ov);
+        const fermer = () => { ov.hidden = true; };
+        const valider = async () => {
+          const saisi = ov.querySelector("#gateIn").value;
+          fermer();
+          gateToast(await gateApply(saisi));
+        };
+        ov.querySelector("#gateX").onclick = fermer;
+        ov.querySelector("#gateOk").onclick = valider;
+        ov.onclick = e => { if (e.target === ov) fermer(); };
+        ov.querySelector("#gateIn").addEventListener("keydown", e => {
+          if (e.key === "Enter") valider();
+          if (e.key === "Escape") fermer();
+        });
+      }
+      // Rouvrir part d'un champ VIDE : le code déjà rangé n'a pas à s'afficher
+      // en clair, et une saisie précédente ne doit pas se ré-appliquer par
+      // inadvertance.
+      const inp = ov.querySelector("#gateIn");
+      inp.value = "";
+      ov.hidden = false;
+      inp.focus();
     }
     function maxFavs() { return isPro() ? Infinity : FREE_MAX_FAVS; }
     function maxRoutes() { return isPro() ? Infinity : FREE_MAX_ROUTES; }
@@ -14468,9 +14577,9 @@ E) ${e}`;
     /* Les compteurs des trois écrans (accueil, NOTAM, Weather) portent le
        plafond tant qu'il y en a un : « (3/5) » se lit sans explication et
        prévient AVANT le refus, au lieu de le subir. */
-    function planCount(n, max) { return "(" + n + (max === Infinity ? "" : "/" + max) + ")"; }
-    function favCountLabel() { return planCount(favs.length, maxFavs()); }
-    function routeCountLabel() { return planCount(favRoutes.length, maxRoutes()); }
+    function gateCount(n, max) { return "(" + n + (max === Infinity ? "" : "/" + max) + ")"; }
+    function favCountLabel() { return gateCount(favs.length, maxFavs()); }
+    function routeCountLabel() { return gateCount(favRoutes.length, maxRoutes()); }
 
     /* Ce qui est réservé au plan complet. UNE clé par fonction bornée : poser
        ou lever un verrou tient sur une ligne, et le message vit à côté de la
@@ -14480,38 +14589,38 @@ E) ${e}`;
        une liste déjà téléchargée. Le verrou est donc du même bois que le
        plafond des favoris : il tient pour qui se sert de l'app, pas pour qui
        ouvre la console. C'est assumé, faute de compte. */
-    const PLAN_LOCKS = {
+    const GATE_LOCKS = {
       timeFilter: "Time filters — <b>Now</b>, <b>Today</b>, <b>Tomorrow</b> and the UTC hour — come with the full version.",
       windHours: "Forecast wind at <b>+1h</b>, <b>+2h</b> and <b>+3h</b> comes with the full version. Observed wind stays free.",
       phaseFilter: "Filtering by <b>flight phase</b> comes with the full version. The counts stay visible.",
       sevFilter: "Filtering by <b>severity</b> comes with the full version. The counts stay visible.",
     };
     /* Vrai si le geste doit être ARRÊTÉ. Un seul appel en tête de gestionnaire :
-       `if (planBlocked("timeFilter")) return;` */
-    function planBlocked(cle) {
+       `if (gateBlocked("timeFilter")) return;` */
+    function gateBlocked(cle) {
       if (isPro()) return false;
-      planToast(PLAN_LOCKS[cle]);
+      gateToast(GATE_LOCKS[cle]);
       return true;
     }
-    /* Ce que le plan change à l'écran, en un basculement. */
-    function planPaint() { document.body.classList.toggle("plan-free", !isPro()); }
+    /* Ce que la formule change à l'écran, en un basculement. */
+    function gatePaint() { document.body.classList.toggle("gate-free", !isPro()); }
 
     /* Créée à la demande : elle ne sert qu'au refus, et un élément de plus dans
        le corps du document se paierait à chaque ouverture. */
-    let planToastTimer = null;
-    function planToast(html) {
-      let el = document.getElementById("planToast");
+    let gateToastTimer = null;
+    function gateToast(html) {
+      let el = document.getElementById("gateToast");
       if (!el) {
         el = document.createElement("div");
-        el.className = "plan-toast";
-        el.id = "planToast";
+        el.className = "gate-toast";
+        el.id = "gateToast";
         el.setAttribute("role", "status");
         document.body.appendChild(el);
       }
       el.innerHTML = html;
       el.hidden = false;
-      clearTimeout(planToastTimer);
-      planToastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+      clearTimeout(gateToastTimer);
+      gateToastTimer = setTimeout(() => { el.hidden = true; }, 3200);
     }
 
     /* ---- stockage hors-ligne des NOTAM consultés (avec horodatage) ---- */
@@ -15079,7 +15188,7 @@ function renderInfo(icao) {
       // retirer : on ne supprime pas en silence ce que l'utilisateur a posé,
       // on l'empêche seulement d'en poser un de plus.
       if (!enleve && favs.length >= maxFavs()) {
-        planToast(`Free version keeps <b>${FREE_MAX_FAVS} favorite aerodromes</b>. Remove one to add another.`);
+        gateToast(`Free version keeps <b>${FREE_MAX_FAVS} favorite aerodromes</b>. Remove one to add another.`);
         return;
       }
       favs = enleve ? favs.filter(c => c !== code) : [...favs, code];
@@ -15129,7 +15238,7 @@ function renderInfo(icao) {
         b.innerHTML = `<span class="cat-label">${CAT_LABEL[c]}</span><span class="cnt" data-cnt="${c}">0</span>`;
         // Le compte par phase reste AFFICHÉ (span .cnt) : seul le tri est borné.
         b.onclick = () => {
-          if (planBlocked("phaseFilter")) return;
+          if (gateBlocked("phaseFilter")) return;
           activeCats.has(c) ? activeCats.delete(c) : activeCats.add(c); render();
         };
         seg.appendChild(b);
@@ -15302,13 +15411,13 @@ function renderInfo(icao) {
     <div class="stat info${activeSev === "info" ? " on" : ""}" data-sev="info"><div class="row"><span class="led"></span><span class="n">${c.info}</span></div><div class="k">Information</div></div>`;
       summary.querySelectorAll(".stat").forEach(el => el.onclick = () => {
         const s = el.dataset.sev;
-        // « all » n'est pas un tri mais sa remise à zéro : en plan gratuit
+        // « all » n'est pas un tri mais sa remise à zéro : en formule gratuite
         // activeSev vaut déjà null, le clic n'y fait rien et n'a pas à être
         // refusé. Les trois autres, si — sans toucher aux chiffres, qui sont
         // un relevé avant d'être un bouton : masquer un compte de NOTAM
         // critiques serait nuisible, et le voir sans pouvoir l'isoler est ce
         // qui donne envie de la version complète.
-        if (s !== "all" && planBlocked("sevFilter")) return;
+        if (s !== "all" && gateBlocked("sevFilter")) return;
         activeSev = (s === "all") ? null : (activeSev === s ? null : s);
         render();
       });
@@ -15440,26 +15549,26 @@ function renderInfo(icao) {
     // obligerait à effacer sous les doigts, ce qui se lit comme une panne.
     // L'écoute de `input` reste en garde-fou pour l'arrivée au clavier (Tab).
     $("#htime").addEventListener("pointerdown", e => {
-      if (planBlocked("timeFilter")) { e.preventDefault(); e.target.blur(); }
+      if (gateBlocked("timeFilter")) { e.preventDefault(); e.target.blur(); }
     });
     $("#htime").addEventListener("input", e => {
-      if (planBlocked("timeFilter")) { e.target.value = ""; return; }
+      if (gateBlocked("timeFilter")) { e.target.value = ""; return; }
       applyTime(e.target.value);
     });
     $("#now").onclick = () => {
-      if (planBlocked("timeFilter")) return;
+      if (gateBlocked("timeFilter")) return;
       const d = new Date();
       $("#htime").value = P(d.getUTCHours()) + ":" + P(d.getUTCMinutes());
       applyTime($("#htime").value);
     };
     $("#todayBtn").onclick = () => {
-      if (planBlocked("timeFilter")) return;
+      if (gateBlocked("timeFilter")) return;
       if (timeMode === "today") { timeWin = null; timeMode = null; }
       else { $("#htime").value = ""; timeWin = dayWindow(0); timeMode = "today"; }
       render();
     };
     $("#tomBtn").onclick = () => {
-      if (planBlocked("timeFilter")) return;
+      if (gateBlocked("timeFilter")) return;
       if (timeMode === "tomorrow") { timeWin = null; timeMode = null; }
       else { $("#htime").value = ""; timeWin = dayWindow(1); timeMode = "tomorrow"; }
       render();
@@ -17620,7 +17729,7 @@ function renderInfo(icao) {
         // « now » (h=0) reste gratuit : c'est le vent OBSERVÉ, sans quoi
         // l'interrupteur de vent n'aurait plus rien à montrer. Seules les
         // prévisions TAF sont bornées.
-        if (+b.dataset.h !== 0 && planBlocked("windHours")) return;
+        if (+b.dataset.h !== 0 && gateBlocked("windHours")) return;
         setMapWindHour(+b.dataset.h); drawMap();
       };
     });
@@ -19509,7 +19618,7 @@ window.addEventListener("scroll", hidePop, true);
       const i = findFavRoute(codes);
       // Même règle que les terrains : seul l'ajout est borné, voir toggleFavCode().
       if (i < 0 && favRoutes.length >= maxRoutes()) {
-        planToast(`Free version keeps <b>${FREE_MAX_ROUTES} favorite routes</b>. Remove one to add another.`);
+        gateToast(`Free version keeps <b>${FREE_MAX_ROUTES} favorite routes</b>. Remove one to add another.`);
         return;
       }
       favRoutes = i < 0 ? [...favRoutes, codes] : favRoutes.filter((_, n) => n !== i);
@@ -20791,8 +20900,8 @@ window.addEventListener("scroll", hidePop, true);
       setTimeout(() => { routeCatchUp(); startRouteCatchUp(); }, 30e3);
     }
     openHome();
-    planPaint();    // borné par défaut : l'empreinte du code n'est pas encore calculée
-    planInit();     // asynchrone : ne retarde rien, redessine les compteurs derrière
+    gatePaint();    // borné par défaut : l'empreinte du code n'est pas encore calculée
+    gateInit();     // asynchrone : ne retarde rien, redessine les compteurs derrière
   </script>
   <script>
 
