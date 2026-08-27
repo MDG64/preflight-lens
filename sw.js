@@ -28,7 +28,13 @@ const ASSETS = [
   // refonte d'icône : incrémenter le suffixe, ne pas écraser.
   // Suffixe "-v4" (26 août 2026) : PREFLIGHT agrandi. Les favicons "PL" n'ont
   // pas changé, ils restent en v3.
-  "./icons/icon-192-v4.png", "./icons/icon-512-v4.png", "./icons/icon-maskable-192-v4.png", "./icons/icon-maskable-512-v4.png",
+  // Les MASKABLE passent en "-v5" (27 août 2026) : leur motif débordait de la
+  // zone que la spécification garantit visible — un cercle de 80 % du côté —,
+  // le manche de la loupe atteignant 94 % du demi-côté. Certains lanceurs
+  // Android l'auraient rogné. Motif réduit de 17 %, dessin inchangé, fond
+  // toujours plein-cadre. Les icônes "any", elles, n'ont pas de zone sûre à
+  // respecter et restent en v4.
+  "./icons/icon-192-v4.png", "./icons/icon-512-v4.png", "./icons/icon-maskable-192-v5.png", "./icons/icon-maskable-512-v5.png",
   "./icons/icon-180-v4.png", "./icons/favicon-32-v3.png", "./icons/favicon-16-v3.png", "./favicon.ico",
   // Photos des trois cases d'accueil (19 aout 2026). Meme regle que les icones :
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
