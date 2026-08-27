@@ -2,6 +2,11 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<!-- CSP plus large sur connect-src que les autres pages, à dessein :
+     l'adresse du serveur est SAISIE par l'utilisateur (cfg-serveur), donc
+     aucune liste blanche ne peut la prévoir. On garde le reste — https
+     exigé, object-src none, base-uri self, form-action none. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <!-- Même règle que les autres pages (2026-08-27) : pas de référencement tant
      que l'app n'est pas sur les stores. fiches.html l'avait manqué et restait
