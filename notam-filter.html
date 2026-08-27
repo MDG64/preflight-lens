@@ -4921,21 +4921,11 @@ body.light .stat.on {
       background: none
     }
 
-    /* Pictogramme plutot que photo (Weather) : il doit tenir ENTIER dans la
-       boite, pas etre recadre. Meme gabarit que les autres cases — c'est lui
-       qui maigrit, l'alignement des trois ne bouge pas.
-       Les deux voisines sont des photos qui remplissent leur vignette ; celle-ci
-       flottait dans le vide. Elle reçoit donc son propre fond, le meme degrade
-       diagonal que l'icone de l'application : argent en haut a gauche, bleu de
-       nuit en bas a droite — meme gabarit et meme arrondi que les deux clichés,
-       et le meme dans les deux thèmes. Le retrait laisse respirer le dessin sans
-       changer la taille de la vignette. */
-    .home-card img.hc-icon {
-      object-fit: contain;
-      box-sizing: border-box;
-      padding: 12px;
-      background: linear-gradient(135deg, #d4d8de 0%, #adb4bf 26%, #7c8593 50%, #414b5d 78%, #141d2f 100%)
-    }
+    /* Weather a quitte le pictogramme pour un cliche (27 aout 2026) : les
+       TROIS vignettes sont desormais des photos, meme traitement pour les
+       trois — recadrage carre en cover, liseré cyan, aucun fond a fabriquer.
+       La regle .hc-icon (contain + degrade argent/bleu de nuit) qui portait
+       l'ancien dessin n'a plus d'image a habiller : elle est retiree. */
 
     /* La carte tient la ligne du dessous à elle seule, mais garde la taille
        exacte d'une des deux cases du haut : elle prend la largeur d'une
@@ -6098,7 +6088,7 @@ body .stat .k{
 
       <div class="home-cards">
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
-          <img class="hc-icon" src="./home-wx-icon-v2.png" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-wx-v8.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Weather</span>
           <span class="hc-sub">METAR · TAF</span>
         </button>
