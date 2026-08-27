@@ -4,7 +4,7 @@
   "description": "Photographier une fiche d'approche et la déposer dans OneDrive, Documents/Fiches approche",
   "id": "./fiches.html",
   "start_url": "./fiches.html",
-  "scope": "/",
+  "scope": "./fiches.html",
   "lang": "fr",
   "display": "standalone",
   "background_color": "#0d1117",

@@ -55,7 +55,17 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(() => {}));
+  // Pas de .catch() qui avale, À DESSEIN. addAll() est atomique : un seul 404
+  // et ZÉRO fichier n'est déposé. En avalant l'erreur, l'installation
+  // réussissait quand même, et un service worker au cache VIDE passait tous les
+  // contrôles — le premier lancement hors ligne échouait alors sans qu'aucun
+  // signal ne l'ait annoncé, c'est-à-dire en vol. En laissant l'échec remonter,
+  // l'installation échoue franchement : l'ancien service worker reste en place
+  // (l'app continue de fonctionner, réseau d'abord) et le navigateur retentera.
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(err => {
+    console.error("[SW] pré-cache incomplet, installation abandonnée :", err);
+    throw err;
+  }));
   self.skipWaiting();                       // active la nouvelle version sans attendre
 });
 
