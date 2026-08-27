@@ -3,6 +3,18 @@
 
 <head>
   <meta charset="utf-8">
+  <!-- Content-Security-Policy (2026-08-27). En balise meta et pas en en-tête :
+       GitHub Pages n'en laisse poser aucun. Conséquence à connaître —
+       frame-ancestors est IGNORÉ dans une meta par la spécification, donc
+       l'anti-clickjacking n'est PAS couvert ici ; il faudrait un hébergeur qui
+       serve des en-têtes. Ce qui est couvert l'est vraiment : object-src none,
+       base-uri self (détournement de <base>), form-action none, et surtout
+       connect-src, qui borne les destinations d'un éventuel script injecté.
+       'unsafe-inline' est inévitable — l'app est un monofichier de scripts et
+       de styles en ligne, et un nonce demanderait un serveur qui l'insère.
+       blob: pour worker-src : MapLibre fabrique son worker par createObjectURL.
+       127.0.0.1:8787 : le proxy en développement local, cf. BACKEND_URL. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Pas de référencement tant que l'app n'est pas sur les stores (2026-08-04).
        N'interdit PAS l'accès : voir robots.txt. À retirer à la publication. -->
@@ -17288,6 +17300,9 @@ function renderInfo(icao) {
         const w = mapWindOf(icao);
         if (!w) return;
         const [wd, ws, wpk] = w;
+        // Pointe annoncée sans cap : ni faisceau ni rotation, le triangle
+        // seul, à gauche du point (l'éclair du CB tient la droite).
+        const dirless = wd == null;
         // Trois flèches au plus — la légende ne parle pas d'autre chose :
         // ↑, ↑↑, ↑↑↑. Au-delà, le rouge dit déjà tout. Zéro quand la station
         // n'a qu'une pointe sans direction à signaler : le triangle sort seul.
@@ -17312,7 +17327,7 @@ function renderInfo(icao) {
         const STEP = 9 * s, SHAFT = 26 * s, HEAD = 6 * s, GAP = 9 * s;
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(wd * Math.PI / 180);
+        if (!dirless) ctx.rotate(wd * Math.PI / 180);
         ctx.lineCap = "round"; ctx.lineJoin = "round";
         // Sur un horizon prévu (+1/+2/+3 h), le fût passe en pointillé — la
         // pointe reste pleine pour garder son cap lisible : c'est la VUE qui
@@ -17341,9 +17356,13 @@ function renderInfo(icao) {
         // lit debout, quel que soit le cap du vent.
         if (wpk > 40) {
           const wcol = WXPAL[wpk > 50 ? 3 : 2];
-          // Sans faisceau à prolonger, le triangle se serre contre le point.
-          ctx.translate(0, n ? -(GAP + SHAFT + 17 * s) : -(GAP + 17 * s));
-          ctx.rotate(-wd * Math.PI / 180);
+          // Sans faisceau à prolonger, le triangle se serre contre le point ;
+          // sans cap du tout, il passe à sa gauche, à l'écart de l'éclair.
+          if (dirless) ctx.translate(-CB_R * s, 0);
+          else {
+            ctx.translate(0, n ? -(GAP + SHAFT + 17 * s) : -(GAP + 17 * s));
+            ctx.rotate(-wd * Math.PI / 180);
+          }
           const tri = () => {
             ctx.beginPath();
             ctx.moveTo(0, -8 * s);
@@ -17360,7 +17379,12 @@ function renderInfo(icao) {
         }
         ctx.restore();
         // La boîte du faisceau — triangle « ! » compris — tournée du cap du
-        // vent puis englobée à l'écran, halo compté dans les marges.
+        // vent puis englobée à l'écran, halo compté dans les marges. Sans cap,
+        // il n'y a que le triangle de gauche à réserver.
+        if (dirless) {
+          windBoxes.push([x - (CB_R + 9.5) * s, y - 9.5 * s, x - (CB_R - 9.5) * s, y + 9.5 * s]);
+          return;
+        }
         const th = wd * Math.PI / 180, cos = Math.cos(th), sin = Math.sin(th);
         const hw = Math.max((n - 1) / 2 * STEP + 7 * s, wpk > 40 ? 9.5 * s : 0);
         const y0 = -((n ? GAP + SHAFT : GAP) + (wpk > 40 ? 27 * s : 2.5 * s)), y1 = -GAP + 2.5 * s;
@@ -17391,7 +17415,9 @@ function renderInfo(icao) {
         const zk = Math.log2(v.scale / 1.4222);
         const s2 = dpr * Math.min(cap, Math.max(1, 1 + (zk - 8) * (cap - 1) / 3));
         const w = (mapWindOn && mapMode === "wx") ? mapWindOf(icao) : null;
-        const th = w ? w[0] * Math.PI / 180 : 0;   // direction d'où VIENT le vent
+        // Direction d'où VIENT le vent — 0, donc à droite du point, quand il
+        // n'y a pas de vent à éviter ou pas de cap connu.
+        const th = (w && w[0] != null) ? w[0] * Math.PI / 180 : 0;
         const bx = x + CB_R * s2 * Math.cos(th), by = y + CB_R * s2 * Math.sin(th);
         const halo = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
         const col = light ? "#c98a08" : "#f6c945";   // --gold des deux thèmes
@@ -17727,6 +17753,10 @@ function renderInfo(icao) {
         if (!best || eff(w) > eff(best)) best = w;
       }
       if (!best) return null;
+      // Calme (00000KT) : le 000 du groupe n'est pas un cap, c'est l'absence
+      // de vent. On le dit null — sans quoi une pointe annoncée sous TEMPO
+      // poserait son triangle au nord, direction que personne n'a écrite.
+      if (!best.spd) best = { ...best, dir: null };
       return peak > eff(best) ? { ...best, pk: peak } : best;
     }
 
@@ -17773,9 +17803,11 @@ function renderInfo(icao) {
     // que la pointe garde donc son triangle, sans faisceau.
     function mapWindOf(icao) {
       const pick = (dir, spd, gst, pk) => {
-        if (dir == null) return null;
-        const eff = spd >= 3 ? Math.max(spd, gst || 0) : 0;
+        const eff = dir != null && spd >= 3 ? Math.max(spd, gst || 0) : 0;
         const peak = Math.max(eff, pk || 0);
+        // Sans cap — vent principal VRB lui aussi, ou calme — il reste la
+        // pointe : cap null, pas de faisceau, le triangle prendra la gauche
+        // du point. Rien à dire du tout : null.
         return (eff || peak > 40) ? [dir, eff, peak] : null;
       };
       if (mapWindHour > 0) {
@@ -17859,7 +17891,7 @@ function renderInfo(icao) {
           // vent. La ligne est gardée telle quelle : mapWindOf en tire la
           // flèche et le triangle. Le proxy applique la même règle de
           // fraîcheur qu'à la catégorie.
-          if (s.length > 4 && s[5] > 0) w.set(s[0], [s[4], s[5], s[6] || 0, s[7] || 0]);
+          if (s.length > 4 && (s[5] > 0 || s[7] > 0)) w.set(s[0], [s[4], s[5], s[6] || 0, s[7] || 0]);
         }
         // d.winds porte à part les vents PRÉVUS par TAF : par OACI, un triplet
         // [dir,spd,gst] par horizon +1/+2/+3 h, ou 0 quand le TAF ne gouverne
