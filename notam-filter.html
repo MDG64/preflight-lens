@@ -6229,7 +6229,7 @@ body .stat .k{
           <span class="rd" aria-hidden="true"></span>
           <span class="lb nt">NOTAM</span>
         </label>
-        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, strongest wind announced (gusts and TEMPO included), blowing downwind onto the station">
+        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, strongest wind announced (gusts and TEMPO included), blowing downwind onto the station; a variable-direction gust (VRB in a squall) has no arrow to give, so it raises the warning marker instead">
           <input type="checkbox" id="mapWindChk">
           <span class="rd" aria-hidden="true"></span>
           <span class="lb">Wind</span>
@@ -17287,9 +17287,10 @@ function renderInfo(icao) {
         if (v.scale < 11.25) return;
         const w = mapWindOf(icao);
         if (!w) return;
-        const [wd, ws] = w;
+        const [wd, ws, wpk] = w;
         // Trois flèches au plus — la légende ne parle pas d'autre chose :
-        // ↑, ↑↑, ↑↑↑. Au-delà, le rouge dit déjà tout.
+        // ↑, ↑↑, ↑↑↑. Au-delà, le rouge dit déjà tout. Zéro quand la station
+        // n'a qu'une pointe sans direction à signaler : le triangle sort seul.
         const n = Math.min(3, Math.ceil(ws / 10));
         // La couleur suit le NOMBRE de flèches, jamais l'inverse : ambre à la
         // troisième, donc au-DESSUS de 20 kt et non à partir de 20 — sinon
@@ -17338,9 +17339,10 @@ function renderInfo(icao) {
         // DÉBUT du faisceau, au vent, à l'opposé du terrain. On annule la
         // rotation autour de son point d'ancrage : un point d'exclamation se
         // lit debout, quel que soit le cap du vent.
-        if (ws > 40) {
-          const wcol = WXPAL[ws > 50 ? 3 : 2];
-          ctx.translate(0, -(GAP + SHAFT + 17 * s));
+        if (wpk > 40) {
+          const wcol = WXPAL[wpk > 50 ? 3 : 2];
+          // Sans faisceau à prolonger, le triangle se serre contre le point.
+          ctx.translate(0, n ? -(GAP + SHAFT + 17 * s) : -(GAP + 17 * s));
           ctx.rotate(-wd * Math.PI / 180);
           const tri = () => {
             ctx.beginPath();
@@ -17360,8 +17362,8 @@ function renderInfo(icao) {
         // La boîte du faisceau — triangle « ! » compris — tournée du cap du
         // vent puis englobée à l'écran, halo compté dans les marges.
         const th = wd * Math.PI / 180, cos = Math.cos(th), sin = Math.sin(th);
-        const hw = Math.max((n - 1) / 2 * STEP + 7 * s, ws > 40 ? 9.5 * s : 0);
-        const y0 = -(GAP + SHAFT + (ws > 40 ? 27 * s : 2.5 * s)), y1 = -GAP + 2.5 * s;
+        const hw = Math.max((n - 1) / 2 * STEP + 7 * s, wpk > 40 ? 9.5 * s : 0);
+        const y0 = -((n ? GAP + SHAFT : GAP) + (wpk > 40 ? 27 * s : 2.5 * s)), y1 = -GAP + 2.5 * s;
         let bx0 = 1/0, by0 = 1/0, bx1 = -1/0, by1 = -1/0;
         for (const [u, vv] of [[-hw, y0], [hw, y0], [-hw, y1], [hw, y1]]) {
           const px = x + u * cos - vv * sin, py = y + u * sin + vv * cos;
@@ -17703,9 +17705,13 @@ function renderInfo(icao) {
       // le plus FORT — rafale comprise — fait la flèche.
       // Sauf le VRB d'un TEMPO ou d'un PROB — le grain d'orage : sans
       // direction il ne fait pas de flèche, et retenu comme « le plus fort »
-      // il effacerait celle du vent principal. Il est écarté ; un VRB observé
-      // dans le corps du METAR reste, lui, tel quel.
-      let best = null, tempo = false;
+      // il effacerait celle du vent principal. Il est écarté de la flèche ; un
+      // VRB observé dans le corps du METAR reste, lui, tel quel.
+      // Écarté de la flèche, mais pas de l'alerte : la pointe annoncée sort à
+      // part, en `pk`, quand elle dépasse le vent retenu — c'est elle qui
+      // allume le triangle « ! ». Une rafale de 45 kt reste une rafale de
+      // 45 kt, même sans direction à lui donner.
+      let best = null, peak = 0, tempo = false;
       const eff = w => Math.max(w.spd, w.gst || 0);
       for (const t of String(raw || "").toUpperCase().replace(/=/g, " ").split(/\s+/)) {
         if (t === "RMK") break;
@@ -17713,14 +17719,15 @@ function renderInfo(icao) {
         if (t === "BECMG") { tempo = false; continue; }
         const m = WX_WIND_RE.exec(t);
         if (!m) continue;
-        if (tempo && !/^\d{3}$/.test(m[1])) continue;   // VRB de grain : écarté
         const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
         const w = { dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) % 360 : null,
                     spd: Math.round(parseInt(m[2], 10) * k),
                     gst: m[3] ? Math.round(parseInt(m[3], 10) * k) : 0 };
+        if (tempo && w.dir == null) { peak = Math.max(peak, eff(w)); continue; }
         if (!best || eff(w) > eff(best)) best = w;
       }
-      return best;
+      if (!best) return null;
+      return peak > eff(best) ? { ...best, pk: peak } : best;
     }
 
     // Un cumulonimbus s'annonce par un groupe de nuages suffixé CB :
@@ -17759,18 +17766,27 @@ function renderInfo(icao) {
     // Sur un horizon prévu (+1/+2/+3 h), le vent que le TAF donne pour cette
     // heure-là remplace celui du METAR — et faute d'un groupe TAF qui gouverne
     // cet instant, le vent du METAR reste.
+    // Rendu : [cap, vent de la FLÈCHE, POINTE annoncée]. Les deux vitesses ne
+    // disent pas la même chose — la flèche a besoin d'une direction et de quoi
+    // souffler, la pointe ajoute la rafale écartée faute de direction (le VRB
+    // d'un grain) et n'existe que pour le triangle « ! ». Une station qui n'a
+    // que la pointe garde donc son triangle, sans faisceau.
     function mapWindOf(icao) {
+      const pick = (dir, spd, gst, pk) => {
+        if (dir == null) return null;
+        const eff = spd >= 3 ? Math.max(spd, gst || 0) : 0;
+        const peak = Math.max(eff, pk || 0);
+        return (eff || peak > 40) ? [dir, eff, peak] : null;
+      };
       if (mapWindHour > 0) {
         const f = mapWxFc.get(icao);
         const s = f && f[mapWindHour - 1];
-        if (s) return (s[0] != null && s[1] >= 3) ? [s[0], Math.max(s[1], s[2] || 0)] : null;
+        if (s) return pick(s[0], s[1], s[2], s[3]);
       }
       const e = mapWx.get(icao);
-      if (e && e.t && Date.now() - e.t <= MAP_WX_MAX_AGE) {
-        return (e.wdir != null && e.wspd >= 3) ? [e.wdir, Math.max(e.wspd, e.wgst || 0)] : null;
-      }
+      if (e && e.t && Date.now() - e.t <= MAP_WX_MAX_AGE) return pick(e.wdir, e.wspd, e.wgst, e.wpk);
       const w = mapWxWind.get(icao);
-      return (w && w[0] != null && w[1] >= 3) ? w : null;
+      return w ? pick(w[0], w[1], w[2], w[3]) : null;
     }
 
     function mapWxIngest(icao, d, at) {
@@ -17778,7 +17794,8 @@ function renderInfo(icao) {
       const vc = m && m.raw ? wxVisCeil(m.raw) : { vis: null, ceil: null };
       const w = m && m.raw ? wxWindOfRaw(m.raw) : null;
       mapWx.set(icao, { vis: vc.vis, ceil: vc.ceil, wdir: w ? w.dir : null, wspd: w ? w.spd : 0,
-                        wgst: w ? w.gst : 0, cb: !!(m && m.raw && wxHasCbRaw(m.raw)),
+                        wgst: w ? w.gst : 0, wpk: w ? (w.pk || 0) : 0,
+                        cb: !!(m && m.raw && wxHasCbRaw(m.raw)),
                         t: m ? (Date.parse(m.time || "") || 0) : 0, at });
     }
 
@@ -17820,8 +17837,8 @@ function renderInfo(icao) {
     // les points hors route restent gris et la légende reste honnête.
     const MAP_WXWORLD_TTL = 60e3;
     let mapWxWorld = new Map(), mapWxWorldAt = 0;   // icao -> cat (0..3)
-    let mapWxWind = new Map();                      // icao -> [wdir, wspd kt] — queue de ligne du flux
-    let mapWxFc = new Map();                        // icao -> vents TAF [+1h,+2h,+3h], triplets [dir,spd,gst] ou 0
+    let mapWxWind = new Map();                      // icao -> [wdir, wspd, wgst, pointe] — queue de ligne du flux
+    let mapWxFc = new Map();                        // icao -> vents TAF [+1h,+2h,+3h], [dir,spd,gst(,pointe)] ou 0
     let mapWxCb = new Set();                        // OACI dont le METAR ou le TAF annonce un CB
     /* `force` : la minuterie de la carte ouverte passe outre l'anti-rebond —
        elle bat au même pas que lui, s'y soumettre ferait sauter un tick sur
@@ -17837,10 +17854,12 @@ function renderInfo(icao) {
         for (const s of d.stations) {
           m.set(s[0], s[3]);
           // [wdir, wspd] absents si calme ou METAR périmé, wdir null si VRB,
-          // rafale en 7e position quand elle dépasse la moyenne : on retient
-          // le plus fort des deux. Le proxy applique la même règle de
+          // rafale en 7e position quand elle dépasse la moyenne, pointe
+          // annoncée en 8e quand une rafale sans direction dépasse encore ce
+          // vent. La ligne est gardée telle quelle : mapWindOf en tire la
+          // flèche et le triangle. Le proxy applique la même règle de
           // fraîcheur qu'à la catégorie.
-          if (s.length > 4 && s[5] > 0) w.set(s[0], [s[4], Math.max(s[5], s[6] || 0)]);
+          if (s.length > 4 && s[5] > 0) w.set(s[0], [s[4], s[5], s[6] || 0, s[7] || 0]);
         }
         // d.winds porte à part les vents PRÉVUS par TAF : par OACI, un triplet
         // [dir,spd,gst] par horizon +1/+2/+3 h, ou 0 quand le TAF ne gouverne
