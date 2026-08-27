@@ -17473,7 +17473,14 @@ function renderInfo(icao) {
         // la couverture NOTAM) au premier coup d'œil, avant même de lire un
         // code. Le liseré sous le point sépare deux voisins qui se touchent.
         const dotR = WORLD_DOT_R * dpr, placed = [];
-        const labelGap = dotR + 4 * dpr;   // écart point -> capsule, suit le rayon
+        // Un favori porte un disque de rayon DOUBLE : sur une carte de
+        // plusieurs centaines de points, les siens se retrouvent d'un coup
+        // d'œil sans rien lire. La couleur ne change pas — elle dit toujours
+        // la météo (ou la couverture NOTAM). Le rayon devient donc propre à
+        // chaque terrain (p.r) : l'écart de la capsule et la zone cliquable
+        // le suivent.
+        const favSet = new Set(favs);
+        const rOf = icao => favSet.has(icao) ? dotR * 2 : dotR;
         // anti-collision avec les libellés de villes du fond : on reprojette leurs boîtes
         // (calculées dans le référentiel du canvas de fond) dans le référentiel écran courant
         // via la même transformation (zr, dx, dy) que celle utilisée pour recoller le fond.
@@ -17493,7 +17500,7 @@ function renderInfo(icao) {
           if (routeSet.has(a.icao)) continue;          // déjà rendu par la couche route
           const x = X(a.lon), y = Y(a.lat);
           if (x < -30 * dpr || x > cv.width + 30 * dpr || y < -20 * dpr || y > cv.height + 20 * dpr) continue;
-          world.push({ a, x, y });
+          world.push({ a, x, y, r: rOf(a.icao) });
         }
         world.sort((p, q) => dotPri(p.a.icao) - dotPri(q.a.icao));
         // Toutes les flèches d'abord, tous les points ensuite : un faisceau ne
@@ -17504,17 +17511,17 @@ function renderInfo(icao) {
         placed.push(...windBoxes);
         const boxH = 14 * dpr;
         for (const p of world) {
-          const { a, x, y } = p;
+          const { a, x, y, r } = p;
           ctx.fillStyle = dotCol(a.icao);
-          ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
           ctx.strokeStyle = light ? "rgba(255,255,255,.8)" : "rgba(10,15,20,.85)";
           ctx.lineWidth = 1.2 * dpr; ctx.stroke();
           // La zone cliquable naît ici avec le point, sans étiquette ; la
           // passe suivante y inscrit la capsule si elle en pose une.
           p.hit = {
             icao: a.icao, saved: savedSet.has(a.icao), dotX: x, dotY: y,
-            dotR: Math.max(dotR + 7 * dpr, 13 * dpr),
-            boxX: x + labelGap, boxY: y - boxH / 2, boxW: 0, boxH
+            dotR: Math.max(r + 7 * dpr, 13 * dpr),
+            boxX: x + r + 4 * dpr, boxY: y - boxH / 2, boxW: 0, boxH
           };
           mapWorldHits.push(p.hit);
         }
@@ -17525,16 +17532,16 @@ function renderInfo(icao) {
            au-dessus, mais quand la place manque c'est lui qui doit garder son
            code. Sans cette inversion, dézoomé, les terrains rouges étaient
            précisément ceux qu'on perdait. */
-        if (showLabels) for (const { a, x, y, hit } of (labelsMayDrop ? [...world].reverse() : world)) {
+        if (showLabels) for (const { a, x, y, r, hit } of (labelsMayDrop ? [...world].reverse() : world)) {
           const w = ctx.measureText(a.icao).width;
-          const pad = 6 * dpr, bw = w + pad * 2;
+          const pad = 6 * dpr, bw = w + pad * 2, labelGap = r + 4 * dpr;
           // le point reste toujours affiché ; on cherche une position libre pour le libellé
           // (droite, gauche, au-dessus, en-dessous) avant de forcer l'affichage en dernier recours.
           const candidates = [
             [x + labelGap, y - boxH / 2],
             [x - bw - labelGap, y - boxH / 2],
-            [x - bw / 2, y - dotR - boxH - 2 * dpr],
-            [x - bw / 2, y + dotR + 2 * dpr],
+            [x - bw / 2, y - r - boxH - 2 * dpr],
+            [x - bw / 2, y + r + 2 * dpr],
           ];
           let chosen = null;
           for (const [cx0, cy0] of candidates) {
@@ -17599,7 +17606,12 @@ function renderInfo(icao) {
         // couche mondiale ; en vue Weather elle rentre dans le rang, liseré
         // compris — sans quoi le point resterait plus épais que ses voisins.
         const wxView = mapMode === "wx";
-        const dotR = (wxView ? WORLD_DOT_R : (depArr ? 8 : 6.5)) * dpr;
+        // Même règle qu'à la couche mondiale, mais en vue Weather seulement :
+        // c'est là que la route rentre dans le rang et partage le rayon
+        // commun. En vue NOTAM elle garde son propre cran d'avance, qui dit
+        // déjà le rôle de vol — le doubler en ferait une tache.
+        const favDot = wxView && favs.includes(a.icao) ? 2 : 1;
+        const dotR = (wxView ? WORLD_DOT_R : (depArr ? 8 : 6.5)) * dpr * favDot;
         ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
         ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = (wxView ? 1.2 : 1.8) * dpr; ctx.stroke();
         let boxX = x, boxY = y, boxW = 0, boxH = 0;
