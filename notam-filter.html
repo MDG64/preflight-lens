@@ -17701,12 +17701,19 @@ function renderInfo(icao) {
       // BECMG) porte son propre vent, et « 12010KT … TEMPO 12025G40KT » est un
       // terrain à 40 kt, pas à 10. Tous les groupes sont pesés jusqu'à RMK,
       // le plus FORT — rafale comprise — fait la flèche.
-      let best = null;
+      // Sauf le VRB d'un TEMPO ou d'un PROB — le grain d'orage : sans
+      // direction il ne fait pas de flèche, et retenu comme « le plus fort »
+      // il effacerait celle du vent principal. Il est écarté ; un VRB observé
+      // dans le corps du METAR reste, lui, tel quel.
+      let best = null, tempo = false;
       const eff = w => Math.max(w.spd, w.gst || 0);
       for (const t of String(raw || "").toUpperCase().replace(/=/g, " ").split(/\s+/)) {
         if (t === "RMK") break;
+        if (t === "TEMPO" || /^PROB\d{2}$/.test(t)) { tempo = true; continue; }
+        if (t === "BECMG") { tempo = false; continue; }
         const m = WX_WIND_RE.exec(t);
         if (!m) continue;
+        if (tempo && !/^\d{3}$/.test(m[1])) continue;   // VRB de grain : écarté
         const k = m[4] === "MPS" ? 1.94384 : m[4] === "KMH" ? 1 / 1.852 : 1;
         const w = { dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1], 10) % 360 : null,
                     spd: Math.round(parseInt(m[2], 10) * k),
