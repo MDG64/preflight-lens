@@ -14568,7 +14568,19 @@ E) ${e}`;
     const GATE_KEY = "notam_plan";
     const GATE_HASH = "341711df51ac69b04b658734db3a24c6b88ceec528254700d6b7c01f012565e3";
     let gatePro = false;
-    function isPro() { return gatePro; }
+    /* SALE_OPEN commande l'entrée en vigueur des bornes, et rien d'autre.
+       Tant qu'il est faux, isPro() répond VRAI pour tout le monde : l'app est
+       entière et gratuite. C'est la seule position tenable avant que l'achat
+       existe — un verrou qui refuse une fonction sans offrir de moyen de
+       l'obtenir est une impasse pour le pilote, et une fiche trompeuse au sens
+       de Google Play. C'est aussi ce que dit l'article 10 des CGU : « tant que
+       l'offre payante n'est pas activée, le Service est intégralement gratuit
+       et sans limite d'usage ».
+       Le jour où l'abonnement est en place : passer SALE_OPEN à true. Toute la
+       machinerie ci-dessous (plafonds, GATE_LOCKS, déverrouillage) est déjà
+       écrite et reprend la main sans autre changement. */
+    const SALE_OPEN = false;
+    function isPro() { return SALE_OPEN ? gatePro : true; }
 
     async function gateSha(txt) {
       const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
