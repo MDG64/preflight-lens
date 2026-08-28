@@ -14,7 +14,9 @@
 //  06/24 » (RUNWAY en toutes lettres, invisible du regex RWY du plan de
 //  notam-filter.html) ; KJFK 2026-08-28 — les NOTAMC « RWY 04L/22R CLSD
 //  CAN » qui auraient fermé les quatre pistes, et « NAV ILS RWY 04R IM
-//  U/S » qui n'est qu'un marqueur.
+//  U/S » qui n'est qu'un marqueur ; LEST E3677/26 — les travaux citent les
+//  DEUX ILS (RWY 17 et 35) mais la phase active n'éteint que le 35 : la ref
+//  de contexte ne doit pas cocher son extrémité.
 //
 //  Comme classify.test.mjs et plan-kind.test.mjs : on DÉCOUPE le code
 //  réellement déployé dans minima.html, repéré par marqueur textuel et
@@ -61,7 +63,7 @@ async function chargerDetecteur() {
   // La base terrains du test remplace runwayList() ; nfStore/nfSave, le
   // sessionStorage. Rien d'autre ne sort du module découpé.
   const STUBS = `
-const TEST_RWYS = { LFPG:["08L/26R","08R/26L","09L/27R","09R/27L"], LFPO:["02/20","06/24","07/25"], LFAB:["13/31"] };
+const TEST_RWYS = { LFPG:["08L/26R","08R/26L","09L/27R","09R/27L"], LFPO:["02/20","06/24","07/25"], LFAB:["13/31"], LEST:["17/35"] };
 function runwayList(icao){ return TEST_RWYS[icao] || []; }
 const nfStore = {};
 function nfSave(){}
@@ -101,6 +103,24 @@ test("Q-line : piste fermée par paire, ILS et rampe par EXTRÉMITÉ", async () 
   // QMXLC (taxiway) citant une piste comme borne → rien.
   d = nfaDetect("LFPG", [Q("LFPG", "QMXLC", `${BC} E) TWY B CLSD BTN RWY 09L AND TWY A`)], NOW);
   assert.deepEqual(Object.keys(d.rwy), []);
+});
+
+test("phrase de panne : la ref citée en contexte ne coche pas son extrémité (LEST E3677/26)", async () => {
+  const { nfaDetect } = await chargerDetecteur();
+  // Le cas fondateur du 2026-08-28 : les travaux citent les DEUX ILS,
+  // la phase 3 n'éteint que le 35 — la 17 n'est que le contexte.
+  let d = nfaDetect("LEST", [`E3677/26 NOTAMN Q) LECM/QIDAS/I/NBO/A/000/999/4254N00825W005 A) LEST B) 2608192200 C) 2610101100 E) REF AIP AIRAC SUP 205/25 WEF 27NOV25/27NOV26EST SANTIAGO/ROSALIA DE CASTRO AD (LEST).- WORKS TO REPLACE ILS/DME RWY 17 IGO AND ILS/DME RWY 35 ISO. PHASE 3 ACTIVATED: ILS/DME RWY 35 ISO U/S.`], NOW);
+  assert.deepEqual(d.ils, { "35": ["E3677/26"] });
+  // Deux extrémités DANS la phrase de panne : les deux tombent.
+  d = nfaDetect("LEST", [Q("LEST", "QICAS", `${BC} E) ILS RWY 17 AND ILS RWY 35 U/S DUE WORKS`)], NOW);
+  assert.deepEqual(Object.keys(d.ils).sort(), ["17", "35"]);
+  // Panne dite par la seule Q-line, aucun mot de panne dans le texte :
+  // les refs du texte entier restent le repli.
+  d = nfaDetect("LEST", [Q("LEST", "QICAS", `${BC} E) ILS RWY 17 DOWNGRADED CAT I`)], NOW);
+  assert.deepEqual(Object.keys(d.ils), ["17"]);
+  // Ref et mot de panne séparés par un point : même repli, rien ne se perd.
+  d = nfaDetect("LEST", [Q("LEST", "QICAS", `${BC} E) ILS RWY 17. U/S DUE STORM DAMAGE`)], NOW);
+  assert.deepEqual(Object.keys(d.ils), ["17"]);
 });
 
 test("texte sans Q-line (NOTAM US) : RUNWAY en toutes lettres, OTS, AD CLSD — et l'équipement prime sur la piste", async () => {
