@@ -7952,7 +7952,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
   const warn = isDeparture
     ? ""
     : `<p class="mini-warn"><span class="ico marginal" aria-hidden="true">${STATE_ICON.marginal}</span>
-         If needed, correct visi / RVR${isAltn?", DH":""} and ceiling required according official charts</p>`;
+         Check and correct if necessary the required Visi / RVR${isAltn?", DH":""} and ceiling against the official charts</p>`;
   return `${warn}<div class="mini${isDeparture?" takeoff":""}">${cells.join("")}</div>`;
 }
 
