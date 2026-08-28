@@ -2280,11 +2280,31 @@ button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
    les trois cartes alignent leurs pieds quand l'une a une ligne de plus. */
 .rt-sub{font:400 9.5px/1.5 var(--mono);color:var(--muted2);margin-top:auto;padding-top:2px}
 .rt-hint{font:400 10.5px/1.5 var(--sans);color:var(--muted);text-align:center}
-/* Sous 720 px tout empile — la route se lit de haut en bas, le bouton prend
-   la largeur. */
+/* Sous 720 px les cartes s'empilent — la route se lit de haut en bas. Les
+   trois cases, elles, ne s'empilent jamais : c'est la route dans son ordre,
+   et une pile de trois champs pousserait la première carte hors de l'écran. */
 @media (max-width:720px){
-  .rt-form{grid-template-columns:1fr}
   .rt-cards{grid-template-columns:1fr}
+}
+/* Sur téléphone — le seuil de la mise en page mobile, celui-là même qui
+   raccourcit les exemples — les trois cases rétrécissent au lieu de passer
+   à la ligne : quatre lettres tiennent dans un tiers d'écran. */
+@media (max-width:600px){
+  .rt-form{gap:7px}
+  .rt-field>label{
+    font-size:9.5px;letter-spacing:.015em;margin-bottom:5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .rt-field input{
+    font-size:13px;letter-spacing:.02em;padding:8px 4px;text-align:center;
+  }
+  .rt-field input::placeholder{font-size:11px;letter-spacing:0}
+  /* Les propositions ne tiennent pas dans un tiers d'écran : la liste prend
+     toute la largeur utile et s'accroche au bord le plus proche de sa case
+     pour rester entièrement visible. */
+  .rt-field .ac{width:calc(100vw - 28px);max-width:calc(100vw - 28px)}
+  .rt-field:nth-child(2) .ac{left:50%;transform:translateX(-50%)}
+  .rt-field:nth-child(3) .ac{left:auto;right:0}
 }
 </style>
 </head>
@@ -8067,6 +8087,11 @@ function applyMobileMode(){
   const first = mobileMode === null;
   mobileMode = on;
   document.body.classList.toggle("mobile", on);
+  /* Les cases du bilan de vol changent d'exemple avec la mise en page : elles
+     n'ont plus qu'un tiers d'écran une fois sur une seule ligne. Ici plutôt
+     que sur la media query : `change` seul manque les redimensionnements
+     pilotés de l'extérieur, que le `resize` ci-dessous rattrape. */
+  if (window.RTV) RTV.syncPlaceholders();
   if (on){ renderMobile(); return; }
   /* Le plein écran des réglages emprunte le panneau « Operation setup » à la
      mise en page tablette et ne le rend qu'à sa fermeture. Repasser en large
@@ -10602,11 +10627,28 @@ window.RTV = (()=>{
     if (RT.icaos[i]!==icao){ RT.icaos[i] = icao; save(); }
   }
 
+  /* Trois cases sur une seule ligne de téléphone, c'est une centaine de
+     pixels chacune : l'exemple long y serait coupé en plein milieu. La
+     consigne reste, raccourcie — le code et l'IATA disent déjà ce qu'on
+     attend, et quatre lettres tapées la font disparaître. */
+  const PH = {
+    wide:  ["LFPG · CDG · Paris", "ICAO · IATA · name", "ICAO · IATA · name"],
+    narrow:["LFPG · CDG",        "ICAO · IATA",        "ICAO · IATA"]
+  };
+  function syncPlaceholders(){
+    const ph = PH[MQ_MOBILE.matches ? "narrow" : "wide"];
+    SLOTS.forEach((slot,i)=>{
+      const el = document.getElementById("rtIcao"+i);
+      if (el) el.placeholder = ph[i];
+    });
+  }
+
   function open(){
     SLOTS.forEach((slot,i)=>{
       const el = document.getElementById("rtIcao"+i);
       if (el) el.value = RT.icaos[i];
     });
+    syncPlaceholders();
     ov.hidden = false;
     fetchWx();
     /* Même pas que la fiche et la carte : le store serveur réingère seul,
@@ -10721,7 +10763,7 @@ window.RTV = (()=>{
     if (fromUrl) open();
   }
 
-  return {open, close, pick, boot, retarget};
+  return {open, close, pick, boot, retarget, syncPlaceholders};
 })();
 
 /* =====================================================================
