@@ -4762,6 +4762,23 @@ function parseVisibilityToken(tok, out){
   return false;
 }
 
+/* « 1 1/2SM » est UN groupe de visibilité, que l'espace des relevés américains
+   coupe en deux mots. Recollé ici avant l'analyse, il retombe sur la forme
+   « 11/2SM » que parseVisibilityToken sait déjà lire ; sans ce recollement la
+   partie entière se perd et 1 1/2 SM se lit 1/2 SM — trois fois moins que ce
+   que le terrain annonce. Le texte brut n'est pas touché : c'est celui que le
+   pilote a collé, et le surlignage s'y aligne mot à mot. */
+function joinSmFractions(toks){
+  const out = [];
+  for (let i=0;i<toks.length;i++){
+    if (/^\d{1,2}$/.test(toks[i]) && /^\d\/\dSM$/.test(toks[i+1]||"")){
+      out.push(toks[i] + toks[i+1]); i++; continue;
+    }
+    out.push(toks[i]);
+  }
+  return out;
+}
+
 function parseCommonBody(tokens, out, ref){
   out.cloud_layers = out.cloud_layers || [];
   out.rvr = out.rvr || [];
@@ -4847,7 +4864,7 @@ function parseMetar(raw, refDate){
     else if (mode==="trend") trendToks.push(t);
     else rmk.push(t);
   }
-  parseCommonBody(body, out, refDate);
+  parseCommonBody(joinSmFractions(body), out, refDate);
   if (trendToks.length) out.trend_raw = trendToks.join(" ");
   if (rmk.length) out.remarks = rmk.join(" ");
   out.day = isDaylightGuess(out.issued_utc);
@@ -4915,7 +4932,7 @@ function parseTaf(raw, refDate){
   for (const c of chunks){
     if (!c.toks.length && c.kind!=="BASE") continue;
     const g = {kind:c.kind, from_utc:c.from||out.valid_from_utc, to_utc:c.to||out.valid_to_utc, raw:c.toks.join(" ")};
-    parseCommonBody(c.toks, g, anchor);
+    parseCommonBody(joinSmFractions(c.toks), g, anchor);
     if (c.kind==="FM"||c.kind==="BASE") g.to_utc = out.valid_to_utc;
     out.groups.push(g);
   }
@@ -7372,15 +7389,22 @@ function takeoffVisCells(r, obs){
   const unit = t.unit || (cfg.framework==="FAA" ? "ft" : "m");
   const req = takeoffReqEff(t) || {v:t.required, unit, label:""};
 
+  /* La case porte l'exigence DANS L'UNITÉ DU RELEVÉ. Sous FAA, faute de RVR
+     pour la piste, un terrain américain donne sa visibilité en milles terrestres
+     (91.175(h)) : un minimum en pieds posé en face obligerait à convertir de
+     tête, et c'est là qu'on se trompe. La saisie du pilote se réaffiche telle
+     qu'elle a été faite ; une ligne réglementaire passe par la table
+     RVR → visibilité, valeur immédiatement supérieure, jamais interpolée. */
   const obsU = obs.unit || unit;
-  const reqCmp = reqInUnit(req.v, req.unit, obsU);
+  const manDisp = visReqFor("DEPARTURE", obsU);
+  const reqCmp = manDisp!=null ? manDisp : reqInUnit(req.v, req.unit, obsU);
   const st = visVerdict(obs.value, reqCmp, obsU);
 
   const sel = `<span class="req-arrow-wrap">
       <span class="req-arrow" aria-hidden="true">▾</span>
       <select id="reqSel" class="inline req-sel">
         ${opts.map((o,i)=>`<option value="${i}" ${!req.manual&&req.label===o.label?"selected":""}>${o.label}</option>`).join("")}
-        <option value="MANUAL" ${req.manual?"selected":""}>${req.manual?`${req.v} ${unit} — entered by hand`:"Entered by hand — type over the value"}</option>
+        <option value="MANUAL" ${req.manual?"selected":""}>${req.manual?`${reqCmp} ${obsU} — entered by hand`:"Entered by hand — type over the value"}</option>
       </select>
     </span>`;
 
@@ -7399,20 +7423,20 @@ function takeoffVisCells(r, obs){
        <span class="v-row combined has-req-lab">
          <span class="req-stack">
            <span class="req-lab" aria-hidden="true">Obs</span>
-           <span class="v">${obs.value!=null?obs.value:"—"}${obs.value!=null?`<small>${obsU}</small>`:""}</span>
+           <span class="v">${obs.value!=null?mFmtVal(obs.value,obsU):"—"}${obs.value!=null?`<small>${obsU==="sm"?"SM":obsU}</small>`:""}</span>
          </span>
          <span class="cmp">${cmp}</span>
          <span class="req-stack">
            <span class="req-lab" aria-hidden="true">Required</span>
-           <input id="toVisInput" class="to-ceil-in" type="number" min="0" step="${unit==="sm"?"0.25":"50"}" inputmode="decimal"
-                  placeholder="—" value="${req.v!=null?req.v:""}"
-                  aria-label="Visibility or RVR required for take-off, in ${unit}">
-           <small class="req-u">${unit==="sm"?"SM":unit}</small>
+           <input id="toVisInput" class="to-ceil-in" type="number" min="0" step="${obsU==="sm"?"0.25":"50"}" inputmode="decimal"
+                  placeholder="—" value="${reqCmp==null?"":(obsU==="sm"?reqCmp.toFixed(2):reqCmp)}" data-unit="${obsU}"
+                  aria-label="Visibility or RVR required for take-off, in ${obsU}">
+           <small class="req-u">${obsU==="sm"?"SM":obsU}</small>
          </span>
          ${sel}
          <span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}" title="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>
        </span>
-       <span class="d">${obs.source?nice(obs.source):"no value"} · margin ${visMarginIn(obsU)} ${obsU}${note?" · "+note:""}</span>
+       <span class="d">${obs.source?nice(obs.source):"no value"} · margin ${mFmtVal(visMarginIn(obsU),obsU)} ${obsU==="sm"?"SM":obsU}${note?" · "+note:""}</span>
      </div>`
   ];
 }
@@ -7475,7 +7499,7 @@ function visReqCell({id, req, obs, unit, manual, label, note, dh, warn}){
   const cmpOn = obs !== undefined;
   const st = (!cmpOn || req==null) ? null : visVerdict(obs, req, unit);
   const input = `<input id="${id}" class="to-ceil-in" type="number" min="0" step="${unit==="sm"?"0.25":"50"}" inputmode="decimal"
-                placeholder="—" value="${req!=null?req:""}"
+                placeholder="—" value="${req!=null?req:""}" data-unit="${unit}"
                 aria-label="${(label||"Visibility or RVR")} required, in ${unit}">`;
   /* Sur les dégagements, la DH / MDH se saisit dans la même case que la
      vis / RVR : c'est d'elle que dérive le plafond de planification comparé
@@ -7723,9 +7747,14 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
 function tafBlock(t){
   if (!t) return "";
   const seg = (s)=>`${hhmm(s.from)}–${hhmm(s.to)}`;
-  const prev = t.prevailing.map(s=>`<tr><td>${s.kind}</td><td>${seg(s)}</td><td>${s.cond.vis_m??"—"} m / ${s.cond.ceiling_ft??"no ceiling"}${s.cond.ceiling_ft?" ft":""}</td><td>${s.becmg?s.becmg.applied:"prevailing"}</td></tr>`).join("");
+  /* Le tableau parle l'unité du cadre : sous FAA, en milles terrestres, comme
+     le relevé américain écrit juste au-dessus. Un « 805 m » en regard du
+     « 1 1/2SM » du texte brut se relit mal, et c'est le même chiffre. */
+  const tvis = m => m==null ? "—"
+    : (cfg.framework==="FAA" ? `${visFromM(m,"sm").toFixed(2)} SM` : `${m} m`);
+  const prev = t.prevailing.map(s=>`<tr><td>${s.kind}</td><td>${seg(s)}</td><td>${tvis(s.cond.vis_m)} / ${s.cond.ceiling_ft??"no ceiling"}${s.cond.ceiling_ft?" ft":""}</td><td>${s.becmg?s.becmg.applied:"prevailing"}</td></tr>`).join("");
   const chg = [...t.considered, ...t.disregarded].sort((a,b)=>a.from-b.from).map(g=>
-    `<tr><td>${g.kind}</td><td>${hhmm(g.from)}–${hhmm(g.to)}</td><td>${g.cond.vis_m??"—"} m / ${g.cond.ceiling_ft??"no ceiling"}${g.cond.ceiling_ft?" ft":""}</td>
+    `<tr><td>${g.kind}</td><td>${hhmm(g.from)}–${hhmm(g.to)}</td><td>${tvis(g.cond.vis_m)} / ${g.cond.ceiling_ft??"no ceiling"}${g.cond.ceiling_ft?" ft":""}</td>
      <td>${g.applied?'<b class="applied">APPLIED</b>':"disregarded"} — ${g.why}</td></tr>`).join("");
   return `<details class="taf" open>
     <summary>TAF application — ${t.role.replace(/_/g," ")} · window ${t.rule.window}</summary>
@@ -7941,6 +7970,15 @@ function escapeHtmlText(s){
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+/* Le groupe de visibilité surligné va de la partie entière à la fraction :
+   « 1 1/2SM » s'écrit en deux mots, et n'en surligner que le second donnerait
+   à croire que l'app a lu 1/2 SM. */
+function visSpanAt(toks, i){
+  const t = toks[i], p = i>0 ? toks[i-1] : null;
+  return {start: (p && /^\d{1,2}$/.test(p.tok) && /^\d\/\dSM$/.test(t.tok)) ? p.start : t.start,
+          end: t.end};
+}
+
 function tokensOf(text){
   const out = []; const re = /\S+/g; let m;
   while ((m = re.exec(text))) out.push({tok:m[0].toUpperCase(), start:m.index, end:m.index+m[0].length});
@@ -7951,7 +7989,8 @@ function tokensOf(text){
    RMK) donc le premier trouvé est le bon. */
 function findMetarSpan(liveText, kind, runway){
   const toks = tokensOf(liveText);
-  for (const t of toks){
+  for (let i=0;i<toks.length;i++){
+    const t = toks[i];
     if (t.tok==="RMK") break;
     if (kind==="RVR"){
       if (runway && new RegExp("^R"+runway+"\\/").test(t.tok)) return {start:t.start, end:t.end};
@@ -7959,7 +7998,7 @@ function findMetarSpan(liveText, kind, runway){
       if (WIND_RE.test(t.tok)) return {start:t.start, end:t.end};
     } else {
       if (/^\d{4}$/.test(t.tok) || /^\d{4}(N|NE|E|SE|S|SW|W|NW)$/.test(t.tok) || /SM$/.test(t.tok) || t.tok==="CAVOK")
-        return {start:t.start, end:t.end};
+        return visSpanAt(toks, i);
     }
   }
   return null;
@@ -7982,10 +8021,11 @@ function findTafSpan(liveText, groupRaw, kind, ceilFt){
   }
   if (winStart<0) return null;
   const win = liveToks.slice(winStart, winStart+groupToks.length);
-  for (const t of win){
+  for (let i=0;i<win.length;i++){
+    const t = win[i];
     if (kind==="VIS"){
       if (/^\d{4}$/.test(t.tok) || /^\d{4}(N|NE|E|SE|S|SW|W|NW)$/.test(t.tok) || /SM$/.test(t.tok) || t.tok==="CAVOK")
-        return {start:t.start, end:t.end};
+        return visSpanAt(win, i);
     } else if (kind==="WIND"){
       if (WIND_RE.test(t.tok)) return {start:t.start, end:t.end};
     } else if (kind==="CEIL"){
@@ -8376,7 +8416,10 @@ function renderStage(tab, r){
    ["#appVisReqInput", cfg.framework==="FAA"?"ft":"m"],
    ["#appVisSmReqInput", "sm"]].forEach(([sel, unit])=>{
     const el = inner.querySelector(sel);
-    if (el) el.onchange = ()=>{ setVisReqFor(roleFor(tab), readCeil(el), unit); render(); };
+    /* `data-unit` l'emporte : la case du décollage se rend dans l'unité du
+       relevé (milles terrestres sous FAA sans RVR), et ce qu'on y écrit doit
+       être enregistré dans l'unité qu'elle affiche, pas dans celle du cadre. */
+    if (el) el.onchange = ()=>{ setVisReqFor(roleFor(tab), readCeil(el), el.dataset.unit || unit); render(); };
   });
 
   const rq = inner.querySelector("#reqSel");
@@ -8925,6 +8968,15 @@ function mReqSelectHtml(){
   const opts = takeoffReqOptions();
   const unit = cfg.framework==="FAA" ? "ft" : "m";
   const req = takeoffReqEff() || {label:""};
+  /* Même règle que la case de la version tablette : l'exigence s'affiche dans
+     l'unité du relevé — milles terrestres sous FAA quand la piste n'a pas de
+     RVR (91.175(h)) — et la saisie est enregistrée dans cette unité. */
+  const mq = qfuForRole("DEPARTURE");
+  const mObs = controllingVis(state.metar, cfg, "TAKEOFF", mq?mq.id:null);
+  const dispU = mObs.unit || unit;
+  const manDisp = visReqFor("DEPARTURE", dispU);
+  const reqDisp = manDisp!=null ? manDisp
+                : (req.v!=null ? reqInUnit(req.v, req.unit||unit, dispU) : null);
   return `<div class="m-req">
     <span>Required minimum — regulatory line</span>
     <select id="mReqSel" aria-label="Required take-off minimum">
@@ -8932,7 +8984,7 @@ function mReqSelectHtml(){
       <option value="MANUAL" ${req.manual?"selected":""}>Entered by hand</option>
     </select>
   </div>`
-  + mVisInputHtml("mToVisInput", req.manual ? req.v : (req.v!=null?req.v:null), unit);
+  + mVisInputHtml("mToVisInput", reqDisp, dispU);
 }
 
 /* Même champ plafond que sur tablette, en ligne de formulaire. Rendu quelle que
@@ -8953,7 +9005,7 @@ function mVisInputHtml(id, req, unit, label, warn){
     <span>${label||"Vis / RVR"} required (${unit}) — empty to use the derived value</span>
     ${warn==null?"":`<span class="ga-warn">GA ${warn}% — check go-around performance</span>`}
     <input id="${id}" class="to-ceil-in" type="number" min="0" step="${unit==="sm"?"0.25":"50"}" inputmode="decimal"
-           placeholder="—" value="${req!=null?req:""}"
+           placeholder="—" value="${req!=null?req:""}" data-unit="${unit}"
            aria-label="${label||"Visibility or RVR"} required for this phase, in ${unit}">
   </div>`;
 }
@@ -9133,7 +9185,9 @@ const SEV_CEIL = {amber:1000, red:500};   // ft, dès ce seuil vers le bas
 function severitySpans(text){
   const out = [];
   const put = (t, c) => out.push({start:t.start, end:t.end, cls:"sev-"+c, sevOnly:true});
-  for (const t of tokensOf(text)){
+  const toks = tokensOf(text);
+  for (let i=0;i<toks.length;i++){
+    const t = toks[i];
     if (t.tok==="RMK") break;
     let m;
     /* Convection : l'orage et le cumulonimbus se signalent d'eux-mêmes, sans
@@ -9176,12 +9230,16 @@ function severitySpans(text){
       continue;
     }
     if (/^\d{4}$/.test(t.tok) || /^\d{4}(N|NE|E|SE|S|SW|W|NW)$/.test(t.tok) || /SM$/.test(t.tok)){
+      /* Le groupe entier, partie entière comprise : « 1 1/2SM » s'écrit en
+         deux mots, et n'en lire que la fraction teindrait le message pour une
+         visibilité trois fois plus basse que celle annoncée. */
+      const sp = visSpanAt(toks, i);
       const o = {};
-      if (!parseVisibilityToken(t.tok, o)) continue;
+      if (!parseVisibilityToken(text.slice(sp.start, sp.end).replace(/\s+/g,"").toUpperCase(), o)) continue;
       const v = o.visibility_m != null ? o.visibility_m : o.visibility_min_dir_m;
       if (v == null) continue;
-      if (v <= SEV_VIS.red) put(t, "red");
-      else if (v <= SEV_VIS.amber) put(t, "amber");
+      if (v <= SEV_VIS.red) put(sp, "red");
+      else if (v <= SEV_VIS.amber) put(sp, "amber");
     }
   }
   return out;
@@ -9424,7 +9482,10 @@ function bindMobile(host){
    ["#mAppVisReqInput", cfg.framework==="FAA"?"ft":"m"],
    ["#mAppVisSmReqInput", "sm"]].forEach(([sel, unit])=>{
     const el = host.querySelector(sel);
-    if (el && mRole) el.onchange = ()=>{ setVisReqFor(mRole, mReadCeil(el), unit); render(); };
+    /* `data-unit` l'emporte : la case du décollage se rend dans l'unité du
+       relevé (milles terrestres sous FAA sans RVR), et ce qu'on y écrit doit
+       être enregistré dans l'unité qu'elle affiche, pas dans celle du cadre. */
+    if (el && mRole) el.onchange = ()=>{ setVisReqFor(mRole, mReadCeil(el), el.dataset.unit || unit); render(); };
   });
   const rq = host.querySelector("#mReqSel");
   if (rq) rq.onchange = ()=>{
