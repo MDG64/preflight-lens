@@ -9674,17 +9674,45 @@ function acKeydown(e, role){
 /* Une case pleine se sélectionne d'un clic : le code affiché est celui qu'on
    vient remplacer, la première lettre tapée repart donc de zéro. Safari
    relâche la sélection au mouseup qui suit le focus — on annule ce
-   mouseup-là, un seul, pour qu'elle tienne. */
+   mouseup-là, un seul, pour qu'elle tienne.
+   Mais la sélection MONTRE cette promesse sans suffire à la tenir : le doigt
+   la relâche en posant le caret, et l'app réécrit parfois le code dans une
+   case qui garde le focus (un créneau de route validé à la quatrième lettre).
+   La case reste donc « armée » tant qu'on n'y a rien retouché, et la lettre
+   suivante repart de zéro au lieu de s'ajouter au code (« LFPG » puis « E »). */
+function acArm(input){ if (input && input.value) input.dataset.acArm = "1"; }
+function acDisarm(input){ if (input) delete input.dataset.acArm; }
 function acSelectAllOnFocus(input){
   let armed = false;
   input.addEventListener("focus", ()=>{
     if (!input.value) return;
-    input.select(); armed = true;
+    input.select(); armed = true; acArm(input);
     /* Le navigateur repose parfois le caret APRÈS l'événement focus : on
        resélectionne au tick suivant si le champ tient toujours le focus. */
     setTimeout(()=>{ if (document.activeElement === input) input.select(); }, 0);
   });
   input.addEventListener("mouseup", e=>{ if (armed){ armed = false; e.preventDefault(); } });
+  /* Reposer le caret dans une case déjà tenue, ou s'y déplacer aux flèches,
+     c'est vouloir retoucher : on écrit aussi des noms de ville dans ces cases,
+     et « Paris Charl|es » doit rester corrigeable d'une lettre. */
+  input.addEventListener("pointerdown", ()=>{ if (document.activeElement === input) acDisarm(input); });
+  input.addEventListener("keydown", e=>{
+    if (e.key==="ArrowLeft" || e.key==="ArrowRight" || e.key==="Home" || e.key==="End") acDisarm(input);
+  });
+  input.addEventListener("blur", ()=>acDisarm(input));
+  /* beforeinput précède l'insertion elle-même : c'est le seul rendez-vous où
+     la case armée peut encore repartir de zéro, quelle que soit la façon dont
+     la lettre arrive. Toute saisie désarme, effacement compris — après elle,
+     la case n'est plus un code posé mais une saisie en cours. */
+  input.addEventListener("beforeinput", e=>{
+    const wasArmed = input.dataset.acArm;
+    acDisarm(input);
+    if (!wasArmed || e.inputType!=="insertText" || !e.data) return;
+    e.preventDefault();
+    input.value = e.data;
+    try { input.setSelectionRange(e.data.length, e.data.length); } catch(err){}
+    input.dispatchEvent(new Event("input", {bubbles:true}));
+  });
 }
 function acBindPop(pop, role){
   if (!pop || pop.dataset.bound) return;
@@ -10585,7 +10613,10 @@ window.RTV = (()=>{
   function pick(i, icao){
     RT.icaos[i] = /^[A-Z]{4}$/.test(icao||"") ? icao : "";
     const el = document.getElementById("rtIcao"+i);
-    if (el) el.value = RT.icaos[i];
+    /* Le code s'écrit ici dans une case qui garde le focus — la quatrième
+       lettre tapée vaut choix. On l'arme : la lettre suivante remplace le
+       code retenu au lieu de s'y ajouter. */
+    if (el){ el.value = RT.icaos[i]; acArm(el); }
     save();
     fetchWx();
   }

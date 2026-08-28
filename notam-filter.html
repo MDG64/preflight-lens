@@ -15454,7 +15454,10 @@ function renderInfo(icao) {
       // clic sur une suggestion : on le traduit en ICAO avant de poursuivre.
       if (icao.length === 3 && IATA_TO_ICAO[icao]) icao = IATA_TO_ICAO[icao];
       currentIcao = icao;
-      $("#icao").value = icao;
+      /* Le code s'écrit dans une case qui peut garder le focus (Entrée, ou une
+         proposition choisie) : on l'arme, sinon la lettre suivante n'aurait
+         plus de place où s'écrire. */
+      $("#icao").value = icao; armReplace($("#icao"));
       $("#suggest").hidden = true;
       showStation(icao);
       renderChips();
@@ -15705,17 +15708,46 @@ function renderInfo(icao) {
        qu'on vient remplacer, la première lettre tapée repart donc de zéro.
        Safari relâche la sélection au mouseup qui suit le focus — on annule ce
        mouseup-là, un seul, pour qu'elle tienne. Même geste que les cases de la
-       page météo, qui l'avaient déjà. */
+       page météo, qui l'avaient déjà.
+       La sélection MONTRE cette promesse sans suffire à la tenir : le doigt la
+       relâche en posant le caret, et l'app réécrit parfois le code dans une
+       case qui garde le focus. La case reste donc « armée » tant qu'on n'y a
+       rien retouché, et la lettre suivante repart de zéro. Sans cela la frappe
+       se perdait tout entière : ces cases sont bornées à quatre lettres, et
+       une case pleine refuse la lettre en silence. */
+    function armReplace(input) { if (input && input.value) input.dataset.acArm = "1"; }
+    function disarmReplace(input) { if (input) delete input.dataset.acArm; }
     function selectAllOnFocus(input) {
       let armed = false;
       input.addEventListener("focus", () => {
         if (!input.value) return;
-        input.select(); armed = true;
+        input.select(); armed = true; armReplace(input);
         /* Le navigateur repose parfois le caret APRÈS l'événement focus : on
            resélectionne au tick suivant si le champ tient toujours le focus. */
         setTimeout(() => { if (document.activeElement === input) input.select(); }, 0);
       });
       input.addEventListener("mouseup", e => { if (armed) { armed = false; e.preventDefault(); } });
+      /* Reposer le caret dans une case déjà tenue, ou s'y déplacer aux
+         flèches, c'est vouloir retoucher UNE lettre : la frappe n'efface plus. */
+      input.addEventListener("pointerdown", () => { if (document.activeElement === input) disarmReplace(input); });
+      input.addEventListener("keydown", e => {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Home" || e.key === "End") disarmReplace(input);
+      });
+      input.addEventListener("blur", () => disarmReplace(input));
+      /* beforeinput précède l'insertion ET la borne de longueur : sur une case
+         pleine à quatre lettres c'est le SEUL rendez-vous — le navigateur y
+         refuse la frappe sans même émettre « input » (mesuré). Toute saisie
+         désarme, effacement compris : après elle, la case n'est plus un code
+         posé mais une saisie en cours. */
+      input.addEventListener("beforeinput", e => {
+        const wasArmed = input.dataset.acArm;
+        disarmReplace(input);
+        if (!wasArmed || e.inputType !== "insertText" || !e.data) return;
+        e.preventDefault();
+        input.value = e.data;
+        try { input.setSelectionRange(e.data.length, e.data.length); } catch (err) {}
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
     }
     $("#icao").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); renderSuggest(e.target.value); });
     $("#icao").addEventListener("focus", e => renderSuggest(e.target.value));
