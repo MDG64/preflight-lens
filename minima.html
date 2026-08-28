@@ -5628,6 +5628,29 @@ function assess(role, ctx){
     const useSm = obs.unit==="sm";
     const unit = useSm ? "sm" : takeoff.unit;
     let req = useSm ? takeoff.visSm : takeoff.required;
+    let reqDriver = (takeoff.driver||"").replace(/_/g," ").toLowerCase();
+    let reqRef = cfg.framework==="FAA" ? DS.faa.takeoff.ref
+               : (takeoff.driver==="SPA_LVO_LVTO" ? DS.easa.lvto.ref : DS.easa.takeoff.ref);
+    /* Ligne réglementaire retenue dans la liste de la case « Visi / RVR ». Elle
+       gouverne le verdict et pas seulement l'affichage : la case, les pouces
+       d'échéance et la table mobile la lisaient déjà, le moteur continuait de
+       juger sur la ligne dérivée d'Operation setup, et deux chiffres différents
+       se disputaient la même phase. Ce que la case montre est ce qui gouverne —
+       même contrat que le plafond et la vis / RVR des phases d'atterrissage —,
+       et la ligne dérivée qu'elle écarte est dite dans un avertissement plutôt
+       qu'appliquée en sous-main. */
+    const effTo = takeoffReqEff(takeoff);
+    if (effTo && effTo.line && effTo.v != null){
+      const was = req;
+      req = reqInUnit(effTo.v, effTo.unit, unit);
+      reqDriver = (effTo.label||"").split(" — ")[1] || reqDriver;
+      reqRef = effTo.ref || reqRef;
+      /* Rien à dire quand la ligne choisie tombe sur le même chiffre que le
+         calcul : l'avertissement ne sort que là où les deux divergent. */
+      if (was == null || req !== was)
+        push({severity:"CAUTION", code:"TAKEOFF_MINIMUM_LINE_SELECTED",
+          message:`Take-off minimum taken from the regulatory line selected on the phase card: ${effTo.label}${was==null?"":` — ${req} ${unit} instead of the ${was} ${unit} derived from Operation setup (${(takeoff.driver||"").replace(/_/g," ").toLowerCase()})`}. The selected line governs; it is your responsibility to check that the runway lighting and the take-off flight path really match it.`});
+    }
     /* Minimum de décollage écrit à la main dans la case « Visi / RVR ». Il prime
        sur la table réglementaire : c'est le chiffre lu dans l'OM-B ou sur la
        carte, et lui seul est alors comparé au relevé. */
@@ -5651,9 +5674,9 @@ function assess(role, ctx){
       question:"Q1_TAKEOFF", label:"Can I take off?",
       result: worstOf(q1),
       rows:q1rows,
-      reference: cfg.framework==="FAA" ? DS.faa.takeoff.ref : (takeoff.driver==="SPA_LVO_LVTO"?DS.easa.lvto.ref:DS.easa.takeoff.ref),
+      reference: reqRef,
       rationale: (obs.value==null ? "No RVR and no visibility available — take-off cannot be assessed."
-        : `${obs.source==="RVR_MEASURED"?"RVR":"Visibility"} ${obs.value} ${unit} vs ${req} ${unit} required (${takeoff.driver.replace(/_/g," ").toLowerCase()}) → margin ${v.margin>=0?"+":""}${useSm?v.margin.toFixed(2):v.margin} ${unit}.`)
+        : `${obs.source==="RVR_MEASURED"?"RVR":"Visibility"} ${obs.value} ${unit} vs ${req} ${unit} required (${reqDriver}) → margin ${v.margin>=0?"+":""}${useSm?v.margin.toFixed(2):v.margin} ${unit}.`)
     });
     if (obs.source!=="RVR_MEASURED" && obs.value!=null)
       push({severity:"CAUTION", code:"CMV_PROHIBITED_FOR_TAKEOFF",
@@ -6119,8 +6142,6 @@ function setDhReqFor(role, v){ state.dhReq[role] = v==null ? undefined : v; save
 /* Exigence de plafond retenue pour la phase : la saisie du pilote si elle
    existe, sinon la valeur dérivée qu'on lui présente. */
 function ceilReqFor(role, derived){ return effCeil(state.ceilReq[role], derived); }
-/* Décollage : la case s'ouvre sur la ligne LVTO à 150 m. */
-state.reqOverride = defaultReqOption();
 
 /* --------------------------- base avions --------------------------- */
 /* Choisir un type dans la liste remplit les cases qui dépendent de l'avion et
@@ -7232,12 +7253,14 @@ function takeoffReqOptions(){
   return o;
 }
 
-/* Ligne retenue à l'ouverture : 150 m sous EASA (LVTO, balisage complet), le
-   minimum standard 91.175(f) sous FAA selon le nombre de moteurs. */
-function defaultReqOption(){
-  const opts = takeoffReqOptions();
-  if (cfg.framework==="FAA") return opts.find(o=>o.v===(cfg.engines>=3?2400:5000)) || opts[0] || null;
-  return opts.find(o=>o.unit==="m" && o.v===150) || opts[0] || null;
+/* La ligne que le moteur DÉRIVE d'Operation setup — éclairage, hauteur de
+   panne moteur, approbation LVTO, nombre de moteurs. Elle figure dans la liste
+   au même titre que les lignes des tables, et c'est celle sur laquelle la case
+   s'ouvre : le retour au calcul est un choix comme un autre. */
+function derivedOptLabel(t){
+  return t && t.required!=null
+    ? `${t.required} ${t.unit} — Operation setup: ${(t.driver||"").replace(/_/g," ").toLowerCase()}`
+    : "Operation setup — no minimum derived";
 }
 
 /* L'observé peut arriver en SM quand la FAA n'a pas de RVR pour la piste
@@ -7368,19 +7391,26 @@ function phaseSlots(tb, rSelected){
   }).join("");
 }
 
-/* Minimum de décollage retenu à l'écran : la saisie du pilote d'abord, la ligne
-   réglementaire choisie ensuite. C'est aussi celui que le moteur compare au
-   relevé, pour que la case, les pouces d'échéance et la table mobile ne
-   racontent jamais deux choses. */
+/* Minimum de décollage retenu : la saisie du pilote d'abord, la ligne
+   réglementaire choisie ensuite, la dérivation d'Operation setup à défaut.
+   Le moteur lit CETTE fonction, comme la case, les pouces d'échéance et la
+   table mobile — c'est ainsi qu'ils ne racontent jamais deux choses. */
 function takeoffReqEff(t){
   const unit = (t && t.unit) || (cfg.framework==="FAA" ? "ft" : "m");
-  /* La liste ne contient que des lignes réglementaires : si celle qui est
-     retenue ne correspond plus au cadre en vigueur — bascule EASA/FAA, donc
-     changement d'unité — on retombe sur la ligne par défaut du cadre. */
-  if (!state.reqOverride || state.reqOverride.unit!==unit) state.reqOverride = defaultReqOption();
+  /* Une ligne choisie avant une bascule EASA/FAA n'a plus cours : la liste ne
+     porte que des lignes du cadre en vigueur, et une valeur en pieds n'a rien
+     à faire dans un barème en mètres. Le calcul reprend la main. */
+  if (state.reqOverride && state.reqOverride.unit!==unit) state.reqOverride = null;
   const man = visReqFor("DEPARTURE", unit);
   if (man != null) return {v:man, unit, label:"", manual:true};
-  return state.reqOverride || (t && t.required!=null ? {v:t.required, unit, label:""} : null);
+  if (state.reqOverride) return {...state.reqOverride, line:true};
+  /* Aucune ligne choisie : la case montre ce que le moteur a dérivé. C'est le
+     seul moyen qu'elle et le verdict partent du même chiffre — s'ouvrir sur une
+     ligne fixe posait un minimum LVTO de 150 m devant un moteur qui en exigeait
+     400, et sans approbation LVTO au réglage. */
+  return t && t.required!=null
+    ? {v:t.required, unit, derived:true, label:derivedOptLabel(t)}
+    : null;
 }
 
 function takeoffVisCells(r, obs){
@@ -7403,7 +7433,8 @@ function takeoffVisCells(r, obs){
   const sel = `<span class="req-arrow-wrap">
       <span class="req-arrow" aria-hidden="true">▾</span>
       <select id="reqSel" class="inline req-sel">
-        ${opts.map((o,i)=>`<option value="${i}" ${!req.manual&&req.label===o.label?"selected":""}>${o.label}</option>`).join("")}
+        <option value="DERIVED" ${req.derived?"selected":""}>${derivedOptLabel(t)}</option>
+        ${opts.map((o,i)=>`<option value="${i}" ${req.line&&req.label===o.label?"selected":""}>${o.label}</option>`).join("")}
         <option value="MANUAL" ${req.manual?"selected":""}>${req.manual?`${reqCmp} ${obsU} — entered by hand`:"Entered by hand — type over the value"}</option>
       </select>
     </span>`;
@@ -8427,17 +8458,18 @@ function renderStage(tab, r){
     rq.onchange = ()=>{
       /* « Entered by hand » n'est pas une ligne de table : c'est l'état de la
          case quand elle porte le chiffre du pilote, et le choisir ne fait que
-         renvoyer au champ. Toute valeur qui n'est pas un index de ligne retombe
-         sur la ligne par défaut : une chaîne vide ne doit pas être lue comme
-         l'index 0. Choisir une ligne réglementaire efface la saisie — sinon
-         elle continuerait de gouverner sans qu'on le voie. */
+         renvoyer au champ. « Operation setup » rend la main au calcul. Toute
+         valeur qui n'est pas un index de ligne y retombe aussi : une chaîne
+         vide ne doit pas être lue comme l'index 0. Choisir une ligne
+         réglementaire efface la saisie — sinon elle continuerait de gouverner
+         sans qu'on le voie. */
       if (rq.value==="MANUAL"){
         const box = inner.querySelector("#toVisInput");
         if (box) box.focus();
         return;
       }
       setVisReqFor(tab.role, null);
-      state.reqOverride = (/^\d+$/.test(rq.value) && takeoffReqOptions()[+rq.value]) || defaultReqOption();
+      state.reqOverride = (/^\d+$/.test(rq.value) && takeoffReqOptions()[+rq.value]) || null;
       render();
     };
     /* « Cliquer sur la case » ouvre la liste : le clic n'importe où dans la
@@ -8964,10 +8996,11 @@ const M_RANK = {go:"GO", marginal:"MARGINAL", nogo:"NO_GO", unknown:"UNKNOWN"};
    quatre colonnes : ce qui est observé ou prévu, ce qui est exigé, l'écart, le
    verdict. Au décollage s'y ajoute le choix de la ligne réglementaire retenue,
    qui pilote exactement le même `state.reqOverride` que sur tablette. */
-function mReqSelectHtml(){
+function mReqSelectHtml(r){
   const opts = takeoffReqOptions();
-  const unit = cfg.framework==="FAA" ? "ft" : "m";
-  const req = takeoffReqEff() || {label:""};
+  const mt = (r && r.computed && r.computed.takeoff) || {};
+  const unit = mt.unit || (cfg.framework==="FAA" ? "ft" : "m");
+  const req = takeoffReqEff(mt) || {label:""};
   /* Même règle que la case de la version tablette : l'exigence s'affiche dans
      l'unité du relevé — milles terrestres sous FAA quand la piste n'a pas de
      RVR (91.175(h)) — et la saisie est enregistrée dans cette unité. */
@@ -8980,7 +9013,8 @@ function mReqSelectHtml(){
   return `<div class="m-req">
     <span>Required minimum — regulatory line</span>
     <select id="mReqSel" aria-label="Required take-off minimum">
-      ${opts.map((o,i)=>`<option value="${i}" ${!req.manual&&req.label===o.label?"selected":""}>${o.label}</option>`).join("")}
+      <option value="DERIVED" ${req.derived?"selected":""}>${derivedOptLabel(mt)}</option>
+      ${opts.map((o,i)=>`<option value="${i}" ${req.line&&req.label===o.label?"selected":""}>${o.label}</option>`).join("")}
       <option value="MANUAL" ${req.manual?"selected":""}>Entered by hand</option>
     </select>
   </div>`
@@ -9120,7 +9154,7 @@ function mDetailHtml(tb, r){
     </div>`;
   })();
   return `<div class="m-detail">
-    ${tb.role==="DEPARTURE" ? mReqSelectHtml() : mPhaseAppHtml(tb)}
+    ${tb.role==="DEPARTURE" ? mReqSelectHtml(r) : mPhaseAppHtml(tb)}
     ${mVisFields}
     ${mDhField}
     ${isDep ? "" : mCeilInputHtml("mPhaseCeilInput",
@@ -9490,12 +9524,13 @@ function bindMobile(host){
   const rq = host.querySelector("#mReqSel");
   if (rq) rq.onchange = ()=>{
     /* « Entered by hand » n'est pas une ligne de table : la saisie tient, rien
-       à changer. Choisir une ligne réglementaire efface la saisie. Toute valeur
-       qui n'est pas un index de ligne retombe sur la ligne par défaut : une
-       chaîne vide ne doit pas être lue comme l'index 0. */
+       à changer. « Operation setup » rend la main au calcul, et toute valeur qui
+       n'est pas un index de ligne y retombe aussi : une chaîne vide ne doit pas
+       être lue comme l'index 0. Choisir une ligne réglementaire efface la
+       saisie. */
     if (rq.value==="MANUAL"){ render(); return; }
     if (mRole) setVisReqFor(mRole, null);
-    state.reqOverride = (/^\d+$/.test(rq.value) && takeoffReqOptions()[+rq.value]) || defaultReqOption();
+    state.reqOverride = (/^\d+$/.test(rq.value) && takeoffReqOptions()[+rq.value]) || null;
     render();
   };
   const mpa = host.querySelector("#mPhaseAppSel");
