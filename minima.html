@@ -435,12 +435,23 @@ body.light .btn.primary:hover{background:#0b87ac;border-color:#0b87ac}
 .nf-strip.active .chk input:checked+.bx{background:var(--amber);border-color:var(--amber)}
 .nf-note{flex-basis:100%;font-size:11px;color:var(--muted2);line-height:1.4}
 /* Pastille du NOTAM porteur d'une case cochée automatiquement : le numéro en
-   clair, les autres NOTAM et leurs extraits dans l'infobulle. */
+   clair, et il s'ouvre — c'est le lien vers le message entier, comme le
+   numéro cité en pied de carte du bilan. Le plus gros texte de la bande —
+   au-dessus des 12,5 px des cases : c'est la seule chose qu'on ira vérifier
+   au briefing officiel, elle doit se lire de loin et se viser du doigt. Et
+   la même taille que le numéro en tête du panneau qu'elle ouvre. */
 .nf-auto{
-  font:600 9px/1 var(--mono);letter-spacing:.06em;color:var(--amber);
-  border:1px solid var(--amber);border-radius:4px;padding:2px 5px;margin-left:6px;
-  cursor:help;white-space:nowrap;
+  font:600 15px/1 var(--mono);letter-spacing:.06em;color:var(--amber);
+  background:none;border:1px solid var(--amber);border-radius:4px;
+  padding:5px 9px;margin-left:8px;cursor:pointer;white-space:nowrap;
+  text-decoration:underline;text-underline-offset:2px;
 }
+.nf-auto:hover{background:var(--amber);color:#0b1116}
+.nf-auto:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+/* La case et sa pastille voyagent ensemble. La pastille est un bouton : elle
+   ne peut pas vivre DANS le <label>, elle lui volerait son clic — cocher une
+   case en voulant lire un NOTAM serait le pire des deux gestes. */
+.nf-item{display:flex;align-items:center;min-width:0}
 .qfu.nf-closed .deg{color:var(--red);font-weight:700;letter-spacing:.08em}
 /* Version mobile : mêmes cases, empilées dans leur carte relevé. */
 .m-report.nf-strip{display:block;margin-bottom:10px}
@@ -2307,12 +2318,15 @@ body.mobile #rtOv:not([hidden]){display:flex}
 .rt-nlink:hover{color:var(--text)}
 .rt-nlink:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}
 .rt-nmore{font:400 10px/1.4 var(--sans);color:var(--muted)}
-/* Le NOTAM en entier : il monte du bas de l'écran et se pose SUR le bilan,
-   sans le couvrir — les autres terrains restent lisibles au-dessus. Même
-   panneau que celui des relevés de la carte METAR, mêmes gestes : la croix,
-   Échap, ou un glissement du doigt vers le bas. */
+/* Le NOTAM en entier : il monte du bas de l'écran et se pose SUR ce qu'on
+   lisait, sans le couvrir — le bilan comme la fiche d'un terrain restent
+   lisibles au-dessus. Même panneau que celui des relevés de la carte METAR,
+   mêmes gestes : la croix, Échap, ou un glissement du doigt vers le bas.
+   Fixé au bloc de vue, plus au bilan : la bande NOTAM d'une fiche l'ouvre
+   aussi, bilan fermé. Au-dessus de toutes les surcouches (95 au plus haut) —
+   c'est toujours la dernière ouverte. */
 .nfsheet{
-  position:absolute;left:0;right:0;bottom:0;z-index:10;
+  position:fixed;left:0;right:0;bottom:0;z-index:96;
   max-height:min(72%,560px);display:flex;flex-direction:column;
   background:var(--panel);border-top:1px solid var(--line2);box-shadow:var(--elev-hi);
   border-radius:14px 14px 0 0;
@@ -2848,16 +2862,17 @@ body.mobile #rtOv:not([hidden]){display:flex}
         pilot-in-command remains solely responsible for the flight.</div>
     </div>
   </div>
-  <!-- Le NOTAM cité en pied de carte, en entier : le panneau monte du bas au
-       clic sur son numéro et se referme d'un glissement vers le bas, de la
-       croix ou d'Échap. Hors de .rt-host — il se pose SUR le bilan, il ne
-       défile pas avec lui. -->
-  <aside class="nfsheet" id="nfSheet" hidden role="dialog" aria-label="NOTAM text">
-    <div class="nfsheet-grip" aria-hidden="true"></div>
-    <button class="nfsheet-x" id="nfSheetX" aria-label="Close the NOTAM" title="Close the NOTAM">×</button>
-    <div class="nfsheet-body" id="nfSheetBody"></div>
-  </aside>
 </div>
+<!-- Le NOTAM en entier : celui cité en pied de carte du bilan, et celui que
+     porte chaque numéro de la bande NOTAM d'une fiche de terrain. Le panneau
+     monte du bas au clic sur son numéro et se referme d'un glissement vers le
+     bas, de la croix ou d'Échap. Hors de #rtOv : la fiche l'ouvre aussi,
+     bilan fermé — il ne peut donc plus vivre dedans. -->
+<aside class="nfsheet" id="nfSheet" hidden role="dialog" aria-label="NOTAM text">
+  <div class="nfsheet-grip" aria-hidden="true"></div>
+  <button class="nfsheet-x" id="nfSheetX" aria-label="Close the NOTAM" title="Close the NOTAM">×</button>
+  <div class="nfsheet-body" id="nfSheetBody"></div>
+</aside>
 <!-- Graine de la base terrains, compilée depuis aero-db (compile-seed.js) :
      pistes + longueurs mondiales, approches par extrémité. Fichier absent =
      l'app fonctionne sur ses replis internes. -->
@@ -4596,12 +4611,30 @@ function nfaNotify(icao){
   if (window.RTV) RTV.refresh();
 }
 
-/* La pastille AUTO d'une case : le premier NOTAM porteur (les autres en
-   infobulle, extraits compris). */
-function nfAutoTag(nf, ids){
+/* La pastille AUTO d'une case : le NOTAM qui l'a cochée, en clair et en
+   lien — son extrait reste dans l'infobulle, le message entier est à un
+   clic. */
+function nfAutoTag(icao, nf, ids, what){
   if (!ids || !ids.length) return "";
-  const tip = ids.map(i => (nf.src && nf.src[i]) ? i + " — " + nf.src[i] : i).join("\n");
-  return `<span class="nf-auto" title="${escapeHtmlText(tip)}">${escapeHtmlText(ids[0])}${ids.length > 1 ? " +" + (ids.length - 1) : ""}</span>`;
+  /* Un numéro, un bouton : deux NOTAM qui lèvent le même drapeau sont deux
+     messages différents, et le pilote doit pouvoir lire celui qu'il vise —
+     un « +1 » replié dans l'infobulle n'ouvrait rien. */
+  return ids.map(id=>{
+    const tip = (nf.src && nf.src[id]) ? id + " — " + nf.src[id] : "Read NOTAM " + id;
+    return `<button type="button" class="nf-auto" data-icao="${escapeHtmlText(icao)}"
+        data-id="${escapeHtmlText(id)}" data-what="${escapeHtmlText(what)}"
+        title="${escapeHtmlText(tip)}">${escapeHtmlText(id)}</button>`;
+  }).join("");
+}
+/* Le clic sur un numéro dévoile le message entier, dans le panneau du bilan —
+   même geste, même panneau, qu'on vienne de la fiche ou de la carte de route.
+   Rien à retélécharger : le texte est celui que le module NOTAM a rangé en
+   cochant la case, hors ligne compris. */
+function nfBindTags(host){
+  host.querySelectorAll(".nf-auto").forEach(b=>b.onclick = e=>{
+    e.preventDefault(); e.stopPropagation();
+    if (window.RTV) RTV.openNotam(b.dataset.icao, b.dataset.id, b.dataset.what);
+  });
 }
 
 /* Les extrémités qui MÉRITENT une case dans le bandeau — le strip resterait
@@ -8232,9 +8265,9 @@ function renderStage(tab, r){
       ${icao ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ils:{}, als:{}, rwy:{}}; return `
       <div class="nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
         <span class="nf-title">NOTAM</span>
-        ${nfIlsEnds(icao).map(en=>`<label class="chk"><input type="checkbox" class="nfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span>${nfAutoTag(nf, (au.ils||{})[en])}</label>`).join("")}
-        ${nfAlsEnds(icao).map(en=>`<label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="nfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span>${nfAutoTag(nf, (au.als||{})[en])}</label>`).join("")}
-        ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="nfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span>${nfAutoTag(nf, (au.rwy||{})[p])}</label>`).join("")}
+        ${nfIlsEnds(icao).map(en=>`<span class="nf-item"><label class="chk"><input type="checkbox" class="nfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.ils||{})[en], "ILS "+en+" unserviceable")}</span>`).join("")}
+        ${nfAlsEnds(icao).map(en=>`<span class="nf-item"><label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="nfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.als||{})[en], "Approach lights "+en+" unserviceable")}</span>`).join("")}
+        ${pairs.map(p=>`<span class="nf-item"><label class="chk"><input type="checkbox" class="nfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span></label>${nfAutoTag(icao, nf, (au.rwy||{})[p], "RWY "+p+" closed")}</span>`).join("")}
         <span class="nf-note">${nfStateNote(icao)}</span>
       </div>`; })() : ""}
 
@@ -8281,6 +8314,7 @@ function renderStage(tab, r){
   inner.querySelectorAll(".nfRwy").forEach(c=>c.onchange = ()=>{
     nfUserToggleRwy(currentIcao(), c.dataset.pair); render();
   });
+  nfBindTags(inner);
   inner.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{
     /* On repart de l'heure qu'il est au moment du clic, sinon « now » rejoue
        l'heure du dernier chargement. */
@@ -9420,6 +9454,7 @@ function bindMobile(host){
   host.querySelectorAll(".mNfRwy").forEach(c=>c.onchange = ()=>{
     nfUserToggleRwy(currentIcao(), c.dataset.pair); render();
   });
+  nfBindTags(host);
 }
 
 /* Tous les QFU de l'aérodrome, dans l'ordre des pistes. Le choix automatique
@@ -9556,9 +9591,9 @@ function mobileResultsHtml(){
         return `<div class="m-report nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
         <span class="label">NOTAM</span>
         <div class="nf-m">
-          ${nfIlsEnds(icao).map(en=>`<label class="chk"><input type="checkbox" class="mNfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span>${nfAutoTag(nf, (au.ils||{})[en])}</label>`).join("")}
-          ${nfAlsEnds(icao).map(en=>`<label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="mNfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span>${nfAutoTag(nf, (au.als||{})[en])}</label>`).join("")}
-          ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="mNfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span>${nfAutoTag(nf, (au.rwy||{})[p])}</label>`).join("")}
+          ${nfIlsEnds(icao).map(en=>`<span class="nf-item"><label class="chk"><input type="checkbox" class="mNfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.ils||{})[en], "ILS "+en+" unserviceable")}</span>`).join("")}
+          ${nfAlsEnds(icao).map(en=>`<span class="nf-item"><label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="mNfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.als||{})[en], "Approach lights "+en+" unserviceable")}</span>`).join("")}
+          ${pairs.map(p=>`<span class="nf-item"><label class="chk"><input type="checkbox" class="mNfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span></label>${nfAutoTag(icao, nf, (au.rwy||{})[p], "RWY "+p+" closed")}</span>`).join("")}
         </div>
         <span class="nf-note">${nfStateNote(icao)}</span>
       </div>`; })() : ""}
@@ -11320,6 +11355,16 @@ window.RTV = (()=>{
     sheet.addEventListener("pointercancel", release);
   })();
   document.getElementById("nfSheetX").onclick = closeNotam;
+  /* Échap referme le NOTAM dévoilé AVANT toute autre couche, d'où qu'il ait
+     été ouvert — bande NOTAM d'une fiche comprise, bilan fermé. En capture :
+     c'est la couche du dessus, elle répond la première et garde la touche
+     pour elle plutôt que de laisser refermer la vue du dessous. Le garde
+     lit la classe `open`, pas `hidden` : celui-là ne tombe qu'à la fin du
+     glissement, et deux Échap de suite s'y perdaient. */
+  document.addEventListener("keydown", e=>{
+    if (e.key!=="Escape" || !sheet.classList.contains("open")) return;
+    e.stopPropagation(); closeNotam();
+  }, true);
 
   /* ---------- rendu ---------- */
   function ageHtml(t){
@@ -11628,9 +11673,6 @@ window.RTV = (()=>{
     if (e.key!=="Escape" || ov.hidden) return;
     if (e.helpClosed || !helpOv.hidden) return;
     if (!document.getElementById("wxMapOv").hidden) return;
-    /* Le NOTAM dévoilé se referme d'abord : Échap rend la vue précédente, pas
-       la fiche — le bilan reste sous les yeux. */
-    if (!sheet.hidden){ closeNotam(); return; }
     close();
   });
 
@@ -11657,8 +11699,11 @@ window.RTV = (()=>{
   }
 
   /* refresh : les drapeaux NOTAM arrivent en différé (nfaNotify) — les cartes
-     se rejugent ; le garde ov.hidden rend l'appel gratuit bilan fermé. */
-  return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render};
+     se rejugent ; le garde ov.hidden rend l'appel gratuit bilan fermé.
+     openNotam : la bande NOTAM des fiches ouvre CE panneau-là — un seul
+     dévoileur de NOTAM dans la page, un seul geste à connaître. */
+  return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render,
+          openNotam, closeNotam};
 })();
 
 /* =====================================================================
