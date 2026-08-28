@@ -22483,6 +22483,106 @@ window.addEventListener("scroll", hidePop, true);
           REF.set(s.r, { point: centre(s) });
       }
 
+      /* SPLITS — LES INTERSECTIONS, une fois pour toutes.
+         Une voie se lit par SECTIONS : d'un croisement au suivant. C'est
+         l'unité qu'un équipage nomme (« W1 entre N41 et W2 »), et c'est donc
+         l'unité qui mérite un nom écrit — un seul. Sans elle, la répétition des
+         noms se règle à la distance, et trois « W1 » peuvent tomber entre deux
+         mêmes bretelles, dont deux à se toucher.
+         On stocke, par surface et par tronçon, les positions de croisement en
+         FRACTIONS de sa longueur (0..1). Fractions et non pixels : la
+         projection est une similitude, donc une fraction vaut à tous les zooms
+         et à tous les cadrages — le calcul est fait une fois à l'ouverture,
+         jamais au rendu.
+         Ne croisent que les LIGNES nommables (voies et pistes) : les postes et
+         les aires toucheraient une voie tous les vingt mètres et la
+         hacheraient en sections d'un seul poste. Deux tronçons de MÊME ref ne
+         se croisent pas non plus — une voie découpée en plusieurs ways OSM se
+         continue, elle ne se coupe pas.
+         Grille de hachage pour ne pas comparer 8 000 arêtes deux à deux (LFPG
+         en compte 781 voies) : chaque arête n'est confrontée qu'à celles qui
+         partagent une de ses cellules. */
+      const SPLITS = new Map();     // surface -> [ [fractions triées] par tronçon ]
+      (() => {
+        const nref = s => String(s.r || "").toUpperCase().replace(/^(?:TAXIWAYS?|TAXILANES?|TWYS?)\s+/, "").trim();
+        const PROJ = new Map();     // surface -> tronçons projetés, réutilisés plus bas
+        const E = [];               // arêtes : { s, gi, vi, a, b }
+        for (const s of SURF) {
+          if (s.t !== "twy" && s.t !== "rwy") continue;
+          const ps = s.segs.map(g => g.map(px));
+          PROJ.set(s, ps);
+          ps.forEach((p, gi) => {
+            for (let i = 1; i < p.length; i++) E.push({ s, gi, vi: i, a: p[i - 1], b: p[i] });
+          });
+        }
+        if (E.length < 2) return;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const e of E) for (const p of [e.a, e.b]) {
+          if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+          if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+        }
+        const cell = Math.max((x1 - x0 + y1 - y0) / 400, 1e-9);
+        const grid = new Map();
+        const cellsOf = e => {
+          const cx0 = Math.floor(Math.min(e.a[0], e.b[0]) / cell), cx1 = Math.floor(Math.max(e.a[0], e.b[0]) / cell);
+          const cy0 = Math.floor(Math.min(e.a[1], e.b[1]) / cell), cy1 = Math.floor(Math.max(e.a[1], e.b[1]) / cell);
+          const out = [];
+          for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) out.push(cx + "," + cy);
+          return out;
+        };
+        E.forEach((e, i) => { for (const k of cellsOf(e)) { if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); } });
+        // paramètre du croisement sur la PREMIÈRE arête, ou null
+        const cross = (p1, p2, p3, p4) => {
+          const d1x = p2[0] - p1[0], d1y = p2[1] - p1[1];
+          const d2x = p4[0] - p3[0], d2y = p4[1] - p3[1];
+          const den = d1x * d2y - d1y * d2x;
+          if (!den) return null;                       // parallèles ou dégénérées
+          const ox = p3[0] - p1[0], oy = p3[1] - p1[1];
+          const t = (ox * d2y - oy * d2x) / den, u = (ox * d1y - oy * d1x) / den;
+          return (t < 0 || t > 1 || u < 0 || u > 1) ? null : t;
+        };
+        const hits = new Map();     // surface -> Map(gi -> [{ vi, d }])
+        E.forEach((e, i) => {
+          const seen = new Set();
+          for (const k of cellsOf(e)) for (const j of grid.get(k) || []) {
+            if (j === i || seen.has(j)) continue;
+            seen.add(j);
+            const o = E[j];
+            if (o.s === e.s) continue;
+            const ra = nref(e.s), rb = nref(o.s);
+            if (ra && ra === rb) continue;
+            const t = cross(e.a, e.b, o.a, o.b);
+            if (t == null) continue;
+            const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]);
+            if (!hits.has(e.s)) hits.set(e.s, new Map());
+            const m = hits.get(e.s);
+            if (!m.has(e.gi)) m.set(e.gi, []);
+            m.get(e.gi).push({ vi: e.vi, d: t * len });
+          }
+        });
+        // longueurs cumulées le long du tronçon, puis fractions triées
+        for (const [s, m] of hits) {
+          const per = [];
+          PROJ.get(s).forEach((p, gi) => {
+            const acc = [0];
+            for (let i = 1; i < p.length; i++)
+              acc.push(acc[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
+            const total = acc[acc.length - 1];
+            const fr = [];
+            if (total > 0) for (const h of m.get(gi) || []) fr.push((acc[h.vi - 1] + h.d) / total);
+            fr.sort((a, b) => a - b);
+            // Un croisement à l'EXTRÉMITÉ ne découpe rien (c'est déjà le bout de
+            // la voie), et deux croisements à se toucher — une bretelle en Y —
+            // ne font qu'une intersection.
+            const out = [];
+            for (const f of fr)
+              if (f > 0.004 && f < 0.996 && (!out.length || f - out[out.length - 1] > 0.004)) out.push(f);
+            per[gi] = out;
+          });
+          SPLITS.set(s, per);
+        }
+      })();
+
       const ground = notams.filter(paintsGround);
       const TOUCH = new Map(), located = new Set();
       // CUTS : par NOTAM, la géométrie de découpe résolue (segment peint ou marqueurs)
@@ -22688,7 +22788,7 @@ window.addEventListener("scroll", hidePop, true);
       }
       const main = [...comp.values()].sort((a, b) => b.length - a.length)[0] || SURF.map((_, i) => i);
 
-      return { layout, SURF, TOUCH, CUTS, BOUNDS, ground, located, MISS, px,
+      return { layout, SURF, TOUCH, CUTS, BOUNDS, SPLITS, ground, located, MISS, px,
                B: box(SURF.map((_, i) => i)), Bfit: box(main),
                view: { k: 1, tx: 0, ty: 0 }, fit: { s: 1, ox: 0, oy: 0 }, sel: null };
     }
@@ -23268,6 +23368,13 @@ window.addEventListener("scroll", hidePop, true);
        son nom — plusieurs points sont tentés le long du tracé, puis on force.
        Un taxiway coloré sans nom attire l'œil sans rien dire. */
     let planBoxes = [];
+    /* Les ancres déjà retenues pour CHAQUE nom, du dessin en cours. Deux voies
+       peuvent porter la même ref sur deux ways OSM distincts (« Q » et
+       « Taxiway Q », deux tronçons d'une même bretelle) : chacune tamise ses
+       propres ancres sans rien savoir de l'autre, et deux « Q » pouvaient
+       encore se retrouver côte à côte. L'écart minimal vaut donc pour le NOM,
+       où qu'il soit écrit sur le plan. */
+    let planNames = new Map();
     /* Deux étiquettes se gênent-elles VRAIMENT ?
        L'enveloppe droite d'un libellé TOURNÉ est bien plus large que le libellé
        lui-même : à 45°, un nom de 60×22 px occupe une enveloppe de 58×58. S'en
@@ -23426,38 +23533,81 @@ window.addEventListener("scroll", hidePop, true);
        du tronçon d'une portion « BTN X AND Y ». C'est là que le nom répond à la
        question posée — sur le morceau que le NOTAM vise, entre ses deux bornes,
        et pas au hasard du reste de la voie.
+       UN SEUL NOM PAR SECTION. L'unité de lecture d'une voie n'est pas une
+       longueur, c'est la SECTION entre deux croisements — celle qu'un équipage
+       nomme (« W1 entre N41 et W2 »). Les ancres sont donc le MILIEU de chaque
+       section (cf. SPLITS, calculé à l'ouverture), et pas des points tous les
+       tant de pixels : trois « W1 » entre les deux mêmes bretelles, dont deux à
+       se toucher, ne disent pas trois fois plus que le premier.
+       Deux filtres, tous deux en pixels d'écran, donc au zoom du moment :
+         · une section trop courte pour porter son nom n'en reçoit pas — un
+           bout de vingt pixels entre deux bretelles voisines n'a pas la place,
+           et le nom de la section d'à côté le renseigne ;
+         · deux noms d'affilée gardent au moins un pas d'écart, sinon une voie
+           croisée dix fois de suite se répéterait dix fois.
        REPLI, inchangé dans son esprit : si aucune ancre ne trouve sa place (ou
        si aucune n'est dans le cadre — un gros plan entre deux ancres), on
        retombe sur l'échantillonnage dense de la portion visible, avec le même
        escalier de fractions et le même forçage qu'avant. Un élément touché ne
        doit jamais rester anonyme. */
-    const PLAN_LBL_STEP = 240;        // px CSS entre deux répétitions d'un même nom
-    function planLabel(ctx, text, segs, col, mode, prio) {
+    const PLAN_LBL_STEP = 240;        // px CSS : écart minimal entre deux noms d'une même voie
+    const PLAN_LBL_SEC = 64;          // px CSS : section plus courte = pas de nom
+    function planLabel(ctx, text, segs, col, mode, prio, splits) {
       const cv = ctx.canvas, W = cv.width, H = cv.height, M = 8 * planDPR;
       const inView = p => p[0] >= M && p[0] <= W - M && p[1] >= M && p[1] <= H - M;
       const anchors = [];
-      for (const p of prio || []) { const q = planSCp(p); if (inView(q)) anchors.push(q); }
-      const step = PLAN_LBL_STEP * planDPR;
+      for (const p of prio || []) anchors.push(planSCp(p));
+      const step = PLAN_LBL_STEP * planDPR, minSec = PLAN_LBL_SEC * planDPR;
       const scrs = segs.map(g => g.map(planSC));
-      for (const scr of scrs) {
-        let total = 0;
-        for (let i = 1; i < scr.length; i++) total += Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]);
-        if (!total) { if (scr.length && inView(scr[0])) anchors.push(scr[0]); continue; }
-        const gap = total / Math.max(1, Math.round(total / step));
-        let acc = 0, next = gap / 2;
-        for (let i = 1; i < scr.length; i++) {
-          const a = scr[i - 1], b = scr[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-          while (d > 0 && next <= acc + d) {
-            const t = (next - acc) / d;
-            const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-            if (inView(p)) anchors.push(p);
-            next += gap;
-          }
-          acc += d;
+      scrs.forEach((scr, gi) => {
+        const acc = [0];
+        for (let i = 1; i < scr.length; i++)
+          acc.push(acc[i - 1] + Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]));
+        const total = acc[acc.length - 1];
+        if (!total) { if (scr.length) anchors.push(scr[0]); return; }
+        // le point situé à la longueur `d` le long du tracé écran
+        const at = d => {
+          let i = 1;
+          while (i < acc.length - 1 && acc[i] < d) i++;
+          const a = scr[i - 1], b = scr[i], seg = acc[i] - acc[i - 1];
+          const t = seg ? (d - acc[i - 1]) / seg : 0;
+          return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        };
+        const cuts = (splits && splits[gi]) || [];
+        const bounds = [0, ...cuts.map(f => f * total), total];
+        let last = -Infinity;
+        for (let i = 1; i < bounds.length; i++) {
+          const a = bounds[i - 1], b = bounds[i];
+          if (b - a < minSec) continue;
+          const mid = (a + b) / 2;
+          if (mid - last < step) continue;
+          last = mid;
+          anchors.push(at(mid));
         }
+      });
+      /* Dernier tamis, en distance À VOL D'OISEAU cette fois. L'écart minimal
+         appliqué plus haut se mesure LE LONG d'un tronçon ; il ne voit pas deux
+         noms que la géométrie rapproche par un autre chemin — deux ways OSM de
+         la même voie qui se rejoignent bout à bout (leur jonction n'est pas une
+         intersection, à raison), ou une voie qui revient sur elle-même. C'est
+         exactement le cas signalé : deux « W1 » à se toucher. L'ancre
+         prioritaire est en tête de liste, donc c'est elle qui survit.
+         Le tamis passe sur TOUTES les ancres, y compris hors cadre, et la
+         visibilité ne se juge qu'au moment de poser : sinon le nom qu'une
+         voisine faisait taire réapparaîtrait dès que cette voisine sort du
+         cadre, et le plan clignoterait au déplacement. Ce qui est écrit ne
+         dépend que de la géométrie et du zoom. */
+      const seen = planNames.get(text) || [];
+      const kept = [];
+      for (const p of anchors) {
+        let ok = true;
+        for (const q of seen) if (Math.hypot(p[0] - q[0], p[1] - q[1]) < step) { ok = false; break; }
+        if (ok) { kept.push(p); seen.push(p); }
       }
+      planNames.set(text, seen);
       let placed = 0;
-      for (const p of anchors) if (planPlace(ctx, text, p[0], p[1], col, mode, false)) placed++;
+      for (const p of kept)
+        if (inView(p) && planPlace(ctx, text, p[0], p[1], col, mode, false)) placed++;
       if (placed) return;
       // repli : la portion visible, échantillonnée dense comme autrefois
       const vis = [];
@@ -23731,6 +23881,7 @@ window.addEventListener("scroll", hidePop, true);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, cv.width, cv.height);
       planBoxes = [];
+      planNames = new Map();
       const S = plan.SURF;
       /* LA PORTÉE NE TOUCHE QUE LES NOMS (cf. planSetScope) : la géométrie et
          les couleurs sont les mêmes dans les trois modes. Le terrain entier
@@ -24001,7 +24152,7 @@ window.addEventListener("scroll", hidePop, true);
         return out;
       };
       for (const s of lab) if (st_.get(s) && nameOK(s))
-        planLabel(ctx, s.r, s.segs, labCol(s, st_.get(s)), labMode(s, st_.get(s)), cutMids(s));
+        planLabel(ctx, s.r, s.segs, labCol(s, st_.get(s)), labMode(s, st_.get(s)), cutMids(s), plan.SPLITS.get(s));
 
       /* 1 bis. LES BORNES, juste derrière les éléments touchés. Deux marqueurs
          sans légende ne disent pas où ils sont : le nom de la borne fait le
@@ -24014,7 +24165,7 @@ window.addEventListener("scroll", hidePop, true);
          Une borne qui aurait par ailleurs SON propre NOTAM est déjà nommée
          au-dessus, en couleur — st_ la retire d'ici. */
       for (const s of lab) if (!st_.get(s) && boundSurfs.has(s))
-        planLabel(ctx, s.r, s.segs, P_.off, "plain");
+        planLabel(ctx, s.r, s.segs, P_.off, "plain", null, plan.SPLITS.get(s));
 
       /* UN ÉLÉMENT TOUCHÉ SE NOMME, QUEL QUE SOIT LE ZOOM. C'est la règle qui
          gouverne les quatre familles d'étiquettes, et elle prime sur tous les
@@ -24104,7 +24255,7 @@ window.addEventListener("scroll", hidePop, true);
       // Ils ne s'écrivent qu'en portée 'all' — sauf une surface CITÉE par le
       // NOTAM ouvert, qui passe le seuil quoi qu'il arrive (cf. `focused`).
       for (const s of lab) if (!st_.get(s) && !boundSurfs.has(s) && nameOK(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
-        planLabel(ctx, s.r, s.segs, planPal().off, "off");
+        planLabel(ctx, s.r, s.segs, planPal().off, "off", null, plan.SPLITS.get(s));
 
       /* Postes SANS NOTAM : 130 à LFBO, 519 à LFPG. Ceux-là seulement gardent un
          seuil — à l'échelle d'ouverture, tout étiqueter serait une bouillie,
