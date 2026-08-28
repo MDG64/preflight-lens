@@ -676,15 +676,6 @@
       transition: transform .12s, color .12s, text-shadow .12s
     }
 
-    /* MAP se pose à droite de FIR : les quatre boutons Route · Weather · FIR
-       · MAP ouvrent chacun une page, ils portent donc le même habit (.mapword)
-       — même taille, même couleur, même case. Il ne garde en propre que son
-       signal : le liseré vert quand une route est chargée. */
-    #stationMapBtn.hasroute {
-      border-color: #34d39a;
-      box-shadow: 0 0 0 1px #34d39a inset, 0 0 6px rgba(52,211,154,.3)
-    }
-
     /* La carte s'annonce par le mot MAP et non plus par un globe : trois
        lettres se lisent partout de la même façon, là où l'émoji changeait de
        dessin d'un système à l'autre. Un mot n'est pas un glyphe : le rond des
@@ -698,7 +689,9 @@
        Le troisième sélecteur pèse ce que pèsent les grosses pastilles du
        bandeau (.hdr-actions .help-btn, largeur 38 px, police 19 px) : sans
        lui, leur gabarit l'emportait sur celui-ci et le mot débordait de sa
-       case dans l'en-tête météo. */
+       case dans l'en-tête météo.
+       Aucun liseré ne le distingue de ses voisins : la route chargée se
+       dit sur la page Route, où elle vient d'être saisie. */
     button.mapword,
     span.mapword,
     .hdr-actions .help-btn.mapword {
@@ -16275,7 +16268,6 @@ function renderInfo(icao) {
       $("#mapBtn").classList.toggle("hasroute", hasRoute);
       $("#mapBtn").disabled = false;   // toujours cliquable (les données sont chargées au clic)
       $("#stationMapBtn").hidden = false;                // toujours visible
-      $("#stationMapBtn").classList.toggle("hasroute", hasRoute);
     }
     // La route n'existe en mémoire (curRoute) qu'après un passage par la page
     // Route : au rechargement de l'app, ou en ouvrant la carte directement par
