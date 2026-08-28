@@ -5051,7 +5051,13 @@ function reportsInSm(metar, taf){
    se trompe. Seuls les mètres basculent : une RVR mesurée garde son unité, et
    le cadre FAA porte déjà sa colonne en milles. */
 function visDispUnit(calcUnit){
-  return calcUnit==="m" && reportsInSm(state.metar, state.taf) ? "sm" : calcUnit;
+  if (calcUnit==="sm" || !reportsInSm(state.metar, state.taf)) return calcUnit;
+  /* Une RVR mesurée garde ses pieds : le message américain l'écrit ainsi, et
+     c'est bien l'unité du relevé. Sans RVR au message, en revanche, rien n'y est
+     en pieds — le minimum s'écrit alors en milles, comme la visibilité qui
+     gouverne à sa place (91.175(h)). */
+  if (calcUnit==="ft" && state.metar && (state.metar.rvr||[]).length) return "ft";
+  return "sm";
 }
 
 function controllingVis(metar, cfg, purpose, rwy){
@@ -7354,6 +7360,19 @@ function takeoffReqOptions(){
    panne moteur, approbation LVTO, nombre de moteurs. Elle figure dans la liste
    au même titre que les lignes des tables, et c'est celle sur laquelle la case
    s'ouvre : le retour au calcul est un choix comme un autre. */
+/* L'intitulé d'une ligne réglementaire, écrit dans l'unité de la case qu'elle
+   remplit — sinon la liste annonce « 1200 ft » et la case affiche 0.25 SM. La
+   valeur de la table suit entre parenthèses : c'est le chiffre du règlement, et
+   on doit pouvoir le retrouver. `label`, lui, ne bouge pas : c'est l'intitulé
+   réglementaire, et c'est par lui que la ligne retenue se reconnaît. */
+function optLabelIn(o, unit){
+  if (!o) return "";
+  if (o.v==null || !unit || unit===o.unit) return o.label||"";
+  const v = reqInUnit(o.v, o.unit, unit);
+  const tail = (o.label||"").split(" — ").slice(1).join(" — ");
+  return `${unit==="sm"?(+v).toFixed(2):v} ${unitLab(unit)} (${o.v} ${unitLab(o.unit)})${tail?" — "+tail:""}`;
+}
+
 function derivedOptLabel(t){
   return t && t.required!=null
     ? `${t.required} ${t.unit} — Operation setup: ${(t.driver||"").replace(/_/g," ").toLowerCase()}`
@@ -7535,8 +7554,8 @@ function takeoffVisCells(r, obs){
   const sel = `<span class="req-arrow-wrap">
       <span class="req-arrow" aria-hidden="true">▾</span>
       <select id="reqSel" class="inline req-sel">
-        <option value="DERIVED" ${req.derived?"selected":""}>${derivedOptLabel(t)}</option>
-        ${opts.map((o,i)=>`<option value="${i}" ${req.line&&req.label===o.label?"selected":""}>${o.label}</option>`).join("")}
+        <option value="DERIVED" ${req.derived?"selected":""}>${optLabelIn({v:t.required, unit:t.unit, label:derivedOptLabel(t)}, obsU)}</option>
+        ${opts.map((o,i)=>`<option value="${i}" ${req.line&&req.label===o.label?"selected":""}>${optLabelIn(o, obsU)}</option>`).join("")}
         <option value="MANUAL" ${req.manual?"selected":""}>${req.manual?`${reqCmp} ${obsU} — entered by hand`:"Entered by hand — type over the value"}</option>
       </select>
     </span>`;
@@ -7774,10 +7793,14 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
   /* Le minimum d'atterrissage s'écrit dans l'unité du relevé : sous EASA c'est
      une RVR en mètres, mais devant un METAR américain en milles terrestres c'est
      en milles qu'il se lit, et la saisie s'enregistre dans cette unité-là. */
+  /* La colonne en milles n'est pas une division : sous FAA c'est celle des
+     minima publiés, et à défaut la table RVR → visibilité, valeur immédiatement
+     supérieure (91.175(h)). Ailleurs, mètres et milles se convertissent. */
   const aUnit = a.unit || "m";
   const aDisp = visDispUnit(aUnit);
   const aReq = a.rvr==null ? null
-             : (aDisp===aUnit ? a.rvr : visFromM(visToM(a.rvr, aUnit), aDisp));
+             : aDisp===aUnit ? a.rvr
+             : (aDisp==="sm" && a.visSm!=null ? a.visSm : reqInUnit(a.rvr, aUnit, aDisp));
   const landVisCell = isToAlt ? "" : visReqCell({
           id:"appVisReqInput",
           req: aReq,
@@ -9126,8 +9149,8 @@ function mReqSelectHtml(r){
   return `<div class="m-req">
     <span>Required minimum — regulatory line</span>
     <select id="mReqSel" aria-label="Required take-off minimum">
-      <option value="DERIVED" ${req.derived?"selected":""}>${derivedOptLabel(mt)}</option>
-      ${opts.map((o,i)=>`<option value="${i}" ${req.line&&req.label===o.label?"selected":""}>${o.label}</option>`).join("")}
+      <option value="DERIVED" ${req.derived?"selected":""}>${optLabelIn({v:mt.required, unit:mt.unit, label:derivedOptLabel(mt)}, dispU)}</option>
+      ${opts.map((o,i)=>`<option value="${i}" ${req.line&&req.label===o.label?"selected":""}>${optLabelIn(o, dispU)}</option>`).join("")}
       <option value="MANUAL" ${req.manual?"selected":""}>Entered by hand</option>
     </select>
   </div>`
@@ -9251,7 +9274,8 @@ function mDetailHtml(tb, r){
   const mAUnit = a.unit || "m";
   const mADisp = visDispUnit(mAUnit);
   const mAReq = a.rvr==null ? null
-              : (mADisp===mAUnit ? a.rvr : visFromM(visToM(a.rvr, mAUnit), mADisp));
+              : mADisp===mAUnit ? a.rvr
+              : (mADisp==="sm" && a.visSm!=null ? a.visSm : reqInUnit(a.rvr, mAUnit, mADisp));
   const mVisFields = isDep ? "" : (tb.role==="TAKEOFF_ALTERNATE"
       ? mVisInputHtml("mToAltVisInput",
                       (r.planning && r.planning.visReq!=null) ? r.planning.visReq : null,
