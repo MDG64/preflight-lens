@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Minimas</title>
+<title>Minima</title>
 <meta name="theme-color" content="#0d1117">
-<meta name="apple-mobile-web-app-title" content="Minimas">
+<meta name="apple-mobile-web-app-title" content="Minima">
 <!-- MODULE de Preflight Lens (2026-08-28) : cette page est la copie déployée
      de « Minima Lens.html » (dépôt Weather Lens, où vivent le serveur local et
      le journal chiffré). Toute évolution se fait DANS LES DEUX fichiers — même
      règle de double livraison que la carte. Les écarts assumés entre les deux
      copies tiennent en trois points : polices -v3 « Preflight Mono » (les
      mêmes fichiers que l'hôte, conformes au Reserved Font Name de l'OFL),
-     identité visible « Minimas », lien retour relatif vers l'accueil.
+     identité visible « Minima », lien retour relatif vers l'accueil.
      La police est servie depuis le projet et non depuis un CDN — l'app doit
      démarrer hors ligne. Trois graisses seulement (400/500/600) : le 700 est
      synthétisé par le navigateur, comme dans l'app hôte. -->
@@ -2521,7 +2521,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
     <button class="help-x" id="helpClose" aria-label="Close">×</button>
     <div class="help-scroll">
       <h2 class="hd-title">How to use</h2>
-      <p class="hd-sub">Minimas compares a METAR and a TAF against the operating minima of each
+      <p class="hd-sub">Minima compares a METAR and a TAF against the operating minima of each
         phase of the flight, and says go, marginal or no go.</p>
 
       <div class="hd-warn">
@@ -2709,7 +2709,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
            d'entrée pour une question, une remarque ou un signalement. -->
       <div class="hd-sec">Questions or feedback</div>
       <p class="hd-p">A question, a remark, a value that looks wrong — write to
-        <a href="mailto:dev@feyndev.com?subject=Minimas">dev@feyndev.com</a>.</p>
+        <a href="mailto:dev@feyndev.com?subject=Minima">dev@feyndev.com</a>.</p>
     </div>
   </div>
 </div>
@@ -9456,7 +9456,7 @@ function mobileHeadHtml(){
   const favs = favList();
   return `
     <div class="m-top">
-      <span class="m-title">Minimas</span>
+      <span class="m-title">Minima</span>
       <button class="m-gear" id="mHome" aria-label="Home screen" title="Home screen">${HOME_ICON}</button>
       <button class="m-gear" id="mRtBtn" aria-label="Minima"
               title="Minima — the whole route at a glance">${RT_ICON}</button>
@@ -12799,7 +12799,7 @@ window.WXMAP = (() => {
     el.classList.add("open");
     /* Le panneau se pose sous le doigt qui vient de taper le point. Tant
        qu'il glisse, il ne prend aucun clic : sans ce délai, le geste
-       d'ouverture peut retomber sur « Open in Minima Lens » — qui referme la
+       d'ouverture peut retomber sur « Open in Minima » — qui referme la
        carte et renvoie à la page principale, alors qu'on venait juste de
        demander à voir le relevé. */
     el.style.pointerEvents = "none";
@@ -12820,7 +12820,7 @@ window.WXMAP = (() => {
         <div class="wxpop-sec"><div class="wxpop-lbl">TAF</div><div class="wxpop-raw">${taf}</div></div>
         ${sideRunwaysHtml(icao, s)}
         <div class="wxpop-sec" id="dwxSec" hidden></div>
-        <button class="btn sm wxpop-open" type="button">Open in Minimas</button>
+        <button class="btn sm wxpop-open" type="button">Open in Minima</button>
         <p class="wxside-hint">Swipe down to close.</p>`;
       fitSide();
       armOpenButton(body, icao);
