@@ -19758,6 +19758,10 @@ var MAX_PHRASE=4;
    surligné reste cliquable.
    ============================================================ */
 var HL_RWY_KEY=new Set(["RWY","RWYS","RUNWAY","RUNWAYS","QFU","THR","TDZ"]);
+/* Le mot « piste » se surligne lui-même, avec ou sans numéro derrière : c'est
+   déjà l'objet du NOTAM. THR, TDZ et QFU restent en dehors — eux désignent un
+   point de la piste, pas la piste, et seul leur chiffre s'allume. */
+var HL_RWY_WORD=new Set(["RWY","RWYS","RUNWAY","RUNWAYS"]);
 var HL_TWY_KEY=new Set(["TWY","TWYS","TAXIWAY","TAXIWAYS","TAXILANE","TAXILANES"]);
 /* Un nom de piste : 25, 25L, 07/25, 07L/25R, 04-22 — et 253 pour un QFU
    donné en degrés. Le tokenizer garde « / » et « - » collés : la paire
@@ -19820,7 +19824,10 @@ function hlMap(toks){
       if(j<toks.length&&toks[j].word&&HL_CAT_RE.test(toks[j].s.toUpperCase())){ hi[i]=true; hi[j]=true; i=j; }
       continue;
     }
-    if(HL_RWY_KEY.has(up)||HL_TWY_KEY.has(up)){ hlList(toks,hi,i,HL_TWY_KEY.has(up)); continue; }
+    if(HL_RWY_KEY.has(up)||HL_TWY_KEY.has(up)){
+      if(HL_RWY_WORD.has(up)) hi[i]=true;
+      hlList(toks,hi,i,HL_TWY_KEY.has(up)); continue;
+    }
     /* Une paire 07/25 se reconnaît sans mot-clé devant : le NOTAM la donne
        souvent seule (« 07/25 CLSD »). Deux caps liés par une barre, chacun
        entre 01 et 36 — un horaire (0700/1900) ou une plage de dates n'y
