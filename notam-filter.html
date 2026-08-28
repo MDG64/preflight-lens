@@ -22487,6 +22487,14 @@ window.addEventListener("scroll", hidePop, true);
       const TOUCH = new Map(), located = new Set();
       // CUTS : par NOTAM, la géométrie de découpe résolue (segment peint ou marqueurs)
       const CUTS = new Map();
+      /* BOUNDS : par NOTAM, les SURFACES qui bornent ses portions (« TWY W1 BTN
+         TWY LM AND L44 »). Elles ne sont ni peintes ni « touchées » — le
+         nettoyage des bornes les a retirées des refs, et c'est juste : le NOTAM
+         ne les vise pas, elles restent ouvertes. Mais ce sont elles qui disent
+         OÙ commence et finit le tronçon ; sans leurs noms, les marqueurs posés
+         sur l'hôte sont deux points sans légende. On les retient donc ici pour
+         que planDraw les NOMME, dans le gris neutre du décor. */
+      const BOUNDS = new Map();   // NOTAM -> Set(surfaces bornes)
       /* MISS : refs qu'un NOTAM NOMME mais qui n'existent pas dans le layout.
          On continue d'afficher le plan — un fond de carte incomplet vaut mieux
          qu'un écran vide — mais il faut le DIRE, et nommer les refs concernées :
@@ -22544,6 +22552,17 @@ window.addEventListener("scroll", hidePop, true);
           const hostHits = INDEX.get("twy:" + hostRef);
           const host = hostHits && hostHits[0];
           if (!host) continue;
+          // Les bornes retenues pour le NOM (cf. BOUNDS) : toutes les surfaces
+          // qui portent la ref, comme le fait TOUCH — un taxiway découpé en
+          // plusieurs tronçons dans OSM en compte plusieurs. L'hôte lui-même
+          // est exclu : une portion bornée par son propre hôte ne se nomme pas
+          // deux fois, et il a déjà son nom, en couleur.
+          for (const br of [rx, ry])
+            for (const bs of INDEX.get("twy:" + br) || []) {
+              if (bs === host) continue;
+              if (!BOUNDS.has(n)) BOUNDS.set(n, new Set());
+              BOUNDS.get(n).add(bs);
+            }
           const bx = REF.get(rx), by = REF.get(ry);
 
           /* Un taxiway peut être découpé en plusieurs tronçons disjoints portant
@@ -22669,7 +22688,7 @@ window.addEventListener("scroll", hidePop, true);
       }
       const main = [...comp.values()].sort((a, b) => b.length - a.length)[0] || SURF.map((_, i) => i);
 
-      return { layout, SURF, TOUCH, CUTS, ground, located, MISS, px,
+      return { layout, SURF, TOUCH, CUTS, BOUNDS, ground, located, MISS, px,
                B: box(SURF.map((_, i) => i)), Bfit: box(main),
                view: { k: 1, tx: 0, ty: 0 }, fit: { s: 1, ox: 0, oy: 0 }, sel: null };
     }
@@ -23788,7 +23807,21 @@ window.addEventListener("scroll", hidePop, true);
                (pas un simple avis) ET couvrir toute la période affichée —
                sinon rien n'est tracé, seul le nom de l'hôte passe en ambre. */
             const cfull = planKind(c.n) === "closed" && (!planTWin || planFullyCovers(c.n, planTWin));
-            if (!cfull) continue;
+            /* Portion qui ne se peint pas — restriction (envergure, type
+               d'appareil), ou fermeture qui ne couvre qu'une partie de la
+               période. Le TRAIT reste exclu, pour la raison dite plus haut :
+               peindre un tronçon pour « quelques heures » sur-alerte. Les
+               BORNES, elles, répondent à « où ? », et sans elles le nom ambre
+               de l'hôte accuse un taxiway entier quand le NOTAM n'en vise
+               qu'un tronçon. On pose donc les deux marqueurs, dans la couleur
+               de l'état et en retrait (dim), et rien d'autre.
+               Rien à poser quand aucune borne n'a été placée (cut.whole) : le
+               marqueur tomberait au milieu du taxiway, c'est-à-dire sur une
+               position inventée — le nom ambre suffit alors. */
+            if (!cfull) {
+              if (!c.cut.whole) for (const m of c.cut.marks) planMark(ctx, m, col, dim);
+              continue;
+            }
             const ccol = planPal().closed;
             if (c.cut.seg) {
               const pts = c.cut.seg.map(planSCp);
@@ -23807,8 +23840,12 @@ window.addEventListener("scroll", hidePop, true);
         }
         // au moins un NOTAM ferme l'entier -> comportement classique. Si la
         // surface n'est que restreinte (aucune fermeture, juste une partie de
-        // la journée), on ne trace rien : le nom en ambre porte le message.
-        if (st.kind === "restricted") continue;
+        // la journée), on ne trace rien : le nom en ambre porte le message —
+        // sauf les bornes des portions, même règle qu'au-dessus.
+        if (st.kind === "restricted") {
+          for (const c of cuts) if (!c.cut.whole) for (const m of c.cut.marks) planMark(ctx, m, col, dim);
+          continue;
+        }
         const wRef = s.t === "rwy" ? PLAN_W.rwy : PLAN_W.twy;
         for (const g of s.segs) planStroke(ctx, g, wRef, col, true, false);
         // et si en plus il y a des portions, leurs marqueurs restent utiles
@@ -23816,6 +23853,13 @@ window.addEventListener("scroll", hidePop, true);
       }
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
+      /* Les bornes des portions AFFICHÉES (cf. BOUNDS). Elles suivent le même
+         filtre que tout le reste — planShown() porte déjà la période ET la
+         portée « ce NOTAM », donc une borne ne s'écrit jamais pour un NOTAM
+         qu'on ne montre pas. */
+      const boundSurfs = new Set();
+      for (const [n, ss] of plan.BOUNDS)
+        if (planShown(n)) for (const s of ss) boundSurfs.add(s);
       /* LA PORTÉE VIT ICI, et nulle part ailleurs dans le rendu : elle décide
          quels ÉLÉMENTS SONT NOMMÉS. Le terrain reste dessiné en entier dans les
          trois modes — c'est le réseau par lequel on se rend jusqu'à la réponse,
@@ -23881,6 +23925,19 @@ window.addEventListener("scroll", hidePop, true);
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
       for (const s of lab) if (st_.get(s) && nameOK(s))
         planLabel(ctx, s.r, s.segs, labCol(s, st_.get(s)), labMode(s, st_.get(s)));
+
+      /* 1 bis. LES BORNES, juste derrière les éléments touchés. Deux marqueurs
+         sans légende ne disent pas où ils sont : le nom de la borne fait le
+         marqueur. Il s'écrit dans le GRIS neutre du décor — nommée, jamais mise
+         en cause : la borne reste ouverte — et en mode "plain", qui lui donne
+         les privilèges de PLACEMENT d'un élément touché (aucun seuil de zoom,
+         priorité dans l'anti-chevauchement, forçage en dernier recours) sans
+         lui donner sa couleur. La portée ne s'y applique pas : une borne n'est
+         pas une réponse de plus, c'est la légende de la réponse déjà affichée.
+         Une borne qui aurait par ailleurs SON propre NOTAM est déjà nommée
+         au-dessus, en couleur — st_ la retire d'ici. */
+      for (const s of lab) if (!st_.get(s) && boundSurfs.has(s))
+        planLabel(ctx, s.r, s.segs, P_.off, "plain");
 
       /* UN ÉLÉMENT TOUCHÉ SE NOMME, QUEL QUE SOIT LE ZOOM. C'est la règle qui
          gouverne les quatre familles d'étiquettes, et elle prime sur tous les
@@ -23969,7 +24026,7 @@ window.addEventListener("scroll", hidePop, true);
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
       // Ils ne s'écrivent qu'en portée 'all' — sauf une surface CITÉE par le
       // NOTAM ouvert, qui passe le seuil quoi qu'il arrive (cf. `focused`).
-      for (const s of lab) if (!st_.get(s) && nameOK(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
+      for (const s of lab) if (!st_.get(s) && !boundSurfs.has(s) && nameOK(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
         planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
       /* Postes SANS NOTAM : 130 à LFBO, 519 à LFPG. Ceux-là seulement gardent un
