@@ -4825,8 +4825,14 @@ function parseCommonBody(tokens, out, ref){
       let sp = parseInt(m[2],10), g = m[3]?parseInt(m[3],10):null;
       if (m[4]==="MPS"){ sp = Math.round(sp*1.94384); if(g) g = Math.round(g*1.94384); }
       if (m[4]==="KMH"){ sp = Math.round(sp*0.539957); if(g) g = Math.round(g*0.539957); }
+      /* Les nœuds servent au calcul — les limites de l'AFM sont en nœuds —, mais
+         la force ANNONCÉE est gardée telle quelle : un METAR russe ou chinois
+         la donne en mètres par seconde, et l'écran doit pouvoir la redire comme
+         le message l'écrit. */
       out.wind = {direction_deg: (m[1]==="VRB"||m[1]==="///")?null:parseInt(m[1],10),
-                  speed_kt: sp, gust_kt: g, variable: m[1]==="VRB"};
+                  speed_kt: sp, gust_kt: g, variable: m[1]==="VRB",
+                  unit: m[4], speed_rep: parseInt(m[2],10),
+                  gust_rep: m[3]?parseInt(m[3],10):null};
       continue;
     }
     if (/^\d{3}V\d{3}$/.test(tok)){
@@ -7100,11 +7106,27 @@ function refreshAutoQfus(results){
   return changed;
 }
 
+/* La force du vent telle que le MESSAGE l'écrit. « 24007G12MPS » annonce 12,
+   et l'app affichait 23 kt : le chiffre lu à l'écran ne se retrouvait nulle
+   part dans le relevé. Les COMPOSANTES, elles, restent en nœuds — ni le
+   traversier ni la limite de l'AFM ne figurent dans un METAR, et c'est le
+   manuel de vol qui donne l'unité de cette comparaison-là. */
+const WIND_LAB = {MPS:"MPS", KMH:"KMH", KT:"kt"};
+function windRep(w, kt){
+  if (!w || kt==null) return {v:null, u:"kt"};
+  const u = w.unit || "KT";
+  if (u==="KT") return {v:Math.round(kt), u:"kt"};
+  if (w.gust_rep!=null && kt===w.gust_kt)  return {v:w.gust_rep,  u:WIND_LAB[u]||u};
+  if (w.speed_rep!=null && kt===w.speed_kt) return {v:w.speed_rep, u:WIND_LAB[u]||u};
+  const f = u==="MPS" ? 1.94384 : 0.539957;
+  return {v:Math.round(kt/f), u:WIND_LAB[u]||u};
+}
+
 /* Une manche à air donne le vent total (elle s'oriente dans le sens où le vent
    souffle) ; deux flèches donnent les composantes : traversier à l'horizontale,
    face/arrière à la verticale. Les deux flèches partagent la même échelle
    px/kt, donc leur équerre reproduit le vecteur vent réel. */
-function windsockSvg(x, y, rel, speed, dirDeg){
+function windsockSvg(x, y, rel, speed, dirDeg, wind){
   const a = (rel + 90).toFixed(1);           // +x local → sens où souffle le vent
   const L = 40, r0 = 10, r1 = 4;             // longueur, rayon bouche, rayon queue — le cône reste à droite, hors de la piste
   const band = L/5;
@@ -7119,7 +7141,8 @@ function windsockSvg(x, y, rel, speed, dirDeg){
      portée du cône (L=40 autour du pivot) — plein sud, il descendait jusqu'à
      y+40 et touchait un chiffre posé à y+46. */
   const dirTxt = dirDeg!=null ? `${String(Math.round(dirDeg)).padStart(3,"0")}°` : "";
-  const windTxt = `${dirTxt}/${speed!=null?String(Math.round(speed)).padStart(2,"0"):"--"} kt`;
+  const rep = windRep(wind, speed);
+  const windTxt = `${dirTxt}/${rep.v!=null?String(rep.v).padStart(2,"0"):"--"} ${rep.u}`;
   return `
     <g>
       <line x1="${x}" y1="${y}" x2="${x}" y2="${y+26}" stroke="var(--steel-dim)" stroke-width="2.4"/>
@@ -7167,13 +7190,13 @@ function runwaySvg(qfu, wind, comp, spdUsed){
      pointe plein nord, et son chiffre — désormais à pivot+60 — s'arrête
      au-dessus de la zone des flèches de composantes (la pointe d'une flèche
      arrière peut monter jusqu'à oy-52, soit cy-40). */
-  const sock = hasDir ? windsockSvg(cx+94, cy-104, rel, spd, wind.direction_deg)
+  const sock = hasDir ? windsockSvg(cx+94, cy-104, rel, spd, wind.direction_deg, wind)
     : (wind && spd!=null ? `
     <g>
       <line x1="${cx+94}" y1="${cy-92}" x2="${cx+94}" y2="${cy-66}" stroke="var(--steel-dim)" stroke-width="2.4"/>
       <circle cx="${cx+94}" cy="${cy-66}" r="3" fill="var(--steel-dim)"/>
       <text x="${cx+94}" y="${cy-46}" text-anchor="middle" font-family="'Preflight Mono', ui-monospace, monospace"
-            font-size="15" font-weight="700" fill="var(--amber)">${wind.variable?"VRB":"DIR ?"}/${String(Math.round(spd)).padStart(2,"0")} kt</text>
+            font-size="15" font-weight="700" fill="var(--amber)">${wind.variable?"VRB":"DIR ?"}/${String(windRep(wind, spd).v).padStart(2,"0")} ${windRep(wind, spd).u}</text>
     </g>` : "");
 
   let comps = "";
@@ -8401,7 +8424,7 @@ function renderStage(tab, r){
 
   const cmpNote = wind
     ? (wind.gust_kt
-        ? `Components computed from the reported gust (${wind.gust_kt} kt) — a gust exceeding a limit is fully applicable.`
+        ? `Components computed from the reported gust (${windRep(wind, wind.gust_kt).v} ${windRep(wind, wind.gust_kt).u}) — a gust exceeding a limit is fully applicable.`
         : "Components computed from the mean wind (no gust reported).")
     : "No wind in the report.";
 
@@ -10857,7 +10880,8 @@ function favWxWindTxt(w){
   const dir = w.variable ? "VRB" : (w.direction_deg!=null ? String(w.direction_deg).padStart(3,"0")+"°" : "—");
   /* Barre oblique entre le d'où et le combien : sans étiquette devant, c'est
      elle qui sépare les deux nombres du vent au premier coup d'œil. */
-  return `${dir}/${w.speed_kt}${w.gust_kt ? "G"+w.gust_kt : ""} kt`;
+  const sp = windRep(w, w.speed_kt), gu = w.gust_kt!=null ? windRep(w, w.gust_kt) : null;
+  return `${dir}/${sp.v}${gu ? "G"+gu.v : ""} ${sp.u}`;
 }
 /* Le « plafond » du résumé : la couche BKN la plus basse (OVC et VV comptent —
    plus couvert que BKN), sinon la SCT la plus basse, sinon la FEW. */
