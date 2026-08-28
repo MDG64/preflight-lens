@@ -4939,33 +4939,23 @@ body.light .stat.on {
        La regle .hc-icon (contain + degrade argent/bleu de nuit) qui portait
        l'ancien dessin n'a plus d'image a habiller : elle est retiree. */
 
-    /* La carte tient la ligne du dessous à elle seule, mais garde la taille
-       exacte d'une des deux cases du haut : elle prend la largeur d'une
-       colonne (moitié de la grille, moins la moitié de la gouttière) et se
-       centre entre les deux. */
-    .home-card-wide {
-      grid-column: 1 / -1;
-      justify-self: center;
-      width: calc(50% - 7px)
-    }
+    /* Quatre cases depuis l'arrivée de MINIMAS (28 aout 2026) : le carré
+       2 x 2 remplace « Map seule en bas » — la règle -wide qui centrait la
+       carte sur sa ligne est partie avec son cas d'usage, chaque case a la
+       taille de toutes les autres. */
 
-    /* ---------- version tablette : les trois cases sur UNE ligne ----------
-       Des que la page atteint sa largeur pleine (560 px), Weather, NOTAM et
-       Map se lisent de gauche a droite, dans l'ordre ou on les ouvre. Chacune
-       prend le TIERS exact de la grille et sa vignette remplit sa colonne :
-       la bande des trois images se cale au pixel sur la ligne des codes et sur
-       la case des favoris, au-dessus — une seule largeur pour toute la page.
-       Le telephone garde ses deux colonnes et Map centree dessous : a moins de
-       560 px, trois vignettes cote a cote seraient des timbres. */
+    /* ---------- version tablette : les quatre cases sur UNE ligne ----------
+       Des que la page atteint sa largeur pleine (560 px), Weather, NOTAM,
+       Map et Minimas se lisent de gauche a droite, dans l'ordre ou on les
+       ouvre. Chacune prend le QUART exact de la grille et sa vignette remplit
+       sa colonne : la bande des images se cale au pixel sur la ligne des
+       codes et sur la case des favoris, au-dessus — une seule largeur pour
+       toute la page. Le telephone garde ses deux colonnes, deux cases par
+       ligne : a moins de 560 px, quatre vignettes cote a cote seraient des
+       timbres. */
     @media (min-width: 560px) {
       .home-cards {
-        grid-template-columns: repeat(3, 1fr)
-      }
-
-      .home-card-wide {
-        grid-column: auto;
-        justify-self: stretch;
-        width: auto
+        grid-template-columns: repeat(4, 1fr)
       }
 
       .home-card img {
@@ -6110,19 +6100,31 @@ body .stat .k{
           <span class="hc-sub">FILTERS</span>
         </button>
         <!-- La carte a quitté le bandeau du haut pour rejoindre ses deux
-             sœurs : même geste, même taille de cible. Elle tient la ligne
-             entière sous WEATHER et NOTAM. -->
+             sœurs : même geste, même taille de cible. Depuis l'arrivée de
+             MINIMAS (28 aout 2026), elle ne tient plus la ligne du bas à
+             elle seule : quatre cases, carré 2 x 2 sur téléphone. -->
         <!-- Photo v3 (27 aout 2026) : la carte de l'app elle-meme, golfe de
              Gascogne, plutot que la photo de carte papier au pion jaune. Prise
              LARGE puis recadree carre sur toute la hauteur — un cadrage serre
              coupait les etiquettes et ne laissait voir que trois terrains.
              Meme gabarit que ses deux soeurs : 768 x 768. -->
-        <button class="home-card home-card-wide" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
+        <button class="home-card" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
           <img src="./home-map-v3.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Map</span>
           <!-- Ligne vide : la case n'a pas de sous-titre à dire, mais elle
                doit faire la hauteur exacte des deux autres. -->
           <span class="hc-sub" aria-hidden="true">&nbsp;</span>
+        </button>
+        <!-- MINIMAS (28 aout 2026) : le module minima entre à l'accueil —
+             la page ./minima.html est la copie déployée de Minima Lens.
+             Photo v1 : approche de nuit dans la brume, la rampe au centre du
+             cliché — le recadrage carré d'object-fit garde l'axe de piste.
+             La case part avec la route saisie ci-dessus dans l'adresse
+             (?dep&dest&altn) : le contrat d'entrée documenté de la page. -->
+        <button class="home-card" id="homeMinimaCard" aria-label="Minimas — compare METAR and TAF with the aerodrome minima of the route typed">
+          <img src="./home-minima-v1.jpg" alt="" aria-hidden="true" decoding="async">
+          <span class="hc-name">Minimas</span>
+          <span class="hc-sub">DA/DH · RVR</span>
         </button>
       </div>
     </div>
@@ -20184,6 +20186,18 @@ window.addEventListener("scroll", hidePop, true);
       openMapOverlay(codes.length ? codes[0].icao : null, "wx");
     }
     $("#homeMapCard").onclick = openHomeMap;
+
+    // Minimas : la même route que ses sœurs, mais portée par l'adresse — le
+    // contrat d'entrée documenté de minima.html (?dep&dest&altn ouvre le
+    // bilan de vol de lui-même). Les cases vides sont sautées ; sans aucun
+    // code, la page s'ouvre nue, sur la dernière route qu'elle a retenue.
+    $("#homeMinimaCard").onclick = () => {
+      const q = new URLSearchParams();
+      const param = { dep: "dep", arr: "dest", alt: "altn" };
+      for (const c of homeRouteCodes()) q.set(param[c.role], c.icao);
+      const qs = q.toString();
+      window.location.href = "./minima.html" + (qs ? "?" + qs : "");
+    };
 
     /* ============================================================
        PAGE WEATHER — METAR + TAF du terrain, via le proxy (l'AWC

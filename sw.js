@@ -36,10 +36,16 @@ const ASSETS = [
   // respecter et restent en v4.
   "./icons/icon-192-v4.png", "./icons/icon-512-v4.png", "./icons/icon-maskable-192-v5.png", "./icons/icon-maskable-512-v5.png",
   "./icons/icon-180-v4.png", "./icons/favicon-32-v3.png", "./icons/favicon-16-v3.png", "./favicon.ico",
-  // Photos des trois cases d'accueil (19 aout 2026). Meme regle que les icones :
+  // Photos des cases d'accueil (19 aout 2026). Meme regle que les icones :
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
   // refonte d'image change le suffixe, on n'ecrase jamais en place.
-  "./home-wx-v8.jpg", "./home-notam-v10.jpg", "./home-map-v3.jpg",
+  "./home-wx-v8.jpg", "./home-notam-v10.jpg", "./home-map-v3.jpg", "./home-minima-v1.jpg",
+  // MINIMAS (28 aout 2026) : le module minima (copie déployée de Minima Lens)
+  // et ses deux bases embarquées — la page doit s'ouvrir en vol, comme l'hôte.
+  // Les bases se régénèrent (recompilation du seed, fiches d'approche) : la
+  // règle 3 les sert « réseau d'abord », comme l'annuaire — le pré-cache ne
+  // fige rien, il garantit seulement le premier lancement hors ligne.
+  "./minima.html", "./airfield-seed.js", "./aircraft-db.js",
   // Polices auto-hébergées (2026-08-06, retrait de Google Fonts). Pré-cache
   // OBLIGATOIRE : la règle 6 les sert « cache d'abord » mais ne dépose jamais
   // rien — sans cette liste, la typo tomberait en police système hors ligne.
@@ -120,11 +126,13 @@ self.addEventListener("fetch", e => {
   }
 
   // 3) Plans de plateforme (layouts/*.json), frontières/fermetures FIR
-  //    (fir/*.json) et annuaire OACI/IATA de fiches.html
-  //    (annuaire-terrains.js, régénéré de temps en temps) : réseau d'abord
-  //    ET mise en cache. Consultable EN VOL, sans connexion — tout en se
-  //    rafraîchissant dès qu'on est en ligne.
-  if (url.includes("/layouts/") || url.includes("/fir/") || url.includes("annuaire-terrains")) {
+  //    (fir/*.json), annuaire OACI/IATA de fiches.html
+  //    (annuaire-terrains.js, régénéré de temps en temps) et bases du module
+  //    MINIMAS (airfield-seed.js recompilé depuis aero-db, aircraft-db.js) :
+  //    réseau d'abord ET mise en cache. Consultable EN VOL, sans connexion —
+  //    tout en se rafraîchissant dès qu'on est en ligne.
+  if (url.includes("/layouts/") || url.includes("/fir/") || url.includes("annuaire-terrains") ||
+      url.includes("airfield-seed") || url.includes("aircraft-db")) {
     e.respondWith(
       fetch(e.request).then(r => {
         if (r && r.ok) {
