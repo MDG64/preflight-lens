@@ -4109,9 +4109,10 @@ function nfAny(icao){
    échec réseau garde les derniers drapeaux connus et le dit dans le bandeau.
      Granularité (v2, 2026-08-28 soir) : ILS et rampe PAR EXTRÉMITÉ — un ILS
    27L HS n'écarte les lignes ILS que du QFU 27L, le 09R garde les siennes.
-   L'extrémité vient des refs « RWY nn » du texte (nfaEndsFor) ; sans ref
-   lisible, toutes les extrémités — le repli conservatif. Fermeture par
-   PAIRE : une surface fermée l'est dans les deux sens. */
+   L'extrémité vient des refs « RWY nn » du texte (nfaEndsFor) — celles de
+   la phrase qui porte le mot de panne d'abord, les refs de contexte en
+   repli ; sans ref lisible, toutes les extrémités — le repli conservatif.
+   Fermeture par PAIRE : une surface fermée l'est dans les deux sens. */
 const NFA_OUT_CONDS = ["LC","AS","AU","LD","AW","LP"];
 const NFA_ILS_SUBJ = ["IC","ID","IG","IL","IS","IT","IU","IW"];
 const NFA_ALS_SUBJ = ["LA"];
@@ -4217,16 +4218,30 @@ function nfaPairsOf(icao, ids){
 }
 
 /* Les extrémités visées par un NOTAM d'équipement : les refs « RWY nn » de
-   son texte, croisées avec les extrémités connues du terrain. Aucune ref, ou
-   aucune qui colle (fiche désaccordée) : TOUTES les extrémités — le repli
-   conservatif, qui est l'ancien comportement terrain entier. */
+   son texte, croisées avec les extrémités connues du terrain. Les refs de la
+   PHRASE qui porte le mot de panne priment : dans « WORKS TO REPLACE ILS
+   RWY 17 AND ILS RWY 35. PHASE 3: ILS RWY 35 U/S », la 17 n'est que le
+   contexte des travaux, seule la 35 tombe. Sans phrase concluante — panne
+   dite par la seule Q-line, ref et mot séparés par un point — toutes les
+   refs du texte ; aucune ref, ou aucune qui colle (fiche désaccordée) :
+   TOUTES les extrémités — le repli conservatif, l'ancien comportement
+   terrain entier. */
 function nfaEndsFor(icao, T){
-  NFA_RWY_REF_RE.lastIndex = 0;
-  const refs = [];
-  let m;
-  while ((m = NFA_RWY_REF_RE.exec(T))){ refs.push(m[1]); if (m[2]) refs.push(m[2]); }
+  const refsIn = s => {
+    NFA_RWY_REF_RE.lastIndex = 0;
+    const refs = [];
+    let m;
+    while ((m = NFA_RWY_REF_RE.exec(s))){ refs.push(m[1]); if (m[2]) refs.push(m[2]); }
+    return refs;
+  };
   const ends = nfEndsOf(icao);
-  const hit = ends.filter(en => refs.indexOf(en) >= 0);
+  const near = [];
+  for (const seg of String(T).split(/[.;]\s+/)){
+    if (NFA_CLOSED_WORDS.some(w => seg.includes(w)) || NFA_OTS_RE.test(seg)) near.push(...refsIn(seg));
+  }
+  let hit = ends.filter(en => near.indexOf(en) >= 0);
+  if (hit.length) return hit;
+  hit = ends.filter(en => refsIn(T).indexOf(en) >= 0);
   return hit.length ? hit : ends;
 }
 
