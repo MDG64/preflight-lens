@@ -2596,6 +2596,13 @@ body.mobile #rtOv:not([hidden]){display:flex}
         it: <b>runways and QFU</b>, magnetic variation, lengths, <b>approach and runway lighting</b>, then the
         <b>approaches and their minima</b>. Picking a runway end applies its lighting class by itself — one column
         of Table 9 is worth 100 to 200 m of RVR.</p>
+      <p class="hd-p">The runway end is <b>picked for you, phase by phase</b>, in that order: the <b>ILS</b>
+        runway as long as it takes <b>no more than 5 kt of tailwind</b>; otherwise a runway with a published
+        <b>approach</b> giving <b>at least 6 kt of headwind</b>; and, if the minima do not allow landing there,
+        back to the <b>ILS</b> runway with <b>up to 10 kt of tailwind</b>. A card is only taken if the wind stays
+        within the aircraft limits and the minima let you land on <b>that</b> end. NOTAMs are already in the sort:
+        a closed runway is out, an unserviceable ILS is no longer an ILS. Take-off has no approach — it keeps the
+        best card, then the strongest headwind. <b>Press a card</b> and your choice holds for all five phases.</p>
       <div class="hd-row">
         <div class="hd-vis"><span class="hd-badge cht">chart</span></div>
         <div class="hd-arr">→</div>
@@ -6814,32 +6821,97 @@ function commonQfu(){
   return qs.every(q=>q.pair===qs[0].pair && q.idx===qs[0].idx) ? qs[0] : null;
 }
 
-/* Le défaut d'une phase : d'abord le pouce de la carte pour CETTE phase — vert,
-   puis orange, puis rouge — ensuite le vent de face le plus élevé, et le
-   traversier le plus faible pour départager. Sans direction au report (VRB), le
-   vent ne départage rien : le premier QFU du meilleur rang l'emporte. Les paires
-   fermées par NOTAM sont écartées tant qu'il en reste une ouverte. */
+/* ---------- l'ordre de priorité des pistes ----------
+   Le défaut d'une phase d'ATTERRISSAGE suit la règle d'exploitation, dans son
+   ordre :
+
+     1. la piste ILS, tant qu'elle ne rend pas plus de 5 kt de vent arrière ;
+     2. sinon une piste dont la fiche publie une approche et qui rend au moins
+        6 kt de vent de face — le miroir exact de la borne du dessus : passé
+        5 kt d'arrière sur l'ILS, l'autre bout en rend autant de face ;
+     3. si les minima n'y laissent pas se poser, retour à la piste ILS, cette
+        fois jusqu'à 10 kt de vent arrière — l'aide à l'approche vaut mieux
+        qu'un vent de face sur une piste où l'on ne descendra pas ;
+     4. à défaut, le classement de secours : le pouce de la carte pour CETTE
+        phase — vert, puis orange, puis rouge — ensuite le vent de face le plus
+        élevé, et le traversier le plus faible pour départager.
+
+   Un candidat n'entre dans un rang que si le vent tient dans les limites de
+   l'avion ET si les minima de CETTE extrémité laissent se poser. Un rang sans
+   candidat est vide et l'on descend au suivant : c'est ce qui fait passer du
+   rang 1 au rang 3 quand la météo ferme la piste au vent de face.
+
+   Les NOTAM sont déjà dans le tri, sans rien y ajouter : une paire fermée est
+   écartée tant qu'il en reste une ouverte, un ILS HS n'est plus un ILS, et une
+   approche retirée avec lui ne compte plus comme approche publiée.
+
+   Le décollage n'a pas d'approche : il garde le classement de secours seul.
+   Sans direction au report (VRB, pas de METAR), le vent ne départage rien — ni
+   face ni arrière — et la règle retombe sur l'ILS. */
 const QFU_RANK = {go:0, marginal:1, unknown:2, nogo:3};
+/* Une extrémité « ILS », c'est la précision de l'ILS, pas son axe : le LOC seul
+   n'en est pas une. */
+const QFU_ILS_TYPES = ["CAT_III","CAT_II","CAT_I"];
+function endApproaches(icao, end){
+  return dbApproachesFor(icao, end).filter(t=>!nfApproachOut(icao, end, t));
+}
+const endHasIls = (icao, end)=>endApproaches(icao, end).some(t=>QFU_ILS_TYPES.includes(t));
+const endHasApp = (icao, end)=>endApproaches(icao, end).length > 0;
+
+/* Sonder une extrémité : le moteur rappelé sur ELLE, et non sur celle qui est
+   sélectionnée. Sans ça, « les minima permettent-ils de se poser au 30 ? » se
+   lirait sur les verdicts du 12, et le rang 3 ne se déclencherait jamais.
+   Mémorisé le temps d'un cycle d'évaluation (assessAll vide le cache) : les
+   cinq phases et leurs trois tours ne paient chaque extrémité qu'une fois. */
+const qfuProbe = new Map();
+function probeTab(tb, q){
+  const key = tb.role + "|" + currentIcao() + "|" + q.pair + "|" + q.id;
+  if (qfuProbe.has(key)) return qfuProbe.get(key);
+  syncLightingFromDb(q); syncPlanningFromDb(q);
+  let out;
+  try { out = assess(roleFor(tb), contextFor(tb, q)); }
+  catch(e){ out = {overall:"UNKNOWN", verdicts:[], warnings:[]}; }
+  qfuProbe.set(key, out);
+  return out;
+}
+
 function autoQfuForTab(tb, r, wind){
   const icao = currentIcao();
   const pairs = runwayList(icao);
   const open = pairs.filter(p=>!nfRwyClosed(icao, p));
   const pick = open.length ? open : pairs;
   const speed = wind ? (wind.gust_kt || wind.speed_kt) : null;   // la rafale gouverne toujours
-  let best = null;
+  const cands = [];
   pick.forEach(p=>qfusOf(p).forEach((qq,idx)=>{
     const q = {...qq, pair:p};
     const c = wind ? windComponents(q.deg, wind.direction_deg, speed) : null;
-    const cand = {pair:p, idx, rank:QFU_RANK[qfuTabState(q, wind, tb, r)] ?? 2,
-                  head:c?c.head:null, cross:c?c.cross:null};
-    if (!best){ best = cand; return; }
-    if (cand.rank !== best.rank){ if (cand.rank < best.rank) best = cand; return; }
-    if (cand.head!=null && best.head!=null && cand.head !== best.head){
-      if (cand.head > best.head) best = cand; return;
-    }
-    if (cand.cross!=null && best.cross!=null && cand.cross < best.cross) best = cand;
+    const pr = probeTab(tb, q);
+    cands.push({q, pair:p, idx, rank:QFU_RANK[qfuTabState(q, wind, tb, pr)] ?? 2,
+                head:c?c.head:null, cross:c?c.cross:null,
+                tail:c?-c.head:0, hw:c?c.head:0,
+                land:mVisInfo(tb, pr, q).st!=="nogo",
+                windOk:qfuWindState(q.deg, wind).st!=="nogo"});
   }));
-  return best ? {pair:best.pair, idx:best.idx} : null;
+  if (!cands.length) return null;
+  /* Le départage, commun à tous les rangs. */
+  const better = (c, b)=>{
+    if (c.rank !== b.rank) return c.rank < b.rank;
+    if (c.head!=null && b.head!=null && c.head !== b.head) return c.head > b.head;
+    if (c.cross!=null && b.cross!=null) return c.cross < b.cross;
+    return false;
+  };
+  const bestOf = list=>list.reduce((b,c)=>(b===null || better(c,b)) ? c : b, null);
+  const out = c=>({pair:c.pair, idx:c.idx});
+  const fallback = bestOf(cands);
+  if (tb.role==="DEPARTURE") return out(fallback);
+  const usable = cands.filter(c=>c.windOk && c.land);
+  const tiers = [
+    usable.filter(c=>endHasIls(icao, c.q.id) && c.tail <= 5),
+    usable.filter(c=>endHasApp(icao, c.q.id) && c.hw >= 6),
+    usable.filter(c=>endHasIls(icao, c.q.id) && c.tail <= 10)
+  ];
+  for (const t of tiers){ const b = bestOf(t); if (b) return out(b); }
+  return out(fallback);
 }
 /* Repose les défauts d'après les verdicts qu'on vient de calculer, et dit si
    quelque chose a bougé — auquel cas les verdicts sont à refaire, le QFU étant
@@ -7785,8 +7857,11 @@ function clockRefresh(pop){
   rd[0].textContent = pad2(CLOCK.h); rd[1].textContent = pad2(CLOCK.m);
 }
 
-function contextFor(tab){
-  const q = qfuForRole(tab.role);
+/* `qOpt` : juger une phase pour un QFU DONNE plutot que pour le sien — c'est
+   ce qui permet au choix automatique de sonder chaque extremite avant d'en
+   retenir une. Voir probeTab. */
+function contextFor(tab, qOpt){
+  const q = qOpt!==undefined ? qOpt : qfuForRole(tab.role);
   const pair = q ? q.pair : state.runway;
   const icao = currentIcao();
   return {cfg, metar:state.metar, taf:state.taf, qfu:q?q.deg:null,
@@ -7806,6 +7881,7 @@ function contextFor(tab){
    entrée du moteur, et le moteur décide du QFU : trois tours suffisent
    largement à se poser, et bornent le cas pathologique. */
 function assessAll(){
+  qfuProbe.clear();
   const evalTabs = ()=>TABS.map(tb=>{
     const q = qfuForRole(tb.role);
     syncLightingFromDb(q);
@@ -8630,8 +8706,8 @@ setInterval(renderMetarAge, 30000);
    fiche verticale : heure modifiable au cadran, METAR/TAF, et une ligne
    par phase — comparaisons vis/RVR et vent, pouce de verdict. Tout le
    moteur (assess, parseurs, cadran) est réutilisé tel quel ; seul le
-   rendu diffère. Le QFU est choisi automatiquement : celui qui minimise
-   le vent arrière puis le traversier.
+   rendu diffère. Le QFU est choisi automatiquement, dans l'ordre de
+   priorité des pistes — voir autoQfuForTab.
    ===================================================================== */
 const GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -8695,8 +8771,8 @@ function mobileTimeDate(){
 const mTimeLabel = ()=>{ const d = mobileTimeDate(); return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}Z`; };
 
 /* Le QFU par défaut ne se pose plus une fois pour toutes, et plus seulement sur
-   mobile : refreshAutoQfus en choisit un POUR CHAQUE PHASE à chaque rendu — le
-   pouce de la carte d'abord, le vent de face ensuite. Voir qfuForRole. */
+   mobile : refreshAutoQfus en choisit un POUR CHAQUE PHASE à chaque rendu —
+   l'ILS d'abord, le vent de face ensuite. Voir autoQfuForTab. */
 
 /* `mobileMode` retient la mise en page posée, pas la media query : la fonction
    est appelée à chaque pixel de redimensionnement, et reconstruire l'écran à
