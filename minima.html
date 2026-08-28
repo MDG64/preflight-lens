@@ -3373,24 +3373,38 @@ function adSaveDb(){
 }
 function adSaveStats(){ try { localStorage.setItem(AD_STATS_KEY, JSON.stringify(adStats)); } catch(e){} }
 
-/* ---------- journal chiffré sur disque ----------
+/* ---------- journal chiffré, partagé entre les appareils ----------
    Le localStorage ne survit ni à un nettoyage du navigateur, ni à un changement
    d'origine (file:// → localhost) : une saisie faite en vol n'a donc de valeur
-   durable que si elle sort d'ici. Le serveur local tient pour ça un journal en
-   ajout seul, chiffré et signé (server/minima-journal.js) ; le stockage local
-   reste le cache — c'est lui qui fait voler l'app sans serveur.
-   Rien ne change quand le serveur est absent : on empile dans une file
+   durable que si elle sort d'ici. Le journal chiffré en ajout seul tient ce
+   rôle — et depuis le backend minimas (2026-08-28), il vit sur le backend
+   commun des deux apps (notam-proxy, Railway) : c'est lui qui fait circuler la
+   base entre les appareils — PC, téléphone, tablette. Le serveur local de
+   Weather Lens garde sa copie du module (server/minima-journal.js) pour le
+   développement : `window.WL_MJ_BASE` y ramène le journal, même motif que
+   WL_API_BASE pour la météo. Le stockage local reste le cache — c'est lui qui
+   fait voler l'app sans réseau.
+   Rien ne change quand le serveur est injoignable : on empile dans une file
    d'attente, qui repart à la première occasion. Le renvoi d'un lot déjà écrit
    est sans effet, le serveur reconnaissant ses propres enregistrements. */
-const MJ_URL = "/api/minima";
+const MJ_BASE = window.WL_MJ_BASE || "https://notam-proxy-production.up.railway.app";
+const MJ_URL = MJ_BASE + "/api/minima";
 const MJ_OUTBOX_KEY = "wl-minima-outbox";
-/* Ouverte en file://, la page n'a pas de serveur à qui parler — et un fetch
-   relatif y échouerait à chaque saisie. Le journal est alors annoncé absent,
-   pas silencieusement en panne. */
-const mjOn = /^https?:$/.test(location.protocol);
+/* Code propriétaire (cahier des charges : seul le propriétaire s'authentifie).
+   Saisi une fois par appareil, gardé ici, envoyé en en-tête — jamais dans
+   l'URL. Sans lui, le serveur admet la saisie mais la rétrograde en
+   communautaire : elle ne peut pas devenir « verified » pour les autres
+   appareils. */
+const MJ_OWNER_KEY = "wl-minima-owner-code";
+let mjOwnerCode = "";
+try { mjOwnerCode = localStorage.getItem(MJ_OWNER_KEY) || ""; } catch(e){}
+/* Le journal étant sur une adresse absolue, une page ouverte en file:// peut
+   l'atteindre aussi — le backend admet l'origine « null » des pages locales,
+   comme pour la météo. */
+const mjOn = /^(https?|file):$/.test(location.protocol);
 let mjOutbox = [];
 try { const a = JSON.parse(localStorage.getItem(MJ_OUTBOX_KEY)||"[]"); if (Array.isArray(a)) mjOutbox = a; } catch(e){}
-let mjState = {mode: mjOn ? "idle" : "off", at:0, journal:null, err:null};
+let mjState = {mode: mjOn ? "idle" : "off", at:0, journal:null, owner:null, err:null};
 let mjTimer = null, mjSending = false, mjRetry = null;
 const mjDirty = new Set(); // terrains dont la fiche a changé, à envoyer au prochain enregistrement
 
@@ -3423,7 +3437,8 @@ async function mjFlush(){
   mjSending = true;
   const batch = mjOutbox.slice(0, 2000);
   try {
-    const r = await fetch(MJ_URL, {method:"POST", headers:{"Content-Type":"application/json"},
+    const r = await fetch(MJ_URL, {method:"POST", headers:{"Content-Type":"application/json",
+                                  ...(mjOwnerCode ? {"X-Minima-Owner": mjOwnerCode} : {})},
                                   body: JSON.stringify({records: batch})});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const out = await r.json();
@@ -3431,7 +3446,8 @@ async function mjFlush(){
        pendant la requête doit rester à envoyer. */
     mjOutbox.splice(0, batch.length);
     mjSaveOutbox();
-    mjState = {mode:"ok", at: Date.now(), journal: out.journal || null, err:null};
+    mjState = {mode:"ok", at: Date.now(), journal: out.journal || null,
+               owner: typeof out.owner === "boolean" ? out.owner : null, err:null};
     if (mjOutbox.length) setTimeout(mjFlush, 0); // il en reste : on enchaîne
     else if (mjRetry){ clearInterval(mjRetry); mjRetry = null; }
   } catch(err){
@@ -8244,10 +8260,11 @@ function setState(msg, cls){
    téléchargement mondial à payer à chaque démarrage du PC, les relevés
    tombent dès l'ouverture. C'est aussi le backend qu'aura l'app des stores,
    qui réunira les deux applications.
-   Le serveur local (server/) reste la porte de la page et du journal des
-   minimas — MJ_URL, en adresse relative, continue de le viser — et garde son
+   Le serveur local (server/) reste la porte de la page et garde son
    moteur météo complet derrière WL_INGEST=1 : pour développer hors ligne,
-   `window.WL_API_BASE` ramène les relevés dessus (http://localhost:8742). */
+   `window.WL_API_BASE` ramène les relevés dessus (http://localhost:8742).
+   Le journal des minimas a suivi le même chemin le 2026-08-28 — voir MJ_BASE
+   plus haut, et WL_MJ_BASE pour le ramener en local. */
 const WX_API = window.WL_API_BASE
   || "https://notam-proxy-production.up.railway.app";
 
@@ -9571,9 +9588,12 @@ function adToolsHtml(){
     <button class="btn sm" data-ad="export"${(nf||ns)?"":" disabled"}>Export JSON</button>
     <button class="btn sm" data-ad="import">Import JSON…</button>
     ${(mjState.mode!=="off" && (nf||ns)) ? `<button class="btn sm" data-ad="journalPush">Write all to journal</button>` : ""}
+    ${mjState.mode!=="off" ? `<button class="btn sm" data-ad="ownerCode" title="${mjOwnerCode
+        ? "Owner code set — your entries are written to the shared journal as verified, for all your devices. Click to change or forget it."
+        : "Enter the owner code so your entries are written to the shared journal as verified, for all your devices"}">${mjOwnerCode ? "Owner ✓" : "Owner code…"}</button>` : ""}
     ${devHtml}
-    <span class="note">Held in this browser for this address, and written to the encrypted
-    journal on disk. Each entry is stamped with the date and the anonymous device identifier
+    <span class="note">Held in this browser for this address, and written to the shared encrypted
+    journal — one journal for all your devices. Each entry is stamped with the date and the anonymous device identifier
     above, which says nothing about you. ${state}${msg}</span>
     ${mjNote()}
   </div>`;
@@ -9588,20 +9608,22 @@ function mjNote(){
   const wait = mjOutbox.length;
   const j = mjState.journal;
   if (mjState.mode === "off")
-    return `<span class="note ko">Encrypted journal — not available on this address
-      (${escapeHtmlText(location.protocol)}). Open the app through Weather Lens.exe or
-      http://localhost:8742 for entries to be written to disk.</span>`;
+    return `<span class="note ko">Encrypted journal — not reachable from this address
+      (${escapeHtmlText(location.protocol)}).</span>`;
   if (mjState.mode === "waiting")
     return `<span class="note ko">Encrypted journal unreachable${mjState.err?` (${escapeHtmlText(mjState.err)})`:""} —
       ${wait} record${wait===1?"":"s"} waiting, kept here and sent on the next connection.
       Nothing is lost.</span>`;
   const bits = [];
-  if (j) bits.push(`${j.lines} line${j.lines===1?"":"s"} on disk`);
+  if (j) bits.push(`${j.lines} line${j.lines===1?"":"s"} on the shared journal`);
   if (j && j.keyId) bits.push(`key ${escapeHtmlText(j.keyId.slice(0,6))}`);
   if (mjState.at) bits.push(`last write ${new Date(mjState.at).toLocaleTimeString()}`);
   if (wait) bits.push(`${wait} waiting`);
+  /* L'état propriétaire vient de la DERNIÈRE écriture : un code refusé se voit
+     ici, pas dans une erreur — le serveur a bien écrit, mais en communautaire. */
+  if (mjOwnerCode) bits.push(mjState.owner === false ? "owner code REFUSED — check it" : "owner ✓");
   return `<span class="note ok">Encrypted journal — ${bits.join(" · ") || "ready"}.
-    Append-only, signed, unreadable without the key file kept outside this folder.</span>`;
+    Append-only, signed, shared by all your devices; the keys never travel with it.</span>`;
 }
 
 function adExportDownload(){
@@ -9846,7 +9868,9 @@ function refreshAdPanel(force){
       Default minima start as the <b>standard minima of the approach type</b>
       (EASA reference tables, FALS lighting). A value recorded on this device is <b>yours — trusted as verified</b>:
       it becomes the application default immediately (badge <b>verified ✓</b>, each new entry replaces the previous
-      one${own?", the × forgets it":""}). Community entries — once the backend exists — will need <b>3 identical values</b> for
+      one${own?", the × forgets it":""}). With the <b>owner code</b> set (Owner button above), it is also written to the
+      shared journal as verified and reaches all your devices; without the code, the journal keeps it as a community
+      entry. Community entries need <b>3 identical values</b> for
       the same runway, approach and aerodrome to become the default (badge <b>user ✓</b>).
       DA/DH in ft, RVR/visibility in metres.${window.AD_SEED_META
         ? `<br>Seed data compiled ${window.AD_SEED_META.date} from OurAirports (runways, true headings) · FAA CIFP · FAA NASR (lighting) · NOTAM mining · nav.dat · SIA eAIP France and NATS UK AIP (updated ${(window.AD_SEED_META.sources||{})["eaip-fr"]||"—"}) — ${window.AD_SEED_META.airports} airfields, ${window.AD_SEED_META.withApproaches} with approaches. QFU headings derived from true headings and WMM magnetic declination (NOAA/BGS) at compile date. NOTAM-biased coverage, never an inventory: an approach missing here is no proof it does not exist.`
@@ -9928,6 +9952,29 @@ function bindAdPanel(){
       if (!confirm("Draw a new device identifier?\n\nEntries already made keep the previous one — "
                  + "their signature is history, not a label to rewrite.")) return;
       adToolsMsg = {ok:true, text:`new device ${adDeviceShort(adDeviceReset())}`};
+      refreshAdPanel(true);
+      return;
+    }
+    if (act==="ownerCode"){
+      /* prompt() suffit et marche partout, téléphone compris ; le panneau se
+         reconstruit à chaque écriture du journal, un champ libre y perdrait le
+         focus en pleine frappe. */
+      const v = prompt("Owner code — sent with each entry so the shared journal "
+                     + "accepts it as verified.\n\nLeave empty and press OK to "
+                     + "forget the code on this device.", mjOwnerCode);
+      if (v === null) return;
+      mjOwnerCode = v.trim();
+      try { if (mjOwnerCode) localStorage.setItem(MJ_OWNER_KEY, mjOwnerCode);
+            else localStorage.removeItem(MJ_OWNER_KEY); } catch(e){}
+      if (mjOwnerCode){
+        /* Tout renvoyer : les valeurs vérifiées qu'un versement anonyme a vues
+           refusées repartent maintenant signées — le serveur reconnaît le
+           reste comme doublons, l'opération est rejouable sans dommage. */
+        const pushed = mjPushAll();
+        adToolsMsg = {ok:true, text:`owner code saved — ${pushed} record(s) queued for the shared journal`};
+      } else {
+        adToolsMsg = {ok:true, text:"owner code forgotten on this device"};
+      }
       refreshAdPanel(true);
       return;
     }
