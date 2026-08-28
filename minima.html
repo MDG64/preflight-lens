@@ -6356,8 +6356,10 @@ const SETUP = [
      réglementaire (takeoffReqOptions) liste toutes les lignes des tables avec
      leur condition d'infrastructure, LVTO comprise ; le plancher OEI du
      dégagement se corrige de même sur sa fiche. Les clés cfg correspondantes
-     restent comme repli du moteur, figées à leurs défauts. Ne subsistent que
-     les limitations vent (données avion) et la marge d'alerte. */
+     restent comme repli du moteur, figées à leurs défauts — SAUF
+     `lvtoApproved`, qui est une approbation d'exploitant et non un réglage de
+     piste : sa case vit dans « Equipment & crew », avec RNP AR. Ne subsistent
+     que les limitations vent (données avion) et la marge d'alerte. */
   {t:"Limits & alerts", f:[
     {k:"maxCrosswindKt", l:"Max crosswind (kt)", type:"number"},
     {k:"maxTailwindKt", l:"Max tailwind (kt)", type:"number"},
@@ -6381,6 +6383,13 @@ const SETUP = [
        croire à une approche disponible alors qu'elle demande une
        autorisation spécifique de l'autorité, avion ET équipage. */
     {k:"rnpArApproved", l:"", type:"check", cl:"RNP AR approved (RNP 0.30) — aircraft and crew"},
+    /* LVTO : une approbation SPA.LVO, pas une donnée de terrain — elle a donc
+       sa case ici, au même titre que RNP AR et que son équivalent FAA
+       (ltsApproved, groupe « FAA specifics »). Sans elle, aucune ligne LVTO ne
+       descend le minimum DÉRIVÉ sous les 400 m des Tables 1 et 2 : le pilote
+       devait passer par le sélecteur de la fiche de départ, qui pose une
+       valeur plate sans le max Table 2 ni le plancher de 75 m. */
+    {k:"lvtoApproved", l:"", type:"check", fw:"EASA", cl:"LVTO approved (SPA.LVO) — take-off below RVR 400 m"},
     /* Le « high minimums captain » (PIC < 100 h sur type) n'a plus de case :
        cas trop rare pour occuper une ligne. Un équipage concerné pose son
        majorant dans « Crew restriction — DH add », qui existe des deux
