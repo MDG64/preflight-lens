@@ -23384,28 +23384,95 @@ window.addEventListener("scroll", hidePop, true);
       }
       return best;
     }
-    /* Étiquette d'un taxiway/piste : elle SUIT la portion visible. On échantillonne
-       tous les tronçons en espace ÉCRAN (points denses), on ne garde que ceux
-       dans le cadre, et on pose le nom sur cette portion visible. Ainsi, quand
-       l'utilisateur déplace ou zoome, le libellé se replace tout seul sur ce
-       qu'il voit — au lieu de rester collé au milieu géographique et de sortir
-       du cadre. Rien de visible => pas d'étiquette (inutile hors cadre). */
-    function planLabel(ctx, text, segs, col, mode) {
+    /* Milieu par LONGUEUR d'une polyligne déjà projetée (espace px du plan) —
+       pas le point du milieu du tableau : les sommets d'OSM ne sont pas
+       espacés régulièrement, et un tronçon dont les points s'entassent à une
+       extrémité verrait son « milieu » tomber à côté. */
+    function planMidOf(pts) {
+      const d = []; let total = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        d.push(l); total += l;
+      }
+      if (!total) return pts[0];
+      let acc = 0;
+      for (let i = 0; i < d.length; i++) {
+        if (acc + d[i] >= total / 2) {
+          const t = d[i] ? (total / 2 - acc) / d[i] : 0;
+          return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t,
+                  pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t];
+        }
+        acc += d[i];
+      }
+      return pts[pts.length - 1];
+    }
+    /* ÉTIQUETTE D'UN TAXIWAY / D'UNE PISTE — RÉPÉTÉE, ET ACCROCHÉE À LA CHAUSSÉE.
+       Un nom UNIQUE posé au milieu de la portion VISIBLE avait deux défauts, et
+       le second est le pire :
+         · sur une voie qui traverse le terrain, il faut la suivre des yeux
+           jusqu'au seul endroit où elle est nommée pour savoir laquelle on
+           regarde — une carte de plateforme (AD 2, Jeppesen) répète le nom tout
+           du long, précisément pour ça ;
+         · il GLISSAIT au doigt : « le milieu » était celui de ce qu'on voyait,
+           donc le nom se déplaçait le long de sa voie à chaque déplacement de la
+           carte. Un repère qui bouge pendant qu'on cherche n'est plus un repère.
+       Les ancres sont donc posées à intervalle constant LE LONG DE LA GÉOMÉTRIE,
+       mesuré depuis son début. Le déplacement n'y change rien (la longueur à
+       l'écran ne dépend que du zoom) : le nom reste où il est pendant qu'on
+       navigue, et zoomer en ajoute au lieu d'en déplacer. Le pas est ajusté pour
+       tomber rond sur la longueur : une voie plus courte qu'un pas garde
+       exactement un nom, en son milieu.
+       `prio` porte des ancres PRIORITAIRES, en coordonnées projetées : le milieu
+       du tronçon d'une portion « BTN X AND Y ». C'est là que le nom répond à la
+       question posée — sur le morceau que le NOTAM vise, entre ses deux bornes,
+       et pas au hasard du reste de la voie.
+       REPLI, inchangé dans son esprit : si aucune ancre ne trouve sa place (ou
+       si aucune n'est dans le cadre — un gros plan entre deux ancres), on
+       retombe sur l'échantillonnage dense de la portion visible, avec le même
+       escalier de fractions et le même forçage qu'avant. Un élément touché ne
+       doit jamais rester anonyme. */
+    const PLAN_LBL_STEP = 240;        // px CSS entre deux répétitions d'un même nom
+    function planLabel(ctx, text, segs, col, mode, prio) {
       const cv = ctx.canvas, W = cv.width, H = cv.height, M = 8 * planDPR;
       const inView = p => p[0] >= M && p[0] <= W - M && p[1] >= M && p[1] <= H - M;
-      const cand = [];
-      for (const g of segs) {
-        const scr = g.map(planSC);
+      const anchors = [];
+      for (const p of prio || []) { const q = planSCp(p); if (inView(q)) anchors.push(q); }
+      const step = PLAN_LBL_STEP * planDPR;
+      const scrs = segs.map(g => g.map(planSC));
+      for (const scr of scrs) {
+        let total = 0;
+        for (let i = 1; i < scr.length; i++) total += Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]);
+        if (!total) { if (scr.length && inView(scr[0])) anchors.push(scr[0]); continue; }
+        const gap = total / Math.max(1, Math.round(total / step));
+        let acc = 0, next = gap / 2;
+        for (let i = 1; i < scr.length; i++) {
+          const a = scr[i - 1], b = scr[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          while (d > 0 && next <= acc + d) {
+            const t = (next - acc) / d;
+            const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+            if (inView(p)) anchors.push(p);
+            next += gap;
+          }
+          acc += d;
+        }
+      }
+      let placed = 0;
+      for (const p of anchors) if (planPlace(ctx, text, p[0], p[1], col, mode, false)) placed++;
+      if (placed) return;
+      // repli : la portion visible, échantillonnée dense comme autrefois
+      const vis = [];
+      for (const scr of scrs) {
         for (let i = 1; i < scr.length; i++) {
           const a = scr[i - 1], b = scr[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
           const steps = Math.max(1, Math.min(40, Math.round(d / (36 * planDPR))));
-          for (let s = 0; s < steps; s++) cand.push([a[0] + (b[0] - a[0]) * s / steps, a[1] + (b[1] - a[1]) * s / steps]);
+          for (let s = 0; s < steps; s++) {
+            const p = [a[0] + (b[0] - a[0]) * s / steps, a[1] + (b[1] - a[1]) * s / steps];
+            if (inView(p)) vis.push(p);
+          }
         }
-        if (scr.length) cand.push(scr[scr.length - 1]);
+        if (scr.length && inView(scr[scr.length - 1])) vis.push(scr[scr.length - 1]);
       }
-      const vis = cand.filter(inView);
       if (!vis.length) return;                          // hors cadre : rien à étiqueter
-      // positions réparties le long de la portion visible (milieu d'abord)
       const fr = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88];
       for (const t of fr) {
         const p = vis[Math.min(vis.length - 1, Math.round(t * (vis.length - 1)))];
@@ -23923,8 +23990,18 @@ window.addEventListener("scroll", hidePop, true);
       const labMode = (s, st) => quietName(s) ? "plain" : st.state;
       // touchés par un NOTAM : toujours étiquetés. Le NOM garde sa propre
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
+      /* Une voie que le NOTAM ne vise que sur un TRONÇON (« BTN LM AND L44 ») :
+         son nom doit tomber sur ce tronçon, pas au hasard du reste de la voie.
+         On passe le milieu de chaque découpe affichée en ancre prioritaire —
+         les répétitions ordinaires suivent, elles, tout le long. */
+      const cutMids = s => {
+        const st = st_.get(s), out = [];
+        for (const c of plan.CUTS.get(s) || [])
+          if (st.ns.includes(c.n) && c.cut.seg) out.push(planMidOf(c.cut.seg));
+        return out;
+      };
       for (const s of lab) if (st_.get(s) && nameOK(s))
-        planLabel(ctx, s.r, s.segs, labCol(s, st_.get(s)), labMode(s, st_.get(s)));
+        planLabel(ctx, s.r, s.segs, labCol(s, st_.get(s)), labMode(s, st_.get(s)), cutMids(s));
 
       /* 1 bis. LES BORNES, juste derrière les éléments touchés. Deux marqueurs
          sans légende ne disent pas où ils sont : le nom de la borne fait le
