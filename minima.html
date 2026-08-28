@@ -2260,8 +2260,11 @@ body.mobile #rtOv:not([hidden]){display:flex}
   background:var(--panel);border:1px solid var(--line);
   border-radius:var(--radius);box-shadow:var(--elev);
 }
-button.rt-card{cursor:pointer}
-button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
+/* La carte est cliquable, mais ce n'est plus un <button> : elle porte
+   désormais le lien vers le NOTAM, et un bouton dans un bouton n'est pas du
+   HTML. Le rôle et le tabindex lui rendent le clavier. */
+.rt-card.act{cursor:pointer}
+.rt-card.act:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
 .rt-card:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .rt-card.v-go{border-color:var(--green);box-shadow:0 0 0 1px var(--green),var(--elev)}
 .rt-card.v-marginal{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber),var(--elev)}
@@ -2283,6 +2286,74 @@ button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
 .rt-rows{display:flex;flex-direction:column;gap:5px}
 .rt-note{font:500 10.5px/1.4 var(--sans);color:var(--red)}
 .rt-note.dim{color:var(--muted);font-weight:400}
+/* Ce qu'un NOTAM retire au terrain, en pied de carte : un triangle « ! »
+   ambre par drapeau levé, ce qu'il touche en clair, et le numéro du NOTAM qui
+   le porte — souligné, il ouvre le message entier. Rouge quand c'est la piste
+   JUGÉE qui est fermée : cette ligne-là porte le NO GO de la carte. */
+.rt-alerts{display:flex;flex-direction:column;gap:5px}
+.rt-alert{
+  display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;
+  font:500 10.5px/1.4 var(--sans);color:var(--amber);
+}
+.rt-alert.bad{color:var(--red)}
+.rt-al-ico{width:13px;height:13px;flex:none;margin-top:1px}
+.rt-al-ico svg{display:block;width:100%;height:100%}
+.rt-alert .tx{min-width:0}
+.rt-nlink{
+  background:none;border:0;padding:0;cursor:pointer;
+  font:600 10.5px/1.4 var(--mono);letter-spacing:.02em;color:var(--cyan);
+  text-decoration:underline;text-underline-offset:2px;
+}
+.rt-nlink:hover{color:var(--text)}
+.rt-nlink:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}
+.rt-nmore{font:400 10px/1.4 var(--sans);color:var(--muted)}
+/* Le NOTAM en entier : il monte du bas de l'écran et se pose SUR le bilan,
+   sans le couvrir — les autres terrains restent lisibles au-dessus. Même
+   panneau que celui des relevés de la carte METAR, mêmes gestes : la croix,
+   Échap, ou un glissement du doigt vers le bas. */
+.nfsheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:10;
+  max-height:min(72%,560px);display:flex;flex-direction:column;
+  background:var(--panel);border-top:1px solid var(--line2);box-shadow:var(--elev-hi);
+  border-radius:14px 14px 0 0;
+  transform:translateY(101%);           /* 101% : l'ombre portée sort aussi du cadre */
+  transition:transform .22s ease;
+}
+.nfsheet.open{transform:translateY(0)}
+/* Pendant le glissement, le panneau suit le doigt : plus de transition, sinon
+   il traîne d'un cinquième de seconde derrière lui. */
+.nfsheet.drag{transition:none;user-select:none}
+.nfsheet[hidden]{display:none}
+/* La poignée : une barre qu'on voit et qu'on saisit. `touch-action:none` la
+   réserve à nous — sinon le navigateur prend le glissement pour un défilement
+   et le panneau ne se ferme jamais. */
+.nfsheet-grip{flex:none;height:22px;position:relative;cursor:grab;touch-action:none}
+.nfsheet-grip::before{
+  content:"";position:absolute;left:50%;top:9px;width:38px;height:4px;
+  margin-left:-19px;border-radius:2px;background:var(--line2);
+}
+.nfsheet-body{flex:1;min-height:0;overflow:auto;padding:2px 16px 18px;touch-action:pan-y;overscroll-behavior:contain}
+/* NOTAM assez court pour tenir sans défiler : il n'y a plus de défilement à
+   protéger, le doigt ferme le panneau depuis n'importe où. */
+.nfsheet-body.short{touch-action:none}
+.nfsheet-x{
+  position:absolute;right:6px;top:6px;z-index:1;
+  background:none;border:0;cursor:pointer;color:var(--muted);
+  font:18px/1 var(--sans);padding:4px 8px;border-radius:8px;
+}
+.nfsheet-x:hover{background:var(--panel2);color:var(--text)}
+.nfsheet-head{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;padding-right:28px}
+.nfsheet-id{font:700 15px/1.2 var(--mono);letter-spacing:.05em}
+.nfsheet-what{font:500 11px/1.35 var(--sans);color:var(--amber)}
+.nfsheet-raw{
+  margin-top:9px;white-space:pre-wrap;word-break:break-word;
+  font-family:var(--mono);font-size:12px;line-height:1.55;
+  background:var(--field);border:1px solid var(--line);border-radius:6px;
+  padding:8px 10px;
+}
+/* Rappel du geste, sous le texte : sur un écran tactile la poignée ne se voit
+   pas, il faut le dire une fois. */
+.nfsheet-hint{margin-top:12px;font:11px/1.4 var(--sans);color:var(--muted2)}
 /* L'heure jugée et le QFU retenu, en pied de carte — poussés en bas pour que
    les trois cartes alignent leurs pieds quand l'une a une ligne de plus. */
 .rt-sub{font:400 9.5px/1.5 var(--mono);color:var(--muted2);margin-top:auto;padding-top:2px}
@@ -2770,6 +2841,15 @@ button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
         pilot-in-command remains solely responsible for the flight.</div>
     </div>
   </div>
+  <!-- Le NOTAM cité en pied de carte, en entier : le panneau monte du bas au
+       clic sur son numéro et se referme d'un glissement vers le bas, de la
+       croix ou d'Échap. Hors de .rt-host — il se pose SUR le bilan, il ne
+       défile pas avec lui. -->
+  <aside class="nfsheet" id="nfSheet" hidden role="dialog" aria-label="NOTAM text">
+    <div class="nfsheet-grip" aria-hidden="true"></div>
+    <button class="nfsheet-x" id="nfSheetX" aria-label="Close the NOTAM" title="Close the NOTAM">×</button>
+    <div class="nfsheet-body" id="nfSheetBody"></div>
+  </aside>
 </div>
 <!-- Graine de la base terrains, compilée depuis aero-db (compile-seed.js) :
      pistes + longueurs mondiales, approches par extrémité. Fichier absent =
@@ -4112,7 +4192,11 @@ function nfAny(icao){
    L'extrémité vient des refs « RWY nn » du texte (nfaEndsFor) — celles de
    la phrase qui porte le mot de panne d'abord, les refs de contexte en
    repli ; sans ref lisible, toutes les extrémités — le repli conservatif.
-   Fermeture par PAIRE : une surface fermée l'est dans les deux sens. */
+   Fermeture par PAIRE : une surface fermée l'est dans les deux sens.
+     Le message ENTIER est gardé avec le drapeau (e.txt, par numéro de NOTAM),
+   à côté de l'extrait des infobulles : c'est lui que le bilan dévoile quand le
+   pilote suit le lien du pied de carte — rien à retélécharger, hors ligne
+   compris. Il vit et meurt avec le drapeau qu'il soutient. */
 const NFA_OUT_CONDS = ["LC","AS","AU","LD","AW","LP"];
 const NFA_ILS_SUBJ = ["IC","ID","IG","IL","IS","IT","IU","IW"];
 const NFA_ALS_SUBJ = ["LA"];
@@ -4250,7 +4334,7 @@ function nfaEndsFor(icao, T){
    piste — « ILS RWY 09 CLSD » parle de l'ILS, pas de la piste 09. ILS et
    rampe sont rangés PAR EXTRÉMITÉ (nfaEndsFor), les fermetures par paire. */
 function nfaDetect(icao, raws, now){
-  const det = {ils:{}, als:{}, rwy:{}, src:{}};
+  const det = {ils:{}, als:{}, rwy:{}, src:{}, txt:{}};
   const from = now, to = now + NFA_LOOKAHEAD_MS;
   const seen = new Set();
   for (const raw of raws || []){
@@ -4278,8 +4362,12 @@ function nfaDetect(icao, raws, now){
     /* Les chevrons sautent : les messages du moteur et les infobulles insèrent
        cet extrait dans du HTML. */
     const excerpt = ((it.e || t).slice(0, 110) + (it.d ? " · D) " + it.d.slice(0, 40) : "")).replace(/[<>&"]/g, " ").replace(/\s+/g, " ").trim();
-    const markEnds = (dict, ends) => { for (const en of ends) (dict[en] = dict[en] || []).push(id); if (ends.length) det.src[id] = excerpt; };
-    const markRwy = ps => { for (const p of ps) (det.rwy[p] = det.rwy[p] || []).push(id); if (ps.length) det.src[id] = excerpt; };
+    /* Le message ENTIER, mis de côté tel qu'il est arrivé — retours à la ligne
+       compris : c'est lui que le panneau du bilan dévoile quand le pilote suit
+       le lien. L'extrait, lui, reste ce que l'infobulle des pastilles montre. */
+    const full = String(raw).replace(/\r\n?/g, "\n").replace(/[ \t]+$/gm, "").trim();
+    const markEnds = (dict, ends) => { for (const en of ends) (dict[en] = dict[en] || []).push(id); if (ends.length){ det.src[id] = excerpt; det.txt[id] = full; } };
+    const markRwy = ps => { for (const p of ps) (det.rwy[p] = det.rwy[p] || []).push(id); if (ps.length){ det.src[id] = excerpt; det.txt[id] = full; } };
     /* Refs de piste ADJACENTES à un mot de fermeture — « RWY 06/24 CLSD »,
        « CLOSURE OF RUNWAY 06/24 » — les seules dignes de foi dans un texte
        libre : « RWY 09 » cité comme borne d'un TWY fermé ne ferme rien. */
@@ -4358,6 +4446,7 @@ function nfEntry(icao){
     if (!e.man[k]) e.man[k] = {};
   }
   if (!e.src) e.src = {};
+  if (!e.txt) e.txt = {};
   return e;
 }
 
@@ -4420,9 +4509,15 @@ function nfaApply(icao, det, meta){
   const used = new Set();
   for (const d of [e.auto.ils, e.auto.als, e.auto.rwy])
     for (const k of Object.keys(d)) for (const id of d[k]) used.add(id);
-  const src = {};
-  for (const id of used){ const s = det.src[id] != null ? det.src[id] : e.src[id]; if (s != null) src[id] = s; }
+  const src = {}, txt = {};
+  for (const id of used){
+    const s = det.src[id] != null ? det.src[id] : e.src[id];
+    if (s != null) src[id] = s;
+    const f = det.txt[id] != null ? det.txt[id] : e.txt[id];
+    if (f != null) txt[id] = f;
+  }
   e.src = src;
+  e.txt = txt;
   e.chk = {at: Date.now(), n: meta.n};
   if (meta.ageMin != null) e.chk.ageMin = meta.ageMin;
   if (meta.stale) e.chk.stale = true;
@@ -4539,6 +4634,23 @@ function nfStateNote(icao){
     + (chk.offline ? " (offline copy from the NOTAM page)" : "")
     + (chk.stale ? " — upstream feed stale" : "")
     + ". A switch you clear stays cleared for these NOTAMs; what you set by hand is kept.";
+}
+
+/* Ce que les drapeaux retirent au terrain, mis en phrases — une ligne par
+   drapeau levé, dans l'ordre de ce qui coûte le plus cher : la piste fermée
+   d'abord, puis l'ILS, puis la rampe. Chaque ligne porte les NOTAM qui la
+   soutiennent ; un drapeau coché à la main y figure sans NOTAM à ouvrir — il
+   pèse autant sur le verdict, la carte ne peut pas le taire. */
+function nfAlerts(icao){
+  const nf = nfGet(icao);
+  const au = nf.auto || {};
+  const out = [];
+  const add = (kind, key, what, dict) =>
+    out.push({kind, key, what, ids: ((dict || {})[key] || []).slice()});
+  for (const p of Object.keys(nf.rwyClosed || {})) add("rwy", p, `RWY ${p} closed`, au.rwy);
+  for (const en of Object.keys(nf.ilsOut || {})) add("ils", en, `ILS ${en} unserviceable`, au.ils);
+  for (const en of Object.keys(nf.lightsOut || {})) add("als", en, `Approach lights ${en} unserviceable`, au.als);
+  return out;
 }
 
 /* Terrain courant du point de vue du MOTEUR : la station du METAR chargé fait
@@ -11039,14 +11151,99 @@ window.RTV = (()=>{
           : cls(r.overall);
       return {icao, name:mAdName(icao), st, vis, wind,
               ceil: tb.role==="DEPARTURE" ? null : ceilInfo(r),
-              qfu:q, closed, closedPair:pair,
-              closedBy: (((nfGet(icao).auto || {}).rwy || {})[pair] || [])[0] || null,
+              qfu:q, closed, closedPair:pair, alerts:nfAlerts(icao),
               eta:etaDate(tb.role),
               obsTime: wx && wx.obsTime!=null ? wx.obsTime : null,
               noWx: !wx || (!wx.metarRaw && !wx.tafRaw),
               noTaf: !!(wx && wx.status==="no-taf")};
     });
   }
+
+  /* ---------- le NOTAM en entier ----------
+     Le numéro cité en pied de carte ouvre le message qui porte le drapeau.
+     Le texte vient du store des drapeaux (nfGet(icao).txt) — celui-là même que
+     le module NOTAM a rangé en cochant : rien à retélécharger, le panneau
+     s'ouvre à l'instant du clic, hors ligne compris. */
+  const sheet = document.getElementById("nfSheet");
+  const sheetBody = document.getElementById("nfSheetBody");
+  let sheetTimer = null;
+
+  /* Le NOTAM tient-il sans défiler ? Si oui, le doigt peut fermer le panneau
+     depuis n'importe où ; sinon le défilement garde le geste vertical et seule
+     la poignée ferme. */
+  function fitSheet(){
+    sheetBody.classList.toggle("short", sheetBody.scrollHeight <= sheetBody.clientHeight + 1);
+  }
+  function closeNotam(){
+    clearTimeout(sheetTimer);
+    sheet.classList.remove("open");
+    sheet.style.transform = "";
+    /* On attend la fin du glissement pour cacher : sinon le panneau disparaît
+       d'un coup au lieu de sortir par le bas. */
+    sheetTimer = setTimeout(()=>{ if (!sheet.classList.contains("open")) sheet.hidden = true; }, 240);
+  }
+  function openNotam(icao, id, what){
+    const nf = nfGet(icao);
+    const raw = (nf.txt || {})[id];
+    const fallback = (nf.src || {})[id];
+    sheet.hidden = false;
+    sheet.style.transform = "";
+    sheetBody.scrollTop = 0;
+    sheetBody.innerHTML = `<div class="nfsheet-head">
+        <span class="nfsheet-id">${escapeHtmlText(id)}</span>
+        <span class="nfsheet-what">${escapeHtmlText(icao + (what ? " — " + what : ""))}</span>
+      </div>
+      <div class="nfsheet-raw">${escapeHtmlText(raw || fallback
+        || "This NOTAM is no longer in the set downloaded for this aerodrome — check the official briefing.")}</div>
+      <p class="nfsheet-hint">Swipe down, press Esc or tap × to close. Always verify against the official briefing.</p>`;
+    fitSheet();
+    /* Un calcul de style forcé entre `hidden = false` et la classe qui ouvre :
+       sans lui le navigateur regroupe les deux changements, part du panneau
+       déjà visible et n'anime rien. */
+    void sheet.offsetWidth;
+    sheet.classList.add("open");
+    fitSheet();
+  }
+
+  /* Le glissement vers le bas ferme — même geste que le panneau des relevés de
+     la carte METAR. Le doigt posé dans un NOTAM qui défile appartient au
+     défilement, sauf s'il est déjà en haut de course ; un départ vers le haut
+     ou nettement horizontal rend la main pour de bon. */
+  (function bindSheetSwipe(){
+    const GRAB_PX = 8, SHUT_PX = 55;
+    let pid = null, x0 = 0, y0 = 0, dy = 0, taken = false, gone = false;
+    sheet.addEventListener("pointerdown", e=>{
+      if (pid !== null) return;
+      if (sheetBody.contains(e.target) && !sheetBody.classList.contains("short") && sheetBody.scrollTop > 0) return;
+      pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; dy = 0; taken = false; gone = false;
+    });
+    sheet.addEventListener("pointermove", e=>{
+      if (e.pointerId !== pid) return;
+      dy = e.clientY - y0;
+      if (!taken){
+        if (Math.abs(dy) < GRAB_PX && Math.abs(e.clientX - x0) < GRAB_PX) return;
+        if (dy < 0 || Math.abs(e.clientX - x0) > Math.abs(dy) * 1.5){ pid = null; return; }
+        taken = true; gone = true;
+        sheet.classList.add("drag");
+        /* La capture garde les mouvements pour nous si le doigt sort du
+           panneau — utile justement quand il le pousse hors de l'écran. */
+        try { sheet.setPointerCapture(e.pointerId); } catch(_){}
+      }
+      sheet.style.transform = `translateY(${Math.max(0, dy)}px)`;
+    });
+    const release = e=>{
+      if (e.pointerId !== pid) return;
+      pid = null;
+      if (!gone) return;
+      sheet.classList.remove("drag");
+      /* Passé le seuil, on laisse le panneau finir sa sortie ; en deçà, il
+         revient se coller au bord. */
+      if (dy >= SHUT_PX) closeNotam(); else sheet.style.transform = "";
+    };
+    sheet.addEventListener("pointerup", release);
+    sheet.addEventListener("pointercancel", release);
+  })();
+  document.getElementById("nfSheetX").onclick = closeNotam;
 
   /* ---------- rendu ---------- */
   function ageHtml(t){
@@ -11080,12 +11277,33 @@ window.RTV = (()=>{
      +`<span class="wl">TW <span class="o${oCls(maxCompSt(w.tail, cfg.maxTailwindKt))}">${mUnitVal(w.tail,"kt")}</span> ${cmpSign(w.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span>`);
   }
 
+  /* Le pied d'alerte : une ligne par piste, ILS ou rampe qu'un NOTAM retire,
+     triangle « ! » ambre en tête, et le numéro du NOTAM en lien — il dévoile
+     le message entier. La piste JUGÉE fermée passe au rouge : c'est elle qui
+     porte le NO GO de la carte. Un drapeau posé à la main le dit et n'ouvre
+     rien : il n'y a pas de message derrière. */
+  function alertsHtml(s){
+    if (!s.alerts || !s.alerts.length) return "";
+    const line = a=>{
+      const bad = a.kind==="rwy" && a.key===s.closedPair;
+      const links = a.ids.length
+        ? a.ids.map(id=>`<button type="button" class="rt-nlink" data-icao="${escapeHtmlText(s.icao)}"
+              data-id="${escapeHtmlText(id)}" data-what="${escapeHtmlText(a.what)}"
+              title="Read NOTAM ${escapeHtmlText(id)}">NOTAM ${escapeHtmlText(id)}</button>`).join(" ")
+        : `<span class="rt-nmore">switch set by hand</span>`;
+      return `<span class="rt-alert${bad?" bad":""}">
+          <span class="rt-al-ico" role="img" aria-label="Warning">${STATE_ICON.marginal}</span>
+          <span class="tx">${escapeHtmlText(a.what)}</span>${links}</span>`;
+    };
+    return `<span class="rt-alerts">${s.alerts.map(line).join("")}</span>`;
+  }
+
   function cardHtml(slot, s, i){
     if (!s) return `<div class="rt-card empty">
         <span class="rt-role">${slot.lab}</span>
         <span>No aerodrome set — pick it above.</span>
       </div>`;
-    return `<button class="rt-card v-${s.st}" data-i="${i}"
+    return `<div class="rt-card act v-${s.st}" data-i="${i}" role="button" tabindex="0"
         title="${slot.lab} ${s.icao} — ${STATE_LABEL[s.st]} · tap for the full phase view">
       <span class="rt-role">${slot.lab}</span>
       <span class="rt-head"><span class="rt-icao">${s.icao}</span>
@@ -11093,12 +11311,12 @@ window.RTV = (()=>{
         ${ageHtml(s.obsTime)}</span>
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
       <span class="rt-rows">${visRow(s.vis)}${ceilRow(s.ceil)}${windRow(s.wind)}</span>
-      ${s.closed ? `<span class="rt-note">Runway ${s.closedPair} closed — ${s.closedBy ? "NOTAM " + s.closedBy : "NOTAM switch"}</span>` : ""}
+      ${alertsHtml(s)}
       ${s.err ? `<span class="rt-note">Engine error: ${escapeHtmlText(s.err)}</span>`
         : s.noWx ? `<span class="rt-note dim">No reports available.</span>`
         : s.noTaf ? `<span class="rt-note dim">No TAF published.</span>` : ""}
       <span class="rt-sub">judged for ${hhmm(s.eta)}${s.qfu ? ` · QFU ${s.qfu.id} ${String(s.qfu.deg).padStart(3,"0")}°` : ""}</span>
-    </button>`;
+    </div>`;
   }
 
   /* Pas de verdict de VOL au-dessus des cartes : rien n'est agrégé — chaque
@@ -11115,8 +11333,20 @@ window.RTV = (()=>{
     });
     document.getElementById("rtCards").innerHTML =
       SLOTS.map((slot,i)=>cardHtml(slot, sums[i], i)).join("");
-    document.querySelectorAll("#rtCards button.rt-card").forEach(b=>{
+    /* La carte n'est plus un <button> (elle en contient) : le rôle lui rend le
+       clic, et Entrée/Espace le clavier. */
+    document.querySelectorAll("#rtCards .rt-card.act").forEach(b=>{
       b.onclick = ()=>openDetail(+b.dataset.i);
+      b.onkeydown = e=>{
+        if (e.key!=="Enter" && e.key!==" ") return;
+        e.preventDefault(); openDetail(+b.dataset.i);
+      };
+    });
+    /* Le lien vers le NOTAM vit DANS la carte : son clic ne doit pas remonter
+       jusqu'à elle — on vient lire un message, pas quitter le bilan. */
+    document.querySelectorAll("#rtCards .rt-nlink").forEach(a=>{
+      a.onclick = e=>{ e.stopPropagation(); openNotam(a.dataset.icao, a.dataset.id, a.dataset.what); };
+      a.onkeydown = e=>{ if (e.key==="Enter" || e.key===" ") e.stopPropagation(); };
     });
   }
 
@@ -11242,6 +11472,7 @@ window.RTV = (()=>{
   }
   function close(){
     if (AC.role && AC.role.startsWith("RT")) acClose();
+    closeNotam();
     ov.hidden = true;
     if (RT.timer){ clearInterval(RT.timer); RT.timer = null; }
   }
@@ -11321,6 +11552,9 @@ window.RTV = (()=>{
     if (e.key!=="Escape" || ov.hidden) return;
     if (e.helpClosed || !helpOv.hidden) return;
     if (!document.getElementById("wxMapOv").hidden) return;
+    /* Le NOTAM dévoilé se referme d'abord : Échap rend la vue précédente, pas
+       la fiche — le bilan reste sous les yeux. */
+    if (!sheet.hidden){ closeNotam(); return; }
     close();
   });
 
