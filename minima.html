@@ -7824,9 +7824,31 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
   const aReq = a.rvr==null ? null
              : aDisp===aUnit ? a.rvr
              : (aDisp==="sm" && a.visSm!=null ? a.visSm : reqInUnit(a.rvr, aUnit, aDisp));
+  /* La destination ne montrait qu'une exigence, sans rien en regard : sa table
+     Q2 — celle qui portait la prévision face au minimum — a quitté l'écran
+     comme celle du décollage, et aucune case n'avait repris la comparaison. Le
+     dégagement au décollage la porte dans sa case de minima, les deux autres
+     dégagements dans une case de comparaison à part ; la destination, elle,
+     n'en avait nulle part, et un plafond absent (approche de type B) la laissait
+     sans aucun chiffre comparé.
+     Elle revient donc ici, dans la case des minima : à la destination
+     l'incrément de planification est nul, l'exigence de la case EST celle de la
+     planification, et il n'y a pas deux chiffres à départager. Le terme comparé
+     est la PRÉVISION retenue dans la fenêtre ETA ±1 h — c'est elle que le
+     règlement fait juger, et c'est déjà elle que porte la ligne de phase de la
+     version téléphone.
+     La comparaison ne se pose que sur la case écrite dans l'unité du calcul de
+     planification : sous FAA c'est la colonne en milles, pas la RVR en pieds. */
+  const isDest = role==="DESTINATION";
+  const destVisObs = u => {
+    if (!isDest || u !== ((r.planning && r.planning.unit) || null)) return undefined;
+    const m = (r.taf && r.taf.limiting) ? r.taf.limiting.vis_m : null;
+    return m==null ? null : visFromM(m, u);
+  };
   const landVisCell = isToAlt ? "" : visReqCell({
           id:"appVisReqInput",
           req: aReq,
+          obs: destVisObs(aDisp),
           unit: aDisp,
           label: isAltn ? "Minima DH · visi / RVR"
                         : (aDisp==="ft" ? "Required RVR" : "Visi / RVR"),
@@ -7855,6 +7877,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
         ...(a.visSm!=null&&!isToAlt&&aDisp!=="sm"?[visReqCell({
           id:"appVisSmReqInput",
           req: a.visSm,
+          obs: destVisObs("sm"),
           unit:"sm",
           label:"Required visibility",
           manual: visReqFor(role, "sm")!=null,
