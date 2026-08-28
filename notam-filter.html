@@ -20199,6 +20199,36 @@ window.addEventListener("scroll", hidePop, true);
       window.location.href = "./minima.html" + (qs ? "?" + qs : "");
     };
 
+    /* Retour du module Minimas : LE MÊME contrat, dans l'autre sens. La page
+       minima.html vit dans un autre document — sa barre ne peut donc pas
+       ouvrir un écran d'ici, elle revient par l'adresse : ?view=notam|map|wx,
+       plus les trois codes sous les noms que cette page emploie déjà pour les
+       envoyer. Les codes remplissent les cases de l'accueil — la route
+       regardée là-bas devient celle d'ici — puis on emprunte EXACTEMENT le
+       chemin de la case correspondante : même lot /api/notams/batch, même
+       carte, même page météo. Aucun chemin d'ouverture parallèle à entretenir.
+       La requête quitte ensuite la barre d'adresse, comme le fragment
+       #unlock : c'est un passage de relais, pas un signet — un rechargement
+       ne doit pas rouvrir une page qu'on n'a demandée qu'une fois. */
+    function bootFromUrl() {
+      let p;
+      try { p = new URLSearchParams(location.search); } catch (e) { return; }
+      const view = (p.get("view") || "").toLowerCase();
+      if (!view) return;
+      const code = k => {
+        const v = (p.get(k) || "").toUpperCase().trim();
+        return /^[A-Z]{4}$/.test(v) ? v : "";
+      };
+      const codes = [code("dep"), code("dest") || code("arr"), code("altn") || code("alt")];
+      if (codes.some(Boolean)) homeApplyRoute(codes);
+      try { history.replaceState(null, "", location.pathname); } catch (e) { }
+      // Sans terrain exploitable, la page NOTAM n'a rien à charger : on reste
+      // à l'accueil plutôt que de rougir une case que personne n'a touchée.
+      if (view === "notam") { if (homeRouteCodes().length) $("#homeNotamCard").click(); return; }
+      if (view === "map") { openHomeMap(); return; }
+      if (view === "wx" || view === "weather") { $("#homeWxCard").click(); return; }
+    }
+
     /* ============================================================
        PAGE WEATHER — METAR + TAF du terrain, via le proxy (l'AWC
        n'émet pas de CORS, voir /api/wx côté serveur). Dernière copie
@@ -21215,6 +21245,7 @@ window.addEventListener("scroll", hidePop, true);
       setTimeout(() => { routeCatchUp(); startRouteCatchUp(); }, 30e3);
     }
     openHome();
+    bootFromUrl();  // une page demandée par l'adresse s'ouvre par-dessus l'accueil
     gatePaint();    // borné par défaut : l'empreinte du code n'est pas encore calculée
     gateInit();     // asynchrone : ne retarde rien, redessine les compteurs derrière
   </script>

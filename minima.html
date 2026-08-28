@@ -1946,6 +1946,24 @@ body.mobile #wxMapOv:not([hidden]){display:flex}
   min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .wxmap-state.err{color:var(--red)}
+/* La barre de la page Minima porte, en plus du titre, la navigation de la
+   suite : la maison, NOTAM, MAP, WEATHER. Six objets et une ligne d'état ne
+   tiennent pas sur la largeur d'un téléphone — sous 560 px l'état passe donc à
+   la ligne, l'espacement et les cadres se resserrent comme dans la barre
+   mobile, la hauteur des cadres restant celle du doigt. L'état ne dit rien la
+   plupart du temps : sur cette ligne-là, vide, il disparaît au lieu de garder
+   sa hauteur. En pleine largeur il reste au contraire en place, vide compris :
+   c'est lui qui pousse les boutons au bord droit, comme dans la barre de la
+   carte. */
+#rtOv .wxmap-bar{flex-wrap:wrap;gap:8px}
+@media (max-width:560px){
+  #rtOv .wxmap-bar{gap:5px;padding:9px 8px}
+  #rtOv .wxmap-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:12px;letter-spacing:.06em}
+  #rtOv .wxmap-state{flex-basis:100%;order:9}
+  #rtOv .wxmap-state:empty{display:none}
+  #rtOv .m-gear,#rtOv .m-back{width:34px}
+  #rtOv .m-link{padding:0 5px;font-size:11.5px}
+}
 .wxmap-host{position:relative;flex:1;min-height:0}
 #wxMap{position:absolute;inset:0}
 /* MapLibre pose sa propre taille de police ; on garde la nôtre. */
@@ -2188,7 +2206,7 @@ body.mobile #wxMapOv:not([hidden]){display:flex}
    observation et prévision confondues. */
 .daywx-main{margin-top:10px}
 
-/* ===================== Bilan de vol — Flight check =====================
+/* ======================== Bilan de vol — Minima ========================
    L'autre présentation de Minima Lens : la route entière — départ,
    destination, dégagement destination — sur un seul écran, un terrain par
    carte, chacun jugé par LE MÊME moteur que son onglet de phase. Plein
@@ -2293,7 +2311,7 @@ button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
          pour les lecteurs d'écran. -->
     <button class="btn primary go" id="fetchBtn" title="Fetch this aerodrome"
             aria-label="Fetch this aerodrome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 12h15M12 5.4l6.6 6.6L12 18.6"/></svg></button>
-    <button class="btn" id="rtBtn" title="Flight check — departure, destination and alternate at a glance">Flight</button>
+    <button class="btn" id="rtBtn" title="Minima — departure, destination and alternate at a glance">Flight</button>
     <button class="btn" id="mapBtn" title="World METAR map — visibility and ceiling at a glance">Map</button>
     <div class="fetch-state" id="fetchState">Fictitious example loaded — not a real report.</div>
     <div class="hdr-actions">
@@ -2515,9 +2533,13 @@ button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
         view of its aerodrome — <b>that phase alone</b>, and the page keeps that single phase whatever
         aerodrome you type into it: the route slot follows. <b>Home</b> (on the phone) or picking a station
         on the <b>Map</b> returns to the full five-tab view. The route is remembered between sessions.</p>
+      <p class="hd-p">That screen is titled <b>Minima</b>, and its bar carries the navigation of the suite:
+        the <b>house</b> goes to the start page of Preflight Lens, and <b>NOTAM</b>, <b>MAP</b> and
+        <b>WEATHER</b> open those pages <b>on the same three aerodromes</b> — the other readings of the
+        route you are looking at, without typing a code again.</p>
       <p class="hd-p muted">A route in the address opens the app straight on this screen —
         <span class="hd-chip">?dep=LFPG&amp;dest=LFPO&amp;altn=LFOB</span> — which is how Preflight Lens
-        will hand its route over.</p>
+        hands its route over.</p>
 
       <div class="hd-sec">Reading a card</div>
       <div class="hd-row">
@@ -2545,7 +2567,7 @@ button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
       <div class="hd-sec">On the phone</div>
       <p class="hd-p">Below 600 px the layout becomes a single column: favourites, ICAO, evaluation time, then one
         line per phase. The top bar carries <b>Home</b> back to the start screen, the <b>waypoints</b> to the same
-        flight check, <b>NOTAM</b> out to Preflight Lens, and <b>Map</b> to the same world map; the gear opens the
+        Minima screen, <b>NOTAM</b> out to Preflight Lens, and <b>Map</b> to the same world map; the gear opens the
         same setup and the <b>?</b> this same page. The engine, the parser and the database are the same — only the
         layout changes.</p>
 
@@ -2670,13 +2692,22 @@ button.rt-card:hover{border-color:var(--steel-dim);box-shadow:var(--elev-hi)}
      re-rendus) ; les cartes sont remplies par RTV.render(). Aucun verdict de
      vol agrégé : chaque terrain répond de sa phase, la décision reste au
      pilote. C'est la présentation qu'ouvre un lien porteur de route
-     (?dep=…&dest=…&altn=…), celle par laquelle Preflight Lens entrera. -->
+     (?dep=…&dest=…&altn=…), celle par laquelle Preflight Lens entre. -->
 <div id="rtOv" hidden>
+  <!-- La barre porte la navigation de la suite, comme les en-têtes de
+       Preflight Lens : la maison vers la page de départ, puis NOTAM, MAP et
+       WEATHER vers leurs pages, chacune sur LES MÊMES trois terrains. Plus de
+       croix : c'est par cet écran que Preflight entre dans les minimas, et la
+       refermer déposait le pilote dans une app qu'il n'avait pas ouverte. Les
+       cartes du bilan — et Échap — ramènent toujours à la fiche. -->
   <div class="wxmap-bar">
-    <span class="wxmap-title">Flight check</span>
+    <span class="wxmap-title">Minima</span>
     <span class="wxmap-state" id="rtState"></span>
+    <button class="m-gear" id="rtHome" aria-label="Start page" title="Start page"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
+    <button class="m-link" id="rtNotam" aria-label="NOTAM of the route shown" title="NOTAM — the same aerodromes">NOTAM</button>
+    <button class="m-link" id="rtMap" aria-label="Map of the route shown" title="Map — the same aerodromes">MAP</button>
+    <button class="m-link" id="rtWx" aria-label="Weather of the route shown" title="Weather — METAR and TAF of the same aerodromes">WEATHER</button>
     <button class="m-back ov-help" id="rtHelp" aria-label="How to use" title="How to use">?</button>
-    <button class="m-back" id="rtClose" aria-label="Close the flight check" title="Close">×</button>
   </div>
   <div class="rt-host">
     <div class="rt-inner">
@@ -8432,8 +8463,8 @@ function mobileHeadHtml(){
     <div class="m-top">
       <span class="m-title">Minimas</span>
       <button class="m-gear" id="mHome" aria-label="Home screen" title="Home screen">${HOME_ICON}</button>
-      <button class="m-gear" id="mRtBtn" aria-label="Flight check"
-              title="Flight check — the whole route at a glance">${RT_ICON}</button>
+      <button class="m-gear" id="mRtBtn" aria-label="Minima"
+              title="Minima — the whole route at a glance">${RT_ICON}</button>
       <a class="m-link" id="mNotamLink" href="./notam-filter.html"
          title="Preflight Lens — NOTAM briefing">NOTAM</a>
       <button class="m-link" id="mMapBtn" aria-label="World METAR map" title="World METAR map"><span class="m-link-big">Map</span></button>
@@ -10290,7 +10321,7 @@ function mDayWxHtml(icao){
 }
 
 /* =====================================================================
-   BILAN DE VOL — Flight check
+   BILAN DE VOL — Minima
    L'autre présentation de Minima Lens : la route entière sur un écran.
    Trois créneaux — départ (onglet 01), destination (04), dégagement
    destination (05) — un seul appel /api/wx pour les trois relevés, puis
@@ -10300,7 +10331,7 @@ function mDayWxHtml(icao){
    La carte d'un terrain ouvre la présentation classique — graphique de
    piste, bandeau minima, règles — sur l'onglet de SA phase.
 
-   C'est l'écran par lequel Preflight Lens entrera : une route dans
+   C'est l'écran par lequel Preflight Lens entre : une route dans
    l'adresse (?dep=…&dest=…&altn=…, ou ?route=DEP,DEST,ALTN — codes OACI,
    IATA ou noms, dirResolve tranche) ouvre l'app directement ici.
    ===================================================================== */
@@ -10590,6 +10621,25 @@ window.RTV = (()=>{
     if (RT.timer){ clearInterval(RT.timer); RT.timer = null; }
   }
 
+  /* ---------- la suite Preflight Lens ----------
+     Minima est un MODULE de Preflight Lens : sa barre ouvre les pages sœurs
+     sur la route affichée ici. Elles vivent dans un AUTRE document, donc le
+     passage se fait par l'adresse — contrat symétrique de celui par lequel
+     Preflight ouvre cette page-ci (?dep&dest&altn) : ?view=notam|map|wx, plus
+     les mêmes trois codes, sous les mêmes noms. Les créneaux vides sont
+     sautés ; l'hôte remplit ses cases avec ce qui arrive, puis emprunte
+     exactement le chemin de la case correspondante de son accueil.
+     La maison, elle, part NUE : elle ne demande pas une lecture des terrains
+     du bilan, elle ramène à la page de départ, et une route en réserve ici —
+     celle de la dernière session — n'a pas à écraser celle que le pilote a
+     saisie là-bas. */
+  const HOST_URL = "./notam-filter.html";
+  function goHost(view){
+    const q = new URLSearchParams({view});
+    SLOTS.forEach((s,i)=>{ if (RT.icaos[i]) q.set(s.key, RT.icaos[i]); });
+    location.href = HOST_URL + "?" + q.toString();
+  }
+
   /* ---------- liaisons ---------- */
   SLOTS.forEach((slot,i)=>{
     const inp = document.getElementById("rtIcao"+i);
@@ -10631,8 +10681,11 @@ window.RTV = (()=>{
     acBindPop(pop, role);
   });
   document.getElementById("rtBtn").onclick = open;
-  document.getElementById("rtClose").onclick = close;
   document.getElementById("rtHelp").onclick = openHelp;
+  document.getElementById("rtHome").onclick = ()=>{ location.href = HOST_URL; };
+  document.getElementById("rtNotam").onclick = ()=>goHost("notam");
+  document.getElementById("rtMap").onclick   = ()=>goHost("map");
+  document.getElementById("rtWx").onclick    = ()=>goHost("wx");
   document.addEventListener("visibilitychange", ()=>{
     if (!document.hidden && RT.timer && !ov.hidden) fetchWx();
   });

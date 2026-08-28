@@ -9,6 +9,9 @@
 <title>Preflight Lens</title>
 </head>
 <body>
-<script>window.location.replace("./notam-filter.html");</script>
+<!-- La requête et le fragment suivent : le domaine nu est l'adresse par
+     laquelle le module Minimas revient (?view=…&dep&dest&altn), et une
+     redirection qui les perdait déposait le pilote sur un accueil vierge. -->
+<script>window.location.replace("./notam-filter.html" + location.search + location.hash);</script>
 </body>
 </html>
