@@ -11294,10 +11294,16 @@ window.RTV = (()=>{
     sheetTimer = setTimeout(()=>{ if (!sheet.classList.contains("open")) sheet.hidden = true; }, 240);
   }
   function openNotam(icao, id, what){
+    /* Le numéro déjà ouvert, recliqué, referme : le doigt qui a fait monter
+       le panneau le renvoie du même geste, sans aller chercher la croix.
+       Un AUTRE numéro remplace le contenu — il n'y a qu'un panneau. */
+    if (sheet.classList.contains("open") && sheet.dataset.icao === icao
+        && sheet.dataset.id === id){ closeNotam(); return; }
     const nf = nfGet(icao);
     const raw = (nf.txt || {})[id];
     const fallback = (nf.src || {})[id];
     sheet.hidden = false;
+    sheet.dataset.icao = icao; sheet.dataset.id = id;
     sheet.style.transform = "";
     sheetBody.scrollTop = 0;
     sheetBody.innerHTML = `<div class="nfsheet-head">
@@ -11306,7 +11312,8 @@ window.RTV = (()=>{
       </div>
       <div class="nfsheet-raw">${escapeHtmlText(raw || fallback
         || "This NOTAM is no longer in the set downloaded for this aerodrome — check the official briefing.")}</div>
-      <p class="nfsheet-hint">Swipe down, press Esc or tap × to close. Always verify against the official briefing.</p>`;
+      <p class="nfsheet-hint">Swipe down, press Esc, tap × or tap the number again to close.
+        Always verify against the official briefing.</p>`;
     fitSheet();
     /* Un calcul de style forcé entre `hidden = false` et la classe qui ouvre :
        sans lui le navigateur regroupe les deux changements, part du panneau
