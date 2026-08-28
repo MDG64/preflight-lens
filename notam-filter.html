@@ -21245,7 +21245,17 @@ window.addEventListener("scroll", hidePop, true);
       setTimeout(() => { routeCatchUp(); startRouteCatchUp(); }, 30e3);
     }
     openHome();
-    bootFromUrl();  // une page demandée par l'adresse s'ouvre par-dessus l'accueil
+    /* La page demandée par l'adresse s'ouvre par-dessus l'accueil — mais pas
+       d'ici : le SECOND <script> de ce document n'est pas encore analysé, et
+       il porte une part du rendu des NOTAM (CNL_TEXT, que lit severity() ;
+       paintsGround()…). Un terrain dont on a déjà la copie locale se rend
+       SANS attendre le réseau, donc en plein dans ce trou : le rendu levait
+       une ReferenceError et la liste restait vide, quand le même geste fait à
+       la main, plus tard, passait très bien. DOMContentLoaded attend les deux
+       scripts — c'est la seule garantie qui vaille ici. */
+    if (document.readyState === "loading")
+      document.addEventListener("DOMContentLoaded", bootFromUrl, { once: true });
+    else bootFromUrl();
     gatePaint();    // borné par défaut : l'empreinte du code n'est pas encore calculée
     gateInit();     // asynchrone : ne retarde rien, redessine les compteurs derrière
   </script>
