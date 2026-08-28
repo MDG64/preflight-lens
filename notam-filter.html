@@ -21474,9 +21474,18 @@ window.addEventListener("scroll", hidePop, true);
       const APR_KW=new Set(["APRON","APN","RAMP"]);
       const STD_KW=new Set(["STAND","STANDS","BAY","BAYS","PRKG","PARKING"]);
 
+      /* Certains fournisseurs encadrent CHAQUE indicatif de guillemets :
+         « TWY 'W1', BTN TWY 'LM' EXCLUDED AND 'L44' INCLUDED ». Le jeton sortait
+         alors avec ses apostrophes collées, TWY_REF le refusait (ce n'est plus
+         une lettre suivie d'un chiffre), et le NOTAM ne produisait AUCUNE ref :
+         il tombait muet en « could not be placed » alors que la voie était
+         dessinée et nommée sur le plan. Le guillemet n'est pas de la ponctuation
+         de phrase — il n'a rien à séparer, on le retire du bord des jetons. */
+      const unquote=t=>t.replace(/^['"«»`]+|['"«»`]+$/g,"");
       // tokenizer qui CONSERVE la ponctuation comme jetons
       function lex(t){
-        return (t||"").toUpperCase().replace(/([.,;:()])/g," $1 ").split(/\s+/).filter(Boolean);
+        return (t||"").toUpperCase().replace(/([.,;:()])/g," $1 ")
+          .split(/\s+/).map(unquote).filter(Boolean);
       }
       const SEP=new Set([",","AND","OR"]);
       const HARD=new Set([".",":",";","(",")"]);
@@ -21538,9 +21547,10 @@ window.addEventListener("scroll", hidePop, true);
       // Mots qui introduisent une AIRE. Sur-ensemble d'APR_KW : voir la branche
       // AREA_KW de refsFromNotam pour ce que « AREA », générique, autorise.
       const AREA_KW=new Set([...APR_KW,"APRONS","AREA","AREAS"]);
-      const unquote=t=>t.replace(/^['"«»`]+|['"«»`]+$/g,"");
       function refsFromNotam(e,heads,aprons,shorts){
-        const w=lex(e), T=" "+(e||"").toUpperCase()+" ";
+        // `unquote` est déjà passé sur les jetons de lex() ; T, lui, est lu tel
+        // quel par la regex piste — « RWY '32L' CLSD » a droit au même filet.
+        const w=lex(e), T=" "+(e||"").toUpperCase().replace(/['"«»`]/g,"")+" ";
         const twy=new Set(),twyHits=[],rwy=new Set(),stand=new Set(),apron=new Set(),partial=[];
         const okT=t=>TWY_REF.test(t), okS=t=>/^[A-Z]{0,2}\d{1,3}$/.test(t);
         /* AIRE NOMMÉE EN TOUTES LETTRES, cherchée dans le voisinage du mot-clé et

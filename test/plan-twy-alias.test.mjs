@@ -13,6 +13,9 @@
 //   2. un nom en DEUX mots qui n'est pas un préfixe de type : les 20 bretelles
 //      d'EGLL s'appellent « Link 35 ». « TWY LINK 35 CLSD » ne produisait
 //      AUCUNE ref — l'extracteur cassait sur LINK, quatre lettres.
+//   3. l'indicatif encadré de guillemets par le rédacteur — « TWY 'W1', BTN TWY
+//      'LM' EXCLUDED AND 'L44' INCLUDED » : le jeton sortait avec ses
+//      apostrophes collées et TWY_REF le refusait, NOTAM muet.
 //
 //  Le test est HERMÉTIQUE : aucun layout du dépôt. Les layouts sont regénérés
 //  depuis OSM, où n'importe qui peut ajouter un `ref=B` du jour au lendemain —
@@ -141,4 +144,19 @@ test("un mot-clé d'une autre famille ne devient pas une tête", async () => {
   assert.deepEqual([...p.HEADS], []);
   assert.deepEqual(refsFromNotam("BAY 3 CLSD", p.HEADS).twy, []);
   assert.deepEqual(refsFromNotam("BAY 3 CLSD", p.HEADS).stand, ["3"]);
+});
+
+test("les guillemets du rédacteur n'effacent pas l'indicatif", async () => {
+  const { plan, refsFromNotam } = await chargerPlan();
+  const p = plan([twy("W1"), twy("LM"), twy("L44")]);
+  // Cas réel : chaque ref est citée entre apostrophes, la portion comprise.
+  const reel = "TWY 'W1', BTN TWY 'LM' EXCLUDED AND 'L44' INCLUDED, "
+             + "LTD TO ACFT WITH A WINGSPAN OF 36M OR LESS";
+  assert.deepEqual(trouve(p, reel, refsFromNotam), ["W1"]);
+  // et les bornes de la portion se lisent elles aussi malgré les guillemets
+  assert.deepEqual(refsFromNotam(reel, p.HEADS).partial, [["LM", "L44"]]);
+  // le guillemet double et le chevron valent l'apostrophe
+  assert.deepEqual(refsFromNotam('TWY "W1" CLSD', p.HEADS).twy, ["W1"]);
+  // la piste passe par la regex, pas par le tokenizer : même filet
+  assert.deepEqual(refsFromNotam("RWY '32L' CLSD", p.HEADS).rwy, ["32L"]);
 });
