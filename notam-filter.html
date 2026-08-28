@@ -19759,12 +19759,13 @@ var MAX_PHRASE=4;
    ============================================================ */
 var HL_RWY_KEY=new Set(["RWY","RWYS","RUNWAY","RUNWAYS","QFU","THR","TDZ"]);
 var HL_TWY_KEY=new Set(["TWY","TWYS","TAXIWAY","TAXIWAYS","TAXILANE","TAXILANES"]);
-/* Les mots « piste » et « taxiway » se surlignent eux-mêmes, avec ou sans nom
-   derrière : ils sont déjà l'objet du NOTAM (« RWY CLSD » n'a pas de chiffre
-   et parle pourtant de la piste). THR, TDZ et QFU restent en dehors — eux
-   désignent un point de la piste, pas la piste, et seul leur chiffre s'allume. */
+/* Tous les mots-clés se surlignent eux-mêmes, avec ou sans nom derrière : ils
+   sont déjà l'objet du NOTAM (« RWY CLSD » n'a pas de chiffre et parle
+   pourtant de la piste). Le seuil, la zone de toucher et le QFU aussi : le
+   mot et son chiffre se lisent d'un seul tenant. */
 var HL_SELF_WORD=new Set(["RWY","RWYS","RUNWAY","RUNWAYS",
-  "TWY","TWYS","TAXIWAY","TAXIWAYS","TAXILANE","TAXILANES"]);
+  "TWY","TWYS","TAXIWAY","TAXIWAYS","TAXILANE","TAXILANES",
+  "THR","TDZ","QFU"]);
 /* Un nom de piste : 25, 25L, 07/25, 07L/25R, 04-22 — et 253 pour un QFU
    donné en degrés. Le tokenizer garde « / » et « - » collés : la paire
    arrive en un seul jeton. */
