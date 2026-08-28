@@ -4405,7 +4405,16 @@ function nfaDetect(icao, raws, now){
        qui est en cause, jamais la piste. La forme TÊTE-PREMIÈRE, elle —
        « CLSD RWY nn », « CLOSURE OF RUNWAY nn » — met la piste en objet
        direct du mot de fermeture : aucun sujet ne peut s'y glisser. Seule
-       celle-là sort du sujet MR. */
+       celle-là sort du sujet MR — et elle seule se passe du garde-fou
+       « restriction partielle ». Ce garde-fou pèse sur le message ENTIER,
+       alors que la clause tête-première nomme son propre objet : « OPERATION
+       OF ACFT WITH WINGSPAN AT OR ABOVE 70M NOT ALLOWED DUE TO CLOSURE OF RWY
+       13L/31R » (LHBP A5758/26, QFALT) ferme bel et bien la 13L/31R, et
+       l'envergure ne qualifie que le reste du terrain. Aucun autre NOTAM de
+       Budapest ne portait cette fermeture ce jour-là : la taire, c'était la
+       perdre. Même précédence que le plan de Preflight Lens, où hasClosureWord()
+       passe AVANT hasRestrictCond() depuis toujours — les deux apps doivent
+       fermer la même piste sur le même message. */
     const adj = [], adjHead = [];
     for (const re of [NFA_RWY_CLSD_RE, NFA_CLSD_RWY_RE]){
       re.lastIndex = 0;
@@ -4419,7 +4428,7 @@ function nfaDetect(icao, raws, now){
     if (subj != null){
       if (subj === "FA"){
         if (cond === "LC" && !restrict) markRwy(runwayList(icao));
-        else if (adjHead.length && !restrict) markRwy(nfaPairsOf(icao, adjHead));
+        else if (adjHead.length) markRwy(nfaPairsOf(icao, adjHead));
       } else if (subj === "MR"){
         if (adj.length && !restrict) markRwy(nfaPairsOf(icao, adj));
         else if (outCond && !restrict){
@@ -4442,7 +4451,7 @@ function nfaDetect(icao, raws, now){
            piste restait ouverte à l'écran. Hors des familles qui desservent
            une piste, la tournure tête-première fait foi, quel que soit le
            sujet. */
-        if (adjHead.length && !restrict && NFA_SERVING_FAMS.indexOf(subj[0]) < 0)
+        if (adjHead.length && NFA_SERVING_FAMS.indexOf(subj[0]) < 0)
           markRwy(nfaPairsOf(icao, adjHead));
       }
       continue;

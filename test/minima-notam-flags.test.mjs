@@ -40,8 +40,9 @@ async function chargerDetecteur() {
   const CONSTS = [
     "NFA_OUT_CONDS", "NFA_ILS_SUBJ", "NFA_ALS_SUBJ", "NFA_CLOSED_WORDS",
     "NFA_OTS_RE", "NFA_RESUME_RE", "NFA_RESTRICT_RE", "NFA_ILS_TXT_RE",
-    "NFA_ALS_TXT_RE", "NFA_AD_CLSD_RE", "NFA_MARKER_US_RE", "NFA_RWY_REF_RE",
-    "NFA_RWY_CLSD_RE", "NFA_CLSD_RWY_RE", "NFA_LOOKAHEAD_MS", "NFA_DAYS",
+    "NFA_ALS_TXT_RE", "NFA_AD_CLSD_RE", "NFA_SERVING_FAMS", "NFA_MARKER_US_RE",
+    "NFA_RWY_REF_RE", "NFA_RWY_CLSD_RE", "NFA_CLSD_RWY_RE", "NFA_LOOKAHEAD_MS",
+    "NFA_DAYS",
   ].map(nom => {
     const m = new RegExp(`^const ${nom} = (.+);$`, "m").exec(html);
     assert.ok(m, `const ${nom} introuvable dans minima.html`);
@@ -63,7 +64,7 @@ async function chargerDetecteur() {
   // La base terrains du test remplace runwayList() ; nfStore/nfSave, le
   // sessionStorage. Rien d'autre ne sort du module découpé.
   const STUBS = `
-const TEST_RWYS = { LFPG:["08L/26R","08R/26L","09L/27R","09R/27L"], LFPO:["02/20","06/24","07/25"], LFAB:["13/31"], LEST:["17/35"] };
+const TEST_RWYS = { LFPG:["08L/26R","08R/26L","09L/27R","09R/27L"], LFPO:["02/20","06/24","07/25"], LFAB:["13/31"], LEST:["17/35"], LHBP:["13L/31R","13R/31L"] };
 function runwayList(icao){ return TEST_RWYS[icao] || []; }
 const nfStore = {};
 function nfSave(){}
@@ -231,4 +232,46 @@ test("migration v1 → v2 : un booléen coché s'étale sur toutes les extrémit
   assert.equal(nfGet("LFPO").rwyClosed["06/24"], true);
   assert.equal(nfGet("LFPO").man.ils["02"], true);
   assert.equal(nfGet("LFPO").man.rwy["06/24"], true);
+});
+
+// ------------------------------------------------------------
+//  La fermeture énoncée HORS du sujet MR (chantier du 2026-08-28 soir).
+//  Pendant de plan-closure-hors-sol.test.mjs : les deux apps doivent fermer
+//  la même piste sur le même message, avec la même tournure et les mêmes
+//  contre-exemples. Mesure du 2026-08-28 : 251 terrains, 7582 NOTAM, 25
+//  créneaux horaires de −24 h à +48 h — deux fermetures gagnées, LFPO
+//  A2740/26 et LHBP A5758/26 ; aucune perdue.
+// ------------------------------------------------------------
+test("tournure tête-première : le sujet Q ne garde plus la porte à lui seul", async () => {
+  const { nfaDetect } = await chargerDetecteur();
+  // LFPO A2740/26 avec son VRAI Q-code : QPDTT, procédures de départ. Ni FA,
+  // ni MR, ni équipement — le message restait muet et la 06/24 ouverte.
+  const orly = `A2740/26 NOTAMN Q) LFFF/QPDTT/I/BO/A/000/999/4843N00223E005 A) LFPO ${BC} E) TRIGGER NOTAM - AIRAC AIP SUP 085/26. AD PARIS ORLY (LFPO) : DUE TO THE CLOSURE OF RUNWAY 06/24 FROM AUGUST 10 TO DECEMBER 17, TEMPORARY APPROACH PROCEDURES ON RUNWAY 25 AND DEPARTURE PROCEDURES ON RUNWAY 20 ARE IMPLEMENTED.`;
+  let d = nfaDetect("LFPO", [orly], NOW);
+  // La 25 et la 20 sont les pistes de REPLI : seule la clause de fermeture compte.
+  assert.deepEqual(Object.keys(d.rwy), ["06/24"]);
+
+  // LHBP A5758/26 : la fermeture est citée comme CAUSE, et le message porte un
+  // mot de restriction (WINGSPAN) qui ne qualifie que le reste du terrain. La
+  // clause tête-première nomme son propre objet — même précédence que
+  // hasClosureWord() devant hasRestrictCond() dans le plan de Preflight Lens.
+  d = nfaDetect("LHBP", [`A5758/26 NOTAMN Q) LHCC/QFALT/IV/NBO/A/000/999/4726N01916E005 A) LHBP ${BC} E) OPERATION OF ACFT WITH WINGSPAN AT OR ABOVE 70M NOT ALLOWED DUE TO CLOSURE OF RWY 13L/31R.`], NOW);
+  assert.deepEqual(Object.keys(d.rwy), ["13L/31R"]);
+
+  // La tournure INVERSE, elle, ne sort jamais du sujet MR : elle se laisse
+  // voler son sujet par ce qui la précède. Cas réels mesurés le 2026-08-28.
+  const muets = [
+    // Heathrow A3024/26 — la grue ne travaille QUE piste fermée.
+    Q("LFPG", "QOBCE", `${BC} E) LIT CRANE OPR AT PSN 512800N 0002601W. WILL ONLY OPR WHEN RWY 09L/27R CLSD`),
+    // JFK 08/291 et Zurich A0611/26 — c'est la voie, la sortie, qui ferme.
+    Q("LFPG", "QMXLC", `${BC} E) TWY FB BTN RWY 08L/26R AND RWY 09L/27R CLSD`),
+    Q("LFPG", "QMXLC", `${BC} E) EXIT TWY E5 AND TWY B EAST FM RWY 09R/27L CLSD DUE TO WIP`),
+  ];
+  for (const m of muets)
+    assert.deepEqual(Object.keys(nfaDetect("LFPG", [m], NOW).rwy), [], m.slice(60, 130));
+
+  // Et les familles qui DESSERVENT une piste gardent leur porte fermée : chez
+  // elles, une fermeture parle de l'installation, pas de la surface.
+  d = nfaDetect("LFPO", [Q("LFPO", "QICAS", `${BC} E) CLSD RWY 06 ILS DUE MAINT`)], NOW);
+  assert.deepEqual(Object.keys(d.rwy), []);
 });

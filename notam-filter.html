@@ -21770,12 +21770,50 @@ window.addEventListener("scroll", hidePop, true);
       // (« RWY 26L TWY DIRECTION SIGN … MISSING ») peigne la piste comme fermée.
       return "restricted";
     }
+    /* Les pistes qu'un NOTAM ferme NOIR SUR BLANC, hors de toute question de
+       Q-code. La tournure retenue est TÊTE-PREMIÈRE — « CLSD RWY nn »,
+       « CLOSURE OF RUNWAY nn » — celle qui met la piste en objet direct du mot
+       de fermeture. La tournure inverse (« RWY nn … CLSD ») est volontairement
+       ABSENTE : elle se laisse voler son sujet par ce qui la précède, et
+       « TWY FB BTN RWY 04L/22R AND RWY 04R/22L CLSD » (JFK), « EXIT TWY E5 …
+       FM RWY 16/34 CLSD » (Zurich) ou « CRANE … WILL ONLY OPR WHEN RWY
+       09L/27R CLSD » (Heathrow) peindraient alors des pistes ouvertes. Ces
+       trois-là sont déjà des NOTAM « sol » : ils entrent au plan par la porte
+       normale, avec les refs de refsFromNotam(), et ne passent pas ici.
+       Même règle, mêmes exemples que le détecteur de drapeaux de Minima Lens —
+       les deux apps doivent fermer la même piste sur le même message.
+       « RUNWAY » en toutes lettres compte autant que « RWY » : refsFromNotam()
+       ne lit que la forme abrégée, ce qui suffit à sa porte à elle (un NOTAM
+       sol écrit « RWY »), pas à celle-ci — le message d'Orly écrit « RUNWAY ». */
+    const PLAN_RWY_CLSD_RE = /\b(?:CLSD|CLOSED|CLOSURE)\s+(?:OF\s+)?R(?:WY|UNWAY)S?\s*:?\s*((?:\d{2}[LRC]?)(?:\s*\/\s*\d{2}[LRC]?)*)/g;
+    function planClosureRwys(n) {
+      const T = (n.e || "").toUpperCase();
+      const out = [];
+      PLAN_RWY_CLSD_RE.lastIndex = 0;
+      let m;
+      while ((m = PLAN_RWY_CLSD_RE.exec(T)))
+        for (const d of m[1].match(/\d{2}[LRC]?/g) || []) if (!out.includes(d)) out.push(d);
+      return out;
+    }
+    /* Un NOTAM dont le Q-code n'est PAS « sol » mais qui ferme une piste en
+       toutes lettres : il entre au plan par cette porte-là, et par elle seule.
+       Cas réel LFPO A2740/26 (QPDTT, le trigger de l'AIP SUP 085/26) « DUE TO
+       THE CLOSURE OF RUNWAY 06/24 FROM AUGUST 10 TO DECEMBER 17 » — la liste
+       le classait Critical, le plan laissait la 06/24 grise pendant quatre
+       mois de fermeture, parce que « procédures de départ » n'est pas « sol ».
+       Le Q-code dit de QUOI parle le message ; il ne dit pas quelle surface le
+       message ferme. */
+    function closesRwyByText(n) {
+      const qc = categoriesFromQcode(n.qcode);
+      const sol = qc.size ? qc.has("sol") : n.categories.includes("sol");
+      return !sol && planClosureRwys(n).length > 0;
+    }
     function paintsGround(n) {
       // Une levée touche bien la surface (elle doit s'afficher en vert, cf.
       // planKind) — elle n'est plus écartée ici comme un non-événement.
       const qc = categoriesFromQcode(n.qcode);
-      if (qc.size) return qc.has("sol");
-      return n.categories.includes("sol");
+      if (qc.size) return qc.has("sol") || closesRwyByText(n);
+      return n.categories.includes("sol") || closesRwyByText(n);
     }
 
     /* Fusion des tronçons OSM par ref : LFPG expose 788 objets « taxiway » pour
@@ -22461,7 +22499,16 @@ window.addEventListener("scroll", hidePop, true);
       const MISSLBL = { twy: "TWY", rwy: "RWY", stand: "STAND", apron: "APRON" };
 
       for (const n of ground) {
-        const refs = refsFromNotam(n.e || "", HEADS, APRONS, APRONS_SHORT);
+        /* Le NOTAM entré par la seule clause de fermeture n'apporte QUE les
+           pistes de cette clause. Lire tout son item E) peindrait les pistes
+           qu'il désigne comme SOLUTION DE REPLI : « … CLOSURE OF RUNWAY 06/24
+           …, TEMPORARY APPROACH PROCEDURES ON RUNWAY 25 AND DEPARTURE
+           PROCEDURES ON RUNWAY 20 ARE IMPLEMENTED » — la 25 et la 20 sont les
+           pistes qu'on utilise à la place, et planKind() vaut pour le message
+           entier : elles sortiraient rouges avec la 06/24. */
+        const refs = closesRwyByText(n)
+          ? { twy: [], rwy: planClosureRwys(n), stand: [], apron: [], partial: [] }
+          : refsFromNotam(n.e || "", HEADS, APRONS, APRONS_SHORT);
         for (const kind of ["twy", "rwy", "stand", "apron"]) {
           for (const ref of refs[kind]) {
             const hits = INDEX.get(KIND2T[kind] + ":" + ref);
@@ -22546,6 +22593,9 @@ window.addEventListener("scroll", hidePop, true);
          retirer ce bloc ne change pas le rendu. Voir le harnais tests/plan-invariants. */
       const segLen = gp => { let l = 0; for (let i = 1; i < gp.length; i++) l += Math.hypot(gp[i][0] - gp[i - 1][0], gp[i][1] - gp[i - 1][1]); return l; };
       for (const n of ground) {
+        // Le NOTAM entré par la clause de fermeture n'a ni taxiway ni portion :
+        // les invariants de découpe n'ont rien à garantir sur lui.
+        if (closesRwyByText(n)) continue;
         const rf = refsFromNotam(n.e || "", HEADS, APRONS, APRONS_SHORT);
         if (!rf.partial.length) continue;
         for (const [rx, ry] of rf.partial) {
