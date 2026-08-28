@@ -1,17 +1,20 @@
 // ============================================================
 //  Non-régression du détecteur NOTAM → drapeaux de minima.html
-//  (chantier « notam/minima » du 2026-08-28).
+//  (chantier « notam/minima » du 2026-08-28, granularité par
+//  extrémité le soir même).
 //
 //  Une piste fermée ou une approche U/S détectée dans les NOTAM du terrain
-//  coche automatiquement les interrupteurs du contrat nfGet/nfSet — la piste
-//  passe NO GO, les lignes ILS/LOC sont écartées du choix d'approche. Le
-//  pilote garde le dernier mot : décocher un drapeau auto est retenu par
-//  NOTAM (dis), cocher à la main survit aux refetch (man).
+//  coche automatiquement les interrupteurs du contrat nfGet — la piste passe
+//  NO GO, les lignes ILS/LOC sont écartées du choix d'approche DU QFU VISÉ
+//  seulement : un ILS 26L HS laisse le 08R garder son CAT III. Le pilote
+//  garde le dernier mot : décocher un drapeau auto est retenu par NOTAM
+//  (dis), cocher à la main survit aux refetch (man).
 //
-//  Cas réel fondateur : LFPO A2740/26 — « DUE TO THE CLOSURE OF RUNWAY
-//  06/24 » — le mot RUNWAY en toutes lettres échappait à l'extraction de
-//  refs du plan (regex RWY seul, cf. refsFromNotam de notam-filter.html) ;
-//  le détecteur de minima.html le reconnaît, ce test le verrouille.
+//  Cas réels fondateurs : LFPO A2740/26 — « DUE TO THE CLOSURE OF RUNWAY
+//  06/24 » (RUNWAY en toutes lettres, invisible du regex RWY du plan de
+//  notam-filter.html) ; KJFK 2026-08-28 — les NOTAMC « RWY 04L/22R CLSD
+//  CAN » qui auraient fermé les quatre pistes, et « NAV ILS RWY 04R IM
+//  U/S » qui n'est qu'un marqueur.
 //
 //  Comme classify.test.mjs et plan-kind.test.mjs : on DÉCOUPE le code
 //  réellement déployé dans minima.html, repéré par marqueur textuel et
@@ -44,7 +47,8 @@ async function chargerDetecteur() {
   });
   // Fonctions sur plusieurs lignes : accolade fermante en colonne 0.
   const FNS = ["nfaItems", "nfaTs", "nfaSchedActiveAt", "nfaActiveIn",
-               "nfaPairsOf", "nfaDetect", "nfGet", "nfEntry", "nfUserSet",
+               "nfaPairsOf", "nfaEndsFor", "nfaDetect", "nfGet", "nfEndsOf",
+               "nfIlsOut", "nfAlsOut", "nfEntry", "nfUserSetEnd",
                "nfUserToggleRwy", "nfaApply"].map(nom => {
     const re = new RegExp(`function ${nom}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}`);
     const m = re.exec(html);
@@ -61,9 +65,10 @@ const TEST_RWYS = { LFPG:["08L/26R","08R/26L","09L/27R","09R/27L"], LFPO:["02/20
 function runwayList(icao){ return TEST_RWYS[icao] || []; }
 const nfStore = {};
 function nfSave(){}
+function nfSeed(icao, e){ nfStore[icao] = e; }
 `;
   const src = [...CONSTS, one[0], ...FNS, STUBS,
-    "export { nfaDetect, nfaActiveIn, nfaItems, nfGet, nfUserSet, nfUserToggleRwy, nfaApply, nfStore };"].join("\n");
+    "export { nfaDetect, nfaActiveIn, nfaItems, nfGet, nfIlsOut, nfAlsOut, nfEntry, nfUserSetEnd, nfUserToggleRwy, nfaApply, nfSeed };"].join("\n");
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 
@@ -74,19 +79,22 @@ const Q = (icao, code, bcde) =>
   `A1000/26 NOTAMN Q) LFFF/${code}/IV/NBO/A/000/999/4901N00227E005 A) ${icao} ${bcde}`;
 const BC = "B) 2608280900 C) 2608291000";
 
-test("Q-line : piste fermée, ILS U/S, rampe U/S — les drapeaux attendus, et eux seuls", async () => {
+test("Q-line : piste fermée par paire, ILS et rampe par EXTRÉMITÉ", async () => {
   const { nfaDetect } = await chargerDetecteur();
   // QMRLC + refs adjacentes → la paire citée, pas les autres.
   let d = nfaDetect("LFPG", [Q("LFPG", "QMRLC", `${BC} E) RWY 09L/27R CLSD DUE WIP`)], NOW);
   assert.deepEqual(Object.keys(d.rwy), ["09L/27R"]);
-  assert.deepEqual(d.ilsOut, []);
-  // QICAS → ILS out, aucune piste fermée.
+  assert.deepEqual(d.ils, {});
+  // QICAS « ILS RWY 26L U/S » → la SEULE extrémité 26L, aucune piste fermée.
   d = nfaDetect("LFPG", [Q("LFPG", "QICAS", `${BC} E) ILS RWY 26L U/S`)], NOW);
-  assert.deepEqual(d.ilsOut, ["A1000/26"]);
+  assert.deepEqual(d.ils, { "26L": ["A1000/26"] });
   assert.deepEqual(Object.keys(d.rwy), []);
-  // QLAAS (rampe d'approche) → lights out.
+  // QICAS sans ref de piste → repli conservatif : toutes les extrémités.
+  d = nfaDetect("LFPG", [Q("LFPG", "QICAS", `${BC} E) ILS U/S DUE MAINT`)], NOW);
+  assert.equal(Object.keys(d.ils).length, 8);
+  // QLAAS (rampe d'approche) → l'extrémité citée.
   d = nfaDetect("LFPG", [Q("LFPG", "QLAAS", `${BC} E) ALS RWY 27R U/S`)], NOW);
-  assert.deepEqual(d.lightsOut, ["A1000/26"]);
+  assert.deepEqual(Object.keys(d.als), ["27R"]);
   // QFALC (aérodrome fermé) → toutes les paires.
   d = nfaDetect("LFPG", [Q("LFPG", "QFALC", `${BC} E) AD CLSD DUE STAFF SHORTAGE`)], NOW);
   assert.equal(Object.keys(d.rwy).length, 4);
@@ -100,22 +108,23 @@ test("texte sans Q-line (NOTAM US) : RUNWAY en toutes lettres, OTS, AD CLSD — 
   // LFPO A2740/26 : « CLOSURE OF RUNWAY 06/24 » (le cas fondateur).
   let d = nfaDetect("LFPO", [`A2740/26 NOTAMN Q) LFFF/QMRLC/IV/NBO/A/000/999/4830N00223E005 A) LFPO ${BC} E) DUE TO THE CLOSURE OF RUNWAY 06/24 TWY W2 UNAVBL`], NOW);
   assert.deepEqual(Object.keys(d.rwy), ["06/24"]);
-  // « APCH LGT OTS » américain, sans Q-line ni série OACI.
+  // « APCH LGT OTS » américain, sans Q-line ni série OACI → l'extrémité 27R.
   d = nfaDetect("LFPG", [`07/210 A) LFPG ${BC} E) RWY 27R APCH LGT OTS`], NOW);
-  assert.deepEqual(d.lightsOut, ["07/210"]);
+  assert.deepEqual(Object.keys(d.als), ["27R"]);
+  assert.deepEqual(d.als["27R"], ["07/210"]);
   // « AD CLSD » sans Q-line → toutes les paires.
   d = nfaDetect("LFAB", [`07/300 A) LFAB ${BC} E) AD CLSD DUE FLOODING`], NOW);
   assert.deepEqual(Object.keys(d.rwy), ["13/31"]);
-  // « ILS RWY 09 CLSD » parle de l'ILS : ilsOut, pas de piste fermée.
+  // « ILS RWY 06 CLSD » parle de l'ILS du 06 : jamais de piste fermée.
   d = nfaDetect("LFPO", [`07/400 A) LFPO ${BC} E) ILS RWY 06 CLSD FOR MAINT`], NOW);
-  assert.deepEqual(d.ilsOut, ["07/400"]);
+  assert.deepEqual(Object.keys(d.ils), ["06"]);
   assert.deepEqual(Object.keys(d.rwy), []);
 });
 
 test("garde-fous : reprise d'exploitation, restriction partielle, envergure", async () => {
   const { nfaDetect } = await chargerDetecteur();
   const rien = d => {
-    assert.deepEqual(d.ilsOut, []); assert.deepEqual(d.lightsOut, []);
+    assert.deepEqual(d.ils, {}); assert.deepEqual(d.als, {});
     assert.deepEqual(Object.keys(d.rwy), []);
   };
   rien(nfaDetect("LFPG", [Q("LFPG", "QMRLC", `${BC} E) RWY 08R/26L RESUMED NORMAL OPS, PREVIOUSLY CLSD`)], NOW));
@@ -135,10 +144,10 @@ test("annulations et marqueurs (cas réels KJFK du 2026-08-28) : jamais un drape
   assert.deepEqual(Object.keys(d.rwy), []);
   // Marqueur intérieur HS (KJFK 05/149) : l'ILS entier reste utilisable.
   d = nfaDetect("LFPG", [`05/149 A) LFPG ${BC} E) NAV ILS RWY 04R IM U/S`], NOW);
-  assert.deepEqual(d.ilsOut, []);
+  assert.deepEqual(d.ils, {});
   // Mais une panne ILS réelle du même cru flagge toujours (LFPO A5442/26).
   d = nfaDetect("LFPG", [`A5442/26 NOTAMN Q) LFFF/QICAS/I/NBO/A/000/999/4844N00223E005 A) LFPG ${BC} E) ILS RWY 02 U/S`], NOW);
-  assert.deepEqual(d.ilsOut, ["A5442/26"]);
+  assert.equal(Object.keys(d.ils).length, 8); // « 02 » inconnu de LFPG → repli toutes extrémités
 });
 
 test("validité : passé, PERM, fenêtre de six heures, chantier de nuit, jours", async () => {
@@ -161,29 +170,45 @@ test("validité : passé, PERM, fenêtre de six heures, chantier de nuit, jours"
   assert.equal(nfaActiveIn(it(`${BC} D) FRI 0800-1200 E) X`), NOW, NOW + 6 * 3600000), true);
 });
 
-test("cycle de vie : refus retenu, NOTAM nouveau recoche, disparition décoche, manuel survit", async () => {
-  const { nfaDetect, nfaApply, nfGet, nfUserSet, nfUserToggleRwy } = await chargerDetecteur();
+test("cycle de vie par extrémité : refus retenu, NOTAM nouveau recoche, disparition décoche, manuel survit", async () => {
+  const { nfaDetect, nfaApply, nfGet, nfIlsOut, nfAlsOut, nfUserSetEnd, nfUserToggleRwy } = await chargerDetecteur();
   const rwy = Q("LFPG", "QMRLC", `${BC} E) RWY 09L/27R CLSD DUE WIP`);
   const ils = `A1001/26 NOTAMN Q) LFFF/QICAS/I/NBO/A/000/999/4901N00227E005 A) LFPG ${BC} E) ILS RWY 26L U/S`;
   const loc = `A2222/26 NOTAMN Q) LFFF/QILAS/I/NBO/A/000/999/4901N00227E005 A) LFPG ${BC} E) LOC RWY 08R U/S`;
-  // Première passe : tout se coche, avec provenance.
+  // Première passe : la 26L seule se coche, avec provenance — la 27L reste saine.
   nfaApply("LFPG", nfaDetect("LFPG", [rwy, ils], NOW), { n: 2 });
-  assert.equal(nfGet("LFPG").ilsOut, true);
+  assert.equal(nfIlsOut("LFPG", "26L"), true);
+  assert.equal(nfIlsOut("LFPG", "27L"), false);
   assert.equal(nfGet("LFPG").rwyClosed["09L/27R"], true);
-  assert.deepEqual(nfGet("LFPG").auto.ilsOut, ["A1001/26"]);
-  // Le pilote décoche l'ILS : le refetch des MÊMES NOTAM ne recoche pas.
-  nfUserSet("LFPG", "ilsOut", false);
+  assert.deepEqual(nfGet("LFPG").auto.ils, { "26L": ["A1001/26"] });
+  // Le pilote décoche l'ILS 26L : le refetch des MÊMES NOTAM ne recoche pas.
+  nfUserSetEnd("LFPG", "ils", "26L", false);
   nfaApply("LFPG", nfaDetect("LFPG", [rwy, ils], NOW), { n: 2 });
-  assert.equal(nfGet("LFPG").ilsOut, false);
-  // Un NOTAM NOUVEAU sur l'ILS recoche — le refus de A1001/26 tient toujours.
+  assert.equal(nfIlsOut("LFPG", "26L"), false);
+  // Un NOTAM NOUVEAU sur le 08R coche le 08R — le refus du 26L tient toujours.
   nfaApply("LFPG", nfaDetect("LFPG", [rwy, ils, loc], NOW), { n: 3 });
-  assert.equal(nfGet("LFPG").ilsOut, true);
-  assert.deepEqual(nfGet("LFPG").dis.ilsOut, ["A1001/26"]);
+  assert.equal(nfIlsOut("LFPG", "08R"), true);
+  assert.equal(nfIlsOut("LFPG", "26L"), false);
+  assert.deepEqual(nfGet("LFPG").dis.ils, { "26L": ["A1001/26"] });
   // Le NOTAM piste disparaît : la paire se décoche seule.
   nfaApply("LFPG", nfaDetect("LFPG", [ils, loc], NOW), { n: 2 });
   assert.equal(nfGet("LFPG").rwyClosed["09L/27R"], undefined);
-  // Une paire cochée à la MAIN survit à un contrôle qui n'en parle pas.
+  // Un drapeau coché à la MAIN survit à un contrôle qui n'en parle pas.
   nfUserToggleRwy("LFPG", "08L/26R");
+  nfUserSetEnd("LFPG", "als", "09R", true);
   nfaApply("LFPG", nfaDetect("LFPG", [ils, loc], NOW), { n: 2 });
   assert.equal(nfGet("LFPG").rwyClosed["08L/26R"], true);
+  assert.equal(nfAlsOut("LFPG", "09R"), true);
+});
+
+test("migration v1 → v2 : un booléen coché s'étale sur toutes les extrémités, en manuel", async () => {
+  const { nfEntry, nfIlsOut, nfGet, nfSeed } = await chargerDetecteur();
+  nfSeed("LFPO", { ilsOut: true, lightsOut: false, rwyClosed: { "06/24": true },
+                   man: { rwy: { "06/24": true } } });
+  nfEntry("LFPO");
+  for (const en of ["02","20","06","24","07","25"]) assert.equal(nfIlsOut("LFPO", en), true);
+  assert.deepEqual(nfGet("LFPO").lightsOut, {});
+  assert.equal(nfGet("LFPO").rwyClosed["06/24"], true);
+  assert.equal(nfGet("LFPO").man.ils["02"], true);
+  assert.equal(nfGet("LFPO").man.rwy["06/24"], true);
 });

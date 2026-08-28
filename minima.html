@@ -3266,7 +3266,7 @@ function syncPlanningFromDb(qOpt){
       let hasB = false;
       for (const end of r.pair.split("/").map(s=>s.trim())){
         for (const t of dbApproachesFor(icao, end)){
-          if (nfApproachOut(icao, t)) continue;
+          if (nfApproachOut(icao, end, t)) continue;
           if (["CAT_III","CAT_II","CAT_I"].includes(t)) hasB = true;
           else if (["LPV","LNAV_VNAV"].includes(t)){
             const eff = adEffMinima(icao, end, t);
@@ -3288,7 +3288,7 @@ function syncPlanningFromDb(qOpt){
           : (typeof selectedQfu === "function") ? selectedQfu() : null;
   const l = (icao && q) ? adLightAt(icao, q.id) : null;
   if (!l) cfg.cmvLighting = "OTHER";
-  else if (!nf.lightsOut && l.cls && l.cls!=="NALS" && l.edge==="H") cfg.cmvLighting = "HIGH";
+  else if (!nfAlsOut(icao, q.id) && l.cls && l.cls!=="NALS" && l.edge==="H") cfg.cmvLighting = "HIGH";
   else if (l.cls==="NALS" && l.edge==="N") cfg.cmvLighting = "NONE";
   else cfg.cmvLighting = "OTHER";
 }
@@ -3972,7 +3972,7 @@ function phaseApproachType(tabRole, icao, end){
   /* Les approches écartées par un drapeau NOTAM (ILS HS) ne sont plus des
      candidates : ni comme choix par défaut, ni comme sélection mémorisée —
      une sélection devenue indisponible retombe sur la meilleure restante. */
-  const opts = dbApproachesFor(icao, end).filter(t=>!nfApproachOut(icao, t));
+  const opts = dbApproachesFor(icao, end).filter(t=>!nfApproachOut(icao, end, t));
   if (!opts.length) return null;
   const sel = state.phaseApp[tabRole];
   if (sel==="SETUP") return null;
@@ -4015,15 +4015,20 @@ function cfgForAppType(base, type){
    son briefing — pas les NOTAM eux-mêmes. C'est le CONTRAT avec un futur module
    NOTAM : lui remplira ces mêmes drapeaux automatiquement, la signature ne
    bougera pas. Par terrain :
-     ilsOut    : ILS HS — les lignes ILS/LOC de la base terrains sont écartées
-                 du choix d'approche ; si la phase reste jugée sur un moyen ILS
-                 (Operation setup), l'alerte devient CRITICAL.
-     lightsOut : balisage d'approche HS — minima recalculés en classe NALS
-                 (aucun système de balisage d'approche), à l'approche seulement :
-                 au décollage, le pilote choisit sa ligne réglementaire (avec sa
-                 condition d'infrastructure) directement sur la fiche de phase.
+     ilsOut    : ILS HS PAR EXTRÉMITÉ ("26L": true) — les lignes ILS/LOC de la
+                 base terrains sont écartées du choix d'approche du QFU jugé ;
+                 si la phase reste jugée sur un moyen ILS (Operation setup),
+                 l'alerte devient CRITICAL. Granularité par extrémité depuis le
+                 2026-08-28 (avant : booléen par terrain, migré par nfEntry).
+     lightsOut : rampe d'approche HS PAR EXTRÉMITÉ ("26L": true) — minima du
+                 QFU jugé recalculés en classe NALS (aucun système de balisage
+                 d'approche), à l'approche seulement : au décollage, le pilote
+                 choisit sa ligne réglementaire (avec sa condition
+                 d'infrastructure) directement sur la fiche de phase.
      rwyClosed : paires de pistes fermées ("09/27": true). La paire sélectionnée
-                 fermée force le verdict de toutes les phases à NO GO.
+                 fermée force le verdict de toutes les phases à NO GO. Une
+                 fermeture reste PAR PAIRE : une surface fermée l'est dans les
+                 deux sens.
    Données de vol, pas de documentation : sessionStorage — un rechargement les
    garde, une nouvelle session repart à blanc, contrairement aux exigences
    OM-B/carte qui vivent en localStorage. */
@@ -4037,25 +4042,33 @@ const NF_ILS_FACILITIES = ["ILS","MLS","GLS","PAR","LOC","LOC_DME"];
 const nfStore = (()=>{ try { return JSON.parse(sessionStorage.getItem(NF_KEY)) || {}; } catch(e){ return {}; } })();
 function nfSave(){ try { sessionStorage.setItem(NF_KEY, JSON.stringify(nfStore)); } catch(e){} }
 function nfGet(icao){
-  return (icao && nfStore[icao]) || {ilsOut:false, lightsOut:false, rwyClosed:{}};
+  return (icao && nfStore[icao]) || {ilsOut:{}, lightsOut:{}, rwyClosed:{}};
 }
-function nfSet(icao, patch){
-  if (!icao) return;
-  nfStore[icao] = {...nfGet(icao), ...patch};
-  nfSave();
-}
-function nfToggleRwy(icao, pair){
-  const rc = {...nfGet(icao).rwyClosed};
-  if (rc[pair]) delete rc[pair]; else rc[pair] = true;
-  nfSet(icao, {rwyClosed: rc});
+/* Toutes les extrémités du terrain (« 08L », « 26R », … ) — mêmes
+   désignateurs que les cartes QFU et la base terrains. */
+function nfEndsOf(icao){
+  return runwayList(icao).flatMap(p => String(p).split("/").map(s => s.trim()));
 }
 function nfRwyClosed(icao, pair){ return !!(pair && nfGet(icao).rwyClosed[pair]); }
+/* L'état d'une extrémité. Sans extrémité (aucun QFU choisi), le doute
+   l'emporte : un drapeau quelque part vaut drapeau — c'était le comportement
+   terrain entier d'avant la granularité. */
+function nfIlsOut(icao, end){
+  const f = nfGet(icao).ilsOut || {};
+  return end ? !!f[end] : Object.keys(f).length > 0;
+}
+function nfAlsOut(icao, end){
+  const f = nfGet(icao).lightsOut || {};
+  return end ? !!f[end] : Object.keys(f).length > 0;
+}
 /* Une approche de la base écartée par un drapeau ? Un seul point de décision,
-   partagé par le moteur (phaseApproachType) et les sélecteurs d'approche. */
-function nfApproachOut(icao, type){ return nfGet(icao).ilsOut && NF_ILS_TYPES.includes(type); }
+   partagé par le moteur (phaseApproachType) et les sélecteurs d'approche —
+   désormais pour l'extrémité jugée, pas pour le terrain entier. */
+function nfApproachOut(icao, end, type){ return nfIlsOut(icao, end) && NF_ILS_TYPES.includes(type); }
 function nfAny(icao){
   const f = nfGet(icao);
-  return f.ilsOut || f.lightsOut || Object.keys(f.rwyClosed).length>0;
+  return Object.keys(f.ilsOut || {}).length > 0 || Object.keys(f.lightsOut || {}).length > 0
+      || Object.keys(f.rwyClosed).length > 0;
 }
 
 /* ================ NOTAM AUTO-FLAGS (remplissage automatique) ================
@@ -4078,9 +4091,11 @@ function nfAny(icao){
    NOTAM (dis) et le refetch ne le recoche pas tant que ce sont les mêmes ;
    un drapeau coché à la main (man) survit à la disparition du NOTAM ; un
    échec réseau garde les derniers drapeaux connus et le dit dans le bandeau.
-     Granularité assumée v1 : ILS et rampe par TERRAIN (un ILS 27L HS écarte
-   les lignes ILS des deux sens — conservatif, la raison affichée cite la
-   piste), fermeture par PAIRE (une extrémité fermée ferme la paire). */
+     Granularité (v2, 2026-08-28 soir) : ILS et rampe PAR EXTRÉMITÉ — un ILS
+   27L HS n'écarte les lignes ILS que du QFU 27L, le 09R garde les siennes.
+   L'extrémité vient des refs « RWY nn » du texte (nfaEndsFor) ; sans ref
+   lisible, toutes les extrémités — le repli conservatif. Fermeture par
+   PAIRE : une surface fermée l'est dans les deux sens. */
 const NFA_OUT_CONDS = ["LC","AS","AU","LD","AW","LP"];
 const NFA_ILS_SUBJ = ["IC","ID","IG","IL","IS","IT","IU","IW"];
 const NFA_ALS_SUBJ = ["LA"];
@@ -4185,11 +4200,26 @@ function nfaPairsOf(icao, ids){
   return out;
 }
 
+/* Les extrémités visées par un NOTAM d'équipement : les refs « RWY nn » de
+   son texte, croisées avec les extrémités connues du terrain. Aucune ref, ou
+   aucune qui colle (fiche désaccordée) : TOUTES les extrémités — le repli
+   conservatif, qui est l'ancien comportement terrain entier. */
+function nfaEndsFor(icao, T){
+  NFA_RWY_REF_RE.lastIndex = 0;
+  const refs = [];
+  let m;
+  while ((m = NFA_RWY_REF_RE.exec(T))){ refs.push(m[1]); if (m[2]) refs.push(m[2]); }
+  const ends = nfEndsOf(icao);
+  const hit = ends.filter(en => refs.indexOf(en) >= 0);
+  return hit.length ? hit : ends;
+}
+
 /* Le détecteur : des NOTAM bruts vers les drapeaux, avec la source de chaque
    décision. Q-line d'abord ; sans elle, l'équipement (ILS/rampe) prime sur la
-   piste — « ILS RWY 09 CLSD » parle de l'ILS, pas de la piste 09. */
+   piste — « ILS RWY 09 CLSD » parle de l'ILS, pas de la piste 09. ILS et
+   rampe sont rangés PAR EXTRÉMITÉ (nfaEndsFor), les fermetures par paire. */
 function nfaDetect(icao, raws, now){
-  const det = {ilsOut:[], lightsOut:[], rwy:{}, src:{}};
+  const det = {ils:{}, als:{}, rwy:{}, src:{}};
   const from = now, to = now + NFA_LOOKAHEAD_MS;
   const seen = new Set();
   for (const raw of raws || []){
@@ -4217,7 +4247,7 @@ function nfaDetect(icao, raws, now){
     /* Les chevrons sautent : les messages du moteur et les infobulles insèrent
        cet extrait dans du HTML. */
     const excerpt = ((it.e || t).slice(0, 110) + (it.d ? " · D) " + it.d.slice(0, 40) : "")).replace(/[<>&"]/g, " ").replace(/\s+/g, " ").trim();
-    const mark = list => { list.push(id); det.src[id] = excerpt; };
+    const markEnds = (dict, ends) => { for (const en of ends) (dict[en] = dict[en] || []).push(id); if (ends.length) det.src[id] = excerpt; };
     const markRwy = ps => { for (const p of ps) (det.rwy[p] = det.rwy[p] || []).push(id); if (ps.length) det.src[id] = excerpt; };
     /* Refs de piste ADJACENTES à un mot de fermeture — « RWY 06/24 CLSD »,
        « CLOSURE OF RUNWAY 06/24 » — les seules dignes de foi dans un texte
@@ -4244,8 +4274,8 @@ function nfaDetect(icao, raws, now){
             : (runwayList(icao).length === 1 ? runwayList(icao) : []));
         }
       } else {
-        if (NFA_ILS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) mark(det.ilsOut);
-        if (NFA_ALS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) mark(det.lightsOut);
+        if (NFA_ILS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) markEnds(det.ils, nfaEndsFor(icao, T));
+        if (NFA_ALS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) markEnds(det.als, nfaEndsFor(icao, T));
       }
       continue;
     }
@@ -4257,8 +4287,8 @@ function nfaDetect(icao, raws, now){
     const T2 = T.replace(NFA_MARKER_US_RE, " ");
     const closTxt2 = !restrict && (NFA_CLOSED_WORDS.some(w => T2.includes(w)) || NFA_OTS_RE.test(T2));
     let equip = false;
-    if (closTxt2 && NFA_ILS_TXT_RE.test(T2)){ mark(det.ilsOut); equip = true; }
-    if (closTxt2 && NFA_ALS_TXT_RE.test(T2)){ mark(det.lightsOut); equip = true; }
+    if (closTxt2 && NFA_ILS_TXT_RE.test(T2)){ markEnds(det.ils, nfaEndsFor(icao, T2)); equip = true; }
+    if (closTxt2 && NFA_ALS_TXT_RE.test(T2)){ markEnds(det.als, nfaEndsFor(icao, T2)); equip = true; }
     if (!equip && adj.length && !restrict) markRwy(nfaPairsOf(icao, adj));
   }
   return det;
@@ -4267,35 +4297,54 @@ function nfaDetect(icao, raws, now){
 /* L'entrée du store, matérialisée et migrée : auto (ce que les NOTAM en cours
    soutiennent), dis (ce que le pilote a refusé, par NOTAM), man (ce qu'il a
    coché à la main), src (l'extrait par NOTAM), chk (l'état du dernier
-   contrôle). Des drapeaux d'une session antérieure au remplissage automatique
-   sont forcément manuels — ils le restent. */
+   contrôle) — chacun décliné en ils/als par extrémité et rwy par paire.
+   Migration v1 (booléens par terrain, avant le 2026-08-28 soir) : un booléen
+   coché s'étale sur toutes les extrémités, en MANUEL — il venait d'un geste
+   du pilote ; les refus/auto v1 sont recalculés au prochain contrôle. */
 function nfEntry(icao){
-  const e = nfStore[icao] || (nfStore[icao] = {ilsOut:false, lightsOut:false, rwyClosed:{}});
-  if (!e.rwyClosed) e.rwyClosed = {};
-  if (!e.auto) e.auto = {ilsOut:[], lightsOut:[], rwy:{}};
-  if (!e.auto.rwy) e.auto.rwy = {};
-  if (!e.dis) e.dis = {rwy:{}};
-  if (!e.dis.rwy) e.dis.rwy = {};
-  if (!e.man){
-    e.man = {rwy:{}};
-    if (e.ilsOut) e.man.ilsOut = true;
-    if (e.lightsOut) e.man.lightsOut = true;
-    for (const p of Object.keys(e.rwyClosed)) e.man.rwy[p] = true;
+  let e = nfStore[icao];
+  if (!e) e = nfStore[icao] = {ilsOut:{}, lightsOut:{}, rwyClosed:{}};
+  if (typeof e.ilsOut === "boolean" || typeof e.lightsOut === "boolean"){
+    const ends = nfEndsOf(icao);
+    const v2 = {ilsOut:{}, lightsOut:{}, rwyClosed:e.rwyClosed || {},
+                auto:{ils:{}, als:{}, rwy:(e.auto && e.auto.rwy) || {}},
+                dis:{ils:{}, als:{}, rwy:(e.dis && e.dis.rwy) || {}},
+                man:{ils:{}, als:{}, rwy:(e.man && e.man.rwy) || {}},
+                src:e.src || {}, chk:e.chk};
+    if (e.ilsOut === true) for (const en of ends){ v2.ilsOut[en] = true; v2.man.ils[en] = true; }
+    if (e.lightsOut === true) for (const en of ends){ v2.lightsOut[en] = true; v2.man.als[en] = true; }
+    e = nfStore[icao] = v2;
   }
-  if (!e.man.rwy) e.man.rwy = {};
+  if (!e.ilsOut) e.ilsOut = {};
+  if (!e.lightsOut) e.lightsOut = {};
+  if (!e.rwyClosed) e.rwyClosed = {};
+  if (!e.auto) e.auto = {};
+  if (!e.dis) e.dis = {};
+  if (!e.man) e.man = {};
+  for (const k of ["ils","als","rwy"]){
+    if (!e.auto[k]) e.auto[k] = {};
+    if (!e.dis[k]) e.dis[k] = {};
+    if (!e.man[k]) e.man[k] = {};
+  }
   if (!e.src) e.src = {};
   return e;
 }
 
-/* Bascule PILOTE d'un drapeau terrain (ilsOut / lightsOut) : cocher marque le
-   drapeau manuel (il survivra aux refetch), décocher un drapeau auto retient
-   le refus — les NOTAM en cours ne le recocheront pas ; un NOTAM NOUVEAU, si. */
-function nfUserSet(icao, flag, on){
-  if (!icao) return;
+/* Bascule PILOTE d'un drapeau d'extrémité (kind « ils » ou « als ») : cocher
+   marque le drapeau manuel (il survivra aux refetch), décocher un drapeau
+   auto retient le refus — les NOTAM en cours ne le recocheront pas ; un
+   NOTAM NOUVEAU, si. */
+function nfUserSetEnd(icao, kind, end, on){
+  if (!icao || !end) return;
   const e = nfEntry(icao);
-  e[flag] = !!on;
-  if (on){ e.man[flag] = true; delete e.dis[flag]; }
-  else { delete e.man[flag]; const ids = e.auto[flag] || []; if (ids.length) e.dis[flag] = ids.slice(); else delete e.dis[flag]; }
+  const flag = kind === "ils" ? e.ilsOut : e.lightsOut;
+  if (on){
+    flag[end] = true; e.man[kind][end] = true; delete e.dis[kind][end];
+  } else {
+    delete flag[end]; delete e.man[kind][end];
+    const ids = e.auto[kind][end] || [];
+    if (ids.length) e.dis[kind][end] = ids.slice(); else delete e.dis[kind][end];
+  }
   nfSave();
 }
 function nfUserToggleRwy(icao, pair){
@@ -4311,37 +4360,35 @@ function nfUserToggleRwy(icao, pair){
   nfSave();
 }
 
-/* Applique une détection au store. Un drapeau soutenu par un NOTAM non refusé
-   se coche ; un drapeau auto dont plus rien ne parle se décoche — sauf coché
-   main. Renvoie vrai si quelque chose que l'écran montre a changé (l'heure du
-   contrôle seule ne compte pas : pas de re-rendu par minuterie). */
+/* Applique une détection au store. Même cycle de vie pour les trois familles,
+   clé par clé (extrémité ou paire) : soutenu par un NOTAM non refusé = coché ;
+   plus soutenu et pas manuel = décoché ; un refus est purgé quand son NOTAM
+   disparaît. Renvoie vrai si quelque chose que l'écran montre a changé
+   (l'heure du contrôle seule ne compte pas : pas de re-rendu par minuterie). */
 function nfaApply(icao, det, meta){
   const e = nfEntry(icao);
   const sig = () => JSON.stringify([e.ilsOut, e.lightsOut, e.rwyClosed, e.auto, e.src,
                                     e.chk ? [e.chk.err || null, e.chk.n, e.chk.offline || null, e.chk.stale || null] : null]);
   const before = sig();
-  for (const flag of ["ilsOut","lightsOut"]){
-    const ids = det[flag] || [];
-    e.auto[flag] = ids;
-    const dis = (e.dis[flag] || []).filter(id => ids.indexOf(id) >= 0);
-    if (dis.length) e.dis[flag] = dis; else delete e.dis[flag];
-    const live = ids.filter(id => dis.indexOf(id) < 0);
-    if (live.length) e[flag] = true;
-    else if (!e.man[flag]) e[flag] = false;
-  }
-  const pairs = new Set([...Object.keys(e.auto.rwy), ...Object.keys(det.rwy)]);
-  e.auto.rwy = {};
-  for (const p of Object.keys(det.rwy)) e.auto.rwy[p] = det.rwy[p];
-  for (const p of pairs){
-    const ids = det.rwy[p] || [];
-    const dis = (e.dis.rwy[p] || []).filter(id => ids.indexOf(id) >= 0);
-    if (dis.length) e.dis.rwy[p] = dis; else delete e.dis.rwy[p];
-    const live = ids.filter(id => dis.indexOf(id) < 0);
-    if (live.length) e.rwyClosed[p] = true;
-    else if (!e.man.rwy[p]) delete e.rwyClosed[p];
-  }
-  const used = new Set([...e.auto.ilsOut, ...e.auto.lightsOut]);
-  for (const p of Object.keys(e.auto.rwy)) for (const id of e.auto.rwy[p]) used.add(id);
+  const applyDict = (flag, auto, dis, man, detD) => {
+    const keys = new Set([...Object.keys(auto), ...Object.keys(detD)]);
+    for (const k of Object.keys(auto)) delete auto[k];
+    for (const k of Object.keys(detD)) auto[k] = detD[k];
+    for (const k of keys){
+      const ids = detD[k] || [];
+      const kept = (dis[k] || []).filter(id => ids.indexOf(id) >= 0);
+      if (kept.length) dis[k] = kept; else delete dis[k];
+      const live = ids.filter(id => kept.indexOf(id) < 0);
+      if (live.length) flag[k] = true;
+      else if (!man[k]) delete flag[k];
+    }
+  };
+  applyDict(e.ilsOut, e.auto.ils, e.dis.ils, e.man.ils, det.ils);
+  applyDict(e.lightsOut, e.auto.als, e.dis.als, e.man.als, det.als);
+  applyDict(e.rwyClosed, e.auto.rwy, e.dis.rwy, e.man.rwy, det.rwy);
+  const used = new Set();
+  for (const d of [e.auto.ils, e.auto.als, e.auto.rwy])
+    for (const k of Object.keys(d)) for (const id of d[k]) used.add(id);
   const src = {};
   for (const id of used){ const s = det.src[id] != null ? det.src[id] : e.src[id]; if (s != null) src[id] = s; }
   e.src = src;
@@ -4422,6 +4469,33 @@ function nfAutoTag(nf, ids){
   if (!ids || !ids.length) return "";
   const tip = ids.map(i => (nf.src && nf.src[i]) ? i + " — " + nf.src[i] : i).join("\n");
   return `<span class="nf-auto" title="${escapeHtmlText(tip)}">${escapeHtmlText(ids[0])}${ids.length > 1 ? " +" + (ids.length - 1) : ""}</span>`;
+}
+
+/* Les extrémités qui MÉRITENT une case dans le bandeau — le strip resterait
+   illisible avec seize cases sur un grand terrain si l'on n'élaguait pas :
+     ILS : extrémités dont la fiche déclare une approche ILS/LOC (toutes si le
+           terrain n'a pas de fiche d'approches — le repli Operation setup
+           peut être un moyen ILS), plus toute extrémité déjà cochée/refusée.
+     ALS : extrémités dont la fiche déclare une rampe (classe ≠ NALS), toutes
+           si le balisage n'est pas documenté, plus les cochées/refusées. */
+function nfIlsEnds(icao){
+  const rec = adGet(icao);
+  const hasDb = !!(rec && rec.approaches && Object.keys(rec.approaches).length);
+  const f = nfGet(icao);
+  return nfEndsOf(icao).filter(en =>
+    !hasDb
+    || dbApproachesFor(icao, en).some(t => NF_ILS_TYPES.includes(t))
+    || (f.ilsOut && f.ilsOut[en]) || (f.auto && f.auto.ils && f.auto.ils[en])
+    || (f.dis && f.dis.ils && f.dis.ils[en]));
+}
+function nfAlsEnds(icao){
+  const f = nfGet(icao);
+  return nfEndsOf(icao).filter(en => {
+    const l = adLightAt(icao, en);
+    return !l || !l.cls || l.cls !== "NALS"
+      || (f.lightsOut && f.lightsOut[en]) || (f.auto && f.auto.als && f.auto.als[en])
+      || (f.dis && f.dis.als && f.dis.als[en]);
+  });
 }
 
 /* La ligne d'état du bandeau : ce que vaut le dernier contrôle automatique. */
@@ -5159,11 +5233,12 @@ function assess(role, ctx){
      est recopié réglé sur ce type, et tout l'aval le lit tel quel. */
   const dbApp = role!=="DEPARTURE" ? (ctx.dbAppType || null) : null;
   let cfg = dbApp ? cfgForAppType(ctx.cfg, dbApp) : ctx.cfg;
-  /* Drapeaux NOTAM du terrain. Balisage d'approche HS : les minima de la phase
-     se recalculent en classe NALS — l'approche seulement ; au décollage le
-     minimum se choisit sur la fiche de phase, condition d'infrastructure lue. */
-  const nf = ctx.notam || {ilsOut:false, lightsOut:false, rwyClosed:{}};
-  if (nf.lightsOut && role!=="DEPARTURE") cfg = cfgClone(cfg, {lightingClass:"NALS"});
+  /* Drapeaux NOTAM de l'EXTRÉMITÉ jugée (ilsOutSel/lightsOutSel, calculés par
+     contextFor pour le QFU de la phase). Rampe d'approche HS : les minima de
+     la phase se recalculent en classe NALS — l'approche seulement ; au
+     décollage le minimum se choisit sur la fiche de phase. */
+  const nf = ctx.notam || {ilsOut:{}, lightsOut:{}, rwyClosed:{}};
+  if (ctx.lightsOutSel && role!=="DEPARTURE") cfg = cfgClone(cfg, {lightingClass:"NALS"});
   const res = {role, dbAppType:dbApp, verdicts:[], warnings:[], computed:null, taf:null, wind:null};
   const push = w => res.warnings.push(w);
 
@@ -5188,21 +5263,23 @@ function assess(role, ctx){
   const nfWhy = ids => ids && ids.length ? `NOTAM ${ids.join(", ")}` : "manual NOTAM switch";
   const nfQuote = ids => { const s = ids && ids.length ? (nf.src || {})[ids[0]] : null;
     return s ? ` — “${s.length > 80 ? s.slice(0, 80) + "…" : s}”` : ""; };
+  const nfEnd = ctx.rwyDesignator || null;
+  const nfEndLbl = nfEnd ? `RWY ${nfEnd}` : "this aerodrome";
   const nfaRwyIds = (nf.auto && nf.auto.rwy && ctx.rwyPair && nf.auto.rwy[ctx.rwyPair]) || [];
-  const nfaIlsIds = (nf.auto && nf.auto.ilsOut) || [];
-  const nfaAlsIds = (nf.auto && nf.auto.lightsOut) || [];
+  const nfaIlsIds = (nf.auto && nf.auto.ils && nfEnd && nf.auto.ils[nfEnd]) || [];
+  const nfaAlsIds = (nf.auto && nf.auto.als && nfEnd && nf.auto.als[nfEnd]) || [];
   if (ctx.rwyClosedSel) push({severity:"CRITICAL", code:"RWY_CLOSED_NOTAM",
     message:`RWY ${ctx.rwyPair || "—"} is flagged CLOSED (${nfWhy(nfaRwyIds)})${nfQuote(nfaRwyIds)}. The aerodrome cannot be used on this runway whatever the weather — pick another runway or clear the switch.`});
-  if (nf.ilsOut && role!=="DEPARTURE"){
+  if (ctx.ilsOutSel && role!=="DEPARTURE"){
     if (dbApp==null && NF_ILS_FACILITIES.includes(cfg.facility))
       push({severity:"CRITICAL", code:"ILS_US_NOTAM",
-        message:`ILS flagged unserviceable (${nfWhy(nfaIlsIds)})${nfQuote(nfaIlsIds)}, but this phase is still judged on ${cfg.facility} minima (setup fallback). Select an available approach in the phase's Approach box, or clear the switch.`});
+        message:`ILS flagged unserviceable for ${nfEndLbl} (${nfWhy(nfaIlsIds)})${nfQuote(nfaIlsIds)}, but this phase is still judged on ${cfg.facility} minima (setup fallback). Select an available approach in the phase's Approach box, or clear the switch.`});
     else
       push({severity:"CAUTION", code:"ILS_US_NOTAM",
-        message:`ILS flagged unserviceable (${nfWhy(nfaIlsIds)})${nfQuote(nfaIlsIds)} — ILS and LOC lines are excluded from the airfield-database approaches${dbApp?`; this phase is judged on ${adTypeLabel(dbApp)}`:""}.`});
+        message:`ILS flagged unserviceable for ${nfEndLbl} (${nfWhy(nfaIlsIds)})${nfQuote(nfaIlsIds)} — ILS and LOC lines are excluded from this runway end's database approaches${dbApp?`; this phase is judged on ${adTypeLabel(dbApp)}`:""}.`});
   }
-  if (nf.lightsOut && role!=="DEPARTURE") push({severity:"CAUTION", code:"ALS_US_NOTAM",
-    message:`Approach lighting flagged unserviceable (${nfWhy(nfaAlsIds)})${nfQuote(nfaAlsIds)} — minima recomputed with no approach light system (NALS).`});
+  if (ctx.lightsOutSel && role!=="DEPARTURE") push({severity:"CAUTION", code:"ALS_US_NOTAM",
+    message:`Approach lighting flagged unserviceable for ${nfEndLbl} (${nfWhy(nfaAlsIds)})${nfQuote(nfaAlsIds)} — minima recomputed with no approach light system (NALS).`});
   if (!cfg.operatorMinimaLoaded) push({severity:"CAUTION", code:"OPERATOR_MINIMA_NOT_LOADED",
     message:"No OM-B/OM-C minima set loaded. The computed values are regulatory reference values — cross-check them against your operator's approved operating minima before use."});
 
@@ -7234,13 +7311,13 @@ function approachCell(tabRole){
   const all = end ? dbApproachesFor(icao, end) : [];
   /* Les approches écartées par un drapeau NOTAM restent listées, mais
      désactivées et marquées : le pilote voit ce qui a disparu et pourquoi. */
-  const opts = all.filter(t=>!nfApproachOut(icao, t));
-  const outs = all.filter(t=>nfApproachOut(icao, t));
+  const opts = all.filter(t=>!nfApproachOut(icao, end, t));
+  const outs = all.filter(t=>nfApproachOut(icao, end, t));
   if (!opts.length){
     return `<div class="cell obs-req-cell app-cell">
        <span class="k">Approach</span>
        <span class="v-row combined"><span class="v txt">Setup</span></span>
-       <span class="d">${!end?"select a QFU":outs.length?`all database approaches for RWY ${end} are U/S (NOTAM switch: ILS)`:`no approach in the database for RWY ${end}`} — Operation setup governs</span>
+       <span class="d">${!end?"select a QFU":outs.length?`all database approaches for RWY ${end} are U/S (ILS ${end} flagged U/S — NOTAM)`:`no approach in the database for RWY ${end}`} — Operation setup governs</span>
      </div>`;
   }
   const selType = phaseApproachType(tabRole, icao, end);
@@ -7575,6 +7652,7 @@ function contextFor(tab){
           /* Drapeaux NOTAM du terrain, et l'état de la paire jugée : le moteur
              reçoit tout par le contexte, il ne lit pas l'état de la page. */
           notam: nfGet(icao), rwyClosedSel: nfRwyClosed(icao, pair),
+          ilsOutSel: nfIlsOut(icao, q?q.id:null), lightsOutSel: nfAlsOut(icao, q?q.id:null),
           rwyPair: pair};
 }
 
@@ -7856,7 +7934,7 @@ function renderStage(tab, r){
     const lgt = l && l.cls
       ? `<span class="lgt" title="${escapeHtmlText(adRampText(l))}">${l.cls}</span>` : "";
     return `<button class="qfu v-${st}${closed?" nf-closed":""}" data-pair="${q.pair}" data-q="${q.idx}" aria-pressed="${on}"
-                    title="${q.pair} — ${closed?"CLOSED (NOTAM switch)":STATE_LABEL[st]}${l&&l.cls?` — approach lighting ${l.cls}, ${escapeHtmlText(adRampText(l))}`:""}">
+                    title="${q.pair} — ${closed?"CLOSED (NOTAM switch)":STATE_LABEL[st]}${nfIlsOut(icao, q.id)?" — ILS U/S (NOTAM)":""}${nfAlsOut(icao, q.id)?" — app. lights U/S (NOTAM)":""}${l&&l.cls?` — approach lighting ${l.cls}, ${escapeHtmlText(adRampText(l))}`:""}">
       <span class="ico ${st}" role="img" aria-label="${closed?"Closed by NOTAM":STATE_LABEL[st]}">${STATE_ICON[st]}</span>
       <span class="top"><span class="id">${q.id}</span><span class="deg">${closed?"CLSD":String(q.deg).padStart(3,"0")+"°"}</span>${lgt}</span>
     </button>`;
@@ -7932,11 +8010,11 @@ function renderStage(tab, r){
       <div class="qfu-grid">${qfuCards}</div>
       <p class="note" style="margin:9px 0 14px">${cmpNote}</p>
 
-      ${icao ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ilsOut:[], lightsOut:[], rwy:{}}; return `
+      ${icao ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ils:{}, als:{}, rwy:{}}; return `
       <div class="nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
         <span class="nf-title">NOTAM</span>
-        <label class="chk"><input type="checkbox" id="nfIls" ${nf.ilsOut?"checked":""}><span class="bx">${TICK}</span><span>ILS U/S</span>${nfAutoTag(nf, au.ilsOut)}</label>
-        <label class="chk"><input type="checkbox" id="nfLights" ${nf.lightsOut?"checked":""}><span class="bx">${TICK}</span><span>App. lights U/S</span>${nfAutoTag(nf, au.lightsOut)}</label>
+        ${nfIlsEnds(icao).map(en=>`<label class="chk"><input type="checkbox" class="nfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span>${nfAutoTag(nf, (au.ils||{})[en])}</label>`).join("")}
+        ${nfAlsEnds(icao).map(en=>`<label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="nfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span>${nfAutoTag(nf, (au.als||{})[en])}</label>`).join("")}
         ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="nfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span>${nfAutoTag(nf, (au.rwy||{})[p])}</label>`).join("")}
         <span class="nf-note">${nfStateNote(icao)}</span>
       </div>`; })() : ""}
@@ -7973,12 +8051,14 @@ function renderStage(tab, r){
   });
   /* Interrupteurs NOTAM : chaque bascule est rangée sous le terrain courant et
      tout se recalcule — verdicts, pastilles, sélecteurs d'approche. Le geste
-     passe par nfUserSet/nfUserToggleRwy : décocher un drapeau auto retient le
-     refus, cocher à la main survit aux refetch. */
-  const nfIls = inner.querySelector("#nfIls");
-  if (nfIls) nfIls.onchange = ()=>{ nfUserSet(currentIcao(), "ilsOut", nfIls.checked); render(); };
-  const nfLights = inner.querySelector("#nfLights");
-  if (nfLights) nfLights.onchange = ()=>{ nfUserSet(currentIcao(), "lightsOut", nfLights.checked); render(); };
+     passe par nfUserSetEnd/nfUserToggleRwy : décocher un drapeau auto retient
+     le refus, cocher à la main survit aux refetch. */
+  inner.querySelectorAll(".nfIls").forEach(c=>c.onchange = ()=>{
+    nfUserSetEnd(currentIcao(), "ils", c.dataset.end, c.checked); render();
+  });
+  inner.querySelectorAll(".nfAls").forEach(c=>c.onchange = ()=>{
+    nfUserSetEnd(currentIcao(), "als", c.dataset.end, c.checked); render();
+  });
   inner.querySelectorAll(".nfRwy").forEach(c=>c.onchange = ()=>{
     nfUserToggleRwy(currentIcao(), c.dataset.pair); render();
   });
@@ -8638,8 +8718,8 @@ function mPhaseAppHtml(tb){
   const end = q ? q.id : null;
   const all = end ? dbApproachesFor(icao, end) : [];
   if (!all.length) return "";
-  const opts = all.filter(t=>!nfApproachOut(icao, t));
-  const outs = all.filter(t=>nfApproachOut(icao, t));
+  const opts = all.filter(t=>!nfApproachOut(icao, end, t));
+  const outs = all.filter(t=>nfApproachOut(icao, end, t));
   const selType = phaseApproachType(tb.role, icao, end);
   return `<div class="m-req">
     <span>Approach — airfield database, RWY ${end}</span>
@@ -9111,10 +9191,12 @@ function bindMobile(host){
   };
   /* Interrupteurs NOTAM — même contrat que sur tablette : décocher un drapeau
      auto retient le refus, cocher à la main survit aux refetch. */
-  const mNfIls = host.querySelector("#mNfIls");
-  if (mNfIls) mNfIls.onchange = ()=>{ nfUserSet(currentIcao(), "ilsOut", mNfIls.checked); render(); };
-  const mNfLights = host.querySelector("#mNfLights");
-  if (mNfLights) mNfLights.onchange = ()=>{ nfUserSet(currentIcao(), "lightsOut", mNfLights.checked); render(); };
+  host.querySelectorAll(".mNfIls").forEach(c=>c.onchange = ()=>{
+    nfUserSetEnd(currentIcao(), "ils", c.dataset.end, c.checked); render();
+  });
+  host.querySelectorAll(".mNfAls").forEach(c=>c.onchange = ()=>{
+    nfUserSetEnd(currentIcao(), "als", c.dataset.end, c.checked); render();
+  });
   host.querySelectorAll(".mNfRwy").forEach(c=>c.onchange = ()=>{
     nfUserToggleRwy(currentIcao(), c.dataset.pair); render();
   });
@@ -9249,13 +9331,13 @@ function mobileResultsHtml(){
       <div class="m-ptabs" role="group" aria-label="Flight phase">${ptabs}</div>
       <div class="m-report"><span class="label">QFU</span><div class="m-qfus">${mQfuChips(icao, results, sel)}</div></div>
       ${mDayWxHtml(icao)}
-      ${/^[A-Z]{4}$/.test(icao) ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ilsOut:[], lightsOut:[], rwy:{}};
+      ${/^[A-Z]{4}$/.test(icao) ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ils:{}, als:{}, rwy:{}};
         const pairs = runwayList(icao).concat(runwayList(icao).includes(state.runway)?[]:[state.runway]);
         return `<div class="m-report nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
         <span class="label">NOTAM</span>
         <div class="nf-m">
-          <label class="chk"><input type="checkbox" id="mNfIls" ${nf.ilsOut?"checked":""}><span class="bx">${TICK}</span><span>ILS U/S</span>${nfAutoTag(nf, au.ilsOut)}</label>
-          <label class="chk"><input type="checkbox" id="mNfLights" ${nf.lightsOut?"checked":""}><span class="bx">${TICK}</span><span>App. lights U/S</span>${nfAutoTag(nf, au.lightsOut)}</label>
+          ${nfIlsEnds(icao).map(en=>`<label class="chk"><input type="checkbox" class="mNfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span>${nfAutoTag(nf, (au.ils||{})[en])}</label>`).join("")}
+          ${nfAlsEnds(icao).map(en=>`<label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="mNfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span>${nfAutoTag(nf, (au.als||{})[en])}</label>`).join("")}
           ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="mNfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span>${nfAutoTag(nf, (au.rwy||{})[p])}</label>`).join("")}
         </div>
         <span class="nf-note">${nfStateNote(icao)}</span>
