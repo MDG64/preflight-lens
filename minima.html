@@ -1034,16 +1034,27 @@ select.inline{width:auto;padding:5px 8px;font-size:11px}
 .mini .obs-req-cell.edge-go{border-color:var(--green);box-shadow:0 0 0 1px var(--green),var(--elev)}
 .mini .obs-req-cell.edge-marginal{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber),var(--elev)}
 .mini .obs-req-cell.edge-nogo{border-color:var(--red);box-shadow:0 0 0 1px var(--red),var(--elev)}
-/* Cadre de PROVENANCE, sur la seule case des minima d'atterrissage — celle qui
-   n'a jamais porté de liseré de verdict, justement parce qu'un minimum ne se
-   compare à rien : vert quand le chiffre affiché est une valeur VÉRIFIÉE de la
-   base terrains (relevée sur la carte d'approche puis enregistrée ici), ambre
-   dans tous les autres cas — table réglementaire, consensus, valeur tapée dans
-   la case. Il ne dit pas si l'on passe, il dit s'il reste une carte à aller
-   relire avant de partir, et c'est l'avertissement juste au-dessus du bandeau
-   qu'il rend visible case par case. */
-.mini .obs-req-cell.min-ver{border-color:var(--green);box-shadow:0 0 0 1px var(--green),var(--elev)}
-.mini .obs-req-cell.min-unver{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber),var(--elev)}
+/* Cadre de PROVENANCE : il ne cercle pas la case, il cercle LE CHIFFRE — la
+   valeur exigée et son unité, rien d'autre. La case porte aussi le relevé, le
+   comparateur et le pouce, qui ne viennent pas de la même source ; les enfermer
+   dans le même cadre aurait donné à la provenance d'un minimum l'air d'un
+   verdict sur la scène entière.
+   Vert quand ce chiffre-là est une valeur VÉRIFIÉE de la base terrains (relevée
+   sur la carte d'approche puis enregistrée ici), ambre dans tous les autres cas
+   — table réglementaire, consensus, valeur tapée dans le champ. Sur les
+   dégagements, la DH et la vis / RVR portent chacune le sien : elles ne se
+   vérifient pas ensemble. */
+.mini .obs-req-cell .req-stack.min-ver,
+.mini .obs-req-cell .req-stack.min-unver{
+  padding:1px 6px 2px;border:1px solid;border-radius:6px;
+}
+.mini .obs-req-cell .req-stack.min-ver{border-color:var(--green)}
+.mini .obs-req-cell .req-stack.min-unver{border-color:var(--amber)}
+/* L'étiquette est posée hors flux sous le bord haut du cadre : sans ce rattrapage
+   elle s'écarterait du chiffre de l'épaisseur du liseré et les cases encadrées ne
+   s'aligneraient plus sur les autres. */
+.mini .obs-req-cell .req-stack.min-ver .req-lab,
+.mini .obs-req-cell .req-stack.min-unver .req-lab{margin-bottom:17px}
 .mini .req-cell .req-arrow-wrap{
   position:relative;display:inline-flex;align-items:center;justify-content:center;
   width:19px;height:19px;margin-left:6px;
@@ -7691,14 +7702,19 @@ function phaseChartGa(tabRole){
 
 function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
   const cmpOn = obs !== undefined;
-  /* `prov` : la valeur affichée est-elle vérifiée ? Vrai pour le cadre vert,
-     faux pour l'ambre, absent quand la case ne porte pas un minimum de la base
-     terrains (l'exigence finale d'un dégagement au décollage, par exemple) —
-     elle garde alors sa bordure ordinaire. */
-  const provCls = prov==null ? "" : (prov ? " min-ver" : " min-unver");
-  const provTip = prov==null ? "" : ` title="${prov
-    ? "Minima verified — recorded on this device from the approach chart. Applied as they stand."
-    : "Minima not verified — standard table, user consensus or hand-entered value. Check them against the official approach chart."}"`;
+  /* `prov` : la valeur EXIGÉE est-elle vérifiée ? Vrai pour le cadre vert, faux
+     pour l'ambre, absent quand la case ne porte pas un minimum de la base
+     terrains (l'exigence finale d'un dégagement au décollage, par exemple) — le
+     chiffre reste alors nu. Un champ vide ne se cercle pas non plus : il n'y a
+     pas de chiffre dont on pourrait dire la provenance. La DH des dégagements
+     porte le sien, dans `dh.prov`. */
+  const provAttrs = (p, v) => (p==null || v==null) ? {cls:"", tip:""} : {
+    cls: p ? " min-ver" : " min-unver",
+    tip: ` title="${p
+      ? "Verified minimum — recorded on this device from the approach chart. Applied as it stands."
+      : "Minimum not verified — standard table, user consensus or hand-entered value. Check it against the official approach chart."}"`};
+  const pv = provAttrs(prov, req);
+  const pd = dh ? provAttrs(dh.prov, dh.v) : {cls:"", tip:""};
   const st = (!cmpOn || req==null) ? null : visVerdict(obs, req, unit);
   const input = `<input id="${id}" class="to-ceil-in" type="number" min="0" step="${unit==="sm"?"0.25":"50"}" inputmode="decimal"
                 placeholder="—" value="${req==null?"":(unit==="sm"?(+req).toFixed(2):req)}" data-unit="${unit}"
@@ -7710,20 +7726,24 @@ function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
      comme l'exigence —, à la même taille que le titre de la case et collée au
      chiffre qu'elle nomme. Sans obs il n'y a qu'un chiffre, mais l'étiquette
      reste : la case se lit alors comme les autres. */
+  /* L'exigence porte son unité contre elle, comme le relevé en face — et le
+     cadre de provenance l'enferme avec le chiffre : un minimum, c'est une
+     valeur ET sa dimension. La ligne grise le redit en toutes lettres, elle
+     nomme aussi d'où vient le chiffre. */
   const body = dh===undefined
-    ? `<span class="req-stack">
-           <span class="req-lab" aria-hidden="true">Required</span>${input}
+    ? `<span class="req-stack${pv.cls}"${pv.tip}>
+           <span class="req-lab" aria-hidden="true">Required</span>${input}<small class="req-u">${unitLab(unit)}</small>
          </span>`
     : `
-         <span class="req-stack">
+         <span class="req-stack${pd.cls}"${pd.tip}>
            <span class="req-lab" aria-hidden="true">${dh.lab||"DH"}</span>
            <input id="${dh.id}" class="to-ceil-in" type="number" min="0" step="10" inputmode="numeric"
                   placeholder="—" value="${dh.v!=null?dh.v:""}"
-                  aria-label="${dh.lab||"DH"} used for planning, in ft — empty to use the derived value">
+                  aria-label="${dh.lab||"DH"} used for planning, in ft — empty to use the derived value"><small class="req-u">ft</small>
          </span>
          <span class="cmp">·</span>
-         <span class="req-stack">
-           <span class="req-lab" aria-hidden="true">visi</span>${input}
+         <span class="req-stack${pv.cls}"${pv.tip}>
+           <span class="req-lab" aria-hidden="true">visi</span>${input}<small class="req-u">${unitLab(unit)}</small>
          </span>`;
   const dTail = (dh && dh.manual) ? ` · ${dh.lab||"DH"} your value, kept` : "";
   /* L'avertissement se pose AU-DESSUS des chiffres, pas dans la ligne grise du
@@ -7732,7 +7752,7 @@ function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
      trop tard. */
   const gaWarn = warn == null ? "" :
     `<span class="ga-warn" title="The approach chart publishes this minimum for several missed-approach gradients. The database keeps the ${warn}% column — the one every aircraft can hold. Lower minima are published for steeper gradients.">GA ${warn}% — check go-around performance</span>`;
-  return `<div class="cell obs-req-cell to-ceil-cell${provCls}${st==="nogo"?" bad":st==="marginal"?" warn":""}"${provTip}>
+  return `<div class="cell obs-req-cell to-ceil-cell${st==="nogo"?" bad":st==="marginal"?" warn":""}">
        <span class="k">${label||"Visi / RVR"}</span>
        ${gaWarn}
        <span class="v-row combined has-req-lab">
@@ -7872,20 +7892,18 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
     const m = (r.taf && r.taf.limiting) ? r.taf.limiting.vis_m : null;
     return m==null ? null : visFromM(m, u);
   };
-  /* Vérifié ou pas : la case des minima se cercle de vert quand CHAQUE chiffre
-     qu'elle affiche vient de la base terrains comme valeur vérifiée, d'ambre
-     sinon. Un seul des deux qui ne l'est pas suffit à faire l'ambre — la case
-     porte les deux minima ensemble, et un cadre vert au-dessus d'une DH tirée
-     de la table réglementaire dirait qu'il n'y a plus rien à relire.
-     Une DH absente (CAT III, approche sans hauteur de décision) ne compte pas :
-     il n'y a pas de chiffre à vérifier. Une valeur tapée dans la case n'est pas
-     vérifiée non plus — le pilote l'a peut-être lue sur la carte, mais rien ne
-     l'a enregistrée comme telle. */
+  /* Vérifié ou pas, CHIFFRE PAR CHIFFRE : chaque minimum se cercle de vert
+     quand il vient de la base terrains comme valeur vérifiée, d'ambre sinon.
+     La DH et la vis / RVR ne se vérifient pas ensemble — une carte de CAT III
+     ne publie pas de DH, et la vis / RVR relevée sur elle n'a pas à porter
+     l'ambre de la hauteur que la table réglementaire a fournie à côté.
+     Une valeur tapée dans le champ n'est pas vérifiée : le pilote l'a peut-être
+     lue sur la carte, mais rien ne l'a enregistrée comme telle. */
   const dhDisp = dhReqFor(role)!=null ? dhReqFor(role)
                : (a.circling ? (a.ceilingRequired!=null?a.ceilingRequired:a.dh)
                              : (a.noDh ? null : a.dh));
   const visVer = a.rvrDriver==="AIRFIELD_DB_VERIFIED" && visReqFor(role, aDisp)==null;
-  const dhVer  = dhDisp==null || (a.dhDriver==="AIRFIELD_DB_VERIFIED" && dhReqFor(role)==null);
+  const dhVer  = a.dhDriver==="AIRFIELD_DB_VERIFIED" && dhReqFor(role)==null;
   const landVisCell = isToAlt ? "" : visReqCell({
           id:"appVisReqInput",
           req: aReq,
@@ -7896,11 +7914,12 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
           manual: visReqFor(role, aDisp)!=null,
           note: nice(a.rvrDriver||""),
           warn: phaseChartGa(tabRole),
-          prov: visVer && (!isAltn || dhVer),
+          prov: visVer,
           ...(isAltn ? {dh:{
                 id:"phaseDhInput",
                 v: dhDisp,
                 lab: a.circling ? "MDH" : "DH",
+                prov: dhVer,
                 manual: dhReqFor(role)!=null}} : {})
         });
   const cells = isDeparture
