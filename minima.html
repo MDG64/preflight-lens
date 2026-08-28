@@ -4229,6 +4229,10 @@ const NFA_RESTRICT_RE = /\bWINGSPAN\b|\bACFT\s+(?:ABOVE|OVER|EXCEEDING)\b|\b(?:C
 const NFA_ILS_TXT_RE = /\b(?:ILS|MLS|LLZ|LOC(?:ALIZER)?|GLIDE\s?PATH|GLIDESLOPE|GP)\b/;
 const NFA_ALS_TXT_RE = /\b(?:ALSF?\d?|[MS]ALS[RF]?|SSALS?R?|APCH\s+(?:LGT|LIGHTS?)|APPROACH\s+LIGHT\w*|CALVERT)\b/;
 const NFA_AD_CLSD_RE = /\b(?:AD|AERODROME|AIRPORT|ARPT)\s+(?:IS\s+)?(?:CLSD|CLOSED)\b/;
+/* Familles de sujet Q qui NOMMENT la piste qu'elles DESSERVENT : comms (C),
+   GNSS (G), ILS/MLS (I), balisage (L), radionav (N). Chez elles, « ILS RWY 06
+   CLSD » ferme l'installation, pas la surface. */
+const NFA_SERVING_FAMS = "CGILN";
 const NFA_MARKER_US_RE = /\b(?:IM|MM|OM|LOM|LMM|(?:INNER|MIDDLE|OUTER)\s+MARKER)\s+(?:U\/S|OTS|UNSERVICEABLE|UNSERV|OUT OF SERVICE|NOT AVBL|NOT AVAILABLE)\b/g;
 const NFA_RWY_REF_RE = /\bR(?:WY|UNWAY)S?\s*:?\s*(\d{2}[LRC]?)(?:\s*\/\s*(\d{2}[LRC]?))?/g;
 const NFA_RWY_CLSD_RE = /\bR(?:WY|UNWAY)S?\s*:?\s*((?:\d{2}[LRC]?)(?:\s*\/\s*\d{2}[LRC]?)*(?:\s*(?:,|AND)\s*\d{2}[LRC]?(?:\s*\/\s*\d{2}[LRC]?)*)*)(?:\s+(?:IS|ARE|WILL\s+BE|REMAINS?))?\s*:?\s*(?:CLSD|CLOSED)\b/g;
@@ -4392,16 +4396,30 @@ function nfaDetect(icao, raws, now){
     const markRwy = ps => { for (const p of ps) (det.rwy[p] = det.rwy[p] || []).push(id); if (ps.length){ det.src[id] = excerpt; det.txt[id] = full; } };
     /* Refs de piste ADJACENTES à un mot de fermeture — « RWY 06/24 CLSD »,
        « CLOSURE OF RUNWAY 06/24 » — les seules dignes de foi dans un texte
-       libre : « RWY 09 » cité comme borne d'un TWY fermé ne ferme rien. */
-    const adj = [];
+       libre : « RWY 09 » cité comme borne d'un TWY fermé ne ferme rien.
+         Les deux tournures ne se valent pourtant pas hors du sujet MR. La
+       forme « RWY nn … CLSD » se laisse voler son sujet par ce qui la
+       précède — « TWY FB BTN RWY 04L/22R AND RWY 04R/22L CLSD » (JFK),
+       « EXIT TWY E5 … FM RWY 16/34 CLSD » (Zurich), « CRANE … WILL ONLY OPR
+       WHEN RWY 09L/27R CLSD » (Heathrow) : c'est la voie, la sortie, la grue
+       qui est en cause, jamais la piste. La forme TÊTE-PREMIÈRE, elle —
+       « CLSD RWY nn », « CLOSURE OF RUNWAY nn » — met la piste en objet
+       direct du mot de fermeture : aucun sujet ne peut s'y glisser. Seule
+       celle-là sort du sujet MR. */
+    const adj = [], adjHead = [];
     for (const re of [NFA_RWY_CLSD_RE, NFA_CLSD_RWY_RE]){
       re.lastIndex = 0;
       let m;
-      while ((m = re.exec(T))) adj.push(...nfaDesigs(m[1]));
+      while ((m = re.exec(T))){
+        const ds = nfaDesigs(m[1]);
+        adj.push(...ds);
+        if (re === NFA_CLSD_RWY_RE) adjHead.push(...ds);
+      }
     }
     if (subj != null){
       if (subj === "FA"){
         if (cond === "LC" && !restrict) markRwy(runwayList(icao));
+        else if (adjHead.length && !restrict) markRwy(nfaPairsOf(icao, adjHead));
       } else if (subj === "MR"){
         if (adj.length && !restrict) markRwy(nfaPairsOf(icao, adj));
         else if (outCond && !restrict){
@@ -4417,6 +4435,15 @@ function nfaDetect(icao, raws, now){
       } else {
         if (NFA_ILS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) markEnds(det.ils, nfaEndsFor(icao, T));
         if (NFA_ALS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) markEnds(det.als, nfaEndsFor(icao, T));
+        /* Le sujet Q ne dit pas tout : une fermeture de piste s'annonce aussi
+           par un NOTAM de PROCÉDURES ou par le TRIGGER d'un AIP SUP — « Q)
+           LFFF/QPDTT/… E) … DUE TO THE CLOSURE OF RUNWAY 06/24 … » (Orly, août
+           2026) : aucune des voies ci-dessus ne portait ce sujet-là, et la
+           piste restait ouverte à l'écran. Hors des familles qui desservent
+           une piste, la tournure tête-première fait foi, quel que soit le
+           sujet. */
+        if (adjHead.length && !restrict && NFA_SERVING_FAMS.indexOf(subj[0]) < 0)
+          markRwy(nfaPairsOf(icao, adjHead));
       }
       continue;
     }
