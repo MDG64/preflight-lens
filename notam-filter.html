@@ -4104,6 +4104,15 @@
         order: 3
       }
 
+      /* MINIMA reste contre WEATHER, même au doigt : les deux autres lectures
+         du même terrain ne se séparent pas. Rang de WEATHER à dessein — à
+         égalité d'`order`, c'est l'ordre du document qui tranche, et MINIMA y
+         vient juste après lui ; renuméroter la ligne aurait déplacé la
+         coupure (.nt-bar::after, rang 6) et la ligne des terrains avec elle. */
+      .nt-titlerow #ntMinimaBtn {
+        order: 3
+      }
+
       .nt-titlerow #themeBtn {
         order: 4
       }
@@ -4199,6 +4208,43 @@
 
       .meta .src {
         margin-left: 0
+      }
+    }
+
+    /* MINIMA fait un sixième objet sur la ligne du titre : sous 400 px, les
+       mots de cette ligne se resserrent d'un cran pour lui faire place. Ceux
+       de la ligne du dessous (ROUTE, MAP, FIR) gardent leur largeur commune,
+       que leur min-width tient — seuls WEATHER et MINIMA maigrissent.
+       Nommés par leur identifiant : la règle des mots du bloc 560 px les vise
+       par trois classes (.hdr-actions .help-btn.mapword) et l'emporterait sur
+       tout sélecteur de classes écrit ici. */
+    @media (max-width:400px) {
+
+      .nt-titlerow #wxPageBtn,
+      .nt-titlerow #ntMinimaBtn {
+        font-size: 11px;
+        padding: 0 4px
+      }
+
+      /* Le titre resserre son interlettrage du même coup : six pixels de plus
+         pour la ligne, et la marge qui manquait à une fenêtre étroite portant
+         sa barre de défilement (elle prend sa largeur DANS la page, là où un
+         téléphone n'en a pas). Le mot ne change ni de taille ni de graisse. */
+      .nt-titlerow .route-title {
+        letter-spacing: .08em
+      }
+    }
+
+    /* Sous 350 px, même resserrés, six objets ne tiennent plus sur la ligne
+       du titre. Plutôt que d'y laisser tomber le jour/nuit et le « ? » seuls
+       contre le bord gauche, MINIMA descend d'un cran, entre ROUTE et MAP.
+       La ligne de la case ICAO en portait trois, elle en porte quatre et
+       déborde à son tour : MAP et FIR passent ensemble à la suivante — là où
+       FIR se retrouvait déjà seule avant que MINIMA n'existe. */
+    @media (max-width:350px) {
+
+      .nt-titlerow #ntMinimaBtn {
+        order: 8
       }
     }
 
@@ -5844,6 +5890,11 @@ body .stat .k{
                même terrain — ce qui est publié, ce qu'il fait — se touchent du
                même pouce, sans repasser par l'accueil. -->
           <button class="help-btn mapword" id="wxPageBtn" aria-label="Weather — METAR and TAF" title="Weather — METAR and TAF">WEATHER</button>
+          <!-- MINIMA contre WEATHER : les deux autres lectures du même terrain
+               se touchent — ce que le ciel annonce, puis ce que ce ciel vaut
+               face aux minima du terrain. Le module vit dans un autre document
+               (minima.html) : la route part donc dans l'adresse. -->
+          <button class="help-btn mapword" id="ntMinimaBtn" aria-label="Minima — the reports against the aerodrome minima" title="Minima — DA/DH · RVR">MINIMA</button>
           <button class="help-btn mapword" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
           <button class="help-btn mapword" id="stationMapBtn" aria-label="Show route map" title="Show route map">MAP</button>
           <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
@@ -6144,6 +6195,9 @@ body .stat .k{
             <!-- NOTAM entre la maison et MAP : depuis un relevé, la liste des
                  NOTAM des MÊMES terrains, sans repasser par l'accueil. -->
             <button class="help-btn mapword" id="wxNotamBtn" aria-label="NOTAM of the aerodromes shown" title="NOTAM">NOTAM</button>
+            <!-- Même place relative que sur la page NOTAM : le mot qui mène à
+                 la troisième lecture suit celui qui mène à la deuxième. -->
+            <button class="help-btn mapword" id="wxMinimaBtn" aria-label="Minima of the aerodromes shown" title="Minima — DA/DH · RVR">MINIMA</button>
             <button class="help-btn mapword" id="wxMapBtn" aria-label="Show map" title="Map">MAP</button>
             <button class="help-btn theme-mirror" id="wxThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
             <button class="help-btn" id="wxHelpBtn" aria-label="Information" title="Information">?</button>
@@ -16226,6 +16280,13 @@ function renderInfo(icao) {
                  : (currentIcao ? [{ icao: currentIcao }] : []);
       openWx(list);
     };
+    /* MINIMA : la MÊME liste que WEATHER — la route si elle est chargée, sinon
+       le terrain affiché — mais jugée cette fois contre les minima de chaque
+       terrain. On quitte la page : le module est un autre document. */
+    $("#ntMinimaBtn").onclick = () => {
+      openMinima(notamRoute.length ? notamRoute.slice()
+                 : (currentIcao ? [{ icao: currentIcao }] : []));
+    };
     function apMeta(a, st) {
       if (st === "ok") return "✓ NOTAMs saved";
       if (st === "fail") return "✕ failed";
@@ -20187,17 +20248,33 @@ window.addEventListener("scroll", hidePop, true);
     }
     $("#homeMapCard").onclick = openHomeMap;
 
-    // Minimas : la même route que ses sœurs, mais portée par l'adresse — le
-    // contrat d'entrée documenté de minima.html (?dep&dest&altn ouvre le
-    // bilan de vol de lui-même). Les cases vides sont sautées ; sans aucun
-    // code, la page s'ouvre nue, sur la dernière route qu'elle a retenue.
-    $("#homeMinimaCard").onclick = () => {
+    /* Vers le module Minimas : la même route que ses sœurs, mais portée par
+       l'adresse — le contrat d'entrée documenté de minima.html (?dep&dest&altn
+       ouvre le bilan de lui-même). TROIS portes s'en servent — la case de
+       l'accueil, et le mot MINIMA des en-têtes NOTAM et Weather —, d'où un
+       seul chemin ici.
+       Le rôle donne son créneau quand il est connu. Un terrain qui n'en a pas
+       — le seul qu'on regarde, un ajout à la main sur la page météo — prend le
+       premier créneau libre, dans l'ordre où il vient : c'est ce que fait la
+       page d'en face avec un terrain seul. Au-delà de trois, ce n'est plus une
+       route : le reste est laissé. Sans aucun code, la page s'ouvre nue, sur
+       la dernière route qu'elle a retenue. */
+    const MINIMA_SLOTS = ["dep", "dest", "altn"];
+    const MINIMA_SLOT = { dep: "dep", arr: "dest", alt: "altn" };
+    function openMinima(list) {
       const q = new URLSearchParams();
-      const param = { dep: "dep", arr: "dest", alt: "altn" };
-      for (const c of homeRouteCodes()) q.set(param[c.role], c.icao);
+      for (const a of (list || [])) {
+        const icao = (a.icao || "").toUpperCase();
+        if (!/^[A-Z]{4}$/.test(icao)) continue;
+        let slot = MINIMA_SLOT[a.role];
+        if (!slot || q.has(slot)) slot = MINIMA_SLOTS.find(s => !q.has(s));
+        if (!slot) break;
+        q.set(slot, icao);
+      }
       const qs = q.toString();
       window.location.href = "./minima.html" + (qs ? "?" + qs : "");
-    };
+    }
+    $("#homeMinimaCard").onclick = () => openMinima(homeRouteCodes());
 
     /* Retour du module Minimas : LE MÊME contrat, dans l'autre sens. La page
        minima.html vit dans un autre document — sa barre ne peut donc pas
@@ -20943,6 +21020,10 @@ window.addEventListener("scroll", hidePop, true);
       const route = list.length > 1 ? list.map(a => a.icao) : null;
       load(list[0].icao, route ? { route } : {});
     };
+    /* MINIMA : les mêmes terrains que ceux affichés, la troisième lecture —
+       le relevé confronté aux minima du terrain. Rien à démonter avant de
+       partir, on change de document. */
+    $("#wxMinimaBtn").onclick = () => openMinima(wxList.slice());
     $("#wxMapBtn").onclick = openHomeMap;
     $("#wxThemeBtn").onclick = () => $("#themeBtn").click();
 
