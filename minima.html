@@ -434,6 +434,13 @@ body.light .btn.primary:hover{background:#0b87ac;border-color:#0b87ac}
 .nf-strip .chk{font-size:12.5px}
 .nf-strip.active .chk input:checked+.bx{background:var(--amber);border-color:var(--amber)}
 .nf-note{flex-basis:100%;font-size:11px;color:var(--muted2);line-height:1.4}
+/* Pastille du NOTAM porteur d'une case cochée automatiquement : le numéro en
+   clair, les autres NOTAM et leurs extraits dans l'infobulle. */
+.nf-auto{
+  font:600 9px/1 var(--mono);letter-spacing:.06em;color:var(--amber);
+  border:1px solid var(--amber);border-radius:4px;padding:2px 5px;margin-left:6px;
+  cursor:help;white-space:nowrap;
+}
 .qfu.nf-closed .deg{color:var(--red);font-weight:700;letter-spacing:.08em}
 /* Version mobile : mêmes cases, empilées dans leur carte relevé. */
 .m-report.nf-strip{display:block;margin-bottom:10px}
@@ -4051,6 +4058,384 @@ function nfAny(icao){
   return f.ilsOut || f.lightsOut || Object.keys(f.rwyClosed).length>0;
 }
 
+/* ================ NOTAM AUTO-FLAGS (remplissage automatique) ================
+   Le module NOTAM annoncé par le contrat ci-dessus : les NOTAM du terrain sont
+   téléchargés (même backend que les relevés — /api/notams/:icao du proxy), puis
+   décodés, et les drapeaux se cochent tout seuls. La signature du contrat ne
+   bouge pas : le moteur continue de lire ilsOut / lightsOut / rwyClosed par le
+   contexte, l'UI continue de tout montrer et de tout laisser décocher.
+     Détection : la Q-line d'abord (sujet MR = piste, FA = aérodrome, famille
+   I* = ILS, LA = rampe d'approche ; condition LC/AS/AU/LD/AW/LP = fermé ou
+   HS), le texte en repli quand elle manque (NOTAM US) — mots de fermeture
+   CLSD / U/S / NOT AVBL…, avec deux garde-fous : une reprise d'exploitation
+   (RESUMED…) n'est jamais une fermeture, une restriction partielle (CLSD TO,
+   envergure) non plus.
+     Validité : un NOTAM ne coche que s'il mord sur [maintenant, +6 h] — items
+   B)/C) (PERM = sans fin, borne illisible = ouverte) et créneaux de l'item D).
+   Six heures ≈ l'horizon des phases jugées : un chantier de nuit ne ferme pas
+   la piste de l'après-midi, mais se voit depuis la soirée.
+     Le pilote garde le dernier mot : décocher un drapeau auto est retenu par
+   NOTAM (dis) et le refetch ne le recoche pas tant que ce sont les mêmes ;
+   un drapeau coché à la main (man) survit à la disparition du NOTAM ; un
+   échec réseau garde les derniers drapeaux connus et le dit dans le bandeau.
+     Granularité assumée v1 : ILS et rampe par TERRAIN (un ILS 27L HS écarte
+   les lignes ILS des deux sens — conservatif, la raison affichée cite la
+   piste), fermeture par PAIRE (une extrémité fermée ferme la paire). */
+const NFA_OUT_CONDS = ["LC","AS","AU","LD","AW","LP"];
+const NFA_ILS_SUBJ = ["IC","ID","IG","IL","IS","IT","IU","IW"];
+const NFA_ALS_SUBJ = ["LA"];
+const NFA_CLOSED_WORDS = ["CLSD","CLOSED","CLOSURE","U/S","UNSERVICEABLE","UNSERV","NOT AVBL","NOT AVAILABLE","UNSAFE","OUT OF SERVICE"];
+const NFA_OTS_RE = /\bOTS\b/;
+const NFA_RESUME_RE = /\b(?:RESUMED?|RESUMPTION|REOPENED?|BACK IN (?:SERVICE|OPERATION)|RETURNED? TO (?:SERVICE|NORMAL)|NORMAL OPS)\b/;
+const NFA_RESTRICT_RE = /\bWINGSPAN\b|\bACFT\s+(?:ABOVE|OVER|EXCEEDING)\b|\b(?:CLSD|CLOSED)\s+(?:TO|FOR)\s+(?:ALL\s+)?ACFT\s+(?:TYPE\s+)?[A-Z]{1,2}\d|\bEXC\b|\bEXCEPT\b/;
+const NFA_ILS_TXT_RE = /\b(?:ILS|MLS|LLZ|LOC(?:ALIZER)?|GLIDE\s?PATH|GLIDESLOPE|GP)\b/;
+const NFA_ALS_TXT_RE = /\b(?:ALSF?\d?|[MS]ALS[RF]?|SSALS?R?|APCH\s+(?:LGT|LIGHTS?)|APPROACH\s+LIGHT\w*|CALVERT)\b/;
+const NFA_AD_CLSD_RE = /\b(?:AD|AERODROME|AIRPORT|ARPT)\s+(?:IS\s+)?(?:CLSD|CLOSED)\b/;
+const NFA_MARKER_US_RE = /\b(?:IM|MM|OM|LOM|LMM|(?:INNER|MIDDLE|OUTER)\s+MARKER)\s+(?:U\/S|OTS|UNSERVICEABLE|UNSERV|OUT OF SERVICE|NOT AVBL|NOT AVAILABLE)\b/g;
+const NFA_RWY_REF_RE = /\bR(?:WY|UNWAY)S?\s*:?\s*(\d{2}[LRC]?)(?:\s*\/\s*(\d{2}[LRC]?))?/g;
+const NFA_RWY_CLSD_RE = /\bR(?:WY|UNWAY)S?\s*:?\s*((?:\d{2}[LRC]?)(?:\s*\/\s*\d{2}[LRC]?)*(?:\s*(?:,|AND)\s*\d{2}[LRC]?(?:\s*\/\s*\d{2}[LRC]?)*)*)(?:\s+(?:IS|ARE|WILL\s+BE|REMAINS?))?\s*:?\s*(?:CLSD|CLOSED)\b/g;
+const NFA_CLSD_RWY_RE = /\b(?:CLSD|CLOSED|CLOSURE)\s+(?:OF\s+)?R(?:WY|UNWAY)S?\s*:?\s*((?:\d{2}[LRC]?)(?:\s*\/\s*\d{2}[LRC]?)*)/g;
+const NFA_LOOKAHEAD_MS = 6*3600000;
+
+/* Découpe les items Q/A/B/C/D/E/F/G d'un NOTAM mis sur une ligne. Les
+   marqueurs sont cherchés DANS L'ORDRE, chacun après le précédent, et
+   seulement précédés d'un blanc ou d'une ponctuation : un « (FREQ) » dans le
+   texte E ne passe pas pour un item Q). */
+function nfaItems(t){
+  const marks = [];
+  let from = 0;
+  for (const L of ["Q","A","B","C","D","E","F","G"]){
+    const re = new RegExp("(?:^|[\\s.;,])" + L + "\\)\\s*", "g");
+    re.lastIndex = from;
+    const m = re.exec(t);
+    if (!m) continue;
+    marks.push([L, m.index, m.index + m[0].length]);
+    from = m.index + m[0].length;
+  }
+  const o = {};
+  for (let i = 0; i < marks.length; i++){
+    o[marks[i][0].toLowerCase()] = t.slice(marks[i][2], i + 1 < marks.length ? marks[i + 1][1] : t.length).trim();
+  }
+  return o;
+}
+
+/* « 2608281200 » → ms UTC ; null si aucun horodatage à 10 chiffres. */
+function nfaTs(s){
+  const m = /(\d{10})/.exec(s || "");
+  if (!m) return null;
+  const d = m[1];
+  return Date.UTC(2000 + +d.slice(0,2), +d.slice(2,4) - 1, +d.slice(4,6), +d.slice(6,8), +d.slice(8,10));
+}
+
+/* L'item D) (horaire récurrent) est-il actif à l'instant t ? Jours (MON-FRI,
+   listes), créneaux HHMM-HHMM, créneaux à cheval sur minuit. Incalculable
+   (SR/SS…) = réputé actif : ne jamais masquer dans le doute — la raison
+   affichée laisse le pilote trancher. */
+const NFA_DAYS = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+function nfaSchedActiveAt(d, t){
+  const s = (d || "").toUpperCase();
+  if (!s || /\bH24\b/.test(s)) return true;
+  if (/\b(?:SR|SS|SUNRISE|SUNSET)\b/.test(s)) return true;
+  const mentioned = NFA_DAYS.filter(x => s.includes(x));
+  if (mentioned.length && !/\bDAILY\b|\bDLY\b/.test(s)){
+    const covered = new Set(mentioned);
+    const rg = /\b(SUN|MON|TUE|WED|THU|FRI|SAT)\s*-\s*(SUN|MON|TUE|WED|THU|FRI|SAT)\b/g;
+    let m;
+    while ((m = rg.exec(s))){
+      let i = NFA_DAYS.indexOf(m[1]);
+      for (let g = 0; g < 7; g++){ covered.add(NFA_DAYS[i]); if (NFA_DAYS[i] === m[2]) break; i = (i + 1) % 7; }
+    }
+    if (!covered.has(NFA_DAYS[new Date(t).getUTCDay()])) return false;
+  }
+  const wins = [...s.matchAll(/\b(\d{4})\s*-\s*(\d{4})\b/g)];
+  if (!wins.length) return true;
+  const dt = new Date(t), cur = dt.getUTCHours() * 100 + dt.getUTCMinutes();
+  return wins.some(m => { const a = +m[1], b = +m[2]; return a <= b ? cur >= a && cur <= b : cur >= a || cur <= b; });
+}
+
+/* Le NOTAM mord-il sur la fenêtre [from, to] ? B)/C) bornent, PERM est sans
+   fin, une borne illisible est ouverte ; l'item D) est balayé minute par
+   minute sur la fenêtre (6 h = 360 tours, négligeable). */
+function nfaActiveIn(it, from, to){
+  const b = nfaTs(it.b);
+  const c = /PERM/i.test(it.c || "") ? Infinity : nfaTs(it.c);
+  const bb = b == null ? -Infinity : b;
+  const cc = c == null ? Infinity : c;
+  if (bb > to || cc < from) return false;
+  const d = (it.d || "").trim();
+  if (!d) return true;
+  const lo = Math.max(from, bb), hi = Math.min(to, cc);
+  for (let t = lo; t <= hi; t += 60000)
+    if (nfaSchedActiveAt(d, t)) return true;
+  return false;
+}
+
+/* Tous les désignateurs de piste (« 09 », « 26R ») d'un fragment de texte. */
+function nfaDesigs(s){ return String(s || "").match(/\d{2}[LRC]?/g) || []; }
+
+/* Les paires de l'aérodrome touchées par ces désignateurs — mêmes clés que
+   l'UI et que rwyClosed (runwayList, pas adGet : un terrain hors base garde
+   sa paire de repli). */
+function nfaPairsOf(icao, ids){
+  const out = [];
+  for (const p of runwayList(icao)){
+    const ends = String(p).split("/");
+    if (ids.some(id => ends.indexOf(id) >= 0)) out.push(p);
+  }
+  return out;
+}
+
+/* Le détecteur : des NOTAM bruts vers les drapeaux, avec la source de chaque
+   décision. Q-line d'abord ; sans elle, l'équipement (ILS/rampe) prime sur la
+   piste — « ILS RWY 09 CLSD » parle de l'ILS, pas de la piste 09. */
+function nfaDetect(icao, raws, now){
+  const det = {ilsOut:[], lightsOut:[], rwy:{}, src:{}};
+  const from = now, to = now + NFA_LOOKAHEAD_MS;
+  const seen = new Set();
+  for (const raw of raws || []){
+    const t = String(raw || "").replace(/\s+/g, " ").trim();
+    if (!t) continue;
+    /* Un NOTAMC ANNULE un autre message — son E) recopie souvent la fermeture
+       levée (« RWY 04L/22R CLSD CAN ») : le lire au premier degré fermerait
+       ce qui vient de rouvrir. Il ne pose jamais de drapeau. */
+    if (/\bNOTAMC\b/.test(t)) continue;
+    const it = nfaItems(t);
+    if (!nfaActiveIn(it, from, to)) continue;
+    const T = (it.e || t).toUpperCase();
+    if (NFA_RESUME_RE.test(T) || /\bCNL\b/.test(T)) continue;
+    const qm = /\bQ\)\s*[A-Z]{4}\/Q([A-Z]{4})\//.exec(t);
+    const subj = qm ? qm[1].slice(0, 2) : null;
+    const cond = qm ? qm[1].slice(2, 4) : null;
+    const idm = /(?:^|\s)([A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4})\b/.exec(t);
+    const id = idm ? idm[1] : "NOTAM";
+    const key = id + "·" + T.slice(0, 40);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const restrict = NFA_RESTRICT_RE.test(T);
+    const closTxt = !restrict && (NFA_CLOSED_WORDS.some(w => T.includes(w)) || NFA_OTS_RE.test(T));
+    const outCond = cond != null && NFA_OUT_CONDS.indexOf(cond) >= 0;
+    /* Les chevrons sautent : les messages du moteur et les infobulles insèrent
+       cet extrait dans du HTML. */
+    const excerpt = ((it.e || t).slice(0, 110) + (it.d ? " · D) " + it.d.slice(0, 40) : "")).replace(/[<>&"]/g, " ").replace(/\s+/g, " ").trim();
+    const mark = list => { list.push(id); det.src[id] = excerpt; };
+    const markRwy = ps => { for (const p of ps) (det.rwy[p] = det.rwy[p] || []).push(id); if (ps.length) det.src[id] = excerpt; };
+    /* Refs de piste ADJACENTES à un mot de fermeture — « RWY 06/24 CLSD »,
+       « CLOSURE OF RUNWAY 06/24 » — les seules dignes de foi dans un texte
+       libre : « RWY 09 » cité comme borne d'un TWY fermé ne ferme rien. */
+    const adj = [];
+    for (const re of [NFA_RWY_CLSD_RE, NFA_CLSD_RWY_RE]){
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(T))) adj.push(...nfaDesigs(m[1]));
+    }
+    if (subj != null){
+      if (subj === "FA"){
+        if (cond === "LC" && !restrict) markRwy(runwayList(icao));
+      } else if (subj === "MR"){
+        if (adj.length && !restrict) markRwy(nfaPairsOf(icao, adj));
+        else if (outCond && !restrict){
+          NFA_RWY_REF_RE.lastIndex = 0;
+          const refs = [];
+          let m;
+          while ((m = NFA_RWY_REF_RE.exec(T))){ refs.push(m[1]); if (m[2]) refs.push(m[2]); }
+          /* Aucune ref citée : la fermeture ne se devine que sur un terrain à
+             piste unique — plusieurs pistes sans ref, on s'abstient. */
+          markRwy(refs.length ? nfaPairsOf(icao, refs)
+            : (runwayList(icao).length === 1 ? runwayList(icao) : []));
+        }
+      } else {
+        if (NFA_ILS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) mark(det.ilsOut);
+        if (NFA_ALS_SUBJ.indexOf(subj) >= 0 && (outCond || closTxt)) mark(det.lightsOut);
+      }
+      continue;
+    }
+    /* Sans Q-line (NOTAM US) : l'aérodrome, puis l'équipement, puis la piste.
+       Les pannes de MARQUEURS sont d'abord retirées du texte : « NAV ILS RWY
+       04R IM U/S » parle du marqueur intérieur, pas de l'ILS entier — même
+       geste que la voie Q-code, qui ignore les sujets II/IM/IO. */
+    if (NFA_AD_CLSD_RE.test(T) && !restrict){ markRwy(runwayList(icao)); continue; }
+    const T2 = T.replace(NFA_MARKER_US_RE, " ");
+    const closTxt2 = !restrict && (NFA_CLOSED_WORDS.some(w => T2.includes(w)) || NFA_OTS_RE.test(T2));
+    let equip = false;
+    if (closTxt2 && NFA_ILS_TXT_RE.test(T2)){ mark(det.ilsOut); equip = true; }
+    if (closTxt2 && NFA_ALS_TXT_RE.test(T2)){ mark(det.lightsOut); equip = true; }
+    if (!equip && adj.length && !restrict) markRwy(nfaPairsOf(icao, adj));
+  }
+  return det;
+}
+
+/* L'entrée du store, matérialisée et migrée : auto (ce que les NOTAM en cours
+   soutiennent), dis (ce que le pilote a refusé, par NOTAM), man (ce qu'il a
+   coché à la main), src (l'extrait par NOTAM), chk (l'état du dernier
+   contrôle). Des drapeaux d'une session antérieure au remplissage automatique
+   sont forcément manuels — ils le restent. */
+function nfEntry(icao){
+  const e = nfStore[icao] || (nfStore[icao] = {ilsOut:false, lightsOut:false, rwyClosed:{}});
+  if (!e.rwyClosed) e.rwyClosed = {};
+  if (!e.auto) e.auto = {ilsOut:[], lightsOut:[], rwy:{}};
+  if (!e.auto.rwy) e.auto.rwy = {};
+  if (!e.dis) e.dis = {rwy:{}};
+  if (!e.dis.rwy) e.dis.rwy = {};
+  if (!e.man){
+    e.man = {rwy:{}};
+    if (e.ilsOut) e.man.ilsOut = true;
+    if (e.lightsOut) e.man.lightsOut = true;
+    for (const p of Object.keys(e.rwyClosed)) e.man.rwy[p] = true;
+  }
+  if (!e.man.rwy) e.man.rwy = {};
+  if (!e.src) e.src = {};
+  return e;
+}
+
+/* Bascule PILOTE d'un drapeau terrain (ilsOut / lightsOut) : cocher marque le
+   drapeau manuel (il survivra aux refetch), décocher un drapeau auto retient
+   le refus — les NOTAM en cours ne le recocheront pas ; un NOTAM NOUVEAU, si. */
+function nfUserSet(icao, flag, on){
+  if (!icao) return;
+  const e = nfEntry(icao);
+  e[flag] = !!on;
+  if (on){ e.man[flag] = true; delete e.dis[flag]; }
+  else { delete e.man[flag]; const ids = e.auto[flag] || []; if (ids.length) e.dis[flag] = ids.slice(); else delete e.dis[flag]; }
+  nfSave();
+}
+function nfUserToggleRwy(icao, pair){
+  if (!icao || !pair) return;
+  const e = nfEntry(icao);
+  if (!e.rwyClosed[pair]){
+    e.rwyClosed[pair] = true; e.man.rwy[pair] = true; delete e.dis.rwy[pair];
+  } else {
+    delete e.rwyClosed[pair]; delete e.man.rwy[pair];
+    const ids = e.auto.rwy[pair] || [];
+    if (ids.length) e.dis.rwy[pair] = ids.slice(); else delete e.dis.rwy[pair];
+  }
+  nfSave();
+}
+
+/* Applique une détection au store. Un drapeau soutenu par un NOTAM non refusé
+   se coche ; un drapeau auto dont plus rien ne parle se décoche — sauf coché
+   main. Renvoie vrai si quelque chose que l'écran montre a changé (l'heure du
+   contrôle seule ne compte pas : pas de re-rendu par minuterie). */
+function nfaApply(icao, det, meta){
+  const e = nfEntry(icao);
+  const sig = () => JSON.stringify([e.ilsOut, e.lightsOut, e.rwyClosed, e.auto, e.src,
+                                    e.chk ? [e.chk.err || null, e.chk.n, e.chk.offline || null, e.chk.stale || null] : null]);
+  const before = sig();
+  for (const flag of ["ilsOut","lightsOut"]){
+    const ids = det[flag] || [];
+    e.auto[flag] = ids;
+    const dis = (e.dis[flag] || []).filter(id => ids.indexOf(id) >= 0);
+    if (dis.length) e.dis[flag] = dis; else delete e.dis[flag];
+    const live = ids.filter(id => dis.indexOf(id) < 0);
+    if (live.length) e[flag] = true;
+    else if (!e.man[flag]) e[flag] = false;
+  }
+  const pairs = new Set([...Object.keys(e.auto.rwy), ...Object.keys(det.rwy)]);
+  e.auto.rwy = {};
+  for (const p of Object.keys(det.rwy)) e.auto.rwy[p] = det.rwy[p];
+  for (const p of pairs){
+    const ids = det.rwy[p] || [];
+    const dis = (e.dis.rwy[p] || []).filter(id => ids.indexOf(id) >= 0);
+    if (dis.length) e.dis.rwy[p] = dis; else delete e.dis.rwy[p];
+    const live = ids.filter(id => dis.indexOf(id) < 0);
+    if (live.length) e.rwyClosed[p] = true;
+    else if (!e.man.rwy[p]) delete e.rwyClosed[p];
+  }
+  const used = new Set([...e.auto.ilsOut, ...e.auto.lightsOut]);
+  for (const p of Object.keys(e.auto.rwy)) for (const id of e.auto.rwy[p]) used.add(id);
+  const src = {};
+  for (const id of used){ const s = det.src[id] != null ? det.src[id] : e.src[id]; if (s != null) src[id] = s; }
+  e.src = src;
+  e.chk = {at: Date.now(), n: meta.n};
+  if (meta.ageMin != null) e.chk.ageMin = meta.ageMin;
+  if (meta.stale) e.chk.stale = true;
+  if (meta.offline) e.chk.offline = true;
+  nfSave();
+  return sig() !== before;
+}
+
+/* Échec du contrôle : rien n'est décoché — les derniers drapeaux connus valent
+   mieux que rien — et le bandeau le dit. */
+function nfaFail(icao, err){
+  const e = nfEntry(icao);
+  const prev = e.chk && e.chk.err;
+  const msg = err instanceof TypeError ? "network unreachable" : (err && err.message) || "error";
+  e.chk = {at: Date.now(), err: msg};
+  nfSave();
+  return prev !== msg;
+}
+
+/* Télécharge et applique les NOTAM d'un terrain. Anti-rafale : un contrôle de
+   moins de dix minutes ne repart pas (la minuterie des relevés est gratuite),
+   un contrôle en vol est partagé. WX_API d'abord ; un serveur local sans la
+   route NOTAM retombe sur le proxy Railway — la même adresse que le défaut de
+   WX_API. Hors ligne, le cache de Preflight Lens (notam_data:ICAO, même
+   origine sur le site déployé) sert de repli. */
+const NFA_FRESH_MS = 10 * 60000;
+const NFA_FALLBACK_API = "https://notam-proxy-production.up.railway.app";
+const nfaPending = new Map();
+const nfaAt = new Map();
+function nfaLoad(icao){
+  if (!/^[A-Z]{4}$/.test(icao || "")) return;
+  const last = nfaAt.get(icao);
+  if (last && Date.now() - last < NFA_FRESH_MS) return nfaPending.get(icao);
+  if (nfaPending.has(icao)) return nfaPending.get(icao);
+  const p = (async () => {
+    let raws = null, meta = {};
+    try {
+      let r = await fetch(`${WX_API}/api/notams/${icao}`);
+      if (!r.ok && WX_API !== NFA_FALLBACK_API) r = await fetch(`${NFA_FALLBACK_API}/api/notams/${icao}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      raws = Array.isArray(d.notams) ? d.notams : [];
+      meta = {n: raws.length, ageMin: d.ageMin, stale: d.stale};
+    } catch (err) {
+      try {
+        const s = JSON.parse(localStorage.getItem("notam_data:" + icao));
+        if (s && Array.isArray(s.raw)){ raws = s.raw; meta = {n: raws.length, offline: true}; }
+      } catch (_) {}
+      if (!raws){
+        nfaAt.set(icao, Date.now());
+        if (nfaFail(icao, err)) nfaNotify(icao);
+        return;
+      }
+    }
+    nfaAt.set(icao, Date.now());
+    if (nfaApply(icao, nfaDetect(icao, raws, Date.now()), meta)) nfaNotify(icao);
+  })();
+  p.catch(() => {}).then(() => { if (nfaPending.get(icao) === p) nfaPending.delete(icao); });
+  nfaPending.set(icao, p);
+  return p;
+}
+
+/* Des drapeaux ont bougé : redessine ce que ce terrain a à l'écran — même
+   garde-fou que la bande du jour, rien ne bouge pour un terrain quitté. Les
+   cartes du bilan de vol suivent toujours (elles jugent leurs trois terrains). */
+function nfaNotify(icao){
+  if (currentIcao() === icao) render();
+  else if (document.body.classList.contains("mobile") && mState.icao === icao) renderMobile();
+  if (window.RTV) RTV.refresh();
+}
+
+/* La pastille AUTO d'une case : le premier NOTAM porteur (les autres en
+   infobulle, extraits compris). */
+function nfAutoTag(nf, ids){
+  if (!ids || !ids.length) return "";
+  const tip = ids.map(i => (nf.src && nf.src[i]) ? i + " — " + nf.src[i] : i).join("\n");
+  return `<span class="nf-auto" title="${escapeHtmlText(tip)}">${escapeHtmlText(ids[0])}${ids.length > 1 ? " +" + (ids.length - 1) : ""}</span>`;
+}
+
+/* La ligne d'état du bandeau : ce que vaut le dernier contrôle automatique. */
+function nfStateNote(icao){
+  const chk = nfGet(icao).chk;
+  if (!chk) return "Checking NOTAMs… Switches auto-fill from them; set the rest from your briefing.";
+  if (chk.err) return `NOTAM auto-check unavailable (${escapeHtmlText(chk.err)}) — switches are manual, set them from your briefing.`;
+  const t = new Date(chk.at).toISOString().slice(11, 16) + "Z";
+  return `Auto-checked against ${chk.n} NOTAM${chk.n === 1 ? "" : "s"} at ${t}`
+    + (chk.offline ? " (offline copy from the NOTAM page)" : "")
+    + (chk.stale ? " — upstream feed stale" : "")
+    + ". A switch you clear stays cleared for these NOTAMs; what you set by hand is kept.";
+}
+
 /* Terrain courant du point de vue du MOTEUR : la station du METAR chargé fait
    foi, à défaut le champ ICAO, à défaut le terrain ouvert sur mobile. */
 function currentIcao(){
@@ -4795,22 +5180,29 @@ function assess(role, ctx){
   if (cfg.lvpUnknown) push({severity:"CAUTION", code:"LVP_STATUS_UNKNOWN",
     message:"LVP status not confirmed. Low-visibility procedures are an AERODROME condition (ATIS/NOTAM), independent of your operating minima — check both."});
 
-  /* ---------------- drapeaux NOTAM (interrupteurs manuels) ----------------
-     Chaque drapeau actif est rappelé ici : le pilote doit toujours voir
-     POURQUOI les minima ont changé, et pouvoir décocher si le NOTAM est mal
-     interprété. */
+  /* ---------------- drapeaux NOTAM ----------------
+     Chaque drapeau actif est rappelé ici, avec sa source quand un NOTAM décodé
+     l'a posé : le pilote doit toujours voir POURQUOI les minima ont changé, et
+     pouvoir décocher si le NOTAM est mal interprété. Les extraits arrivent
+     déjà sans chevrons (nfaDetect) — warnBlock insère le message en HTML. */
+  const nfWhy = ids => ids && ids.length ? `NOTAM ${ids.join(", ")}` : "manual NOTAM switch";
+  const nfQuote = ids => { const s = ids && ids.length ? (nf.src || {})[ids[0]] : null;
+    return s ? ` — “${s.length > 80 ? s.slice(0, 80) + "…" : s}”` : ""; };
+  const nfaRwyIds = (nf.auto && nf.auto.rwy && ctx.rwyPair && nf.auto.rwy[ctx.rwyPair]) || [];
+  const nfaIlsIds = (nf.auto && nf.auto.ilsOut) || [];
+  const nfaAlsIds = (nf.auto && nf.auto.lightsOut) || [];
   if (ctx.rwyClosedSel) push({severity:"CRITICAL", code:"RWY_CLOSED_NOTAM",
-    message:`RWY ${ctx.rwyPair || "—"} is flagged CLOSED (manual NOTAM switch). The aerodrome cannot be used on this runway whatever the weather — pick another runway or clear the switch.`});
+    message:`RWY ${ctx.rwyPair || "—"} is flagged CLOSED (${nfWhy(nfaRwyIds)})${nfQuote(nfaRwyIds)}. The aerodrome cannot be used on this runway whatever the weather — pick another runway or clear the switch.`});
   if (nf.ilsOut && role!=="DEPARTURE"){
     if (dbApp==null && NF_ILS_FACILITIES.includes(cfg.facility))
       push({severity:"CRITICAL", code:"ILS_US_NOTAM",
-        message:`ILS flagged unserviceable (manual NOTAM switch), but this phase is still judged on ${cfg.facility} minima (setup fallback). Select an available approach in the phase's Approach box, or clear the switch.`});
+        message:`ILS flagged unserviceable (${nfWhy(nfaIlsIds)})${nfQuote(nfaIlsIds)}, but this phase is still judged on ${cfg.facility} minima (setup fallback). Select an available approach in the phase's Approach box, or clear the switch.`});
     else
       push({severity:"CAUTION", code:"ILS_US_NOTAM",
-        message:`ILS flagged unserviceable (manual NOTAM switch) — ILS and LOC lines are excluded from the airfield-database approaches${dbApp?`; this phase is judged on ${adTypeLabel(dbApp)}`:""}.`});
+        message:`ILS flagged unserviceable (${nfWhy(nfaIlsIds)})${nfQuote(nfaIlsIds)} — ILS and LOC lines are excluded from the airfield-database approaches${dbApp?`; this phase is judged on ${adTypeLabel(dbApp)}`:""}.`});
   }
   if (nf.lightsOut && role!=="DEPARTURE") push({severity:"CAUTION", code:"ALS_US_NOTAM",
-    message:"Approach lighting flagged unserviceable (manual NOTAM switch) — minima recomputed with no approach light system (NALS)."});
+    message:`Approach lighting flagged unserviceable (${nfWhy(nfaAlsIds)})${nfQuote(nfaAlsIds)} — minima recomputed with no approach light system (NALS).`});
   if (!cfg.operatorMinimaLoaded) push({severity:"CAUTION", code:"OPERATOR_MINIMA_NOT_LOADED",
     message:"No OM-B/OM-C minima set loaded. The computed values are regulatory reference values — cross-check them against your operator's approved operating minima before use."});
 
@@ -7540,13 +7932,13 @@ function renderStage(tab, r){
       <div class="qfu-grid">${qfuCards}</div>
       <p class="note" style="margin:9px 0 14px">${cmpNote}</p>
 
-      ${icao ? (()=>{ const nf = nfGet(icao); return `
-      <div class="nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — manual switches">
+      ${icao ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ilsOut:[], lightsOut:[], rwy:{}}; return `
+      <div class="nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
         <span class="nf-title">NOTAM</span>
-        <label class="chk"><input type="checkbox" id="nfIls" ${nf.ilsOut?"checked":""}><span class="bx">${TICK}</span><span>ILS U/S</span></label>
-        <label class="chk"><input type="checkbox" id="nfLights" ${nf.lightsOut?"checked":""}><span class="bx">${TICK}</span><span>App. lights U/S</span></label>
-        ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="nfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span></label>`).join("")}
-        <span class="nf-note">Manual switches — set them from your NOTAM briefing; they reshape the minima and verdicts below.</span>
+        <label class="chk"><input type="checkbox" id="nfIls" ${nf.ilsOut?"checked":""}><span class="bx">${TICK}</span><span>ILS U/S</span>${nfAutoTag(nf, au.ilsOut)}</label>
+        <label class="chk"><input type="checkbox" id="nfLights" ${nf.lightsOut?"checked":""}><span class="bx">${TICK}</span><span>App. lights U/S</span>${nfAutoTag(nf, au.lightsOut)}</label>
+        ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="nfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span>${nfAutoTag(nf, (au.rwy||{})[p])}</label>`).join("")}
+        <span class="nf-note">${nfStateNote(icao)}</span>
       </div>`; })() : ""}
 
       ${needQfu ? `<div class="ph">Pick one above to compare the limits</div>` : `
@@ -7580,13 +7972,15 @@ function renderStage(tab, r){
     render();
   });
   /* Interrupteurs NOTAM : chaque bascule est rangée sous le terrain courant et
-     tout se recalcule — verdicts, pastilles, sélecteurs d'approche. */
+     tout se recalcule — verdicts, pastilles, sélecteurs d'approche. Le geste
+     passe par nfUserSet/nfUserToggleRwy : décocher un drapeau auto retient le
+     refus, cocher à la main survit aux refetch. */
   const nfIls = inner.querySelector("#nfIls");
-  if (nfIls) nfIls.onchange = ()=>{ nfSet(currentIcao(), {ilsOut: nfIls.checked}); render(); };
+  if (nfIls) nfIls.onchange = ()=>{ nfUserSet(currentIcao(), "ilsOut", nfIls.checked); render(); };
   const nfLights = inner.querySelector("#nfLights");
-  if (nfLights) nfLights.onchange = ()=>{ nfSet(currentIcao(), {lightsOut: nfLights.checked}); render(); };
+  if (nfLights) nfLights.onchange = ()=>{ nfUserSet(currentIcao(), "lightsOut", nfLights.checked); render(); };
   inner.querySelectorAll(".nfRwy").forEach(c=>c.onchange = ()=>{
-    nfToggleRwy(currentIcao(), c.dataset.pair); render();
+    nfUserToggleRwy(currentIcao(), c.dataset.pair); render();
   });
   inner.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{
     /* On repart de l'heure qu'il est au moment du clic, sinon « now » rejoue
@@ -7717,6 +8111,10 @@ function reparse(){
     state.qfuAuto = {};
     /* Les approches choisies appartiennent au terrain quitté. */
     state.phaseApp = {};
+    /* Les NOTAM du terrain partent dès qu'on le sait nouveau — quel que soit
+       le chemin d'entrée (fetch, mobile, relevé collé, exemple). Asynchrone :
+       les drapeaux arrivent, nfaNotify redessine. */
+    nfaLoad(st);
     /* Une page focalisée le reste : le terrain qui vient d'arriver — écrit
        dans la case, choisi en favori, ou son relevé collé à la main — prend
        le créneau de la route au lieu de rendre les cinq onglets. On ne sort
@@ -7856,6 +8254,9 @@ async function fetchWeather(opts = {}){
     /* La bande du jour part après le relevé, jamais à sa place : son cache
        client rend le rafraîchissement minute gratuit. */
     loadMainDayWx(icao);
+    /* Même contrat pour les drapeaux NOTAM : l'anti-rafale de nfaLoad rend la
+       minuterie gratuite, et un NOTAM tombé entre-temps finit par cocher. */
+    nfaLoad(icao);
     startAutoRefresh();
   } catch(err){
     if (silent){
@@ -8708,13 +9109,14 @@ function bindMobile(host){
     if (tb) state.phaseApp[tb.role] = mpa.value;
     render();
   };
-  /* Interrupteurs NOTAM — même contrat que sur tablette. */
+  /* Interrupteurs NOTAM — même contrat que sur tablette : décocher un drapeau
+     auto retient le refus, cocher à la main survit aux refetch. */
   const mNfIls = host.querySelector("#mNfIls");
-  if (mNfIls) mNfIls.onchange = ()=>{ nfSet(currentIcao(), {ilsOut: mNfIls.checked}); render(); };
+  if (mNfIls) mNfIls.onchange = ()=>{ nfUserSet(currentIcao(), "ilsOut", mNfIls.checked); render(); };
   const mNfLights = host.querySelector("#mNfLights");
-  if (mNfLights) mNfLights.onchange = ()=>{ nfSet(currentIcao(), {lightsOut: mNfLights.checked}); render(); };
+  if (mNfLights) mNfLights.onchange = ()=>{ nfUserSet(currentIcao(), "lightsOut", mNfLights.checked); render(); };
   host.querySelectorAll(".mNfRwy").forEach(c=>c.onchange = ()=>{
-    nfToggleRwy(currentIcao(), c.dataset.pair); render();
+    nfUserToggleRwy(currentIcao(), c.dataset.pair); render();
   });
 }
 
@@ -8847,15 +9249,16 @@ function mobileResultsHtml(){
       <div class="m-ptabs" role="group" aria-label="Flight phase">${ptabs}</div>
       <div class="m-report"><span class="label">QFU</span><div class="m-qfus">${mQfuChips(icao, results, sel)}</div></div>
       ${mDayWxHtml(icao)}
-      ${/^[A-Z]{4}$/.test(icao) ? (()=>{ const nf = nfGet(icao);
+      ${/^[A-Z]{4}$/.test(icao) ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ilsOut:[], lightsOut:[], rwy:{}};
         const pairs = runwayList(icao).concat(runwayList(icao).includes(state.runway)?[]:[state.runway]);
-        return `<div class="m-report nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — manual switches">
-        <span class="label">NOTAM — manual switches</span>
+        return `<div class="m-report nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
+        <span class="label">NOTAM</span>
         <div class="nf-m">
-          <label class="chk"><input type="checkbox" id="mNfIls" ${nf.ilsOut?"checked":""}><span class="bx">${TICK}</span><span>ILS U/S</span></label>
-          <label class="chk"><input type="checkbox" id="mNfLights" ${nf.lightsOut?"checked":""}><span class="bx">${TICK}</span><span>App. lights U/S</span></label>
-          ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="mNfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span></label>`).join("")}
+          <label class="chk"><input type="checkbox" id="mNfIls" ${nf.ilsOut?"checked":""}><span class="bx">${TICK}</span><span>ILS U/S</span>${nfAutoTag(nf, au.ilsOut)}</label>
+          <label class="chk"><input type="checkbox" id="mNfLights" ${nf.lightsOut?"checked":""}><span class="bx">${TICK}</span><span>App. lights U/S</span>${nfAutoTag(nf, au.lightsOut)}</label>
+          ${pairs.map(p=>`<label class="chk"><input type="checkbox" class="mNfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span>${nfAutoTag(nf, (au.rwy||{})[p])}</label>`).join("")}
         </div>
+        <span class="nf-note">${nfStateNote(icao)}</span>
       </div>`; })() : ""}
       <div class="m-phases">${rows}</div>
     </div>`;
@@ -10492,7 +10895,9 @@ window.RTV = (()=>{
           : cls(r.overall);
       return {icao, name:mAdName(icao), st, vis, wind,
               ceil: tb.role==="DEPARTURE" ? null : ceilInfo(r),
-              qfu:q, closed, closedPair:pair, eta:etaDate(tb.role),
+              qfu:q, closed, closedPair:pair,
+              closedBy: (((nfGet(icao).auto || {}).rwy || {})[pair] || [])[0] || null,
+              eta:etaDate(tb.role),
               obsTime: wx && wx.obsTime!=null ? wx.obsTime : null,
               noWx: !wx || (!wx.metarRaw && !wx.tafRaw),
               noTaf: !!(wx && wx.status==="no-taf")};
@@ -10544,7 +10949,7 @@ window.RTV = (()=>{
         ${ageHtml(s.obsTime)}</span>
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
       <span class="rt-rows">${visRow(s.vis)}${ceilRow(s.ceil)}${windRow(s.wind)}</span>
-      ${s.closed ? `<span class="rt-note">Runway ${s.closedPair} closed — NOTAM switch</span>` : ""}
+      ${s.closed ? `<span class="rt-note">Runway ${s.closedPair} closed — ${s.closedBy ? "NOTAM " + s.closedBy : "NOTAM switch"}</span>` : ""}
       ${s.err ? `<span class="rt-note">Engine error: ${escapeHtmlText(s.err)}</span>`
         : s.noWx ? `<span class="rt-note dim">No reports available.</span>`
         : s.noTaf ? `<span class="rt-note dim">No TAF published.</span>` : ""}
@@ -10579,6 +10984,9 @@ window.RTV = (()=>{
     const ids = [...new Set(RT.icaos.filter(Boolean))];
     render();
     if (!ids.length){ sayState(""); return; }
+    /* Les drapeaux NOTAM des trois terrains partent avec les relevés — chaque
+       arrivée redessine les cartes (nfaNotify → RTV.refresh). */
+    ids.forEach(id => nfaLoad(id));
     const my = ++RT.seq;
     sayState(`Requesting ${ids.length} station${ids.length>1?"s":""}…`);
     let data;
@@ -10794,7 +11202,9 @@ window.RTV = (()=>{
     if (fromUrl) open();
   }
 
-  return {open, close, pick, boot, retarget, syncPlaceholders};
+  /* refresh : les drapeaux NOTAM arrivent en différé (nfaNotify) — les cartes
+     se rejugent ; le garde ov.hidden rend l'appel gratuit bilan fermé. */
+  return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render};
 })();
 
 /* =====================================================================
@@ -10951,6 +11361,10 @@ window.WXMAP = (() => {
       const raw = localStorage.getItem(NC_KEY);
       if (raw){ const d = JSON.parse(raw); add(Array.isArray(d) ? d : Object.keys(d || {})); }
     } catch(_){}
+    /* L'index hors-ligne que notam-filter.html écrit RÉELLEMENT
+       (notam_data_idx, même origine sur le site déployé) compte aussi — le
+       contrat wl-notam-cache restait sinon lettre morte. */
+    try{ add(JSON.parse(localStorage.getItem("notam_data_idx") || "[]")); } catch(_){}
     return set;
   }
 
