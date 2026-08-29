@@ -7439,11 +7439,11 @@ body .stat .k{
        L'EN-TÊTE, lui, est sans ambiguïté : un NOTAMC n'impose jamais rien, il
        ne fait que retirer un message. C'est la lecture qu'a déjà le détecteur
        de drapeaux de Minima Lens (nfaDetect, « if (/\bNOTAMC\b/) continue »).
-       Ancré sur l'identifiant de tête — ICAO (A2541/26), domestique US
-       (07/211, 6/7302) ou SNOWTAM (0854) — pour ne jamais confondre avec un
-       corps qui CITERAIT le mot. Les 8 NOTAMC de KMIA relevés ce jour-là
-       matchent tous. */
-    const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4}|\d{3,4})\s+NOTAMC\b/;
+       Ancré sur l'identifiant de tête — ICAO (A2541/26, série à trois ou
+       quatre chiffres), domestique US (07/211, 6/7302) ou SNOWTAM (0854) —
+       pour ne jamais confondre avec un corps qui CITERAIT le mot. Les 8
+       NOTAMC de KMIA relevés ce jour-là matchent tous. */
+    const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{3,4}\/\d{2}|\d{1,2}\/\d{3,4}|\d{3,4})\s+NOTAMC\b/;
     /* LES CHAMPS DE LA LIGNE Q) NE SE LISENT QUE S'ILS EN ONT LA FORME.
        La ligne se lit par position depuis la gauche, et une position ne vaut
        que si toutes celles d'avant sont là : quand la source en saute une,
@@ -7505,7 +7505,24 @@ body .stat .k{
       // NOTAMN/C/R la suit, ce que l'anticipation vérifie sans la consommer.
       // Les deux formes à barre restent essayées d'abord : « 08/474 NOTAMN »
       // garde son identifiant entier.
-      const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4}|\d{3,4}(?=\s+NOTAM[NCR]\b))/) || [])[1] || "(sans id)";
+      //
+      // ... ET IL ARRIVE QU'IL N'AIT PAS DE LIGNE D'EN-TÊTE DU TOUT. Le
+      // message commence alors directement par l'en-tête abrégé du SNOWTAM,
+      // « SWOP0047 OPLA 08251034 (SNOWTAM 0047 ... » : SW, le code à deux
+      // lettres de l'État, puis le rang. C'est ce rang qu'on affiche, le même
+      // que celui des SNOWTAM qui ont leur ligne — sinon le même relevé
+      // porterait deux numéros selon la mise en page de la source.
+      //
+      // LA SÉRIE OACI N'A PAS TOUJOURS QUATRE CHIFFRES. « B006/09 » aux
+      // Seychelles : la source en émet trois. Le motif les accepte tous deux,
+      // et reste glouton, donc « A2541/26 » garde bien ses quatre chiffres.
+      //
+      // Balayage du 2026-08-29 sur la TOTALITÉ de l'index du proxy —
+      // 87319 NOTAM, 6207 terrains, aucun appel amont : ces deux formes sont
+      // les 4 derniers « (sans id) » du monde, et aucun identifiant déjà lu ne
+      // change.
+      const mId = text.match(/^\(?(?:([A-Z]\d{3,4}\/\d{2}|\d{1,2}\/\d{3,4}|\d{3,4}(?=\s+NOTAM[NCR]\b))|SW[A-Z]{2}(\d{4})(?=\s))/);
+      const id = (mId && (mId[1] || mId[2])) || "(sans id)";
       const cnl = CANCEL_HEAD_RE.test(text);
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
