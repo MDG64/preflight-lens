@@ -10069,7 +10069,7 @@ function adToolsHtml(){
     <button class="btn sm" data-ad="export"${(nf||ns)?"":" disabled"}>Export JSON</button>
     <button class="btn sm" data-ad="import">Import JSON…</button>
     ${(mjState.mode!=="off" && (nf||ns)) ? `<button class="btn sm" data-ad="journalPush">Write all to journal</button>` : ""}
-    ${mjState.mode!=="off" ? (mjCert
+    ${mjState.mode!=="off" ? (mjCertifie()
         ? `<button class="btn sm" data-ad="appareils" title="This device is certified. Click to see every certified device and revoke one.">Devices ✓</button>`
         : `<button class="btn sm" data-ad="certifier" title="Certify this device with the enrolment code, so your entries are written to the shared journal as verified">Certify this device…</button>`) : ""}
     ${mjLiensHtml()}
@@ -10109,6 +10109,13 @@ function mjRegistreHtml(){
   </div>`;
 }
 
+/* Un certificat que le serveur ne reconnaît plus vaut un appareil non certifié.
+   La dernière écriture l'a dit (`owner:false`), et c'est ce qui doit commander
+   le BOUTON autant que le texte : tant que la présence du certificat suffisait,
+   l'app proposait « Devices ✓ » — une porte fermée, le registre répond 403 — et
+   le seul geste utile, se certifier à nouveau, n'était plus atteignable. */
+function mjCertifie(){ return !!mjCert && mjState.owner !== false; }
+
 /* Ce que le journal chiffré a fait de la saisie — dit à chaque rendu du
    panneau, parce qu'une sauvegarde silencieuse ne se distingue pas d'une
    sauvegarde absente. Les valeurs en attente sont annoncées comme telles :
@@ -10129,11 +10136,18 @@ function mjNote(){
   if (j && j.keyId) bits.push(`key ${escapeHtmlText(j.keyId.slice(0,6))}`);
   if (mjState.at) bits.push(`last write ${new Date(mjState.at).toLocaleTimeString()}`);
   if (wait) bits.push(`${wait} waiting`);
-  /* L'état propriétaire vient de la DERNIÈRE écriture : un code refusé se voit
-     ici, pas dans une erreur — le serveur a bien écrit, mais en communautaire. */
-  bits.push(mjCert
-    ? (mjState.owner === false ? "certificate REFUSED — certify this device again" : "certified device")
-    : "device NOT certified — entries stay community");
+  /* L'état propriétaire vient de la DERNIÈRE écriture : un certificat refusé se
+     voit ici, pas dans une erreur — le serveur a bien écrit, mais en
+     communautaire. Les deux états qui ne conviennent pas nomment le geste qui
+     en sort, et le bouton qui le porte : constater ne sert à rien si la sortie
+     reste à deviner. */
+  bits.push(mjCertifie()
+    ? "certified device"
+    : mjCert
+      ? `certificate no longer recognised — entries stay community; press “Certify this
+         device…” above and enter the enrolment code to certify it again`
+      : `device NOT certified — entries stay community; press “Certify this device…”
+         above and enter the enrolment code to write verified minima`);
   return `<span class="note ok">Encrypted journal — ${bits.join(" · ") || "ready"}.
     Append-only, signed, shared by all your devices; the keys never travel with it.</span>`;
 }
@@ -10206,7 +10220,7 @@ function mjLiensHtml(){
 function mBaseHtml(){
   const msg = adToolsMsg ? `<span class="note ${adToolsMsg.ok?"ok":"ko"}">${escapeHtmlText(adToolsMsg.text)}</span>` : "";
   return `<div class="setup-body"><div class="ad-tools">
-    ${mjState.mode!=="off" ? (mjCert
+    ${mjState.mode!=="off" ? (mjCertifie()
       ? `<button class="btn sm" data-ad="appareils">Devices ✓</button>`
       : `<button class="btn sm" data-ad="certifier">Certify this device…</button>`) : ""}
     ${mjLiensHtml()}
