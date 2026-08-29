@@ -72,10 +72,10 @@
       --amber: #f6b23e;
       --green: #34d39a;
       --gold: #f6c945;
-      /* Encre des noms surlignés dans le texte des NOTAM (QFU, taxiway,
-         approche). De nuit un or franc sur fond sombre ; de jour il vire à
-         l'ambre foncé (voir body.light), sans quoi le jaune s'effacerait sur
-         le blanc — le nom doit rester lisible, pas seulement repérable. */
+      /* Encre des noms mis en avant dans le texte des NOTAM (QFU, taxiway,
+         approche). De nuit un or franc sur fond sombre ; de jour un bleu
+         profond (voir body.light), le jaune s'effaçant sur le blanc — le nom
+         doit rester lisible, pas seulement repérable. */
       --hl: #f6c945;
       --red-bg: #241619;
       --amber-bg: #241f17;
@@ -114,7 +114,7 @@
       --amber: #cf7a12;
       --green: #12936a;
       --gold: #c98a08;
-      --hl: #8a5300;
+      --hl: #0b5cad;
       --red-bg: #fdecec;
       --amber-bg: #fbf1e2;
       --green-bg: #e7f4ef;
@@ -4283,7 +4283,7 @@
     /* -- noms mis en avant : QFU, taxiway, type d'approche. C'est l'encre qui
        change, pas le fond : un texte de NOTAM en compte beaucoup, et autant de
        pavés jaunes hachaient la phrase. La couleur suit le thème — or de nuit,
-       ambre foncé de jour (--hl) — pour rester lisible dans les deux. -- */
+       bleu profond de jour (--hl) — pour rester lisible dans les deux. -- */
     .etext mark.nhl,.etext .gl.hi{background:none;color:var(--hl);font-weight:600}
     .etext .gl.hi:hover,.etext .gl.hi:focus-visible{background:color-mix(in srgb,var(--hl) 16%,transparent);border-bottom-color:var(--hl)}
     .glpop{position:absolute;z-index:60;max-width:320px;background:#0b1722;border:1px solid var(--line2);border-radius:11px;box-shadow:0 16px 44px rgba(0,0,0,.55);padding:13px 15px;font-family:var(--sans);animation:glpopin .12s ease both}
