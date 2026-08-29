@@ -7095,14 +7095,22 @@ body .stat .k{
          « TOWER » nu en est absent à dessein — la tour de contrôle porte le même
          mot, et ses feux à elle ne sont pas du balisage d'obstacle ;
        - entre l'obstacle, ses feux et le « U/S », on n'accepte ni fin de phrase
-         (« . » suivi d'une espace) ni ponctuation d'énumération (« , ; : »). Le
-         point NU reste permis : les NOTAM US écrivent leurs coordonnées et leurs
-         hauteurs en décimal (« 12.5NM », « 531.8FT »), une exclusion sèche de
-         « . » ne reconnaîtrait jamais la forme réelle. Une énumération du genre
-         « OBST LGT ON HANGAR, PAPI RWY 04 U/S » ne matche donc pas et reste
-         Critical — le sens du repli est voulu : on rate un allègement, on ne
-         masque jamais une panne. */
-    const OBST_LGT_OOS_RE = /\b(?:OBST|OBSTACLES?|CRANES?|MASTS?)\b(?:(?!\.\s)[^,;:\n]){0,120}?\b(?:LGTS?|LIGHTS?)\b(?:(?!\.\s)[^,;:\n]){0,120}?\b(?:U\/S|UNSERVICEABLE|UNSERV|NOT AVBL|NOT AVAILABLE|OUT OF SERVICE)\b/g;
+         (« . » suivi d'une espace, le saut de ligne compris) ni ponctuation
+         d'énumération (« , ; : »). Le point NU reste permis : les NOTAM US
+         écrivent leurs coordonnées et leurs hauteurs en décimal (« 12.5NM »,
+         « 531.8FT »), une exclusion sèche de « . » ne reconnaîtrait jamais la
+         forme réelle. Une énumération du genre « OBST LGT ON HANGAR, PAPI RWY 04
+         U/S » ne matche donc pas et reste Critical — le sens du repli est voulu :
+         on rate un allègement, on ne masque jamais une panne.
+       Le SAUT DE LIGNE, lui, est traversé — c'est un repli de mise en page, pas
+       une frontière de sens. L'amont replie ses lignes vers 65 caractères, en
+       plein milieu de l'item : audit du 2026-08-29 sur 6352 NOTAM de 75 terrains
+       US, les trois seuls feux d'obstacle restés rouges l'étaient tous pour cette
+       raison — « OBST POLE LGT (ASN UNKNOWN) 362850N0822424W (0.29NM WSW APCH END
+       RWY 23) \n UNKNOWN (60FT AGL) U/S » (KTRI 08/029, KTUS 07/005, KDSM
+       08/123). Une vraie fin de phrase reste bloquée : « . » suivi du saut de
+       ligne tombe sous le même garde-fou que « . » suivi d'une espace. */
+    const OBST_LGT_OOS_RE = /\b(?:OBST|OBSTACLES?|CRANES?|MASTS?)\b(?:(?!\.\s)[^,;:]){0,120}?\b(?:LGTS?|LIGHTS?)\b(?:(?!\.\s)[^,;:]){0,120}?\b(?:U\/S|UNSERVICEABLE|UNSERV|NOT AVBL|NOT AVAILABLE|OUT OF SERVICE)\b/g;
     function severity(q, e) {
       const [subj, cond] = qcodeParts(q), t = (e || "").toUpperCase();
       // Passage en Information UNIQUEMENT pour les NOTAM dont le sujet EST un poste

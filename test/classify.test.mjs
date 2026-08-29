@@ -231,6 +231,15 @@ test("un feu d'obstacle hors service est de l'Information, Q-code ou pas", async
   for (const e of ["OBST LGT U/S", "OBSTACLE LIGHTS NOT AVBL",
                    "CRANE LGT OUT OF SERVICE", "MAST LGT UNSERVICEABLE"])
     assert.equal(classifyNotam("QXXXX", e).severity, "info", e);
+  // L'amont replie ses lignes vers 65 caractères, en plein milieu de l'item :
+  // le saut de ligne se traverse. Cas réels KTRI 08/029, KTUS 07/005 et KDSM
+  // 08/123 (audit du 2026-08-29), les trois seuls feux d'obstacle restés rouges
+  // sur 6352 NOTAM de 75 terrains US, tous pour cette raison.
+  assert.equal(classifyNotam(null,
+    "OBST POLE LGT (ASN UNKNOWN) 362850N0822424W (0.29NM WSW APCH END RWY 23) \nUNKNOWN (60FT AGL) U/S").severity,
+    "info");
+  // Mais une vraie fin de phrase reste une frontière, saut de ligne ou pas.
+  assert.equal(classifyNotam(null, "OBST LGT ON CRANE.\nPAPI RWY 04 U/S").severity, "critical");
   // Une vraie fermeture citée dans le même message garde son rouge.
   assert.equal(classifyNotam("QXXXX", "RWY 12 CLSD. OBST TOWER LGT U/S").severity, "critical");
   assert.equal(classifyNotam("QMRLC", "OBST LGT U/S. RWY 12/30 CLSD").severity, "critical");
