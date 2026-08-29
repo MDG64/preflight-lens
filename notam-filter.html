@@ -2141,13 +2141,18 @@
       box-shadow: 0 8px 12px -10px rgba(0, 0, 0, .55)
     }
 
+    /* Les trois boutons remontent au-dessus de la fiche montante quand elle en
+       recouvre l'emplacement (--sheet-ov, posé par planSyncZoom) : le zoom est
+       la façon dont on va VÉRIFIER sur le dessin ce que la fiche raconte, il ne
+       doit pas disparaître au moment où on la lit. */
     .plan-zoom {
       position: absolute;
       right: 8px;
-      bottom: 8px;
+      bottom: calc(8px + var(--sheet-ov, 0px));
       display: flex;
       flex-direction: column;
-      gap: 5px
+      gap: 5px;
+      transition: bottom .24s cubic-bezier(.22, .61, .36, 1)
     }
 
     /* Crédit ODbL du plan : le dessin est une œuvre produite des données OSM,
@@ -2307,6 +2312,122 @@
 
     .plan-pick:empty {
       display: none
+    }
+
+    /* FICHE MONTANTE. Un repère cliqué sur le dessin appelle SES NOTAMs, et rien
+       d'autre : la fiche monte du bas, par-dessus le plan, à la hauteur de ce
+       qu'elle contient. Une fiche courte n'occupe qu'un bandeau, le plan reste
+       lisible au-dessus ; une longue s'arrête aux quatre cinquièmes de la modale
+       et défile — le terrain ne disparaît jamais complètement, c'est lui qui
+       porte la question à laquelle la fiche répond.
+       Elle ne remplace la liste sous le dessin dans aucune portée : celle-là
+       répond à « qu'y a-t-il », la fiche à « qu'y a-t-il ICI ». */
+    .plan-sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      /* Plafond : une surface qui porte huit NOTAMs ne doit pas faire disparaître
+         le terrain sous sa propre fiche. Passé ce seuil elle défile en elle-même,
+         et une bande de dessin reste visible au-dessus — c'est elle qui dit de
+         QUOI on est en train de lire les NOTAMs. */
+      max-height: 72%;
+      background: var(--panel);
+      border-top: 1px solid var(--line2);
+      border-radius: 14px 14px 0 0;
+      box-shadow: 0 -14px 34px rgba(0, 0, 0, .5);
+      transform: translateY(101%);
+      transition: transform .24s cubic-bezier(.22, .61, .36, 1);
+      will-change: transform
+    }
+
+    .plan-sheet[hidden] {
+      display: none
+    }
+
+    .plan-sheet.up {
+      transform: translateY(0)
+    }
+
+    /* Pendant le balayage, la fiche suit le doigt : une transition la ferait
+       traîner derrière lui. */
+    .plan-sheet.drag {
+      transition: none
+    }
+
+    /* La poignée est la zone de préhension : elle prend toute la largeur, et
+       `touch-action:none` lui garde le geste vertical que le navigateur, sinon,
+       interpréterait comme un défilement. */
+    .plan-sheet-hd {
+      flex: 0 0 auto;
+      padding: 8px 10px 6px 16px;
+      border-bottom: 1px solid var(--line);
+      touch-action: none;
+      cursor: grab;
+      user-select: none
+    }
+
+    .plan-sheet-hd:active {
+      cursor: grabbing
+    }
+
+    .plan-sheet-grip {
+      width: 42px;
+      height: 4px;
+      margin: 0 auto 7px;
+      border-radius: 999px;
+      background: var(--line2)
+    }
+
+    .plan-sheet-row {
+      display: flex;
+      align-items: center;
+      gap: 10px
+    }
+
+    .plan-sheet-t {
+      font: 600 11px/1.4 var(--mono);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    /* Croix propre à la fiche : celle de la modale, en haut à droite, ferme LE
+       PLAN. Deux croix, deux portées — celle-ci vit dans la fiche et ne ferme
+       qu'elle. */
+    .plan-sheet-x {
+      margin-left: auto;
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--line2);
+      background: var(--panel);
+      color: var(--muted);
+      font: 400 22px/1 var(--sans);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .plan-sheet-x:hover {
+      color: var(--text)
+    }
+
+    .plan-sheet-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      padding: 10px 16px 14px
     }
 
     /* Le bandeau légal se colle en bas, comme le plan se colle en haut : la
@@ -6448,6 +6569,20 @@ body .stat .k{
           <div id="planBody"></div>
         </div>
       </div>
+      <!-- Fiche du repère cliqué. Hors de .hd-scroll à dessein : elle se pose
+           SUR le plan, elle ne défile pas avec lui. Deux façons de la renvoyer,
+           parce qu'on la lit d'une main : la croix, ou un balayage vers le bas. -->
+      <div class="plan-sheet" id="planSheet" hidden role="dialog"
+           aria-label="NOTAMs concerning the selected element">
+        <div class="plan-sheet-hd" id="planSheetHd">
+          <div class="plan-sheet-grip" aria-hidden="true"></div>
+          <div class="plan-sheet-row">
+            <span class="plan-sheet-t" id="planSheetTitle"></span>
+            <button class="plan-sheet-x" id="planSheetX" aria-label="Close">×</button>
+          </div>
+        </div>
+        <div class="plan-sheet-body" id="planSheetBody"></div>
+      </div>
     </div>
   </div>
 
@@ -6692,13 +6827,16 @@ body .stat .k{
         <div class="hd-row">
           <div class="hd-vis" style="min-width:auto"><span class="hd-chip">All</span></div>
           <div class="hd-arr">→</div>
-          <div class="hd-desc">Name every element of the aerodrome, the untouched ones more discreetly.</div>
+          <div class="hd-desc">Name every element of the aerodrome, the untouched ones more discreetly. Nothing is
+            listed below: <b>the drawing alone</b>, at full height.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn">+</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc"><b>+ / − / ⤢</b> zoom in, zoom out, fit to screen. Drag to pan, pinch to zoom. <b>Tap a
-              surface</b> to read the NOTAMs that concern it.</div>
+              coloured surface</b> to read the NOTAMs that concern it: a panel slides up from the bottom, as tall as
+            what it holds. Close it with <b>×</b>, by <b>swiping it down</b>, or by tapping the drawing outside any
+            coloured surface.</div>
         </div>
         <div class="hd-note">A line under the drawing counts how many ground NOTAMs could be placed. Some cannot — read
           the full list. If a surface a NOTAM names is <b>missing from the drawing</b>, a warning says so and a
@@ -16105,7 +16243,8 @@ function renderInfo(icao) {
       if (typeof scheduleDraw === "function" && mapView) scheduleDraw();   // repeint la carte si elle est ouverte
       // idem pour le plan de plateforme, légende comprise
       if (typeof plan !== "undefined" && plan && !$("#planOv").hidden) {
-        planDraw(); planShowPick(plan.sel);
+        planDraw(); planShowList();
+        if (planSheetOpen()) planOpenSheet(plan.sel);
       }
     };
 
@@ -16127,6 +16266,7 @@ function renderInfo(icao) {
       document.body.style.overflow = "hidden";
     }
     function closePlanOv() {
+      if (typeof planSheetHideNow === "function") planSheetHideNow();
       $("#planOv").hidden = true;
       document.documentElement.style.overflow = "";
       document.body.style.overflow = "";
@@ -16149,7 +16289,14 @@ function renderInfo(icao) {
       if (e.key !== "Escape") return;
       if (!$("#helpOv").hidden || !$("#infoOv").hidden) e.overlayClosed = true;
       $("#helpOv").hidden = true; $("#infoOv").hidden = true;
-      if (!$("#planOv").hidden) { closePlanOv(); e.overlayClosed = true; }
+      /* Échap referme UNE couche à la fois : la fiche montante d'abord, le plan
+         ensuite. Fermer les deux d'un coup ferait perdre le terrain à qui
+         voulait seulement renvoyer la fiche. */
+      if (!$("#planOv").hidden) {
+        if (typeof planSheetOpen === "function" && planSheetOpen()) planCloseSheet();
+        else closePlanOv();
+        e.overlayClosed = true;
+      }
     });
     $("#infoBtn").onclick = () => {
       if (!currentIcao) return;
@@ -23452,7 +23599,15 @@ window.addEventListener("scroll", hidePop, true);
         const b = $("#planT-" + m);
         if (b) b.classList.toggle("on", m === mode);
       }
-      if (plan) { planDraw(); planTally(); planShowPick(plan.sel); }
+      /* La fiche montante suit la période : elle est ouverte SUR un repère, et
+         ce repère change de couleur — ou cesse d'être peint — quand la journée
+         change. Une fiche restée sur les NOTAMs d'hier au-dessus d'un plan
+         redessiné ferait lire la mauvaise réponse. planOpenSheet la referme
+         d'elle-même si plus rien n'y est actif. */
+      if (plan) {
+        planDraw(); planTally(); planShowList();
+        if (planSheetOpen()) planOpenSheet(plan.sel);
+      }
     }
 
     /* Changement de portée. La PÉRIODE ne bouge pas : on répond à « quoi », pas
@@ -23471,13 +23626,13 @@ window.addEventListener("scroll", hidePop, true);
       const tr = document.querySelector("#planTimeSlot .plan-time");
       if (tr) tr.hidden = (scope === "notam");
       if (!plan) return;
-      /* La sélection suit la portée. En sortant de « ce NOTAM », on la relâche :
-         sans cela, le panneau garderait la fiche d'UNE surface alors qu'on vient
-         justement de demander la liste complète. En y entrant, on la pose sur la
-         surface du NOTAM ouvert — c'est la seule qui reste cliquable. */
-      if (scope !== "notam") plan.sel = null;
-      else { const s = planSurfacesFor(planFocusNotam.id); plan.sel = s.length ? s[0] : null; }
-      planTally(); planShowPick(plan.sel);
+      /* Changer de portée, c'est reposer la question : la fiche montante,
+         réponse à un repère qu'on avait désigné dans l'ancienne, redescend. La
+         laisser ouverte cacherait le bas du plan qu'on vient justement de
+         demander à voir autrement. */
+      plan.sel = null;
+      planCloseSheet();
+      planTally(); planShowList();
       // la barre temps apparaît ou disparaît : le canvas doit se remesurer avant
       // d'être redessiné, sinon il garde la hauteur de l'autre mode.
       planResize();
@@ -23846,9 +24001,12 @@ window.addEventListener("scroll", hidePop, true);
          SAUF en portée « All », où l'on ne lit pas des NOTAMs : on REGARDE LE
          TERRAIN, et un plan de terrain se lit comme une carte AD 2, en grand.
          C'est la portée d'entrée du bouton du terrain, celle où l'on n'a
-         désigné personne — rien à mettre en regard, donc rien à réserver. La
-         liste reste dessous, le plan collé la laisse défiler devant lui, et les
-         deux portées qui répondent à « où est CE NOTAM » sont à un tap. */
+         désigné personne — rien à mettre en regard, donc rien à réserver. Il n'y
+         a d'ailleurs plus rien à réserver DU TOUT : cette portée ne liste rien
+         sous le dessin (planListHtml), le plan y prend toute la hauteur, et ce
+         qui touche un repère s'obtient en le touchant — la fiche monte alors du
+         bas. Les deux portées qui répondent à « où est CE NOTAM » restent à un
+         tap. */
       const PICK_M = 10;                       // marge haute de .plan-pick
       const pick = document.querySelector("#planBody .plan-pick");
       // on remesure la LISTE, pas la bande qu'on lui avait réservée la fois
@@ -23862,12 +24020,15 @@ window.addEventListener("scroll", hidePop, true);
           : Math.max(170, Math.min(260, Math.round(availH * 0.34))));
         const before = availH;
         availH = Math.max(full ? 200 : 260, availH - room);
-        /* La bande garde sa hauteur même quand la liste rétrécit — un clic sur une
-           surface remplace sept fiches par une seule, et le plan, lui, ne bouge
-           pas (le redimensionner à chaque clic ferait sauter le dessin sous le
-           doigt). Sans ce plancher, le bandeau légal remontait au milieu de
-           l'écran en laissant du vide en dessous. Plein écran seulement : ailleurs
-           la fenêtre se règle sur son contenu et se resserre d'elle-même. */
+        /* La bande garde sa hauteur même quand la liste rétrécit — changer de
+           journée peut remplacer sept fiches par une seule, et le plan, lui, ne
+           doit pas sauter sous le doigt. Sans ce plancher, le bandeau légal
+           remontait au milieu de l'écran en laissant du vide en dessous. Plein
+           écran seulement : ailleurs la fenêtre se règle sur son contenu et se
+           resserre d'elle-même.
+           Toucher un repère, en revanche, ne redimensionne plus rien : sa fiche
+           monte du bas PAR-DESSUS le plan (.plan-sheet) et ne prend rien à la
+           mise en page. */
         if (full) pick.style.minHeight = Math.max(0, before - availH - PICK_M) + "px";
       }
 
@@ -23887,6 +24048,9 @@ window.addEventListener("scroll", hidePop, true);
       plan.fit.oy = pad + ((H - pad * 2) - (B.y1 - B.y0) * plan.fit.s) / 2 - B.y0 * plan.fit.s;
       planClamp();
       planDraw();
+      // le canvas a changé de hauteur : le recouvrement de la fiche montante
+      // avec son coin bas-droit n'est plus le même.
+      planSyncZoom();
     }
     /* Trait hachuré : une ligne fine continue + des perches perpendiculaires
        régulières, façon voie ferrée. Visuellement distinct du pointillé temporel
@@ -25028,7 +25192,13 @@ window.addEventListener("scroll", hidePop, true);
               (others ? ` ${others} other ground NOTAM${others === 1 ? "" : "s"} ${scope} ${others === 1 ? "is" : "are"} not shown — use <b>All ground NOTAMs</b>.` : "");
           })()
         : `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
-          (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "") +
+          /* En portée « All », il n'y a plus de liste sous le dessin : renvoyer
+             à « la liste complète » enverrait chercher ce qui n'est pas là. On
+             nomme le bouton qui la porte. */
+          (un ? ` <span class="warn">${un} could not be placed</span> — ` +
+                (planScope === "all"
+                  ? `use <b>All ground NOTAMs</b> to read ${un === 1 ? "it" : "them"}.`
+                  : `read the full list.`) : "") +
           /* Aucun NOTAM sol placé : cette portée ne nomme donc RIEN, et un plan
              sans une seule étiquette se lit d'abord comme un plan cassé. On dit
              les deux choses dans le même souffle — pourquoi il est nu, et le
@@ -25083,34 +25253,9 @@ window.addEventListener("scroll", hidePop, true);
       t = Math.max(0, Math.min(1, t));
       return Math.hypot(px_ - (x1 + t * dx), py_ - (y1 + t * dy));
     }
-    /* Après un clic sur un repère (surface peinte, marqueur de découpe, poste),
-       la fiche NOTAM apparaît sous le canvas — mais souvent hors du cadre visible,
-       surtout sur mobile où la modale est plein écran. On fait défiler le SEUL
-       scroll existant (.hd-scroll de la modale) jusqu'à ce que la fiche soit
-       visible.
-       La bande lisible n'est PAS tout le cadre : le plan est collé en haut et le
-       bandeau légal en bas, une fiche amenée à leur hauteur passerait dessous.
-       On vise donc ce qui reste entre les deux — et si la fiche est déjà cachée
-       SOUS le plan (on avait défilé, puis cliqué), on remonte : c'est le seul
-       cas où remonter est une réponse au clic. */
-    function planScrollToPick() {
-      const box = document.querySelector("#planOv .hd-scroll");
-      const pick = $("#planPick");
-      if (!box || !pick || !pick.innerHTML.trim()) return;
-      const b = box.getBoundingClientRect(), p = pick.getBoundingClientRect();
-      const cvw = document.querySelector("#planBody .plan-cvwrap");
-      const ft = document.querySelector("#planBody .plan-foot");
-      const top = cvw ? Math.max(b.top, cvw.getBoundingClientRect().bottom) : b.top;
-      const bot = ft ? Math.min(b.bottom, ft.getBoundingClientRect().top) : b.bottom;
-      if (p.top < top - 2) { box.scrollBy({ top: p.top - top - 8, behavior: "smooth" }); return; }
-      // on ne pousse jamais le HAUT de la fiche sous le plan pour en montrer le
-      // bas : une fiche se lit par le début.
-      const overflow = p.bottom - bot;
-      if (overflow > 4) box.scrollBy({ top: Math.min(overflow + 12, p.top - top), behavior: "smooth" });
-    }
-    // Une fiche NOTAM sous le plan. `tag` nomme la surface quand la fiche
-    // répond à un clic dessus ; la liste d'ensemble, elle, ne désigne aucune
-    // surface en particulier et s'en passe.
+    /* Une fiche NOTAM du plan. `tag` nomme la surface quand la fiche en désigne
+       une ; la liste d'ensemble et la fiche montante — qui porte déjà le nom du
+       repère dans son en-tête — s'en passent. */
     function planCard(n, tag) {
       return `<article class="strip ${n.severity}" style="margin-bottom:8px">
         <div class="rail"></div>
@@ -25129,14 +25274,18 @@ window.addEventListener("scroll", hidePop, true);
         </div></article>`;
     }
 
-    /* Ce que le panneau porte quand AUCUNE surface n'est sélectionnée : la liste
-       de ce que le plan montre. En portée « ce NOTAM », c'est ce NOTAM — même
-       s'il ne s'est pas placé sur le dessin, et c'est justement là qu'il faut
-       pouvoir le lire. Sinon, tous les NOTAMs sol de la période, sous un titre
-       qui dit ce qu'on lit : sans lui, la liste complète se confondrait avec la
-       fiche d'une surface qu'on vient de cliquer. */
+    /* Ce que le panneau SOUS le dessin porte : la liste de ce que le plan montre.
+       En portée « ce NOTAM », c'est ce NOTAM — même s'il ne s'est pas placé sur
+       le dessin, et c'est justement là qu'il faut pouvoir le lire. En « All
+       ground NOTAMs », tous ceux de la période, sous un titre qui dit ce qu'on
+       lit.
+       En portée « All », RIEN : on n'y lit pas des NOTAMs, on regarde le
+       terrain, comme une carte AD 2. Une liste de tout le terrain sous le
+       dessin n'y répondrait à aucune question posée — celles-là s'obtiennent
+       en touchant un repère (la fiche monte alors du bas), ou par les deux
+       autres portées, à un tap. */
     function planListHtml() {
-      if (!plan) return "";
+      if (!plan || planScope === "all") return "";
       if (planScope === "notam")
         return planFocusNotam ? planCard(planFocusNotam, "") : "";
       const g = plan.ground.filter(planShown);
@@ -25145,12 +25294,140 @@ window.addEventListener("scroll", hidePop, true);
         g.map(n => planCard(n, "")).join("");
     }
 
-    function planShowPick(s) {
+    function planShowList() {
       const el = $("#planPick"); if (!el) return;
-      if (!s) { el.innerHTML = planListHtml(); return; }
-      const st = planState(s); if (!st) { el.innerHTML = planListHtml(); return; }
-      const T = { twy: "TWY", rwy: "RWY", std: "STAND", apr: "APRON" }[s.t] || s.t;
-      el.innerHTML = st.ns.map(n => planCard(n, T + " " + (s.r || ""))).join("");
+      el.innerHTML = planListHtml();
+    }
+
+    /* ---------- fiche montante ---------- */
+    /* La réponse à « qu'est-ce qui touche CE repère » ne vit plus sous le
+       dessin, où il fallait défiler pour l'atteindre — et où, en portée
+       « All », elle aurait été noyée sous la liste du terrain entier. Elle monte
+       du bas, par-dessus le plan, à la hauteur de son contenu (voir .plan-sheet).
+       Le repère touché reste visible au-dessus : la question et la réponse dans
+       le même écran, sans un geste de plus. */
+    const planSurfTag = s => (({ twy: "TWY", rwy: "RWY", std: "STAND", apr: "APRON" }[s.t] || s.t)
+                              + " " + (s.r || "")).trim();
+
+    // déclaration, pas une const fléchée : closePlanOv et la touche Échap la
+    // testent par `typeof`, et `typeof` sur une liaison en zone morte LÈVE.
+    function planSheetOpen() { const sh = $("#planSheet"); return !!sh && !sh.hidden; }
+
+    /* De combien la fiche mord-elle sur le bas du dessin ? Les deux boîtes ne
+       partagent pas de repère — la fiche est calée sur la modale, les boutons de
+       zoom sur le conteneur collant du canvas — donc on mesure le recouvrement
+       réel plutôt que de le déduire d'une hauteur. */
+    function planSyncZoom() {
+      const cvw = document.querySelector("#planBody .plan-cvwrap");
+      const sh = $("#planSheet");
+      if (!cvw) return;
+      const md = document.querySelector("#planOv .modal.plan");
+      /* On vise la position de REPOS de la fiche (bas de la modale moins sa
+         hauteur), pas celle qu'elle occupe à l'instant : appelée pendant la
+         montée, la mesure directe donnerait un recouvrement nul et les boutons
+         partiraient se cacher dessous. */
+      const ov = (sh && !sh.hidden && md && sh.classList.contains("up"))
+        ? Math.max(0, cvw.getBoundingClientRect().bottom
+                      - (md.getBoundingClientRect().bottom - sh.getBoundingClientRect().height))
+        : 0;
+      cvw.style.setProperty("--sheet-ov", Math.round(ov) + "px");
+    }
+
+    function planOpenSheet(s) {
+      const sh = $("#planSheet"), body = $("#planSheetBody"), ttl = $("#planSheetTitle");
+      if (!sh || !body || !ttl) return;
+      const st = s && planState(s);
+      // un repère sans NOTAM actif dans la période affichée n'a rien à dire :
+      // ouvrir une fiche vide serait pire que ne rien ouvrir.
+      if (!st) { planCloseSheet(); return; }
+      // le repère montré par la fiche EST plan.sel : c'est ici qu'on le pose, et
+      // nulle part ailleurs — un appelant qui l'oublierait ferait rouvrir la
+      // fiche sur rien au premier redessin (changement de thème ou de journée).
+      if (plan) plan.sel = s;
+      ttl.textContent = planSurfTag(s) + " · " + st.ns.length + " NOTAM" + (st.ns.length === 1 ? "" : "s");
+      body.innerHTML = st.ns.map(n => planCard(n, "")).join("");
+      body.scrollTop = 0;
+      sh.style.transform = "";
+      sh.hidden = false;
+      /* Un reflow forcé, pas un requestAnimationFrame : la transition a besoin
+         que l'état de DÉPART (fiche en bas, hors cadre) ait été calculé avant
+         qu'on pose l'état d'arrivée, sinon elle apparaît sans monter. Le rAF le
+         donnait aussi — mais il ne se déclenche pas dans un onglet caché, et la
+         fiche y serait restée sous le bord, présente et invisible. */
+      void sh.offsetHeight;
+      sh.classList.add("up");
+      planSyncZoom();                      // les boutons de zoom montent avec elle
+    }
+
+    // Fermeture animée : la fiche redescend, puis disparaît. `hidden` posé tout
+    // de suite couperait la descente au premier pixel.
+    function planCloseSheet() {
+      const sh = $("#planSheet"); if (!sh || sh.hidden) return;
+      sh.classList.remove("drag");
+      sh.style.transform = "";
+      sh.classList.remove("up");
+      if (plan) plan.sel = null;
+      planSyncZoom();                      // les boutons de zoom redescendent avec elle
+      setTimeout(() => {
+        if (sh.classList.contains("up")) return;   // rouverte entre-temps
+        sh.hidden = true;
+        const b = $("#planSheetBody"); if (b) b.innerHTML = "";
+      }, 260);
+    }
+
+    // Sans animation : le plan se referme, il n'y a plus rien derrière quoi la
+    // faire redescendre — et elle ne doit pas être encore là à la réouverture.
+    function planSheetHideNow() {
+      const sh = $("#planSheet"); if (!sh) return;
+      sh.classList.remove("up", "drag");
+      sh.style.transform = "";
+      sh.hidden = true;
+      const b = $("#planSheetBody"); if (b) b.innerHTML = "";
+      planSyncZoom();
+    }
+
+    /* Balayage vers le bas. On ne prend le geste que s'il PART de la poignée, ou
+       du corps déjà en haut de son défilement : autrement, descendre d'une ligne
+       dans un long NOTAM refermerait la fiche qu'on est en train de lire. */
+    function planWireSheet() {
+      const sh = $("#planSheet"); if (!sh || sh.dataset.wired) return;
+      sh.dataset.wired = "1";
+      const body = $("#planSheetBody"), x = $("#planSheetX");
+      if (x) x.onclick = planCloseSheet;
+      let d = null;
+      sh.addEventListener("pointerdown", e => {
+        if (e.target.closest && e.target.closest(".plan-sheet-x")) return;
+        if (body && body.contains(e.target) && body.scrollTop > 0) return;
+        d = { y: e.clientY, id: e.pointerId, moved: false };
+      });
+      sh.addEventListener("pointermove", e => {
+        if (!d || e.pointerId !== d.id) return;
+        const dy = e.clientY - d.y;
+        if (!d.moved) {
+          if (dy < 6) return;                       // vers le haut, ou tremblement du doigt
+          d.moved = true;
+          sh.classList.add("drag");
+          try { sh.setPointerCapture(d.id); } catch (_) { }
+        }
+        sh.style.transform = "translateY(" + Math.max(0, dy) + "px)";
+      });
+      const end = e => {
+        if (!d || (e.pointerId != null && e.pointerId !== d.id)) return;
+        const dy = e.clientY - d.y, moved = d.moved;
+        d = null;
+        sh.classList.remove("drag");
+        sh.style.transform = "";
+        // seuil au quart de la hauteur, borné : une fiche haute ne doit pas
+        // demander de traverser l'écran, une courte ne doit pas se fermer au
+        // moindre frôlement.
+        const h = sh.getBoundingClientRect().height || 200;
+        if (moved && dy > Math.max(56, Math.min(120, h * 0.25))) planCloseSheet();
+      };
+      sh.addEventListener("pointerup", end);
+      sh.addEventListener("pointercancel", () => {
+        if (!d) return;
+        d = null; sh.classList.remove("drag"); sh.style.transform = "";
+      });
     }
 
     /* ---------- ouverture ---------- */
@@ -25221,9 +25498,12 @@ window.addEventListener("scroll", hidePop, true);
         }
         lastTap = now;
 
+        /* planPick ne rend QUE les repères peints (planState filtre les surfaces
+           sans NOTAM actif) : toucher le terrain nu referme la fiche au lieu
+           d'en ouvrir une vide — c'est aussi le geste par lequel on la renvoie
+           pour revoir le plan entier. */
         const surf = planPick(mx, my);
-        plan.sel = surf; planShowPick(surf);
-        if (surf) requestAnimationFrame(() => setTimeout(planScrollToPick, 30));
+        if (surf) planOpenSheet(surf); else planCloseSheet();
       });
       cv.addEventListener("pointercancel", release);
 
@@ -25271,6 +25551,10 @@ window.addEventListener("scroll", hidePop, true);
       const ov = $("#planOv"), body = $("#planBody");
       $("#planIcao").textContent = icao || "—";
       $("#planTimeSlot").innerHTML = "";
+      // la fiche montante survit au remplacement de #planBody (elle vit hors de
+      // lui) : sans cette remise à zéro, un plan rouvert s'ouvrirait avec la
+      // fiche du terrain d'avant posée dessus.
+      planSheetHideNow();
       ov.hidden = false;
       lockPlanScroll();
       body.innerHTML = `<div class="plan-msg"><div class="spinner"></div>Loading layout…</div>`;
@@ -25380,6 +25664,7 @@ window.addEventListener("scroll", hidePop, true);
         <div class="plan-pick" id="planPick"></div>
         <div class="plan-foot">INDICATIVE · NOT AIP-COMPLIANT · NOT FOR NAVIGATION</div>`;
       planWire();
+      planWireSheet();
       for (const m of ["now", "today", "tomorrow"]) {
         const b = $("#planT-" + m);
         if (b) b.onclick = () => planSetTime(m);
@@ -25422,8 +25707,12 @@ window.addEventListener("scroll", hidePop, true);
       if (focusNotam) {
         const surfs = planSurfacesFor(focusNotam.id);
         if (surfs.length) {
-          plan.sel = surfs[0];
-          planShowPick(surfs[0]);
+          /* Pas de fiche montante ici : la portée « ce NOTAM » l'affiche déjà
+             sous le dessin, et une fiche posée sur le plan à l'ouverture
+             masquerait le centrage qu'on vient de faire — la surface qu'on est
+             venu voir. La fiche reste ce qu'on OBTIENT en touchant un repère,
+             et plan.sel avec elle : rien à poser ici. */
+          planShowList();
           // ces surfaces-là se nomment quel que soit le zoom : c'est la réponse
           // qu'on est venu chercher. planFocus redessine juste après.
           planFocusSurfs = new Set(surfs);
