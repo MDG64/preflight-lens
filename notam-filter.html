@@ -19766,6 +19766,12 @@ var HL_TWY_KEY=new Set(["TWY","TWYS","TAXIWAY","TAXIWAYS","TAXILANE","TAXILANES"
 var HL_SELF_WORD=new Set(["RWY","RWYS","RUNWAY","RUNWAYS",
   "TWY","TWYS","TAXIWAY","TAXIWAYS","TAXILANE","TAXILANES",
   "THR","TDZ","QFU"]);
+/* Le mot-clé collé à son nom, sans espace : RWY24, RWY07/25, THR09, TWYA1 —
+   la forme des cartes (« LFPO IAC RWY24 ») et de bien des NOTAM. Le jeton
+   arrive d'un bloc, il s'allume d'un bloc. Les pluriels (RWYS, TAXIWAYS) sont
+   reconnus avant, sans quoi le S se lirait comme un nom de taxiway. */
+var HL_GLUED_RWY_RE=/^(?:RWY|RUNWAY|THR|TDZ|QFU)\d{2,3}[LRC]?(?:[\/-]\d{2,3}[LRC]?)*$/;
+var HL_GLUED_TWY_RE=/^(?:TWY|TAXIWAY|TAXILANE)[A-Z]{1,2}\d{0,2}$/;
 /* Un nom de piste : 25, 25L, 07/25, 07L/25R, 04-22 — et 253 pour un QFU
    donné en degrés. Le tokenizer garde « / » et « - » collés : la paire
    arrive en un seul jeton. */
@@ -19830,6 +19836,9 @@ function hlMap(toks){
     if(HL_RWY_KEY.has(up)||HL_TWY_KEY.has(up)){
       if(HL_SELF_WORD.has(up)) hi[i]=true;
       hlList(toks,hi,i,HL_TWY_KEY.has(up)); continue;
+    }
+    if(HL_GLUED_RWY_RE.test(up)||HL_GLUED_TWY_RE.test(up)){
+      hi[i]=true; hlList(toks,hi,i,HL_GLUED_TWY_RE.test(up)); continue;
     }
     /* Une paire 07/25 se reconnaît sans mot-clé devant : le NOTAM la donne
        souvent seule (« 07/25 CLSD »). Deux caps liés par une barre, chacun
