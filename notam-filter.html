@@ -3248,9 +3248,8 @@
     }
 
     /* Panneau METAR/TAF de la vue Weather : au clic sur un point ou un code,
-       il monte du bas et se pose SUR la carte sans la couvrir — la station
-       cliquée et son voisinage restent lisibles au-dessus. Il se referme comme
-       il est venu : un glissement du doigt vers le bas.
+       il monte du bas et se pose SUR la carte. Il se referme comme il est
+       venu : un glissement du doigt vers le bas.
        7 : au-dessus de la flèche ← (6) — panneau ouvert, la flèche disparaît
        dessous ; on sort du relevé par sa croix ou le glissement, pas de la
        carte. */
@@ -3260,7 +3259,15 @@
       right: 0;
       bottom: 0;
       z-index: 7;
-      max-height: min(70%, 540px);
+      /* Le relevé d'abord : METAR, TAF, vents par QFU et bande du jour font
+         couramment 900 px — un plafond de 540 px les coupait au milieu et
+         obligeait à faire défiler un panneau qui avait la place de tout
+         montrer. Le panneau prend donc toute la hauteur dont il a besoin,
+         moins une bande de carte laissée visible au-dessus : elle rappelle
+         d'où vient le relevé et garde le point cliqué dans le champ.
+         Court, il reste court : la hauteur suit le contenu, ce n'est qu'un
+         plafond. */
+      max-height: calc(100% - 56px);
       display: flex;
       flex-direction: column;
       background: var(--bg);
@@ -20531,8 +20538,17 @@ window.addEventListener("scroll", hidePop, true);
        Une route entiere posee a vide : c'est exactement ce que fait une puce de
        route, avec trois codes vides. Les deux ecrans sont jumeles, la page
        Route se vide donc avec l'accueil, et la file de remplissage repart du
-       depart. */
-    $("#hClearBtn").onclick = () => homeApplyRoute(["", "", ""]);
+       depart.
+       Et la route s'efface AUSSI la ou elle est calculee et rangee : sans ca,
+       les cases repartaient vides mais la carte rouvrait sur le trace d'avant,
+       globe encore vert compris — la route survivait dans curRoute et dans le
+       stockage. On passe donc par l'effacement de la page Route, garde-fou du
+       telechargement en cours compris. */
+    $("#hClearBtn").onclick = () => {
+      if (preloading) return;          // jamais pendant un telechargement en cours
+      clearRouteUI();                  // route calculee, route rangee, page Route, globe
+      homeApplyRoute(["", "", ""]);    // ... et la file de remplissage de l'accueil
+    };
     $("#homeTabAd").onclick = () => homeSetFavTab("ad");
     $("#homeTabRoute").onclick = () => homeSetFavTab("route");
 
