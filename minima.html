@@ -5152,7 +5152,14 @@ function computeTakeoffMinima(cfg){
     if (cfg.ltsApproved && cfg.ltsRvrFt){
       req = cfg.ltsRvrFt; driver = DS.faa.takeoff.lts.ref;
     }
-    return {required:req, unit:"ft", visSm: std.visSm ?? faaRvrToVisSm(req), driver, warnings};
+    let visSm = std.visSm ?? faaRvrToVisSm(req);
+    if (Number.isFinite(cfg.companyToRvrM) && cfg.companyToRvrM > 0){
+      const was = req;
+      req = visFromM(cfg.companyToRvrM, "ft"); visSm = faaRvrToVisSm(req); driver = "COMPANY_APPROVAL";
+      warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+        message:`Take-off minimum from your company approval applied: ${cfg.companyToRvrM} m = ${req} ft, instead of the ${was} ft otherwise derived. It replaces the regulatory value in both directions — an approval may sit above or below the table. Check it against the OM-B.`});
+    }
+    return {required:req, unit:"ft", visSm, driver, warnings};
   }
 
   // EASA — Table 1 (facilities)
@@ -5203,6 +5210,14 @@ function computeTakeoffMinima(cfg){
         message:"LVTO approval declared but the runway lighting does not match any SPA.LVO facility row."});
     }
     if (required < 75){ required = 75; driver = "LVTO_ABSOLUTE_FLOOR"; }
+  }
+  /* Le minimum approuvé a le dernier mot sur la dérivation réglementaire, y
+     compris sur le plancher LVTO : c'est l'approbation qui fixe le chiffre. */
+  if (Number.isFinite(cfg.companyToRvrM) && cfg.companyToRvrM > 0){
+    const was = required;
+    required = cfg.companyToRvrM; driver = "COMPANY_APPROVAL";
+    warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+      message:`Take-off minimum from your company approval applied: ${required} m${was?`, instead of the ${was} m otherwise derived`:""}. It replaces the regulatory value in both directions — an approval may sit above or below the table. Check it against the OM-B.`});
   }
   return {required, unit:"m", driver, t1, t2, warnings};
 }
@@ -5634,6 +5649,32 @@ function assess(role, ctx){
       push({severity:"INFO", code:"AIRFIELD_DB_MINIMA_APPLIED",
         message:`Airfield database minima applied for ${adIcao} RWY ${ctx.rwyDesignator} — ${adTypeLabel(adType)}: ${parts.join(" · ")}. ${verified?"Verified value entered on this device — applied immediately.":"At least 3 identical user entries."} Cross-check against official charts.`});
     }
+  }
+
+  /* ---------------- minima approuvés de l'exploitant ----------------
+     Après la base terrains, avant la saisie de la phase. Un minimum approuvé
+     n'est pas un plancher de plus : c'est le chiffre que l'équipage vole, et
+     il remplace donc ce que la table, la carte ou le consensus ont posé.
+     UNE OPÉRATION QUE LA CARTE INTERDIT RESTE INTERDITE : aucune approbation
+     ne rend des minima à une opération qui n'en publie pas. */
+  if (!app.notAuthorized){
+    const coRvr = Number.isFinite(cfg.companyLdgRvrM) && cfg.companyLdgRvrM>0 ? cfg.companyLdgRvrM : null;
+    const coDh  = Number.isFinite(cfg.companyLdgDhFt) && cfg.companyLdgDhFt>0 ? cfg.companyLdgDhFt : null;
+    const coParts = [];
+    if (coRvr!=null){
+      if (cfg.framework==="FAA"){ app.rvr = visFromM(coRvr,"ft"); app.visSm = faaRvrToVisSm(app.rvr); }
+      else app.rvr = coRvr;
+      app.rvrDriver = "COMPANY_APPROVAL";
+      coParts.push(`RVR ${app.rvr} ${app.unit}`);
+    }
+    if (coDh!=null){
+      app.dh = coDh; app.noDh = false; app.dhDriver = "COMPANY_APPROVAL";
+      /* En circling la MDH EST le plafond exigé — même raison qu'au-dessus. */
+      if (app.circling) app.ceilingRequired = coDh;
+      coParts.push(`DH ${coDh} ft`);
+    }
+    if (coParts.length) push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+      message:`Landing minima from your company approval applied: ${coParts.join(" · ")}. They replace the regulatory, chart and airfield-database values. It is your responsibility to check them against the OM-B.`});
   }
 
   /* ---------------- minimum d'atterrissage saisi à la main ----------------
@@ -6135,6 +6176,16 @@ const cfg = {
   /* Approbation RNP AR — défaut FAUX : elle ne se présume pas. */
   rnpArApproved:false,
   afmDhFt:null, afmRvrM:null, melDegraded:false,
+  /* Minima APPROUVÉS de l'exploitant (OM-B). Vides = aucun, le moteur garde sa
+     dérivation réglementaire. Renseignés, ils REMPLACENT la valeur dérivée —
+     table, base terrains et minima publiés compris : un minimum approuvé est
+     le chiffre que l'équipage vole, pas un plancher de plus, et le clamper
+     afficherait un minimum que personne n'applique. Seule la saisie de la
+     phase passe devant : elle décrit le vol du jour, eux l'exploitation.
+     Les trois se saisissent dans l'unité de leur intitulé ; sous cadre FAA les
+     mètres sont convertis en pieds, centaine la plus proche, comme toute autre
+     vis/RVR de l'application. */
+  companyToRvrM:null, companyLdgRvrM:null, companyLdgDhFt:null,
   /* crew */
   pilots:2, lvoQualified:true, crewRestrictDhFt:null,
   /* limits */
@@ -6406,6 +6457,15 @@ const SETUP = [
        majorant dans « Crew restriction — DH add », qui existe des deux
        côtés du cadre. */
     {k:"crewRestrictDhFt", l:"Crew restriction — DH add (ft)", type:"number"}
+  ]},
+  /* Les minima approuvés de l'exploitant ont leur groupe : ils ne sont ni de
+     l'équipement, ni de la planification — ils remplacent le résultat du
+     moteur. La case « OM-B/OM-C minima loaded » du groupe suivant dit qu'on
+     les a lus ; celles-ci disent ce qu'ils valent. */
+  {t:"Company approved minima (OM-B)", f:[
+    {k:"companyToRvrM", l:"Take-off minimum by company approval (m)", type:"number"},
+    {k:"companyLdgRvrM", l:"Landing minimum by company approval — RVR / visibility (m)", type:"number"},
+    {k:"companyLdgDhFt", l:"Landing minimum by company approval — DH / MDH (ft)", type:"number"}
   ]},
   {t:"Planning & met", f:[
     {k:"planningScheme", l:"Planning minima scheme", type:"select", fw:"EASA", o:[["BASIC","Basic (Table 2)"],["VARIATIONS","Basic with variations (Table 3)"],["REDUCED_VIS","Variations with reduced-visibility approval (Table 4)"]]},
