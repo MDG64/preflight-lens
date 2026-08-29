@@ -3323,14 +3323,17 @@
     /* ---------- remonter en haut de la liste ----------
        Les NOTAM d'un grand terrain descendent sur plusieurs écrans, et
        l'en-tête ne colle pas au haut : revenir à la case ICAO coûtait autant
-       de gestes qu'il en avait fallu pour descendre. La flèche se pose donc
-       en haut à droite dès que l'en-tête est passé, et ramène d'un doigt.
+       de gestes qu'il en avait fallu pour descendre. La flèche paraît dès que
+       l'en-tête est passé, et ramène d'un doigt.
+       EN BAS À DROITE : c'est là que le pouce se trouve déjà quand il fait
+       défiler, et le haut de l'écran est la bande que le navigateur anime en
+       repliant sa barre d'adresse — un objet `fixed` y saute.
        Elle vit SOUS tous les recouvrements (route 45, accueil 50, weather 52,
        carte 60, modales 70) et le script l'efface quand l'un d'eux s'ouvre :
        aucun de ces écrans n'est celui qu'elle remonte. */
     .to-top {
       position: fixed;
-      top: calc(12px + env(safe-area-inset-top));
+      bottom: calc(18px + env(safe-area-inset-bottom));
       right: calc(14px + env(safe-area-inset-right));
       z-index: 30;
       width: 38px;
@@ -3351,7 +3354,7 @@
          rien. */
       opacity: 0;
       visibility: hidden;
-      transform: translateY(-6px);
+      transform: translateY(6px);
       transition: opacity .16s, transform .16s, visibility .16s
     }
 
@@ -3384,8 +3387,8 @@
       .to-top {
         width: 34px;
         height: 34px;
-        top: calc(10px + env(safe-area-inset-top));
-        right: calc(10px + env(safe-area-inset-right))
+        bottom: calc(16px + env(safe-area-inset-bottom));
+        right: calc(12px + env(safe-area-inset-right))
       }
     }
 
