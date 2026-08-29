@@ -3626,6 +3626,10 @@ function mjPushAll(){
       mjQueue({t:"minima", at: s.verified.at || 0, by: s.verified.by, icao, end, type,
                dh: s.verified.dh, rvr: s.verified.rvr, verified:true, mark:true}); n++;
     }
+    for (const [acat, v] of Object.entries(s.verifiedBy || {})){
+      mjQueue({t:"minima", at: v.at || 0, by: v.by, icao, end, type,
+               dh: v.dh, rvr: v.rvr, acat, verified:true, mark:true}); n++;
+    }
   }
   return n;
 }
@@ -3687,6 +3691,8 @@ function adStampOf(rec){
   if (!rec || typeof rec !== "object") return 0;
   let at = Number.isFinite(rec.at) ? rec.at : 0;
   if (rec.verified && Number.isFinite(rec.verified.at)) at = Math.max(at, rec.verified.at);
+  for (const v of Object.values(rec.verifiedBy || {}))
+    if (v && Number.isFinite(v.at) && v.at > at) at = v.at;
   if (Array.isArray(rec.log))
     for (const e of rec.log) if (e && Number.isFinite(e.at) && e.at > at) at = e.at;
   return at;
@@ -3951,26 +3957,50 @@ function adRecordMinima(icao, end, type, dh, rvr){
      champ par champ, la dernière saisie remplaçant la précédente. La règle
      des 3 valeurs identiques (adConsensus) est conservée pour les saisies
      communautaires qui arriveront avec le backend. */
-  s.verified = s.verified || {};
-  if (Number.isFinite(dh) && dh>0) s.verified.dh = Math.round(dh);
-  if (Number.isFinite(rvr) && rvr>0) s.verified.rvr = Math.round(rvr);
-  s.verified.at = at;
-  s.verified.by = by;
+  /* La saisie porte LA CATÉGORIE D'AÉRONEF réglée dans le setup : c'est la
+     ligne de la carte qu'on vient de lire, et elle ne vaut que pour elle. Sans
+     catégorie réglée, elle retombe sur la valeur commune à toutes. */
+  const acat = (cfg && cfg.acCategory) || null;
+  const v = acat
+    ? ((s.verifiedBy || (s.verifiedBy = {}))[acat] || (s.verifiedBy[acat] = {}))
+    : (s.verified || (s.verified = {}));
+  if (Number.isFinite(dh) && dh>0) v.dh = Math.round(dh);
+  if (Number.isFinite(rvr) && rvr>0) v.rvr = Math.round(rvr);
+  v.at = at;
+  v.by = by;
   adSaveStats();
   /* La même saisie part vers le journal chiffré, telle qu'elle a été retenue —
      valeurs arrondies, date et appareil de la ligne de journal. */
   mjQueue({t:"minima", at, by, icao, end, type,
            dh:  Number.isFinite(dh)  && dh>0  ? Math.round(dh)  : undefined,
            rvr: Number.isFinite(rvr) && rvr>0 ? Math.round(rvr) : undefined,
+           ...(acat ? {acat} : {}),
            verified:true});
 }
-/* Valeurs vérifiées du propriétaire — prioritaires sur tout consensus. */
+/* Valeurs vérifiées du propriétaire — prioritaires sur tout consensus.
+   DEUX RANGEMENTS, et l'ordre compte : `verifiedBy[catégorie]` porte la valeur
+   validée POUR CETTE CATÉGORIE d'aéronef, `verified` celle qui n'en nomme
+   aucune et vaut pour toutes. La carte publie une ligne par catégorie — servir
+   la ligne C à un aéronef de catégorie D proposerait plus bas que la carte
+   n'autorise. La valeur commune reste le repli des catégories qu'aucune carte
+   ne chiffre, et la forme des saisies d'avant cette version. */
 function adVerified(icao, end, type){
   const s = adStatList(icao, end, type);
-  if (!s || !s.verified) return null;
-  const dh  = Number.isFinite(s.verified.dh)  ? s.verified.dh  : null;
-  const rvr = Number.isFinite(s.verified.rvr) ? s.verified.rvr : null;
+  if (!s) return null;
+  const cat = cfg && cfg.acCategory;
+  const v = (cat && s.verifiedBy && s.verifiedBy[cat]) || s.verified;
+  if (!v) return null;
+  const dh  = Number.isFinite(v.dh)  ? v.dh  : null;
+  const rvr = Number.isFinite(v.rvr) ? v.rvr : null;
   return (dh!=null || rvr!=null) ? {dh, rvr} : null;
+}
+/* La catégorie sous laquelle la valeur en vigueur a été validée, null si elle
+   vaut pour toutes. Sert à le DIRE sur la pastille : « verified ✓ D » et
+   « verified ✓ » ne se lisent pas pareil. */
+function adVerifiedCat(icao, end, type){
+  const s = adStatList(icao, end, type);
+  const cat = cfg && cfg.acCategory;
+  return (cat && s && s.verifiedBy && s.verifiedBy[cat]) ? cat : null;
 }
 function adModeOf(list){
   const n = {};
@@ -10384,8 +10414,9 @@ function refreshAdPanel(force){
     const eff = adEffMinima(icao, a.end, a.type);
     const s = adStatList(icao, a.end, a.type) || {dh:[], rvr:[]};
     const srcs = [eff.dh.src, eff.rvr.src];
+    const vcat = srcs.includes("verified") ? adVerifiedCat(icao, a.end, a.type) : null;
     const badge = srcs.includes("verified")
-      ? `<span class="ad-badge verified" title="Value entered by you — trusted as verified and applied immediately">verified ✓</span>`
+      ? `<span class="ad-badge verified" title="Value entered by you${vcat?` for aircraft category ${vcat}`:" for every aircraft category"} — trusted as verified and applied immediately">verified ✓${vcat?" "+vcat:""}</span>`
       : srcs.includes("consensus")
       ? `<span class="ad-badge consensus" title="At least 3 identical user entries — this value is now the application default">user ✓</span>`
       : `<span class="ad-badge" title="Standard minima of the approach type — no user value yet">std</span>`;
@@ -10645,13 +10676,19 @@ function bindAdPanel(){
        retombe sur le consensus s'il existe, sinon sur le standard du type. */
     if (act==="clearVerified"){
       const s = adStatList(icao, btn.dataset.end, btn.dataset.type);
-      if (s && s.verified){
-        delete s.verified; adSaveStats();
+      /* On oublie la valeur QUI GOUVERNE pour la catégorie réglée : celle de
+         cette catégorie si elle existe, sinon la valeur commune. Oublier la
+         catégorie D ne doit pas emporter la C. */
+      const vcat = adVerifiedCat(icao, btn.dataset.end, btn.dataset.type);
+      if (s && (vcat || s.verified)){
+        if (vcat) delete s.verifiedBy[vcat]; else delete s.verified;
+        adSaveStats();
         /* Un journal en ajout seul ne retire pas de ligne : l'oubli s'y écrit.
            Sans cette ligne, la valeur écartée reviendrait au prochain
            démarrage, lue depuis le fichier. */
         mjQueue({t:"clear", at: Date.now(), by: adDeviceId(),
-                 icao, end: btn.dataset.end, type: btn.dataset.type});
+                 icao, end: btn.dataset.end, type: btn.dataset.type,
+                 ...(vcat ? {acat: vcat} : {})});
         refreshAdPanel(true); render();
       }
       return;
