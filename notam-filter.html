@@ -1973,10 +1973,34 @@
 
     /* Plan : en-tête FIXE (titre + Now/Today/Tomorrow) toujours visible, seul le
        canvas défile. La modale devient une colonne flex : topbar figée en haut,
-       .hd-scroll prend le reste et défile. */
+       .hd-scroll prend le reste et défile.
+
+       ET PLEIN ÉCRAN, SUR TOUS LES ÉCRANS. Une carte de plateforme se consulte
+       en grand, et une fenêtre à marges laissait voir tout autour la liste des
+       NOTAM de la page — la page qu'on vient précisément de quitter du regard
+       pour aller chercher OÙ ça se passe. Deux lectures concurrentes dans le
+       même écran, dont une qu'on ne peut ni toucher ni faire défiler : le
+       terrain reprend tout, et il n'y a plus qu'une chose à lire.
+       position:fixed + inset:0, pas une hauteur en vh/dvh : sur tablette, un
+       balayage vertical fait apparaître/disparaître la barre d'adresse du
+       navigateur, ce qui recalcule 100dvh à chaque frame et provoque un sursaut
+       de mise en page — le bandeau fixe (ICAO + Now/Today/Tomorrow + croix)
+       semble alors disparaître un instant. inset:0 colle la modale au viewport
+       visuel réel sans dépendre de ce recalcul. */
     .modal.plan {
       display: flex;
-      flex-direction: column
+      flex-direction: column;
+      position: fixed;
+      inset: 0;
+      max-width: 100%;
+      width: 100%;
+      max-height: 100%;
+      border-radius: 0;
+      border: 0
+    }
+
+    #planOv {
+      padding: 0
     }
 
     .modal.plan .plan-topbar {
@@ -2455,27 +2479,11 @@
        lui, il n'a pas de souris. C'est ce critère qui doit décider du plein
        écran, pas une largeur en pixels qu'aucun seuil ne couvre tous les
        modèles. */
+    /* Le plein écran, lui, n'est plus une affaire de taille d'écran : il vaut
+       partout (voir .modal.plan plus haut). Ne restent ici que les retouches qui
+       tiennent VRAIMENT au petit écran et au doigt — retraits resserrés, boutons
+       de zoom agrandis. */
     @media (max-width: 640px), (hover: none) and (pointer: coarse) {
-      #planOv {
-        padding: 0
-      }
-
-      .modal.plan {
-        /* position:fixed + inset:0, pas une hauteur en vh/dvh : sur tablette,
-           un balayage vertical fait apparaître/disparaître la barre d'adresse
-           du navigateur, ce qui recalcule 100dvh à chaque frame et provoque un
-           sursaut de mise en page — le bandeau fixe (ICAO + Now/Today/Tomorrow
-           + croix) semble alors disparaître un instant. inset:0 colle la
-           modale au viewport visuel réel sans dépendre de ce recalcul. */
-        position: fixed;
-        inset: 0;
-        max-width: 100%;
-        width: 100%;
-        max-height: 100%;
-        border-radius: 0;
-        border: 0
-      }
-
       .modal.plan .hd-scroll {
         max-height: none;
         padding: 0
@@ -17897,7 +17905,7 @@ function renderInfo(icao) {
         // que Weather Lens (×1 au zoom MapLibre 8, plafond atteint au zoom 11) :
         // près du terrain, la flèche reste un objet qu'on lit, sans devenir
         // monstrueuse au niveau rue que cette carte, elle, atteint. Sur écran
-        // tactile — pas de souris, même critère que planIsFullScreen — le
+        // tactile — pas de souris, le critère de mapTouchUI ci-dessus — le
         // plafond monte de ×1.6 à ×2.2 : l'écran est petit, le doigt est gros,
         // la flèche doit se voir de plus loin. `s` remplace dpr dans toutes
         // les cotes : halo, pointillé et triangle suivent, exactement comme
@@ -18372,7 +18380,8 @@ function renderInfo(icao) {
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
     let mapWindHour = 0;
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que
-    // planIsFullScreen : les flèches de vent y plafonnent plus haut au zoom.
+    // les retouches tactiles du plan (media query, boutons de zoom agrandis) :
+    // les flèches de vent y plafonnent plus haut au zoom.
     const mapTouchUI = matchMedia("(max-width: 640px), (hover: none) and (pointer: coarse)").matches;
     const mapWx = new Map();             // icao -> { vis, ceil, wdir, wspd, t: heure du METAR, at: heure du fetch }
 
@@ -23739,11 +23748,6 @@ window.addEventListener("scroll", hidePop, true);
     }
 
     /* ---------- rendu ---------- */
-    // Même critère que la media query CSS : pas de souris = plein écran,
-    // qu'il s'agisse d'un téléphone ou d'une tablette (iPad, peu importe le
-    // modèle ou l'orientation — la largeur en pixels ne les couvre pas tous).
-    const planIsFullScreen = () =>
-      matchMedia("(max-width: 640px), (hover: none) and (pointer: coarse)").matches;
     let planDPR = Math.min(devicePixelRatio || 1, 2);
     const planSC = p => {
       const [x, y] = plan.px(p), f = plan.fit, v = plan.view;
@@ -23975,18 +23979,14 @@ window.addEventListener("scroll", hidePop, true);
       /* La référence est le VIEWPORT, jamais le conteneur : sa hauteur dépend de
          son contenu, donc du canvas — lui demander la place disponible revient à
          demander à la boîte sa taille pour décider de sa taille. */
-      let availH;
-      const full = planIsFullScreen();
-      if (full) {
-        // le canvas lui-même, pas son conteneur : celui-ci porte le retrait qui
-        // le sépare du bandeau fixe, et ce retrait n'est pas de la place à
-        // dessiner. Le conteneur étant collé en haut, la mesure vaut aussi
-        // quand la liste a défilé.
-        const top = cv.getBoundingClientRect().top;
-        availH = Math.max(240, innerHeight - top - after - 16);
-      } else {
-        availH = Math.max(320, Math.min(660, Math.round(innerHeight * 0.72) - after));
-      }
+      /* La modale est plein écran partout (voir .modal.plan) : il n'y a plus
+         qu'un seul calcul de hauteur, celui du viewport. On mesure le canvas
+         lui-même, pas son conteneur : celui-ci porte le retrait qui le sépare du
+         bandeau fixe, et ce retrait n'est pas de la place à dessiner. Le
+         conteneur étant collé en haut, la mesure vaut aussi quand la liste a
+         défilé. */
+      const top = cv.getBoundingClientRect().top;
+      let availH = Math.max(240, innerHeight - top - after - 16);
 
       /* BANDE DE LECTURE. Le plan est collé en haut de la zone qui défile (voir
          .plan-cvwrap) : encore faut-il qu'il reste de la place SOUS lui. Un plan
@@ -24015,21 +24015,17 @@ window.addEventListener("scroll", hidePop, true);
       const pickH = (planScope !== "all" && pick && pick.innerHTML.trim())
         ? pick.getBoundingClientRect().height : 0;
       if (pickH) {
-        const room = Math.min(pickH + PICK_M, full
-          ? Math.max(150, Math.min(300, Math.round(availH * 0.42)))
-          : Math.max(170, Math.min(260, Math.round(availH * 0.34))));
+        const room = Math.min(pickH + PICK_M, Math.max(150, Math.min(300, Math.round(availH * 0.42))));
         const before = availH;
-        availH = Math.max(full ? 200 : 260, availH - room);
+        availH = Math.max(200, availH - room);
         /* La bande garde sa hauteur même quand la liste rétrécit — changer de
            journée peut remplacer sept fiches par une seule, et le plan, lui, ne
            doit pas sauter sous le doigt. Sans ce plancher, le bandeau légal
-           remontait au milieu de l'écran en laissant du vide en dessous. Plein
-           écran seulement : ailleurs la fenêtre se règle sur son contenu et se
-           resserre d'elle-même.
+           remontait au milieu de l'écran en laissant du vide en dessous.
            Toucher un repère, en revanche, ne redimensionne plus rien : sa fiche
            monte du bas PAR-DESSUS le plan (.plan-sheet) et ne prend rien à la
            mise en page. */
-        if (full) pick.style.minHeight = Math.max(0, before - availH - PICK_M) + "px";
+        pick.style.minHeight = Math.max(0, before - availH - PICK_M) + "px";
       }
 
       cv.style.height = availH + "px";
