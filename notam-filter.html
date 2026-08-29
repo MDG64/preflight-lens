@@ -1999,8 +1999,28 @@
       border: 0
     }
 
+    /* CE QUI SE VOIT SOUS LA MODALE. Sur tablette, un balayage vertical fait
+       rétracter la barre d'outils du navigateur : la zone réellement visible
+       grandit, tandis qu'un élément `fixed` reste calé sur le viewport de MISE
+       EN PAGE. Une bande découverte apparaît alors en bas — et c'est la liste
+       des NOTAM de la page qu'on y lisait, sous le plan.
+       Le fond de l'overlay s'occupe de cette bande : opaque (plus de voile
+       translucide, la modale plein écran le recouvrait déjà entièrement) et
+       haut du GRAND viewport, barres rétractées comprises. 100vh d'abord, qui
+       vaut déjà cette hauteur-là sur iOS ; 100lvh ensuite pour les navigateurs
+       qui le connaissent. `bottom:auto` parce que inset:0 poserait les deux
+       bords à la fois et la hauteur serait ignorée.
+       La modale, elle, reste sur le viewport de mise en page : la déborder
+       ferait passer son bandeau légal et la fiche montante sous la barre
+       d'outils quand celle-ci revient. */
     #planOv {
-      padding: 0
+      padding: 0;
+      background: var(--panel);
+      backdrop-filter: none;
+      bottom: auto;
+      height: 100vh;
+      height: 100lvh;
+      overscroll-behavior: none
     }
 
     .modal.plan .plan-topbar {
@@ -2059,6 +2079,10 @@
       flex: 1 1 auto;
       min-height: 0;
       max-height: none;
+      /* `none` et pas `contain` : contenir empêche la propagation au document
+         mais garde le rebond élastique DANS la boîte — sur tablette, c'est ce
+         rebond qui décale le plan et découvre ce qu'il y a dessous. */
+      overscroll-behavior: none;
       /* Les retraits haut et bas sont portés par les deux boîtes qui se collent
          — .plan-cvwrap et .plan-foot — et non par le conteneur : laissés ici,
          ils bornent la course du collage, et le bandeau légal remontait d'un
