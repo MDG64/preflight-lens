@@ -5789,17 +5789,18 @@ body.light .stat.on {
       color: var(--muted2)
     }
 
-    /* Le groupe sévère garde son encre : seul le fond change, assez peu pour
-       rester lisible sur les deux thèmes. */
+    /* Le groupe sévère change d'encre, pas de fond — la règle des noms mis en
+       avant dans un NOTAM (.etext mark.nhl), et pour la même raison : un relevé
+       compte beaucoup de groupes, autant de pavés teintés le hachaient. */
     .wx-raw mark.wx-sev {
-      background: color-mix(in srgb, var(--amber) 32%, transparent);
-      color: inherit;   /* l'encre ne bouge pas : le fond seul signale */
-      border-radius: 3px;
-      padding: 1px 2px
+      background: none;
+      color: var(--amber);
+      border-radius: 0;
+      padding: 0
     }
 
     .wx-raw mark.wx-sev.red {
-      background: color-mix(in srgb, var(--red) 32%, transparent)
+      color: var(--red)
     }
 
     /* QFU : vent efficace et traversier, sous METAR et TAF. Une ligne par
@@ -25968,48 +25969,49 @@ window.addEventListener("scroll", hidePop, true);
 
   <script>
     /* ---------- remonter en haut de la liste ----------
-       Voir le commentaire CSS de .to-top. Deux conditions pour se montrer : la
-       page a dépassé son en-tête, et aucun écran ne la recouvre. La seconde se
-       lit à l'attribut `hidden` des recouvrements — ils s'ouvrent et se
-       ferment tous par lui — plutôt qu'en doublant chaque bouton qui les
-       ouvre : une vue de plus n'aura rien à raccorder ici. */
+       Voir le commentaire CSS de .to-top. La règle : la flèche paraît DÈS QUE
+       le bandeau du haut a quitté l'écran, et repart dès qu'il revient.
+
+       C'est l'en-tête LUI-MÊME qu'on surveille, par IntersectionObserver, et
+       non une hauteur comparée à window.scrollY. Deux raisons, toutes deux
+       constatées :
+
+       — la hauteur du bandeau n'est pas une constante. Deux rangées au doigt,
+         trois au bureau, une de plus quand la route pose ses terrains : tout
+         seuil calculé se décale d'autant. L'observateur, lui, ne mesure rien,
+         il regarde un bord passer.
+       — surtout, `scroll` n'est pas fiable pendant le glissement à inertie
+         d'un téléphone : l'événement n'arrive qu'une fois la page posée. La
+         flèche attendait donc la fin du geste au lieu de suivre le bandeau.
+         Un IntersectionObserver, lui, est servi par le compositeur, pendant.
+
+       Seconde condition : aucun écran ne recouvre la page. Elle se lit à
+       l'attribut `hidden` des recouvrements — ils s'ouvrent et se ferment
+       tous par lui — plutôt qu'en doublant chaque bouton qui les ouvre : une
+       vue de plus n'aura rien à raccorder ici. */
     (function () {
       const btn = document.getElementById("toTop");
-      if (!btn) return;
+      const head = document.querySelector("header");
+      if (!btn || !head) return;
       const ecrans = Array.prototype.slice.call(document.querySelectorAll(
         ".home-screen, .wx-screen, .route-screen, .map-ov, .modal-ov, .favwx-ov"));
-      const head = document.querySelector("header");
-      /* Le seuil est la hauteur de l'en-tête, MESURÉE : il tient sur deux
-         rangées au doigt et trois au bureau, un nombre écrit en dur se
-         tromperait sur l'un des deux. Repli à 200 px tant que la page n'est
-         pas peinte. */
-      function seuil() {
-        const h = head ? head.offsetHeight : 0;
-        return h > 40 ? h : 200;
-      }
-      let prevue = false;
+      let horsEcran = false;                  // le bandeau a-t-il quitté la vue
       function peindre() {
-        prevue = false;
-        const y = window.scrollY || document.documentElement.scrollTop || 0;
-        const libre = !ecrans.some(el => !el.hidden);
-        btn.classList.toggle("show", libre && y > seuil());
+        btn.classList.toggle("show", horsEcran && !ecrans.some(el => !el.hidden));
       }
-      function demander() {
-        if (prevue) return;
-        prevue = true;
-        requestAnimationFrame(peindre);
-      }
-      window.addEventListener("scroll", demander, { passive: true });
-      window.addEventListener("resize", demander);
-      /* Fermer un écran ne fait défiler personne : sans cette veille, la
-         flèche resterait effacée jusqu'au prochain geste. */
-      const veille = new MutationObserver(demander);
+      new IntersectionObserver(entrees => {
+        horsEcran = !entrees[entrees.length - 1].isIntersecting;
+        peindre();
+      }, { threshold: 0 }).observe(head);
+      /* Fermer un écran ne fait défiler personne, donc n'apprend rien à
+         l'observateur : sans cette veille, la flèche resterait effacée
+         jusqu'au prochain geste. */
+      const veille = new MutationObserver(peindre);
       ecrans.forEach(el => veille.observe(el, { attributes: true, attributeFilter: ["hidden"] }));
       btn.addEventListener("click", () => {
         const doux = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         window.scrollTo(doux ? { top: 0, behavior: "smooth" } : { top: 0 });
       });
-      demander();
     })();
   </script>
 </body>
