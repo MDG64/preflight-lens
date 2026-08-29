@@ -16777,10 +16777,40 @@ function renderInfo(icao) {
       refreshGo(); refreshMapBtn();
     }
     $("#clearRouteBtn").onclick = clearRouteUI;
+    /* ---- la carte suit l'échange départ <-> destination ----
+       La double flèche renverse la route et retire le dégagement, qui avait
+       été choisi pour l'ancienne destination. Le tracé, lui, restait celui de
+       l'aller : il vit dans deux endroits que l'échange ne touchait pas — la
+       route calculée (curRoute) et la route rangée dans le stockage —, et la
+       carte rouvrait donc sur l'aller, branche du dégagement comprise. En
+       ligne, le téléchargement automatique finissait par recalculer ; hors
+       ligne, jamais, et c'est là qu'on lit la carte.
+       On recale les deux ici, sans réseau : computeRoute est un calcul pur.
+       Le stockage garde SON téléchargement (icaos, status) — l'aller et le
+       retour partagent le même corridor, seule la branche du dégagement s'en
+       va —, et il ne suit QUE s'il décrit bien la route qu'on renverse : une
+       route d'hier n'a pas à hériter des codes du jour, elle ferait passer
+       pour téléchargé ce qui ne l'est pas. */
+    function syncRouteAfterSwap(oldDep, oldArr) {
+      const dep = rVal("#rFrom"), arr = rVal("#rTo"), saved = activeRoute();
+      const mine = !!(saved && saved.dep === oldDep && (saved.arr || "") === oldArr);
+      if (mine) { saved.dep = dep; saved.arr = arr; saved.alt = null; store.set(ROUTE_KEY, saved); }
+      // Base aérodromes absente (elle se charge tard sur l'accueil) : on efface
+      // au lieu de garder l'aller — la carte reprendra la route du stockage à
+      // son ouverture, celle qu'on vient de renverser (voir restoreSavedRoute).
+      const r = (GEO && dep !== arr && GEO[dep] && GEO[arr])
+        ? computeRoute(dep, arr, null, { width: (mine && saved.width) || 200 }) : null;
+      curRoute = (r && r.ok) ? r : null;
+      userAdded = [];                                   // les terrains ajoutés à la main tenaient à l'aller
+      renderApGrid(mine ? (saved.status || {}) : {});   // ... et la grille de la page Route avec eux
+      refreshMapBtn();
+    }
     $("#swapBtn").onclick = () => {
-      const f = $("#rFrom").value; $("#rFrom").value = $("#rTo").value; $("#rTo").value = f;
+      const f = $("#rFrom").value, oldDep = rVal("#rFrom"), oldArr = rVal("#rTo");
+      $("#rFrom").value = $("#rTo").value; $("#rTo").value = f;
       $("#rAlt").value = "";        // la double flèche efface aussi le champ ALT
       syncRouteMirror(); renderHomeStars();    // l'accueil reflète l'échange
+      syncRouteAfterSwap(oldDep, oldArr);      // ... et la carte perd l'aller et son dégagement
       refreshGo();
     };
     document.querySelectorAll("#rfRwySeg .rf-pill").forEach(b => {
@@ -20524,7 +20554,8 @@ window.addEventListener("scroll", hidePop, true);
        Le retour du soir, c'est la meme route lue a l'envers : on echange les
        deux codes au lieu de les retaper. Le degagement, lui, avait ete choisi
        pour l'ancienne destination — il ne repond plus de rien une fois la
-       route retournee, donc il part. */
+       route retournee, donc il part — de la carte aussi bien que de la case,
+       voir syncRouteAfterSwap(). */
     $("#hSwap").onclick = () => {
       const from = rVal("#hFrom"), to = rVal("#hTo");
       [["#hFrom", to], ["#hTo", from], ["#hAlt", ""]].forEach(([id, code]) => {
@@ -20532,6 +20563,7 @@ window.addEventListener("scroll", hidePop, true);
         const mir = RMIRROR[id.slice(1)]; if (mir) $(mir).value = code;
         $(id).closest(".scratch").classList.remove("need");
       });
+      syncRouteAfterSwap(from, to);
       refreshGo(); renderHomeChips(); renderHomeStars();
     };
     /* ---- effacement des trois cases ----
