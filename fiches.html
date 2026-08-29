@@ -213,8 +213,6 @@
 /* ---------- configuration locale ---------- */
 const SERVEUR_DEFAUT = 'https://notam-proxy-production.up.railway.app';
 const CFG = {
-  get jeton() { return localStorage.getItem('fa_jeton') || ''; },
-  set jeton(v) { localStorage.setItem('fa_jeton', v); },
   /* Le certificat de CET appareil, délivré à l'enrôlement. Il remplace le
      jeton partagé : une seule identité pour tout ce qui touche la base des
      terrains, et révocable appareil par appareil. Le jeton d'avant reste lu
@@ -240,19 +238,21 @@ function erreur(id, msg) {
 
 /* ---------- démarrage ---------- */
 function demarrer() {
-  $('pied').textContent = 'v3.0 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'jeton de transition')
+  $('pied').textContent = 'v3.1 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'non certifié')
     + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   // Le serveur par défaut se montre dès la première ouverture : un champ
   // vide faisait croire qu'il y avait quelque chose à trouver soi-même.
   $('cfg-serveur').value = CFG.serveur;
-  montrer((CFG.cert || CFG.jeton) ? 'ecran-principal' : 'ecran-config');
+  montrer(CFG.cert ? 'ecran-principal' : 'ecran-config');
   majAttente();
   viderFile();
 }
 
 /* ---------- l'identité de cet appareil sur chaque requête ---------- */
+/* L'identite de cet appareil : son certificat, et rien d'autre. Le code
+   d'enrolement n'ouvre plus que l'enrolement. */
 function entetes() {
-  return CFG.cert ? { 'x-terrains-cert': CFG.cert } : { 'x-fiches-token': CFG.jeton };
+  return { 'x-terrains-cert': CFG.cert };
 }
 
 /* ---------- la file d'attente hors connexion ----------
@@ -317,7 +317,7 @@ async function envoyer(blob, nom) {
 
 let vidageEnCours = false;
 async function viderFile() {
-  if (vidageEnCours || !navigator.onLine || !(CFG.cert || CFG.jeton)) return;
+  if (vidageEnCours || !navigator.onLine || !CFG.cert) return;
   vidageEnCours = true;
   try {
     for (const rec of await fileLire()) {
@@ -539,9 +539,7 @@ $('btn-envoyer').onclick = async () => {
       photo = null;
       montrer('ecran-fait');
     } else if (xhr.status === 403) {
-      rate(CFG.cert
-        ? 'Certificat refusé — cet appareil a peut-être été révoqué. Recertifie-le dans ⚙.'
-        : 'Jeton refusé — certifie cet appareil dans ⚙.');
+      rate('Certificat refusé — cet appareil a peut-être été révoqué. Recertifie-le dans ⚙.');
     } else {
       let detail = '';
       try { detail = ' — ' + JSON.parse(xhr.responseText).error; } catch { /* corps illisible */ }

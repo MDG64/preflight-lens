@@ -3228,9 +3228,6 @@ const MJ_OUTBOX_KEY = "wl-minima-outbox";
    l'URL. Sans lui, le serveur admet la saisie mais la rétrograde en
    communautaire : elle ne peut pas devenir « verified » pour les autres
    appareils. */
-const MJ_OWNER_KEY = "wl-minima-owner-code";
-let mjOwnerCode = "";
-try { mjOwnerCode = localStorage.getItem(MJ_OWNER_KEY) || ""; } catch(e){}
 /* ---------- appareil certifié ----------
    Le code d'enrôlement ne sert plus qu'UNE FOIS, ici : le serveur délivre en
    échange un certificat propre à CET appareil, et l'inscrit à son registre.
@@ -3251,12 +3248,13 @@ try { mjCert = localStorage.getItem(MJ_CERT_KEY) || ""; } catch(e){}
 let mjRegistre = null;      // le registre des appareils, chargé à la demande
 let mjRegistreOuvert = false;
 
-/* L'identité de cet appareil sur toutes les requêtes du coffre. Le certificat
-   d'abord ; le code de transition seulement à défaut. */
+/* L'identité de cet appareil sur toutes les requêtes du coffre : son
+   certificat, et rien d'autre. Le code d'enrôlement n'ouvre plus que
+   l'enrôlement — c'est ce qui donne son sens à la révocation, puisqu'un
+   secret partagé rouvrait sinon la même porte à un appareil révoqué. */
 function mjEntetes(base){
   const h = Object.assign({}, base || {});
   if (mjCert) h["X-Terrains-Cert"] = mjCert;
-  else if (mjOwnerCode) h["X-Minima-Owner"] = mjOwnerCode;
   return h;
 }
 
@@ -10122,8 +10120,9 @@ function mjNote(){
   if (wait) bits.push(`${wait} waiting`);
   /* L'état propriétaire vient de la DERNIÈRE écriture : un code refusé se voit
      ici, pas dans une erreur — le serveur a bien écrit, mais en communautaire. */
-  if (mjCert) bits.push(mjState.owner === false ? "certificate REFUSED — certify again" : "certified device");
-  else if (mjOwnerCode) bits.push(mjState.owner === false ? "owner code REFUSED — check it" : "owner ✓ (not certified yet)");
+  bits.push(mjCert
+    ? (mjState.owner === false ? "certificate REFUSED — certify this device again" : "certified device")
+    : "device NOT certified — entries stay community");
   return `<span class="note ok">Encrypted journal — ${bits.join(" · ") || "ready"}.
     Append-only, signed, shared by all your devices; the keys never travel with it.</span>`;
 }
@@ -10450,8 +10449,8 @@ function refreshAdPanel(force){
       Default minima start as the <b>standard minima of the approach type</b>
       (EASA reference tables, FALS lighting). A value recorded on this device is <b>yours — trusted as verified</b>:
       it becomes the application default immediately (badge <b>verified ✓</b>, each new entry replaces the previous
-      one${own?", the × forgets it":""}). With the <b>owner code</b> set (Owner button above), it is also written to the
-      shared journal as verified and reaches all your devices; without the code, the journal keeps it as a community
+      one${own?", the × forgets it":""}). Once this device is <b>certified</b> (button above), it is also written to the
+      shared journal as verified and reaches all your devices; without a certificate, the journal keeps it as a community
       entry. Community entries need <b>3 identical values</b> for
       the same runway, approach and aerodrome to become the default (badge <b>user ✓</b>).
       DA/DH in ft, RVR/visibility in metres.${window.AD_SEED_META
@@ -10540,29 +10539,6 @@ function bindAdPanel(){
     if (act==="certifier"){ gesteCertifier(); return; }
     if (act==="appareils"){ gesteAppareils(); return; }
     if (act==="revoquer"){ gesteRevoquer(btn.dataset.id); return; }
-    if (act==="ownerCode"){
-      /* prompt() suffit et marche partout, téléphone compris ; le panneau se
-         reconstruit à chaque écriture du journal, un champ libre y perdrait le
-         focus en pleine frappe. */
-      const v = prompt("Owner code — sent with each entry so the shared journal "
-                     + "accepts it as verified.\n\nLeave empty and press OK to "
-                     + "forget the code on this device.", mjOwnerCode);
-      if (v === null) return;
-      mjOwnerCode = v.trim();
-      try { if (mjOwnerCode) localStorage.setItem(MJ_OWNER_KEY, mjOwnerCode);
-            else localStorage.removeItem(MJ_OWNER_KEY); } catch(e){}
-      if (mjOwnerCode){
-        /* Tout renvoyer : les valeurs vérifiées qu'un versement anonyme a vues
-           refusées repartent maintenant signées — le serveur reconnaît le
-           reste comme doublons, l'opération est rejouable sans dommage. */
-        const pushed = mjPushAll();
-        adToolsMsg = {ok:true, text:`owner code saved — ${pushed} record(s) queued for the shared journal`};
-      } else {
-        adToolsMsg = {ok:true, text:"owner code forgotten on this device"};
-      }
-      refreshAdPanel(true);
-      return;
-    }
 
     const icao = adShownIcao;
     if (!icao) return;
