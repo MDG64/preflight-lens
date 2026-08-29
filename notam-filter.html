@@ -3314,6 +3314,75 @@
       background: transparent
     }
 
+    /* ---------- remonter en haut de la liste ----------
+       Les NOTAM d'un grand terrain descendent sur plusieurs écrans, et
+       l'en-tête ne colle pas au haut : revenir à la case ICAO coûtait autant
+       de gestes qu'il en avait fallu pour descendre. La flèche se pose donc
+       en haut à droite dès que l'en-tête est passé, et ramène d'un doigt.
+       Elle vit SOUS tous les recouvrements (route 45, accueil 50, weather 52,
+       carte 60, modales 70) et le script l'efface quand l'un d'eux s'ouvre :
+       aucun de ces écrans n'est celui qu'elle remonte. */
+    .to-top {
+      position: fixed;
+      top: calc(12px + env(safe-area-inset-top));
+      right: calc(14px + env(safe-area-inset-right));
+      z-index: 30;
+      width: 38px;
+      height: 38px;
+      flex: none;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid var(--cyan-dim);
+      background: #1a242c;
+      color: var(--cyan);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--elev-hi);
+      /* Effacée par défaut. visibility — et pas seulement opacity — pour
+         qu'elle sorte aussi du parcours au clavier tant qu'elle ne sert à
+         rien. */
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-6px);
+      transition: opacity .16s, transform .16s, visibility .16s
+    }
+
+    .to-top.show {
+      opacity: 1;
+      visibility: visible;
+      transform: none
+    }
+
+    .to-top:hover {
+      border-color: var(--cyan);
+      background: #202a33
+    }
+
+    .to-top svg {
+      width: 55%;
+      height: 55%;
+      display: block
+    }
+
+    body.light .to-top {
+      background: #eef4f7
+    }
+
+    body.light .to-top:hover {
+      background: #e3edf1
+    }
+
+    @media (max-width:560px) {
+      .to-top {
+        width: 34px;
+        height: 34px;
+        top: calc(10px + env(safe-area-inset-top));
+        right: calc(10px + env(safe-area-inset-right))
+      }
+    }
+
     /* ---------- bandeau « nouvelle version » ----------
        Caché par défaut : il n'apparaît que si le serveur porte une version
        plus récente que celle qui tourne. z-index au-dessus des overlays
@@ -6202,6 +6271,14 @@ body .stat .k{
 
     <footer></footer>
   </div>
+
+  <!-- Flèche de remontée. Posée hors de .wrap : elle ne dépend d'aucune boîte
+       de la page, et rien ne peut la rogner. Elle ne se cache pas par
+       `hidden` mais par la classe .show, sinon l'apparition serait sèche. -->
+  <button class="to-top" id="toTop" type="button" aria-label="Back to top" title="Back to top">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5.6M5.4 12.2 12 5.6l6.6 6.6"/></svg>
+  </button>
 
   <!-- ================= PAGE ROUTE (écran dédié) ================= -->
   <div class="route-screen" id="routeScreen" hidden>
@@ -25886,6 +25963,53 @@ window.addEventListener("scroll", hidePop, true);
       window.addEventListener("online", verifier);
       setInterval(() => { if (!document.hidden) verifier(); }, CHECK_MS);
       window.__checkBuild = verifier;         // sonde manuelle, pour diagnostic
+    })();
+  </script>
+
+  <script>
+    /* ---------- remonter en haut de la liste ----------
+       Voir le commentaire CSS de .to-top. Deux conditions pour se montrer : la
+       page a dépassé son en-tête, et aucun écran ne la recouvre. La seconde se
+       lit à l'attribut `hidden` des recouvrements — ils s'ouvrent et se
+       ferment tous par lui — plutôt qu'en doublant chaque bouton qui les
+       ouvre : une vue de plus n'aura rien à raccorder ici. */
+    (function () {
+      const btn = document.getElementById("toTop");
+      if (!btn) return;
+      const ecrans = Array.prototype.slice.call(document.querySelectorAll(
+        ".home-screen, .wx-screen, .route-screen, .map-ov, .modal-ov, .favwx-ov"));
+      const head = document.querySelector("header");
+      /* Le seuil est la hauteur de l'en-tête, MESURÉE : il tient sur deux
+         rangées au doigt et trois au bureau, un nombre écrit en dur se
+         tromperait sur l'un des deux. Repli à 200 px tant que la page n'est
+         pas peinte. */
+      function seuil() {
+        const h = head ? head.offsetHeight : 0;
+        return h > 40 ? h : 200;
+      }
+      let prevue = false;
+      function peindre() {
+        prevue = false;
+        const y = window.scrollY || document.documentElement.scrollTop || 0;
+        const libre = !ecrans.some(el => !el.hidden);
+        btn.classList.toggle("show", libre && y > seuil());
+      }
+      function demander() {
+        if (prevue) return;
+        prevue = true;
+        requestAnimationFrame(peindre);
+      }
+      window.addEventListener("scroll", demander, { passive: true });
+      window.addEventListener("resize", demander);
+      /* Fermer un écran ne fait défiler personne : sans cette veille, la
+         flèche resterait effacée jusqu'au prochain geste. */
+      const veille = new MutationObserver(demander);
+      ecrans.forEach(el => veille.observe(el, { attributes: true, attributeFilter: ["hidden"] }));
+      btn.addEventListener("click", () => {
+        const doux = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo(doux ? { top: 0, behavior: "smooth" } : { top: 0 });
+      });
+      demander();
     })();
   </script>
 </body>
