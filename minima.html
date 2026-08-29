@@ -1972,6 +1972,10 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 .m-overlay{position:fixed;inset:0;z-index:60;background:var(--bg);overflow:auto;padding:12px 14px 40px}
 .m-ov-bar{display:flex;align-items:center;gap:10px;margin:2px auto 14px;max-width:520px}
 #mSetupHost{max-width:520px;margin:0 auto}
+#mBaseHost{max-width:520px;margin:0 auto}
+#mBaseHost .setup-body{border-top:0;padding:0}
+.m-base-tt{max-width:520px;margin:18px auto 8px;padding:0 2px;
+  font:700 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 #mSetupHost .setup-body{border-top:0;padding:0}
 
 /* Barre pleine largeur, en tête d'une présentation plein écran. Elle a
@@ -2527,6 +2531,10 @@ body.mobile #rtOv:not([hidden]){display:flex}
     <button class="m-back" id="mOvClose" aria-label="Close settings">×</button>
   </div>
   <div id="mSetupHost"></div>
+  <!-- Le coffre des terrains : certifier cet appareil, voir le registre,
+       rejoindre le dépôt de fiches et le suivi. -->
+  <div class="m-base-tt">Airfield database</div>
+  <div id="mBaseHost"></div>
 </div>
 <!-- Bilan de vol : la route — départ, destination, dégagement destination —
      jugée d'un seul écran par le même moteur que les onglets de phase. Les
@@ -3231,6 +3239,12 @@ try { mjOwnerCode = localStorage.getItem(MJ_OWNER_KEY) || ""; } catch(e){}
    le serveur peut refuser le sixième — un code qui fuite n'ouvre pas un parc.
    L'ancien code partagé reste envoyé tant qu'aucun certificat n'est là : un
    appareil qui n'a pas encore été certifié continue de valider. */
+/* Les deux autres pages du coffre. Servies à côté de l'app quand elle est
+   déployée ; en développement local (serveur Weather Lens, ou file://) elles
+   n'existent pas là, on vise alors le domaine. */
+const APPS_BASE = (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+                   || location.protocol === "file:")
+  ? "https://notam.feyndev.com/" : "./";
 const MJ_CERT_KEY = "wl-terrains-cert";
 let mjCert = "";
 try { mjCert = localStorage.getItem(MJ_CERT_KEY) || ""; } catch(e){}
@@ -9846,6 +9860,22 @@ function bindMobileClock(host){
    un overlay masqué. */
 function openMobileSettings(){
   document.getElementById("mSetupHost").appendChild(document.getElementById("setupBody"));
+  const bh = document.getElementById("mBaseHost");
+  if (bh){
+    bh.innerHTML = mBaseHtml();
+    /* Écouteur posé une seule fois : le bloc se reconstruit par innerHTML, un
+       écouteur posé dedans partirait avec. */
+    if (!bh.dataset.lie){
+      bh.dataset.lie = "1";
+      bh.addEventListener("click", e=>{
+        const b = e.target.closest("[data-ad]");
+        if (!b) return;
+        if (b.dataset.ad === "certifier") gesteCertifier();
+        else if (b.dataset.ad === "appareils") gesteAppareils();
+        else if (b.dataset.ad === "revoquer") gesteRevoquer(b.dataset.id);
+      });
+    }
+  }
   document.getElementById("mOverlay").hidden = false;
 }
 function closeMobileSettings(){
@@ -10033,6 +10063,7 @@ function adToolsHtml(){
     ${mjState.mode!=="off" ? (mjCert
         ? `<button class="btn sm" data-ad="appareils" title="This device is certified. Click to see every certified device and revoke one.">Devices ✓</button>`
         : `<button class="btn sm" data-ad="certifier" title="Certify this device with the enrolment code, so your entries are written to the shared journal as verified">Certify this device…</button>`) : ""}
+    ${mjLiensHtml()}
     ${devHtml}
     <span class="note">Held in this browser for this address, and written to the shared encrypted
     journal — one journal for all your devices. Each entry is stamped with the date and the anonymous device identifier
@@ -10095,6 +10126,85 @@ function mjNote(){
   else if (mjOwnerCode) bits.push(mjState.owner === false ? "owner code REFUSED — check it" : "owner ✓ (not certified yet)");
   return `<span class="note ok">Encrypted journal — ${bits.join(" · ") || "ready"}.
     Append-only, signed, shared by all your devices; the keys never travel with it.</span>`;
+}
+
+/* ---------- les gestes du coffre, atteignables des deux affichages ----------
+   Le panneau Airfield database est une table dense, faite pour l'écran large :
+   sur téléphone tout le conteneur est masqué, et le panneau avec lui. Or c'est
+   là qu'on certifie un appareil — et un téléphone doit pouvoir se certifier
+   lui-même. Ces trois gestes vivent donc AUSSI dans les réglages mobiles, sur
+   le même code : deux affichages, une seule implémentation. */
+function majBase(){
+  refreshAdPanel(true);
+  const h = document.getElementById("mBaseHost");
+  const ov = document.getElementById("mOverlay");
+  if (h && ov && !ov.hidden) h.innerHTML = mBaseHtml();
+}
+function gesteCertifier(){
+  const nom = prompt("Name this device — it will appear in the registry, and each "
+                   + "validation will be signed with it.\n\nFor example: PC, Xiaomi, iPad.");
+  if (nom === null || !nom.trim()) return;
+  const code = prompt("Enrolment code.\n\nIt is used once, here: the server hands back a "
+                    + "certificate that belongs to this device alone.");
+  if (code === null || !code.trim()) return;
+  adToolsMsg = {ok:true, text:"certifying…"};
+  majBase();
+  mjCertifier(nom.trim(), code.trim()).then(o=>{
+    /* Tout renvoyer : ce que cet appareil avait saisi sans certificat a été
+       rangé en communautaire ; signé, il remonte en vérifié. */
+    const pushed = mjPushAll();
+    adToolsMsg = {ok:true, text:`device certified as "${o.nom}" — ${o.restant} slot(s) left, ${pushed} record(s) re-sent`};
+    majBase();
+  }).catch(e=>{
+    adToolsMsg = {ok:false, text:`certification refused — ${e.message}`};
+    majBase();
+  });
+}
+function gesteAppareils(){
+  mjRegistreOuvert = !mjRegistreOuvert;
+  if (!mjRegistreOuvert){ majBase(); return; }
+  mjChargerRegistre().then(majBase);
+  majBase();
+}
+function gesteRevoquer(id){
+  const a = (mjRegistre && mjRegistre.appareils.find(x=>x.id===id)) || {nom:id};
+  const moi = mjRegistre && id === mjRegistre.moi;
+  if (!confirm(`Revoke "${a.nom}"?\n\n${moi
+    ? "This is the device you are using: it will stop validating minima until you certify it again."
+    : "That device will stop validating minima. The others are untouched."}`)) return;
+  mjRevoquer(id).then(o=>{
+    if (moi){ mjCert = ""; try { localStorage.removeItem(MJ_CERT_KEY); } catch(e){} }
+    adToolsMsg = {ok:true, text:`"${o.nom}" revoked — ${o.restant} slot(s) left`};
+    return mjChargerRegistre();
+  }).then(majBase)
+    .catch(e=>{ adToolsMsg = {ok:false, text:`revocation refused — ${e.message}`}; majBase(); });
+}
+
+/* Les deux pages voisines du coffre. Elles étaient joignables seulement par
+   leur adresse, ce qui revenait à ne pas l'être : un point d'accès unique se
+   juge à ce qu'on atteint sans la connaître. */
+function mjLiensHtml(){
+  return `<a class="btn sm" href="${APPS_BASE}fiches.html"
+     title="Deposit an approach chart — photograph it, or pick an image or PDF">Deposit a chart…</a>
+    <a class="btn sm" href="${APPS_BASE}suivi.html"
+     title="Where the airfield database stands, country by country">Database progress…</a>`;
+}
+
+/* Le bloc du coffre dans les réglages mobiles : l'identité de cet appareil,
+   le registre, et les deux pages voisines. Rien de la table des minimas —
+   elle n'a pas sa place sur un téléphone, et ce n'est pas ce qu'on y cherche. */
+function mBaseHtml(){
+  const msg = adToolsMsg ? `<span class="note ${adToolsMsg.ok?"ok":"ko"}">${escapeHtmlText(adToolsMsg.text)}</span>` : "";
+  return `<div class="setup-body"><div class="ad-tools">
+    ${mjState.mode!=="off" ? (mjCert
+      ? `<button class="btn sm" data-ad="appareils">Devices ✓</button>`
+      : `<button class="btn sm" data-ad="certifier">Certify this device…</button>`) : ""}
+    ${mjLiensHtml()}
+    <span class="note">Certifying this device lets it write verified minima to the shared
+    journal, for every one of your devices. ${msg}</span>
+    ${mjNote()}
+    ${mjRegistreHtml()}
+  </div></div>`;
 }
 
 function adExportDownload(){
@@ -10427,49 +10537,9 @@ function bindAdPanel(){
       refreshAdPanel(true);
       return;
     }
-    if (act==="certifier"){
-      const nom = prompt("Name this device — it will appear in the registry, and each "
-                       + "validation will be signed with it.\n\nFor example: PC, Xiaomi, iPad.");
-      if (nom === null || !nom.trim()) return;
-      const code = prompt("Enrolment code.\n\nIt is used once, here: the server hands back a "
-                        + "certificate that belongs to this device alone.");
-      if (code === null || !code.trim()) return;
-      adToolsMsg = {ok:true, text:"certifying…"};
-      refreshAdPanel(true);
-      mjCertifier(nom.trim(), code.trim()).then(o=>{
-        /* Tout renvoyer : ce que cet appareil avait saisi sans certificat a été
-           rangé en communautaire ; signé, il remonte en vérifié. */
-        const pushed = mjPushAll();
-        adToolsMsg = {ok:true, text:`device certified as "${o.nom}" — ${o.restant} slot(s) left, ${pushed} record(s) re-sent`};
-        refreshAdPanel(true);
-      }).catch(e=>{
-        adToolsMsg = {ok:false, text:`certification refused — ${e.message}`};
-        refreshAdPanel(true);
-      });
-      return;
-    }
-    if (act==="appareils"){
-      mjRegistreOuvert = !mjRegistreOuvert;
-      if (!mjRegistreOuvert){ refreshAdPanel(true); return; }
-      mjChargerRegistre().then(()=>refreshAdPanel(true));
-      refreshAdPanel(true);
-      return;
-    }
-    if (act==="revoquer"){
-      const id = btn.dataset.id;
-      const a = (mjRegistre && mjRegistre.appareils.find(x=>x.id===id)) || {nom:id};
-      const moi = mjRegistre && id === mjRegistre.moi;
-      if (!confirm(`Revoke "${a.nom}"?\n\n${moi
-        ? "This is the device you are using: it will stop validating minima until you certify it again."
-        : "That device will stop validating minima. The others are untouched."}`)) return;
-      mjRevoquer(id).then(o=>{
-        if (moi){ mjCert = ""; try { localStorage.removeItem(MJ_CERT_KEY); } catch(e){} }
-        adToolsMsg = {ok:true, text:`"${o.nom}" revoked — ${o.restant} slot(s) left`};
-        return mjChargerRegistre();
-      }).then(()=>refreshAdPanel(true))
-        .catch(e=>{ adToolsMsg = {ok:false, text:`revocation refused — ${e.message}`}; refreshAdPanel(true); });
-      return;
-    }
+    if (act==="certifier"){ gesteCertifier(); return; }
+    if (act==="appareils"){ gesteAppareils(); return; }
+    if (act==="revoquer"){ gesteRevoquer(btn.dataset.id); return; }
     if (act==="ownerCode"){
       /* prompt() suffit et marche partout, téléphone compris ; le panneau se
          reconstruit à chaque écriture du journal, un champ libre y perdrait le
