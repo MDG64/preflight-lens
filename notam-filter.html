@@ -7403,6 +7403,36 @@ body .stat .k{
        (07/211, 6/7302) — pour ne jamais confondre avec un corps qui CITERAIT
        le mot. Les 8 NOTAMC de KMIA relevés ce jour-là matchent tous. */
     const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4})\s+NOTAMC\b/;
+    /* LES CHAMPS DE LA LIGNE Q) NE SE LISENT QUE S'ILS EN ONT LA FORME.
+       La ligne se lit par position depuis la gauche, et une position ne vaut
+       que si toutes celles d'avant sont là : quand la source en saute une,
+       tout ce qui suit glisse d'un cran et chaque champ prend la valeur de son
+       voisin. Relevé du 2026-08-29 sur 6592 lignes Q) : 66 le font, toutes
+       américaines, toutes de la même façon —
+
+           Q) KZLA/undefined/NBO/A/000/999/3356N11824W005
+
+       sept champs au lieu de huit, le code Q réduit au mot « undefined »
+       (« undXXined » une fois) et le champ trafic disparu. L'app affichait
+       donc « undefined » dans la pastille de code, avec un trafic « NBO »,
+       une raison « A » et une portée « 000 » derrière — tous décalés.
+       Le classement, lui, ne s'y trompait pas : qcodeParts refuse déjà tout
+       ce qui n'est pas Q + 4 lettres, ces NOTAM repartaient sur leur texte
+       (« identified via text ») et les décodeurs de la fiche ne rendent rien
+       d'une valeur inconnue. C'est la PASTILLE qui montrait le mot au pilote.
+       On vérifie donc la forme de chaque champ au lieu de faire confiance à
+       sa place : ce qui ne ressemble à rien s'efface, le reste ne bouge pas.
+       Sur les 6592 lignes du relevé, 69 champs s'effacent et pas un seul
+       champ valide ne change.
+       Compter depuis la DROITE aurait rendu la raison et la portée de ces 66
+       lignes, mais aurait cassé les 12 du relevé où la capture déborde sur le
+       corps du message — « ...FICON 5/5/5 100 PCT WET » y ajoute ses propres
+       barres. La gauche est le seul ancrage stable. */
+    const Q_CODE    = /^Q[A-Z]{4}$/;      // QMRLC
+    const Q_TRAFFIC = /^[IVK]{1,2}$/;     // I, V, IV, K
+    const Q_PURPOSE = /^[NBOMK]{1,4}$/;   // N, B, O, M, K et leurs assemblages
+    const Q_SCOPE   = /^[AEWK]{1,3}$/;    // A, E, W, K et leurs assemblages
+    const qField = (re, v) => { v = (v || "").trim().toUpperCase(); return re.test(v) ? v : ""; };
     function parseNotam(raw) {
       const text = unwrapOriginalNotam(cleanHtml(raw));
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
@@ -7427,7 +7457,11 @@ body .stat .k{
       const cnl = CANCEL_HEAD_RE.test(text);
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
-      if (qm) { const p = qm[1].split("/").map(s => s.trim()); qcode = p[1] || ""; traffic = p[2] || ""; purpose = p[3] || ""; scope = p[4] || ""; }
+      if (qm) { const p = qm[1].split("/");
+                qcode   = qField(Q_CODE,    p[1]);
+                traffic = qField(Q_TRAFFIC, p[2]);
+                purpose = qField(Q_PURPOSE, p[3]);
+                scope   = qField(Q_SCOPE,   p[4]); }
       return {
         id, cnl, raw: text, qcode, scope, traffic, purpose,
         a: field(text, "A"), b: field(text, "B"), c: field(text, "C"), d: field(text, "D"),
