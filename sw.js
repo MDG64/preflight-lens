@@ -46,6 +46,10 @@ const ASSETS = [
   // règle 3 les sert « réseau d'abord », comme l'annuaire — le pré-cache ne
   // fige rien, il garantit seulement le premier lancement hors ligne.
   "./minima.html", "./airfield-seed.js", "./aircraft-db.js",
+  // Le suivi de la base : il lit le journal partage quand il le peut, et sa
+  // derniere copie connue sinon -- encore faut-il que la PAGE soit la. Sans
+  // ce pre-cache, hors ligne on n'aurait meme pas l'ecran pour le dire.
+  "./suivi.html",
   // Polices auto-hébergées (2026-08-06, retrait de Google Fonts). Pré-cache
   // OBLIGATOIRE : la règle 6 les sert « cache d'abord » mais ne dépose jamais
   // rien — sans cette liste, la typo tomberait en police système hors ligne.

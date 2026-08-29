@@ -130,12 +130,17 @@
   <!-- Première ouverture : le jeton, saisi une fois. -->
   <section class="ecran" id="ecran-config">
     <div class="carte">
-      <p class="note">Colle ici le <b>jeton de dépôt</b> (le même que la
-      variable <b>FICHES_TOKEN</b> du serveur). À faire une seule fois sur
-      cet appareil.</p>
+      <p class="note">Cet appareil doit être <b>certifié</b> une fois. Donne-lui un
+      nom, colle le <b>code d'enrôlement</b>, et le serveur lui délivre son propre
+      certificat. Le code ne sert que là : ensuite, cet appareil a le sien, et il
+      se révoque tout seul depuis Minima Lens si tu le perds.</p>
     </div>
     <div>
-      <label for="cfg-jeton">Jeton de dépôt</label>
+      <label for="cfg-nom">Nom de cet appareil</label>
+      <input type="text" id="cfg-nom" placeholder="Xiaomi" autocomplete="off" spellcheck="false">
+    </div>
+    <div>
+      <label for="cfg-jeton">Code d'enrôlement</label>
       <input type="password" id="cfg-jeton" autocomplete="off" spellcheck="false">
     </div>
     <div>
@@ -144,13 +149,15 @@
     </div>
     <div class="erreur" id="err-config"></div>
     <div class="pile">
-      <button class="principal" id="btn-config">Enregistrer</button>
+      <button class="principal" id="btn-config">Certifier cet appareil</button>
     </div>
   </section>
 
   <!-- L'écran de tous les jours : ouvrir la caméra. -->
   <section class="ecran" id="ecran-principal">
     <button class="camera" id="btn-camera"><span>📷</span>Photographier une fiche</button>
+    <button class="discret" id="btn-fichier">📄 Choisir un fichier (image ou PDF)</button>
+    <p class="note" id="attente-note" hidden></p>
     <div class="champ-terrain">
       <label for="icao">Terrain (OACI ou IATA, facultatif — nomme le fichier)</label>
       <input type="text" id="icao" class="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false">
@@ -162,11 +169,15 @@
          téléphone ; sur un ordinateur, l'attribut est ignoré et un
          sélecteur de fichier apparaît — les deux conviennent. -->
     <input type="file" id="fichier" accept="image/*" capture="environment" hidden>
+    <!-- Sans capture : la galerie et les fichiers, PDF compris, et plusieurs
+         d'un coup. Une fiche déjà scannée n'a pas à être rephotographiée. -->
+    <input type="file" id="fichiers" accept="image/*,application/pdf" multiple hidden>
   </section>
 
   <!-- La confirmation demandée : on voit ce qu'on envoie. -->
   <section class="ecran" id="ecran-apercu">
     <img class="apercu-photo" id="apercu" alt="Aperçu de la fiche">
+    <div class="carte" id="apercu-liste" hidden></div>
     <p class="note" id="apercu-detail"></p>
     <div class="erreur" id="err-apercu"></div>
     <div class="pile">
@@ -204,6 +215,15 @@ const SERVEUR_DEFAUT = 'https://notam-proxy-production.up.railway.app';
 const CFG = {
   get jeton() { return localStorage.getItem('fa_jeton') || ''; },
   set jeton(v) { localStorage.setItem('fa_jeton', v); },
+  /* Le certificat de CET appareil, délivré à l'enrôlement. Il remplace le
+     jeton partagé : une seule identité pour tout ce qui touche la base des
+     terrains, et révocable appareil par appareil. Le jeton d'avant reste lu
+     tant qu'aucun certificat n'est là, pour ne pas casser un téléphone déjà
+     configuré. */
+  get cert() { return localStorage.getItem('wl-terrains-cert') || ''; },
+  set cert(v) { localStorage.setItem('wl-terrains-cert', v); },
+  get nom() { return localStorage.getItem('fa_nom') || ''; },
+  set nom(v) { localStorage.setItem('fa_nom', v); },
   get serveur() { return localStorage.getItem('fa_serveur') || SERVEUR_DEFAUT; },
   set serveur(v) { localStorage.setItem('fa_serveur', v); }
 };
@@ -220,36 +240,162 @@ function erreur(id, msg) {
 
 /* ---------- démarrage ---------- */
 function demarrer() {
-  $('pied').textContent = 'v2.2 · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
+  $('pied').textContent = 'v3.0 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'jeton de transition')
+    + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   // Le serveur par défaut se montre dès la première ouverture : un champ
   // vide faisait croire qu'il y avait quelque chose à trouver soi-même.
   $('cfg-serveur').value = CFG.serveur;
-  montrer(CFG.jeton ? 'ecran-principal' : 'ecran-config');
+  montrer((CFG.cert || CFG.jeton) ? 'ecran-principal' : 'ecran-config');
+  majAttente();
+  viderFile();
 }
 
+/* ---------- l'identité de cet appareil sur chaque requête ---------- */
+function entetes() {
+  return CFG.cert ? { 'x-terrains-cert': CFG.cert } : { 'x-fiches-token': CFG.jeton };
+}
+
+/* ---------- la file d'attente hors connexion ----------
+   Une fiche déposée sans réseau ne doit pas être perdue, ni obliger à
+   reprendre la photo une fois rentré. Elle attend ici, dans IndexedDB —
+   seul stockage du navigateur qui accepte des binaires de plusieurs méga —
+   et repart dès que la connexion revient. Même philosophie que la file des
+   minimas : on empile, et ça se vide tout seul. */
+const FILE_DB = 'fiches-attente';
+function idb() {
+  return new Promise((ok, ko) => {
+    const r = indexedDB.open(FILE_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('attente', { keyPath: 'id', autoIncrement: true });
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => ko(r.error);
+  });
+}
+async function fileAjouter(rec) {
+  const d = await idb();
+  return new Promise((ok, ko) => {
+    const tx = d.transaction('attente', 'readwrite');
+    tx.objectStore('attente').add(rec);
+    tx.oncomplete = ok; tx.onerror = () => ko(tx.error);
+  });
+}
+async function fileLire() {
+  const d = await idb();
+  return new Promise((ok, ko) => {
+    const rq = d.transaction('attente', 'readonly').objectStore('attente').getAll();
+    rq.onsuccess = () => ok(rq.result || []); rq.onerror = () => ko(rq.error);
+  });
+}
+async function fileRetirer(id) {
+  const d = await idb();
+  return new Promise((ok, ko) => {
+    const tx = d.transaction('attente', 'readwrite');
+    tx.objectStore('attente').delete(id);
+    tx.oncomplete = ok; tx.onerror = () => ko(tx.error);
+  });
+}
+async function majAttente() {
+  let n = 0;
+  try { n = (await fileLire()).length; } catch (e) { /* pas d'IndexedDB : tant pis */ }
+  const el = $('attente-note');
+  el.hidden = !n;
+  el.textContent = n + ' fiche(s) en attente — elles partiront dès le retour du réseau.';
+}
+
+/* L'envoi nu, sans barre de progression : c'est celui de la file. */
+async function envoyer(blob, nom) {
+  const r = await fetch(CFG.serveur + '/api/fiches', {
+    method: 'POST',
+    headers: Object.assign({ 'x-fiches-nom': nom,
+      'Content-Type': blob.type || 'application/octet-stream' }, entetes()),
+    body: blob
+  });
+  if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+  let final = nom;
+  try { final = (await r.json()).nom || nom; } catch (e) { /* on garde le nom local */ }
+  return final;
+}
+
+let vidageEnCours = false;
+async function viderFile() {
+  if (vidageEnCours || !navigator.onLine || !(CFG.cert || CFG.jeton)) return;
+  vidageEnCours = true;
+  try {
+    for (const rec of await fileLire()) {
+      try {
+        const final = await envoyer(rec.blob, rec.nom);
+        await fileRetirer(rec.id);
+        $('journal').insertAdjacentHTML('afterbegin', '<li>' + final + ' · différée</li>');
+      } catch (e) {
+        /* On s'arrête au PREMIER échec plutôt que d'insister : si le réseau
+           est retombé ou le certificat révoqué, marteler n'aide personne. La
+           file reste entière et repartira au prochain réveil. */
+        break;
+      }
+    }
+  } finally { vidageEnCours = false; majAttente(); }
+}
+window.addEventListener('online', viderFile);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) viderFile(); });
+
 /* ---------- écrans ---------- */
-$('btn-config').onclick = () => {
-  const jeton = $('cfg-jeton').value.trim();
+$('btn-config').onclick = async () => {
+  const nom = $('cfg-nom').value.trim();
+  const code = $('cfg-jeton').value.trim();
   const serveur = $('cfg-serveur').value.trim().replace(/\/+$/, '') || SERVEUR_DEFAUT;
-  if (jeton.length < 16) { erreur('err-config', 'Ce jeton est trop court pour être le bon (au moins 16 caractères).'); return; }
+  if (!nom) { erreur('err-config', 'Donne un nom à cet appareil — il apparaîtra au registre.'); return; }
+  if (code.length < 16) { erreur('err-config', 'Ce code est trop court pour être le bon (au moins 16 caractères).'); return; }
   if (!/^https?:\/\//.test(serveur)) { erreur('err-config', 'Le serveur doit commencer par https://'); return; }
-  CFG.jeton = jeton; CFG.serveur = serveur;
-  demarrer();
+  CFG.serveur = serveur;
+  $('btn-config').disabled = true;
+  try {
+    const r = await fetch(serveur + '/api/appareils/enrolement', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code, nom: nom })
+    });
+    const o = await r.json().catch(() => ({}));
+    if (!r.ok || !o.ok) throw new Error(o.error || ('HTTP ' + r.status));
+    CFG.cert = o.certificat; CFG.nom = o.nom;
+    demarrer();
+  } catch (e) {
+    erreur('err-config', 'Certification refusée — ' + e.message);
+  } finally { $('btn-config').disabled = false; }
 };
 
 $('btn-reglages').onclick = () => {
-  $('cfg-jeton').value = CFG.jeton;
+  /* Le certificat ne se remontre pas : il ne se retape pas, il se refait. */
+  $('cfg-nom').value = CFG.nom;
+  $('cfg-jeton').value = '';
   $('cfg-serveur').value = CFG.serveur;
   montrer('ecran-config');
 };
 
 /* ---------- prise de vue et confirmation ---------- */
 let photo = null;     // le Blob en attente d'envoi
+let lot = null;       // ou plusieurs, choisis dans les fichiers
 $('btn-camera').onclick = () => $('fichier').click();
+$('btn-fichier').onclick = () => $('fichiers').click();
+/* Plusieurs fichiers d'un coup : on ne montre pas un aperçu par fichier, on
+   montre la LISTE de ce qui partira. Le geste reste « je vois ce que
+   j'envoie » — c'est la règle de cet écran. */
+$('fichiers').onchange = () => {
+  const fs2 = [...$('fichiers').files];
+  if (!fs2.length) return;
+  lot = fs2; photo = null;
+  $('apercu').hidden = true;
+  const liste = $('apercu-liste');
+  liste.hidden = false;
+  liste.innerHTML = fs2.map(f => '<p class="note">' + (f.type === 'application/pdf' ? '📄 ' : '🖼 ')
+    + nomDeFichier(f) + ' · ' + (f.size / 1048576).toFixed(1) + ' Mo</p>').join('');
+  $('apercu-detail').textContent = fs2.length + ' fichier(s) à déposer';
+  montrer('ecran-apercu');
+  $('fichiers').value = '';
+};
 $('fichier').onchange = () => {
   const f = $('fichier').files[0];
   if (!f) return;
-  photo = f;
+  photo = f; lot = null;
+  $('apercu').hidden = false;
+  $('apercu-liste').hidden = true;
   $('apercu').src = URL.createObjectURL(f);
   $('apercu-detail').textContent =
     `${nomDeFichier(f)} · ${(f.size / 1048576).toFixed(1)} Mo`;
@@ -320,15 +466,50 @@ function nomDeFichier(f) {
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
   const ts = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp' }[f.type] || 'jpg';
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic',
+                'image/webp': 'webp', 'application/pdf': 'pdf' }[f.type]
+    || (f.name && f.name.includes('.') ? f.name.split('.').pop().toLowerCase().slice(0, 4) : 'jpg');
   return `${/^[A-Z]{4}$/.test(icao) ? icao : 'fiche'}_${ts}.${ext}`;
 }
 
 /* ---------- l'envoi ---------- */
-$('btn-envoyer').onclick = () => {
+$('btn-envoyer').onclick = async () => {
+  /* Un lot de fichiers : pas de barre par fichier, on enchaîne — et hors
+     réseau, tout part à la file plutôt que de renvoyer l'utilisateur à sa
+     galerie. */
+  if (lot) {
+    const restants = [];
+    montrer('ecran-envoi');
+    for (let i = 0; i < lot.length; i++) {
+      const f = lot[i], nom = nomDeFichier(f);
+      $('envoi-detail').textContent = 'Envoi ' + (i + 1) + ' / ' + lot.length + '…';
+      $('progression').style.width = Math.round(100 * i / lot.length) + '%';
+      if (!navigator.onLine) { restants.push({ f, nom }); continue; }
+      try {
+        const final = await envoyer(f, nom);
+        $('journal').insertAdjacentHTML('afterbegin', '<li>' + final + '</li>');
+      } catch (e) { restants.push({ f, nom }); }
+    }
+    for (const r of restants) { try { await fileAjouter({ nom: r.nom, blob: r.f, at: Date.now() }); } catch (e) { /* rien à faire de mieux */ } }
+    await majAttente();
+    lot = null; $('icao').value = '';
+    $('fait-detail').textContent = restants.length
+      ? restants.length + ' fiche(s) mise(s) en attente — elles partiront au retour du réseau.'
+      : 'Le PC les rangera dans OneDrive/Documents/Fiches approche d\'ici une dizaine de minutes.';
+    montrer('ecran-fait');
+    return;
+  }
   if (!photo) return;
-  if (!navigator.onLine) { erreur('err-apercu', 'Pas de réseau — la photo reste à l\'écran, réessaie une fois connecté.'); return; }
   const nom = nomDeFichier(photo);
+  if (!navigator.onLine) {
+    try {
+      await fileAjouter({ nom: nom, blob: photo, at: Date.now() });
+      photo = null; $('icao').value = ''; await majAttente();
+      $('fait-detail').textContent = 'Pas de réseau — mise en attente. Elle partira toute seule au retour de la connexion.';
+      montrer('ecran-fait');
+    } catch (e) { erreur('err-apercu', 'Pas de réseau, et la mise en attente a échoué — garde l\'écran ouvert.'); }
+    return;
+  }
   montrer('ecran-envoi');
   $('envoi-detail').textContent = `Envoi de ${nom}…`;
   $('progression').style.width = '0%';
@@ -338,7 +519,8 @@ $('btn-envoyer').onclick = () => {
      une vraie barre. */
   const xhr = new XMLHttpRequest();
   xhr.open('POST', CFG.serveur + '/api/fiches');
-  xhr.setRequestHeader('x-fiches-token', CFG.jeton);
+  const h = entetes();
+  for (const k of Object.keys(h)) xhr.setRequestHeader(k, h[k]);
   xhr.setRequestHeader('x-fiches-nom', nom);
   xhr.setRequestHeader('Content-Type', photo.type || 'application/octet-stream');
   xhr.upload.onprogress = e => {
@@ -357,7 +539,9 @@ $('btn-envoyer').onclick = () => {
       photo = null;
       montrer('ecran-fait');
     } else if (xhr.status === 403) {
-      rate('Jeton refusé — vérifie-le dans ⚙, il doit être identique à FICHES_TOKEN sur le serveur.');
+      rate(CFG.cert
+        ? 'Certificat refusé — cet appareil a peut-être été révoqué. Recertifie-le dans ⚙.'
+        : 'Jeton refusé — certifie cet appareil dans ⚙.');
     } else {
       let detail = '';
       try { detail = ' — ' + JSON.parse(xhr.responseText).error; } catch { /* corps illisible */ }
