@@ -7075,6 +7075,34 @@ body .stat .k{
        la même raison : un raccourci par mot-clé ne doit jamais masquer une
        vraie fermeture citée dans le même message. */
     const REIL_OOS_RE = /\b(?:REILS?|(?:(?:RWY|RUNWAY)\s+)?END\s+ID(?:ENT|ENTIFIER)?\s+(?:LGTS?|LIGHTS?))\b[^.\n]{0,30}?\b(?:U\/S|UNSERVICEABLE|UNSERV|NOT AVBL|NOT AVAILABLE|OUT OF SERVICE)\b/g;
+    /* Balisage d'OBSTACLE hors service (« OBST TOWER LGT … U/S ») : c'est mot
+       pour mot ce que dit un Q-code « OL » — rendu Information sans condition
+       tout en haut de severity(), U/S compris. Côté US il n'y a pas de Q-code
+       (QXXXX), il ne reste que le texte, et le seul « U/S » suffisait à peindre
+       en ROUGE « Critical » une lampe éteinte sur un pylône à 12 NM du terrain.
+       Le même message vu d'Europe serait sorti en Information : le rang d'un
+       NOTAM se mettait à dépendre du pays qui l'a rédigé. Revue du 2026-08-29,
+       cas réels KGPT 07/031, 08/018, 08/025 et 08/040 « OBST TOWER LGT (ASR
+       1242308) 303656.80N0890243.60W (12.5NM NE GPT) 531.8FT (305.8FT AGL)
+       U/S » — quatre pastilles rouges d'affilée pour quatre feux d'obstacle.
+       Le segment reconnu est RETIRÉ avant qu'on cherche une fermeture, exactement
+       comme pour les REIL : « RWY 12 CLSD. OBST TOWER LGT U/S » garde son rouge,
+       et « LDG RWY 20 PROHIBITED DUE TO OBST » aussi (l'obstacle y est une CAUSE,
+       il n'y a pas de feu hors service à retirer).
+       Deux garde-fous serrent la portée, parce qu'une reconnaissance trop large
+       ferait taire une vraie panne au lieu d'une fausse alerte :
+       - le vocabulaire d'obstacle est celui d'INFO_TEXT_RE, pas un mot de plus.
+         « TOWER » nu en est absent à dessein — la tour de contrôle porte le même
+         mot, et ses feux à elle ne sont pas du balisage d'obstacle ;
+       - entre l'obstacle, ses feux et le « U/S », on n'accepte ni fin de phrase
+         (« . » suivi d'une espace) ni ponctuation d'énumération (« , ; : »). Le
+         point NU reste permis : les NOTAM US écrivent leurs coordonnées et leurs
+         hauteurs en décimal (« 12.5NM », « 531.8FT »), une exclusion sèche de
+         « . » ne reconnaîtrait jamais la forme réelle. Une énumération du genre
+         « OBST LGT ON HANGAR, PAPI RWY 04 U/S » ne matche donc pas et reste
+         Critical — le sens du repli est voulu : on rate un allègement, on ne
+         masque jamais une panne. */
+    const OBST_LGT_OOS_RE = /\b(?:OBST|OBSTACLES?|CRANES?|MASTS?)\b(?:(?!\.\s)[^,;:\n]){0,120}?\b(?:LGTS?|LIGHTS?)\b(?:(?!\.\s)[^,;:\n]){0,120}?\b(?:U\/S|UNSERVICEABLE|UNSERV|NOT AVBL|NOT AVAILABLE|OUT OF SERVICE)\b/g;
     function severity(q, e) {
       const [subj, cond] = qcodeParts(q), t = (e || "").toUpperCase();
       // Passage en Information UNIQUEMENT pour les NOTAM dont le sujet EST un poste
@@ -7107,8 +7135,14 @@ body .stat .k{
       // condition -> critical, même si le mot "OBST" y apparaît comme cause) vs
       // A4935/26 "...PROHIBITED FOR ACFT WHICH WINGSPAN EXCEEDS 36M" (condition
       // -> pas de fermeture totale, reste au rang caution/CONDITION_SEVERITY).
-      const isClosure = hasClosureWord(t) ||
-        (t.includes("PROHIBITED") && !hasRestrictCond(t));
+      // La recherche se fait sur le texte PRIVÉ de ses segments « balisage
+      // d'obstacle hors service » (OBST_LGT_OOS_RE, cf. son commentaire) : un
+      // feu d'obstacle éteint ne ferme rien, et son « U/S » ne doit pas passer
+      // pour un mot de fermeture. Ce qui reste est lu exactement comme avant,
+      // donc une vraie fermeture citée dans le même message garde son rouge.
+      const tHorsObstLgt = t.replace(OBST_LGT_OOS_RE, " ");
+      const isClosure = hasClosureWord(tHorsObstLgt) ||
+        (tHorsObstLgt.includes("PROHIBITED") && !hasRestrictCond(tHorsObstLgt));
       // Un NOTAM qui restreint ou interdit l'accès, TOTALEMENT (isClosure) OU
       // CONDITIONNELLEMENT (PROHIBITED avec condition de type/envergure, ou tout
       // autre match RESTRICT_TEXT), cite très souvent un OBSTACLE comme simple
@@ -7118,7 +7152,8 @@ body .stat .k{
       // PROHIBITED FOR ACFT WHICH WINGSPAN EXCEEDS 36M" : conditionnel
       // (isClosure=false) mais reste une restriction active -> Caution, jamais
       // Info malgré le mot OBSTACLE.
-      const isActiveRestriction = isClosure || t.includes("PROHIBITED") || hasRestrictCond(t);
+      const isActiveRestriction = isClosure || tHorsObstLgt.includes("PROHIBITED") ||
+        hasRestrictCond(tHorsObstLgt);
       // NOTAM levé (CNL/CANCELLED/WITHDRAWN/VOID) : simple information, pas une
       // alerte active — sauf si isActiveRestriction (une restriction/fermeture
       // reste active malgré la mention d'une levée passée). Réutilise CNL_TEXT

@@ -217,6 +217,36 @@ test("un REIL hors service est ambre, en départ ET en approche", async () => {
   assert.equal(classifyNotam("QMRLC", "RWY 35 CLSD, REIL RELOCATED").severity, "critical");
 });
 
+test("un feu d'obstacle hors service est de l'Information, Q-code ou pas", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Un obstacle est Information sans condition quand le Q-code le dit (OB/OL).
+  assert.equal(classifyNotam("QOLAS", "OBST LGT U/S").severity, "info");
+  // Cas réels KGPT 07/031, 08/018, 08/025 et 08/040 (constatés le 2026-08-29) :
+  // même message, mais en QXXXX comme tout le domestique US — le seul « U/S »
+  // les faisait ressortir Critical, quatre pastilles rouges d'affilée.
+  const kgpt = classifyNotam("QXXXX",
+    "OBST TOWER LGT (ASR 1242308) 303656.80N0890243.60W (12.5NM NE GPT) 531.8FT (305.8FT AGL) U/S");
+  assert.equal(kgpt.severity, "info");
+  // Les autres graphies de la même panne passent aussi.
+  for (const e of ["OBST LGT U/S", "OBSTACLE LIGHTS NOT AVBL",
+                   "CRANE LGT OUT OF SERVICE", "MAST LGT UNSERVICEABLE"])
+    assert.equal(classifyNotam("QXXXX", e).severity, "info", e);
+  // Une vraie fermeture citée dans le même message garde son rouge.
+  assert.equal(classifyNotam("QXXXX", "RWY 12 CLSD. OBST TOWER LGT U/S").severity, "critical");
+  assert.equal(classifyNotam("QMRLC", "OBST LGT U/S. RWY 12/30 CLSD").severity, "critical");
+  // L'obstacle cité comme CAUSE d'une interdiction reste Critical : il n'y a
+  // aucun feu hors service à retirer du texte. Cas réel LFPO A4641/26.
+  assert.equal(classifyNotam("QXXXX", "LDG RWY 20 PROHIBITED DUE TO OBST").severity, "critical");
+  // Une énumération n'est pas reconnue — le repli va vers Critical, jamais vers
+  // Information : on rate un allègement, on ne masque pas une panne.
+  assert.equal(classifyNotam("QXXXX", "OBST LGT ON HANGAR, PAPI RWY 04 U/S").severity, "critical");
+  // « TOWER » nu n'ouvre pas la porte : la tour de contrôle porte le même mot.
+  assert.equal(classifyNotam("QXXXX", "TOWER LGT U/S").severity, "critical");
+  // Et le retrait ne vaut que pour les feux : l'obstacle lui-même retiré du
+  // service n'est pas la même chose qu'une lampe éteinte.
+  assert.equal(classifyNotam("QXXXX", "OBST CRANE ERECTED 500FT NE OF ARP").severity, "info");
+});
+
 test("le RVR borne le décollage autant que l'approche", async () => {
   const { classifyNotam } = await chargerClassificateur();
   // Cas réel A5236/26 (QFTAS) : « RVR THR 06, MEDIAN AND 24 NOT AVBL » sortait
