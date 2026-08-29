@@ -3885,6 +3885,14 @@ function adChartMinima(icao, end, type){
 }
 
 function adEffMinima(icao, end, type){
+  /* LA CARTE NE PUBLIE RIEN POUR CETTE CATÉGORIE. Ni valeur vérifiée, ni
+     consensus, ni minimum standard : servir la ligne d'une autre catégorie
+     proposerait plus bas que la carte n'autorise, et le standard inventerait
+     un chiffre là où l'État n'en publie aucun. Le refus se pose ICI, au point
+     de passage commun — le moteur et la table le posaient déjà chacun de leur
+     côté, leurs deux voisins l'oubliaient. */
+  if (adChartInterdit(icao, end, type))
+    return {dh:{v:null, src:"chart-na"}, rvr:{v:null, src:"chart-na"}, na:true};
   const std = adStdMinima(type) || {dh:null, rvr:null};
   const v = adVerified(icao, end, type);
   const c = adConsensus(icao, end, type);
@@ -7711,7 +7719,8 @@ function approachCell(tabRole){
   const selType = phaseApproachType(tabRole, icao, end);
   const eff = selType ? adEffMinima(icao, end, selType) : null;
   const srcs = eff ? [eff.dh.src, eff.rvr.src] : [];
-  const src = srcs.includes("verified") ? "verified ✓ — your minima govern"
+  const src = eff && eff.na ? `no minima published for category ${(cfg && cfg.acCategory) || "—"}`
+            : srcs.includes("verified") ? "verified ✓ — your minima govern"
             : srcs.includes("consensus") ? "user ✓ — 3+ identical entries"
             : "standard minima of the type";
   const sel = `<span class="req-arrow-wrap">
@@ -10395,8 +10404,8 @@ function refreshAdPanel(force){
     if (adChartInterdit(icao, a.end, a.type)) return `<tr>
       <td style="font-weight:600">${a.end}</td>
       <td>${a.circ ? "Circling" : adTypeLabel(a.type)}</td>
-      <td class="ad-def"><span class="ad-badge na" title="The approach chart publishes no minima for this operation in your aircraft category — it is not authorized. No default is offered.">not authorized</span></td>
-      <td colspan="${own?4:3}" class="ad-stats">published as not authorized for category ${(cfg && cfg.acCategory) || "—"}</td>
+      <td class="ad-def"><span class="ad-badge na" title="The approach chart publishes no minima for this operation in your aircraft category — whether it reads « Not published » or « Not authorized », there is nothing to fly to. No default is offered.">no minima published</span></td>
+      <td colspan="${own?4:3}" class="ad-stats">the chart publishes no minima for category ${(cfg && cfg.acCategory) || "—"}</td>
       <td></td>
     </tr>`;
     /* Proposition de la carte : pré-remplie dans les deux champs, jamais
