@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi des minima vérifiés</title>
+<!--
+  suivi.html — où en est la vérification des minima, pays par pays.
+
+  TROIS NIVEAUX, un geste à chaque fois : les pays, les terrains du pays,
+  les approches du terrain. Vert quand c'est vérifié, ambre sinon.
+
+  CETTE PAGE NE STOCKE RIEN ET NE DÉCIDE DE RIEN. Elle lit deux sources
+  qui existent déjà :
+
+    airfield-seed.js   la liste des approches par seuil (clé `a`) et les
+                       minima relevés sur les cartes photographiées (`n`),
+                       compilés par aero-db ;
+    localStorage       les minima que vous avez validés dans Minima Lens
+                       (clé wl-airfield-minima-stats, champs `verified` pour
+                       une valeur commune à toutes les catégories d'aéronef,
+                       `verifiedBy` pour celles qui en nomment une).
+
+  D'où l'exigence d'être servie par le MÊME serveur que Minima Lens :
+  le localStorage appartient à une origine, et une page ouverte en
+  file:// n'y a aucun accès. Elle vit donc à côté de Minima Lens.html et
+  s'ouvre par http://localhost:8742/suivi.html.
+
+  Conséquence heureuse : rien à régénérer. La page reflète l'état réel à
+  chaque rechargement — une validation faite il y a dix secondes s'y voit.
+-->
+<style>
+:root{
+  --bg:#f7f9fb; --card:#fff; --line:#dde5ec; --text:#1b2228; --muted:#69737d;
+  --green:#12936a; --green-bg:#e7f4ef; --amber:#cf7a12; --amber-bg:#fbf1e2;
+  --red:#c8322f; --red-bg:#fdecec;
+  --bleu:#1264c4;
+  --hover:#eef2f5;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#040506; --card:#0d1117; --line:#20272e; --text:#e6edf3; --muted:#8b949e;
+    --green:#3fb950; --green-bg:#0f2417; --amber:#f6b23e; --amber-bg:#241f17;
+    --red:#f0665f; --red-bg:#2a1416;
+    --bleu:#58a6ff;
+    --hover:#161b22;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--sans)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:16px 20px 12px}
+h1{margin:0 0 3px;font-size:17px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:12.5px}
+.bar{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+#q{flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--card);color:var(--text);font:14px var(--sans)}
+#q:focus{outline:2px solid var(--green);outline-offset:-1px}
+.crumb{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.crumb button{background:none;border:0;color:var(--green);cursor:pointer;font:inherit;padding:2px 0}
+.crumb button:hover{text-decoration:underline}
+main{padding:14px 20px 50px;max-width:900px;margin:0 auto}
+ul{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+li{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line)}
+li:last-child{border-bottom:0}
+li.act{cursor:pointer}
+li.act:hover{background:var(--hover)}
+.tick{flex:0 0 22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700}
+.ok{background:var(--green-bg);color:var(--green)}
+.todo{background:var(--amber-bg);color:var(--amber)}
+.na{background:var(--red-bg);color:var(--red)}
+.cnt.interdit{color:var(--red)}
+.lbl{flex:1;min-width:0}
+.nom{font-weight:600}
+.det{color:var(--muted);font-size:12.5px;font-family:var(--mono)}
+.cnt{color:var(--muted);font-size:12.5px;font-family:var(--mono);white-space:nowrap;text-align:right}
+.cnt.vert{color:var(--green)}
+.cnt.attente{color:var(--amber)}
+/* Bleu : le travail est ENGAGÉ sans être fini. Sans lui, un terrain à 8
+   approches vérifiées sur 9 se lisait comme un terrain où rien n'a été
+   fait — le gris ne distingue pas « pas commencé » de « presque bouclé ». */
+.cnt.partiel{color:var(--bleu)}
+.vide{padding:26px 16px;color:var(--muted);text-align:center}
+.alerte{padding:18px;border:1px solid var(--amber);background:var(--amber-bg);color:var(--amber);
+  border-radius:10px;font-size:14px}
+footer{max-width:900px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12px}
+code{font-family:var(--mono);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Suivi des minima vérifiés</h1>
+  <div class="sub" id="tot">lecture…</div>
+  <div class="bar"><div class="crumb" id="crumb"></div></div>
+  <div class="bar">
+    <input id="q" type="search" placeholder="Filtrer — pays, code OACI/IATA, nom de terrain" autocomplete="off">
+  </div>
+</header>
+<main><div id="vue"></div></main>
+<footer id="pied"></footer>
+
+<script src="airfield-seed.js"></script>
+<script>
+"use strict";
+
+/* Les libellés de l'application, pour que la ligne lue ici et la ligne
+   lue dans Minima Lens portent le même nom. */
+var LABEL = {
+  CAT_III:"ILS CAT III", CAT_II:"ILS CAT II", CAT_I:"ILS / GLS / MLS CAT I",
+  LPV:"RNP — LPV", LNAV_VNAV:"RNP — LNAV/VNAV", LNAV:"RNP — LNAV", LP:"RNP — LP",
+  LOC:"LOC", VOR:"VOR", NDB:"NDB", CIRCLING:"Circling"
+};
+var STATS_KEY = "wl-airfield-minima-stats";
+/* ---- d'où viennent les chiffres ----
+   DEUX SOURCES, dans cet ordre. Le JOURNAL PARTAGÉ du backend dit l'état réel
+   de tous vos appareils : c'est lui qui fait autorité, et c'est ce qui rend
+   cette page consultable du téléphone sans avoir ouvert Minima Lens d'abord.
+   Le CACHE LOCAL prend le relais hors connexion, ou sur une origine qui n'a
+   pas de certificat — le suivi servi par le serveur local, par exemple.
+   RÉSERVÉ AUX APPAREILS CERTIFIÉS. L'avancement, c'est l'atelier : qui a
+   validé quoi, ce qui reste à faire. Le produit — les minimas eux-mêmes —
+   reste lisible de tous ; le journal de bord, non. */
+var CERT_KEY = "wl-terrains-cert";
+var API = window.WL_MJ_BASE || "https://notam-proxy-production.up.railway.app";
+var certificat = "";
+try { certificat = localStorage.getItem(CERT_KEY) || ""; } catch (e) {}
+var STATS_DIST = null;   // ce que le journal partagé a répondu
+var SOURCE = "cache";    // "journal" | "cache"
+
+var vue = document.getElementById("vue");
+var crumb = document.getElementById("crumb");
+var q = document.getElementById("q");
+var pays = null, terrain = null;
+
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---- les deux sources ---- */
+
+var SEED = window.AD_SEED || null;
+
+/* Une valeur est VÉRIFIÉE dès qu'elle porte une DH ou une RVR validée.
+   Peu importe d'où elle vient : saisie à la main, ou proposée par une
+   carte puis validée d'un clic — c'est le même geste et le même statut. */
+function statsLues(){
+  if (STATS_DIST) return STATS_DIST;
+  try { var o = JSON.parse(localStorage.getItem(STATS_KEY) || "{}"); return o && typeof o === "object" ? o : {}; }
+  catch(e){ return {}; }
+}
+/* Va chercher le journal partagé. Un échec n'est pas une panne : on retombe
+   sur le cache local et on le DIT, plutôt que d'afficher des chiffres périmés
+   sans prévenir. */
+function chargerJournal(){
+  if (!certificat) return Promise.resolve(false);
+  var h = { "X-Terrains-Cert": certificat };
+  return fetch(API + "/api/minima", { headers: h, cache: "no-store" })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(o){
+      if (!o || !o.stats) return false;
+      STATS_DIST = o.stats; SOURCE = "journal"; return true;
+    })
+    .catch(function(){ return false; });
+}
+function estVerifie(stats, icao, end, type){
+  var s = stats[icao + "|" + end + "|" + type];
+  if (!s) return false;
+  /* Deux rangements depuis le 2026-08-30 : `verifiedBy[catégorie]` porte la
+     valeur validée pour une catégorie d'aéronef donnée, `verified` celle qui
+     n'en nomme aucune. Une série validée pour la seule catégorie D est validée
+     — la compter « à valider » ferait disparaître du travail déjà fait. */
+  var v = [s.verified];
+  for (var k in (s.verifiedBy || {})) v.push(s.verifiedBy[k]);
+  for (var i = 0; i < v.length; i++)
+    if (v[i] && (Number.isFinite(v[i].dh) || Number.isFinite(v[i].rvr))) return true;
+  return false;
+}
+/* La carte a livré ses minima mais personne ne les a encore validés :
+   ce n'est pas « à faire », c'est « en attente d'un clic ». La nuance
+   vaut d'être dite, sinon le travail déjà fait devient invisible. */
+function proposeParCarte(icao, end, type){
+  var n = SEED && SEED[icao] && SEED[icao].n;
+  var c = n && n[end] && n[end][type];
+  if (!c) return false;
+  /* Une case interdite n'attend pas de validation : il n'y a rien à
+     valider. Elle n'est ni faite ni à faire — elle est close. */
+  for (var k in c) if (c[k] !== "NA") return true;
+  return false;
+}
+function interditParCarte(icao, end, type){
+  var n = SEED && SEED[icao] && SEED[icao].n;
+  var c = n && n[end] && n[end][type];
+  if (!c) return false;
+  for (var k in c) if (c[k] !== "NA") return false;
+  return true;
+}
+
+/* L'annuaire de la graine : OACI|IATA|nom|ville|pays, une ligne par
+   terrain. On ne garde que ceux dont on connaît au moins une approche —
+   ailleurs il n'y a rien à vérifier. */
+function annuaire(){
+  var par = {}, dir = window.AD_DIR || "";
+  var lignes = dir.split("\n");
+  for (var i = 0; i < lignes.length; i++){
+    if (!lignes[i]) continue;
+    var c = lignes[i].split("|");
+    var icao = c[0];
+    if (!SEED[icao] || !SEED[icao].a) continue;
+    var cc = c[4] || "??";
+    (par[cc] || (par[cc] = [])).push({ icao: icao, iata: c[1] || "", nom: c[2] || icao, ville: c[3] || "" });
+  }
+  /* Un terrain absent de l'annuaire mais présent dans la graine ne doit
+     pas disparaître du suivi : il est rangé sous « pays inconnu ». */
+  var vus = {};
+  for (var cc2 in par) for (var j = 0; j < par[cc2].length; j++) vus[par[cc2][j].icao] = 1;
+  for (var k in SEED)
+    if (SEED[k] && SEED[k].a && !vus[k]) (par["??"] || (par["??"] = [])).push({ icao: k, nom: k, ville: "" });
+  return par;
+}
+
+/* ---- l'état, recalculé à chaque rendu : il change sous nos pieds ---- */
+
+function calcul(){
+  var stats = statsLues(), par = annuaire();
+  var nomDe;
+  try { var dn = new Intl.DisplayNames(["fr"], { type: "region" });
+        nomDe = function(cc){ try { return dn.of(cc) || cc; } catch(e){ return cc; } }; }
+  catch(e){ nomDe = function(cc){ return cc; }; }
+
+  var pays = [], terrains = {}, approches = {};
+  var nApp = 0, nOk = 0, nAttente = 0, nTer = 0, nTerOk = 0;
+
+  for (var cc in par){
+    var liste = [], complets = 0, entames = 0;
+    for (var i = 0; i < par[cc].length; i++){
+      var t = par[cc][i];
+      var a = SEED[t.icao].a, lignes = [], ok = 0, att = 0;
+      for (var end in a){
+        var types = a[end].slice();
+        /* Le circling n'est pas dans la liste des approches — c'est une
+           manœuvre — mais il se relève et se valide comme elles, sous la
+           piste de sa carte. Il ne compte que là où une carte l'a livré :
+           l'ajouter partout gonflerait le reste à faire d'une ligne
+           qu'aucune carte ne réclame. */
+        var nc = SEED[t.icao].n;
+        if (nc && nc[end] && nc[end].CIRCLING) types.push("CIRCLING");
+        for (var j = 0; j < types.length; j++){
+          var type = types[j];
+          /* Interdite par la carte : elle sort du décompte. La compter
+             comme « à faire » gonflerait indéfiniment un reste à faire
+             que rien ne pourra jamais solder. */
+          if (interditParCarte(t.icao, end, type)) {
+            lignes.push({ end: end, type: type, ok: false, attente: false, interdit: true });
+            continue;
+          }
+          var v = estVerifie(stats, t.icao, end, type);
+          var p = !v && proposeParCarte(t.icao, end, type);
+          lignes.push({ end: end, type: type, ok: v, attente: p });
+          if (v) ok++; else if (p) att++;
+        }
+      }
+      lignes.sort(function(x, y){ return x.end < y.end ? -1 : x.end > y.end ? 1 : 0; });
+      approches[t.icao] = lignes;
+      /* Les lignes interdites sortent du dénominateur : un terrain dont
+         tout le reste est validé est complet, même s'il porte des cases
+         que la carte refuse. */
+      var tot = lignes.filter(function(l){ return !l.interdit; }).length;
+      var tout = tot > 0 && ok === tot;
+      if (tout) complets++;
+      else if (ok > 0) entames++;   // commencé, pas fini
+      liste.push({ icao: t.icao, iata: t.iata, nom: t.nom, ville: t.ville, tot: tot, ok: ok, attente: att, complet: tout });
+      nApp += tot; nOk += ok; nAttente += att; nTer++;
+    }
+    liste.sort(function(x, y){ return x.icao < y.icao ? -1 : 1; });
+    terrains[cc] = liste;
+    nTerOk += complets;
+    pays.push({ cc: cc, nom: cc === "??" ? "Pays inconnu" : nomDe(cc), tot: liste.length,
+                ok: complets, entames: entames });
+  }
+  pays.sort(function(x, y){ return x.nom.localeCompare(y.nom, "fr"); });
+  return { pays: pays, terrains: terrains, approches: approches,
+           nApp: nApp, nOk: nOk, nAttente: nAttente, nTer: nTer, nTerOk: nTerOk };
+}
+
+/* ---- rendu ---- */
+
+function tick(ok){
+  return '<span class="tick ' + (ok ? "ok" : "todo") + '">' + (ok ? "✓" : "•") + "</span>";
+}
+function ligne(ok, nom, det, cnt, cls, attr){
+  return '<li class="act" ' + attr + ">" + tick(ok) +
+    '<span class="lbl"><span class="nom">' + nom + "</span>" +
+    (det ? '<br><span class="det">' + det + "</span>" : "") + "</span>" +
+    '<span class="cnt ' + cls + '">' + cnt + "</span></li>";
+}
+
+function rendre(){
+  if (!SEED){
+    document.getElementById("tot").textContent = "";
+    vue.innerHTML = '<div class="alerte"><b>La base terrains n\'a pas pu être lue.</b><br><br>' +
+      "Cette page doit être servie par Weather Lens, sur la même adresse que Minima Lens — " +
+      "c'est ce qui lui donne accès aux minima que vous avez validés. Lancez Weather Lens, " +
+      'puis ouvrez <code>http://localhost:8742/suivi.html</code>.</div>';
+    return;
+  }
+  var D = calcul();
+  var f = q.value.trim().toLowerCase();
+
+  document.getElementById("tot").textContent =
+    D.nOk + " approches vérifiées sur " + D.nApp + " · " +
+    D.nTerOk + " terrains complets sur " + D.nTer +
+    (D.nAttente ? " · " + D.nAttente + " relevées sur carte, en attente de validation" : "");
+  document.getElementById("pied").innerHTML =
+    "Vert = minima <b>vérifiés</b> dans Minima Lens, que la valeur ait été saisie à la main ou " +
+    "proposée par une carte puis validée. Bleu = commencé, pas fini. Ambre = relevé sur carte, " +
+    "en attente d'un clic. Gris = rien encore. Un terrain est vert quand TOUTES " +
+    "ses approches le sont. Seuls figurent les terrains dont la base connaît au moins une approche. " +
+    "Rien à régénérer : cette page relit l’état à chaque rechargement. " +
+    (SOURCE === "journal"
+      ? "Chiffres lus sur le <b>journal partagé</b> : ils valent pour tous vos appareils."
+      : (certificat
+         ? "Journal partagé injoignable — chiffres lus sur le <b>cache de cet appareil</b>, ils peuvent être en retard."
+         : "Chiffres lus sur le <b>cache de cet appareil</b>. Certifiez-le dans Minima Lens pour voir l’état de tous vos appareils."));
+
+  var h = "";
+  if (!pays){
+    crumb.innerHTML = "<span>Pays</span>";
+    var lp = D.pays.filter(function(p){
+      return !f || p.nom.toLowerCase().indexOf(f) >= 0 || p.cc.toLowerCase().indexOf(f) >= 0; });
+    h = lp.map(function(p){
+      return ligne(p.ok === p.tot, esc(p.nom), p.cc, p.ok + " / " + p.tot,
+        p.ok === p.tot ? "vert" : ((p.ok || p.entames) ? "partiel" : ""),
+        'data-pays="' + p.cc + '"'); }).join("");
+    h = lp.length ? "<ul>" + h + "</ul>" : '<div class="vide">Aucun pays ne correspond.</div>';
+
+  } else if (!terrain){
+    var np = (D.pays.filter(function(p){ return p.cc === pays; })[0] || { nom: pays }).nom;
+    crumb.innerHTML = '<button data-go="pays">Pays</button><span>›</span><span>' + esc(np) + "</span>";
+    var lt = (D.terrains[pays] || []).filter(function(t){
+      return !f || t.icao.toLowerCase().indexOf(f) >= 0 || t.nom.toLowerCase().indexOf(f) >= 0
+        || (t.iata && t.iata.toLowerCase().indexOf(f) >= 0)
+        || (t.ville && t.ville.toLowerCase().indexOf(f) >= 0); });
+    h = lt.map(function(t){
+      var det = esc(t.nom) + (t.ville ? " · " + esc(t.ville) : "");
+      var cnt = t.ok + " / " + t.tot + (t.attente ? " · " + t.attente + " à valider" : "");
+      return ligne(t.complet, t.icao, det, cnt,
+        t.complet ? "vert" : (t.ok ? "partiel" : (t.attente ? "attente" : "")),
+        'data-icao="' + t.icao + '"'); }).join("");
+    h = lt.length ? "<ul>" + h + "</ul>" : '<div class="vide">Aucun terrain ne correspond.</div>';
+
+  } else {
+    var np2 = (D.pays.filter(function(p){ return p.cc === pays; })[0] || { nom: pays }).nom;
+    var t2 = (D.terrains[pays] || []).filter(function(x){ return x.icao === terrain; })[0];
+    crumb.innerHTML = '<button data-go="pays">Pays</button><span>›</span>' +
+      '<button data-go="terrains">' + esc(np2) + "</button><span>›</span><span>" +
+      terrain + (t2 ? " · " + esc(t2.nom) : "") + "</span>";
+    var la = D.approches[terrain] || [];
+    h = la.map(function(a){
+      if (a.interdit) return '<li><span class="tick na">✕</span>' +
+        '<span class="lbl"><span class="nom">' + esc(LABEL[a.type] || a.type) + '</span><br>' +
+        '<span class="det">' + (a.end === "-" ? "tout le terrain" : "piste " + esc(a.end)) +
+        '</span></span><span class="cnt interdit">interdit par la carte</span></li>';
+      var etat = a.ok ? "vérifié" : (a.attente ? "à valider" : "à faire");
+      return "<li>" + tick(a.ok) + '<span class="lbl"><span class="nom">' +
+        esc(LABEL[a.type] || a.type) + '</span><br><span class="det">' +
+        "piste " + esc(a.end) +
+        '</span></span><span class="cnt ' + (a.ok ? "vert" : (a.attente ? "attente" : "")) + '">' +
+        etat + "</span></li>"; }).join("");
+    h = la.length ? "<ul>" + h + "</ul>" : '<div class="vide">Aucune approche connue.</div>';
+  }
+  vue.innerHTML = h;
+}
+
+document.addEventListener("click", function(e){
+  var b = e.target.closest("[data-go]");
+  if (b){
+    if (b.getAttribute("data-go") === "pays"){ pays = null; terrain = null; } else terrain = null;
+    q.value = ""; rendre(); window.scrollTo(0, 0); return;
+  }
+  var li = e.target.closest("li.act");
+  if (!li) return;
+  if (li.getAttribute("data-pays")){ pays = li.getAttribute("data-pays"); terrain = null; }
+  else if (li.getAttribute("data-icao")) terrain = li.getAttribute("data-icao");
+  q.value = ""; rendre(); window.scrollTo(0, 0);
+});
+q.addEventListener("input", rendre);
+/* Minima Lens tourne souvent dans l'onglet d'à côté : une validation
+   faite là-bas doit se voir ici sans avoir à recharger. */
+window.addEventListener("storage", function(e){ if (e.key === STATS_KEY) rendre(); });
+/* Au retour sur l'onglet, on re-interroge le journal : une validation faite
+   sur un autre appareil il y a dix secondes doit s'y voir. */
+document.addEventListener("visibilitychange", function(){
+  if (document.hidden) return;
+  chargerJournal().then(rendre);
+});
+rendre();                      // tout de suite, avec ce qu'on a
+chargerJournal().then(function(ok){ if (ok) rendre(); });
+</script>
+</body>
+</html>
