@@ -7328,20 +7328,39 @@ body .stat .k{
        Cas déclencheur LFPO A4935/26, mais le relevé du 2026-08-22 sur 7767
        NOTAM de 1248 terrains européens en compte 126 — pas un accident isolé.
 
-       DEUX rédactions dans le corpus, et une seule règle les couvre : l'en-tête
-       se termine toujours par les mots « ORIGINAL NOTAM » suivis de la
-       parenthèse. 124 fois ces deux mots seuls, 2 fois précédés d'un avis de
-       remplacement EUROCONTROL (« 250646 EUECYIYN NOTAM REPLACED BY A5141/26
-       ORIGINAL NOTAM (A4935/26 ... »). On coupe donc à cet endroit précis,
-       jamais sur la seule parenthèse : un NOTAM qui commence par « ( » sans
-       emballage est un format US légitime, déjà géré plus bas.
+       La règle ne peut pas s'accrocher aux MOTS de l'emballage. Elle l'a fait
+       — « ORIGINAL NOTAM » suivi de la parenthèse, 124 fois ces deux mots
+       seuls et 2 fois précédés d'un avis de remplacement EUROCONTROL
+       (« 250646 EUECYIYN NOTAM REPLACED BY A5141/26 ORIGINAL NOTAM
+       (A4935/26 ... ») — et une troisième rédaction est arrivée sans eux :
+
+           NOTAM REPLACED BY P2886/26
+           (P1762/26 NOTAMN
+            Q) LFFF/QOBCE/...                          <- LFPG, 29 AOUT 2026
+
+       Ce qui identifie un emballage n'est pas sa formule, c'est sa FORME : du
+       texte, puis une parenthèse, puis un VRAI en-tête de NOTAM — numéro
+       suivi de NOTAMN/C/R. On coupe là-dessus.
+
+       Deux garde-fous, et ils suffisent. Il faut au moins un caractère avant
+       la parenthèse, sinon on couperait un NOTAM qui commence par « ( » sans
+       emballage — format US légitime, géré plus bas. Et ce qui précède ne
+       doit contenir AUCUNE parenthèse : tout marqueur d'item (« Q) », « A) »,
+       « E) ») en porte une, donc cette seule condition interdit de couper à
+       l'intérieur du corps du message. C'est elle qui protège le SNOWTAM,
+       dont l'item E) contient « (SNOWTAM 0854 ... ».
+
+       Relevé du 2026-08-29 sur 9226 NOTAM de 200 terrains : la nouvelle règle
+       déballe les 11 cas que l'ancienne déballait, plus celui de LFPG. Aucun
+       autre message ne bouge.
 
        La fermante ne se retire que si elle est EN TROP (plus de fermantes que
        d'ouvrantes une fois l'ouvrante de l'emballage partie) : bien des textes
        finissent légitimement par une parenthèse equilibree, « ...(24.5NM ENE
        FRIEDLAND DVOR/DME FLD). » — on compte, on ne suppose pas. */
-    function unwrapOriginalNotam(t) {
-      const m = /^[\s\S]*?\bORIGINAL NOTAM\b\s*\(/.exec(t);
+    const WRAPPED_RE = /^[^()]{1,200}\((?=\(?(?:[A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4}|\d{3,4})\s+NOTAM[NCR]\b)/;
+    function unwrapNotam(t) {
+      const m = WRAPPED_RE.exec(t);
       if (!m) return t;
       let dedans = t.slice(m[0].length).trim();
       // Le comptage IGNORE les marqueurs d'items : « Q) », « A) », « B) »...
@@ -7399,10 +7418,11 @@ body .stat .k{
        L'EN-TÊTE, lui, est sans ambiguïté : un NOTAMC n'impose jamais rien, il
        ne fait que retirer un message. C'est la lecture qu'a déjà le détecteur
        de drapeaux de Minima Lens (nfaDetect, « if (/\bNOTAMC\b/) continue »).
-       Ancré sur l'identifiant de tête — ICAO (A2541/26) ou domestique US
-       (07/211, 6/7302) — pour ne jamais confondre avec un corps qui CITERAIT
-       le mot. Les 8 NOTAMC de KMIA relevés ce jour-là matchent tous. */
-    const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4})\s+NOTAMC\b/;
+       Ancré sur l'identifiant de tête — ICAO (A2541/26), domestique US
+       (07/211, 6/7302) ou SNOWTAM (0854) — pour ne jamais confondre avec un
+       corps qui CITERAIT le mot. Les 8 NOTAMC de KMIA relevés ce jour-là
+       matchent tous. */
+    const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4}|\d{3,4})\s+NOTAMC\b/;
     /* LES CHAMPS DE LA LIGNE Q) NE SE LISENT QUE S'ILS EN ONT LA FORME.
        La ligne se lit par position depuis la gauche, et une position ne vaut
        que si toutes celles d'avant sont là : quand la source en saute une,
@@ -7434,7 +7454,7 @@ body .stat .k{
     const Q_SCOPE   = /^[AEWK]{1,3}$/;    // A, E, W, K et leurs assemblages
     const qField = (re, v) => { v = (v || "").trim().toUpperCase(); return re.test(v) ? v : ""; };
     function parseNotam(raw) {
-      const text = unwrapOriginalNotam(cleanHtml(raw));
+      const text = unwrapNotam(cleanHtml(raw));
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
       // domestiques ont un ID cycle/séquence, sans lettre de série ni année.
       // Certains textes source (US) encadrent tout le message d'une
@@ -7453,7 +7473,18 @@ body .stat .k{
       // et zéro NOTAM non-US concerné : élargir le cycle à un ou deux chiffres
       // suffit et ne touche à rien d'autre. C'est déjà la lecture de Minima
       // Lens (nfaDetect), qui n'avait pas la même borne.
-      const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4})/) || [])[1] || "(sans id)";
+      //
+      // LE SNOWTAM N'A PAS DE BARRE DU TOUT. Son numéro est un simple rang à
+      // quatre chiffres — « 0854 NOTAMN » à BIKF, « 1352 NOTAMN » à ENGM — et
+      // il se retrouve tel quel dans le corps (« SWBI0854 BIKF 08291424 »).
+      // 14 sur les 9226 NOTAM relevés le 2026-08-29 (200 terrains), tous
+      // européens : Islande, Norvège, Royaume-Uni, Estonie.
+      // Un nombre nu ne peut pas servir d'ancre à lui seul — trop de textes
+      // commencent par un chiffre. Cette forme-là n'est donc retenue que si
+      // NOTAMN/C/R la suit, ce que l'anticipation vérifie sans la consommer.
+      // Les deux formes à barre restent essayées d'abord : « 08/474 NOTAMN »
+      // garde son identifiant entier.
+      const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4}|\d{3,4}(?=\s+NOTAM[NCR]\b))/) || [])[1] || "(sans id)";
       const cnl = CANCEL_HEAD_RE.test(text);
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
