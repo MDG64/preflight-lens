@@ -2014,12 +2014,37 @@
        .hd-scroll, qui seul défile) — on l'agrandit ici pour qu'elle reste
        facile à repérer et à toucher, plus que la croix générique des autres
        modales (aide, infos terrain). */
+    /* LA SORTIE DOIT SE VOIR. Le plan étant plein écran, cette croix est le seul
+       chemin de retour visible : plus de bord de fenêtre autour d'elle, plus de
+       page derrière pour dire qu'on est « par-dessus » quelque chose. En thème
+       clair, la croix générique — fond blanc, filet très pâle, glyphe gris — se
+       fondait dans un bandeau blanc et disparaissait à l'œil.
+       Elle se détache donc franchement : fond contrasté, filet net, glyphe à
+       pleine couleur, et l'ombre du thème pour la poser au-dessus du plan.
+       z-index au-dessus de TOUT ce que la modale peut empiler, fiche montante
+       comprise (z 6) : rien ne doit jamais passer devant la sortie.
+       env(safe-area-inset-top) : en plein écran sur un téléphone installé
+       (barre d'état, encoche), un top de 10 px la glisserait dessous. */
     .modal.plan .modal-x {
       width: 40px;
       height: 40px;
-      top: 10px;
+      top: calc(10px + env(safe-area-inset-top, 0px));
       right: 10px;
+      z-index: 8;
       font-size: 26px;
+      background: var(--panel2);
+      border-color: var(--muted2);
+      color: var(--text);
+      box-shadow: var(--elev);
+    }
+
+    .modal.plan .modal-x:hover {
+      background: var(--line);
+      color: var(--text)
+    }
+
+    .modal.plan .plan-topbar {
+      padding-top: calc(18px + env(safe-area-inset-top, 0px))
     }
 
     .modal.plan .plan-topbar .plan-head {
@@ -2490,7 +2515,9 @@
       }
 
       .modal.plan .plan-topbar {
-        padding: 10px 58px 8px 12px
+        /* le retrait haut garde la marge d'encoche : ce raccourci arrive après
+           la règle qui la pose, il l'écraserait s'il l'oubliait. */
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 58px 8px 12px
       }
 
       .modal.plan .plan-wrap {
