@@ -2186,6 +2186,24 @@ body.mobile #rtOv:not([hidden]){display:flex}
    les trois cartes alignent leurs pieds quand l'une a une ligne de plus. */
 .rt-sub{font:400 9.5px/1.5 var(--mono);color:var(--muted2);margin-top:auto;padding-top:2px}
 .rt-hint{font:400 10.5px/1.5 var(--sans);color:var(--muted);text-align:center}
+/* Au téléphone, la carte ne quitte plus Minima : elle se DÉPLIE. La barre du
+   haut ne bouge pas, les autres cartes restent en place, et la fiche du
+   terrain — la même que la version mobile, sur la seule phase du créneau —
+   se déroule juste dessous. Le chevron dit le geste ; le rappel à la carte
+   la referme. */
+.rt-detail{
+  grid-column:1/-1;min-width:0;margin-top:-6px;
+  padding:11px 12px 14px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--elev);
+}
+.rt-detail-bar{display:flex;align-items:center;min-width:0}
+.rt-detail-bar .btn{margin-left:auto;flex:none}
+/* La fiche suit son propre trait de séparation : sous la barre du volet, le
+   sien ferait doublon. */
+.rt-detail .m-res{border-top:0;padding-top:9px}
+/* Le chevron n'existe qu'au téléphone : ailleurs, la carte ouvre toujours la
+   page entière et il n'y a rien à déplier. */
+.rt-chev{display:none}
 /* Sous 720 px les cartes s'empilent — la route se lit de haut en bas. Les
    trois cases, elles, ne s'empilent jamais : c'est la route dans son ordre,
    et une pile de trois champs pousserait la première carte hors de l'écran. */
@@ -2211,6 +2229,14 @@ body.mobile #rtOv:not([hidden]){display:flex}
   .rt-field .ac{width:calc(100vw - 28px);max-width:calc(100vw - 28px)}
   .rt-field:nth-child(2) .ac{left:50%;transform:translateX(-50%)}
   .rt-field:nth-child(3) .ac{left:auto;right:0}
+  /* Le chevron de la carte : même signe que les lignes de phase de la fiche,
+     pointé vers le bas quand le détail est replié, retourné quand il est
+     déplié — c'est la carte qu'on ouvre, pas une page qu'on quitte. */
+  /* Il se range à droite de la ligne ; la pastille d'âge, quand elle est là,
+     y est déjà poussée et le chevron la suit sans lui reprendre la place. */
+  .rt-chev{display:block;flex:none;margin-left:auto;font:400 12px/1 var(--sans);color:var(--muted);transition:transform .15s}
+  .rt-age + .rt-chev{margin-left:0}
+  .rt-card.open .rt-chev{transform:rotate(180deg)}
 }
 </style>
 </head>
@@ -9028,6 +9054,10 @@ function applyMobileMode(){
      que sur la media query : `change` seul manque les redimensionnements
      pilotés de l'extérieur, que le `resize` ci-dessous rattrape. */
   if (window.RTV) RTV.syncPlaceholders();
+  /* Une fiche dépliée sous une carte est un geste de téléphone : la mise en
+     page large la referme, sinon elle resterait coincée dans le bilan pendant
+     que la page du dessous, elle, se redessine en grand. */
+  if (!on && window.RTV) RTV.fold();
   if (on){ renderMobile(); return; }
   /* Le plein écran des réglages emprunte le panneau « Operation setup » à la
      mise en page tablette et ne le rend qu'à sa fermeture. Repasser en large
@@ -9435,8 +9465,14 @@ function mMarkedHtml(text, spans){
 function renderMobile(){
   const host = document.getElementById("mobile");
   if (!host) return;
-  host.innerHTML = mobileHeadHtml() + (mState.icao ? mobileResultsHtml() : "");
+  /* La fiche dépliée sous une carte de Minima est CETTE fiche-là, déplacée :
+     la laisser aussi ici ferait deux fois les mêmes identifiants, et
+     getElementById ne verrait plus la bonne case. Elle revient d'elle-même au
+     repli comme à la fermeture du bilan. */
+  const inRoute = !!(window.RTV && RTV.inlineOpen()!==null);
+  host.innerHTML = mobileHeadHtml() + (mState.icao && !inRoute ? mobileResultsHtml() : "");
   bindMobile(host);
+  if (inRoute) RTV.renderDetail();
   /* La pastille d'âge est écrite dans le gabarit, mais sa place se calcule sur
      la largeur du mot METAR : il faut le DOM pour la mesurer. */
   renderMetarAge();
@@ -9556,15 +9592,20 @@ function bindMobile(host){
   /* La saisie n'est plus limitée à quatre lettres capitales : code OACI, code
      IATA, nom ou ville, et la liste des propositions fait le tri. Un code OACI
      complet ouvre toujours le terrain sans passer par la liste. */
+  /* Le même habillage sert deux hôtes : la page mobile entière, et la fiche
+     seule dépliée sous une carte de Minima — qui n'a ni case ICAO ni favoris.
+     Tout le reste est déjà écrit au conditionnel ; la case l'est ici. */
   const input = host.querySelector("#mIcao");
-  input.addEventListener("input", ()=>{
-    const v = dirKey(input.value).trim();
-    if (/^[A-Z]{4}$/.test(v) && (adGet(v) || dirGet(v))){ acClose(); mOpen(v); return; }
-    acRefresh("MOBILE");
-  });
-  input.addEventListener("keydown", e=>acKeydown(e, "MOBILE"));
-  acSelectAllOnFocus(input);
-  acBindPop(host.querySelector("#mAcPop"), "MOBILE");
+  if (input){
+    input.addEventListener("input", ()=>{
+      const v = dirKey(input.value).trim();
+      if (/^[A-Z]{4}$/.test(v) && (adGet(v) || dirGet(v))){ acClose(); mOpen(v); return; }
+      acRefresh("MOBILE");
+    });
+    input.addEventListener("keydown", e=>acKeydown(e, "MOBILE"));
+    acSelectAllOnFocus(input);
+    acBindPop(host.querySelector("#mAcPop"), "MOBILE");
+  }
   /* pointerdown plutôt que click, pour la raison d'acBindPop : le clic ferait
      d'abord perdre le focus au champ, ce qui refermerait la liste — et la
      proposition surlignée serait perdue avant qu'acCommit ne la lise. */
@@ -11522,7 +11563,9 @@ window.RTV = (()=>{
   const KEY = "wl-minima-route";
   const REFRESH_MS = 60000;
   const ov = document.getElementById("rtOv");
-  const RT = {icaos:["","",""], wx:{}, seq:0, timer:null};
+  /* `open` : le créneau dont la fiche est dépliée sous sa carte (téléphone
+     seulement), `null` quand les trois cartes sont refermées. */
+  const RT = {icaos:["","",""], wx:{}, seq:0, timer:null, open:null};
 
   function save(){ try { localStorage.setItem(KEY, JSON.stringify(RT.icaos)); } catch(e){} }
   function load(){
@@ -11786,12 +11829,18 @@ window.RTV = (()=>{
         <span class="rt-role">${slot.lab}</span>
         <span>No aerodrome set — pick it above.</span>
       </div>`;
-    return `<div class="rt-card act v-${s.st}" data-i="${i}" role="button" tabindex="0"
-        title="${slot.lab} ${s.icao} — ${STATE_LABEL[s.st]} · tap for the full phase view">
+    /* Au téléphone la carte déplie sa fiche ici même ; ailleurs elle ouvre la
+       page entière. Deux gestes, deux promesses : l'infobulle le dit. */
+    const inline = document.body.classList.contains("mobile");
+    const open = inline && RT.open===i;
+    return `<div class="rt-card act v-${s.st}${open?" open":""}" data-i="${i}" role="button" tabindex="0"
+        ${inline?`aria-expanded="${open}"`:""}
+        title="${slot.lab} ${s.icao} — ${STATE_LABEL[s.st]} · tap ${inline ? "to unfold the detail here" : "for the full phase view"}">
       <span class="rt-role">${slot.lab}</span>
       <span class="rt-head"><span class="rt-icao">${s.icao}</span>
         <span class="ico ${s.st}" role="img" aria-label="${STATE_LABEL[s.st]}">${STATE_ICON[s.st]}</span>
-        ${ageHtml(s.obsTime)}</span>
+        ${ageHtml(s.obsTime)}
+        <span class="rt-chev" aria-hidden="true">▾</span></span>
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
       <span class="rt-rows">${visRow(s.vis)}${ceilRow(s.ceil)}${windRow(s.wind)}</span>
       ${alertsHtml(s)}
@@ -11800,6 +11849,85 @@ window.RTV = (()=>{
         : s.noTaf ? `<span class="rt-note dim">No TAF published.</span>` : ""}
       <span class="rt-sub">judged for ${hhmm(s.eta)}${s.qfu ? ` · QFU ${s.qfu.id} ${String(s.qfu.deg).padStart(3,"0")}°` : ""}</span>
     </div>`;
+  }
+
+  /* ---------- la fiche dépliée sous sa carte (téléphone) ----------
+     Le créneau ouvert, ou `null` : la mise en page large ne déplie rien —
+     là-bas, la carte ouvre toujours la page entière. */
+  function inlineOpen(){
+    return document.body.classList.contains("mobile") ? RT.open : null;
+  }
+  /* Le corps du volet est CELUI de la fiche mobile, repris tel quel — même
+     moteur, mêmes cases, mêmes gestes. Il ne vit qu'ici tant qu'il est
+     déplié : le laisser AUSSI dans #mobile ferait deux fois les mêmes
+     identifiants, et getElementById ne verrait plus la bonne case. */
+  function detailHtml(){
+    /* La carte juste au-dessus dit déjà le rôle et le terrain : le volet ne
+       les répète pas. Il n'a qu'une chose à porter que la carte n'a pas — la
+       sortie vers la page entière. */
+    return `<div class="rt-detail" id="rtDetail">
+      <div class="rt-detail-bar">
+        <button type="button" class="btn sm" id="rtDetailFull"
+          title="Open this aerodrome on its own page — the start screen and its bar are there">Full page</button>
+      </div>
+      ${mobileResultsHtml()}
+    </div>`;
+  }
+  function bindDetail(){
+    const el = document.getElementById("rtDetail");
+    if (!el) return;
+    bindMobile(el);
+    const full = el.querySelector("#rtDetailFull");
+    if (full) full.onclick = e=>{ e.stopPropagation(); goFull(); };
+    renderMetarAge();
+  }
+  /* Repeint le volet SEUL — c'est par là que la fiche mobile (render →
+     renderMobile) tient à jour ce qui est déplié ici, sans rejuger les trois
+     cartes à chaque frappe. */
+  function renderDetail(){
+    const el = document.getElementById("rtDetail");
+    if (!el || inlineOpen()===null){ render(); return; }
+    el.innerHTML = el.firstElementChild.outerHTML + mobileResultsHtml();
+    bindDetail();
+  }
+  /* Déplier / replier. Le terrain se charge comme n'importe quel terrain
+     ouvert (mOpen), et le créneau lui donne sa phase : la fiche montre CELLE
+     du bilan, elle seule. */
+  function toggleDetail(i){
+    if (inlineOpen()===i){ fold(); return; }
+    const icao = RT.icaos[i];
+    if (!icao) return;
+    RT.open = i;
+    state.tab = SLOTS[i].tab;
+    /* mOpen vide le focus (c'est un chargement de terrain) : il se pose juste
+       après sa partie synchrone, avant le premier coup de peinture. */
+    mOpen(icao);
+    state.routeFocus = SLOTS[i].tab;
+    mState.phase = SLOTS[i].tab; mState.open = SLOTS[i].tab;
+    /* Un seul appel : renderMobile vide la fiche de la page du dessous — elle
+       vit ici tant qu'elle est dépliée — puis peint le volet (renderDetail,
+       qui redessine les cartes quand le volet n'existe pas encore). */
+    renderMobile();
+    /* La carte touchée remonte en tête : le détail se déroule sous elle, pas
+       hors de l'écran. */
+    const card = document.querySelector(`#rtCards .rt-card[data-i="${i}"]`);
+    if (card) card.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+  /* Replier rend la fiche à la page du dessous — le focus de route, lui,
+     tient : refermé le bilan, on retrouve le terrain sur SA phase, comme
+     avant. */
+  function fold(){
+    if (RT.open===null) return;
+    RT.open = null;
+    render();
+    if (document.body.classList.contains("mobile")) renderMobile();
+  }
+  /* La page entière : même terrain, même phase, hors du bilan. C'est la
+     sortie — la barre de la fiche porte l'accueil, les favoris et l'heure,
+     que celle du bilan n'a pas. */
+  function goFull(){
+    if (RT.open===null) return;
+    close();   /* referme le bilan ET rend la fiche à la page du dessous */
   }
 
   /* Pas de verdict de VOL au-dessus des cartes : rien n'est agrégé — chaque
@@ -11815,7 +11943,9 @@ window.RTV = (()=>{
                         wind:null, ceil:null, err:e.message, noWx:false}; }
     });
     document.getElementById("rtCards").innerHTML =
-      SLOTS.map((slot,i)=>cardHtml(slot, sums[i], i)).join("");
+      SLOTS.map((slot,i)=>cardHtml(slot, sums[i], i)
+        + (inlineOpen()===i && sums[i] ? detailHtml() : "")).join("");
+    bindDetail();
     /* La carte n'est plus un <button> (elle en contient) : le rôle lui rend le
        clic, et Entrée/Espace le clavier. */
     document.querySelectorAll("#rtCards .rt-card.act").forEach(b=>{
@@ -11882,6 +12012,9 @@ window.RTV = (()=>{
        lettre tapée vaut choix. On l'arme : la lettre suivante remplace le
        code retenu au lieu de s'y ajouter. */
     if (el){ el.value = RT.icaos[i]; acArm(el); }
+    /* La fiche dépliée sous cette carte parlait de l'autre terrain : elle se
+       referme plutôt que de mentir le temps d'un chargement. */
+    if (RT.open===i) fold();
     save();
     fetchWx();
   }
@@ -11893,18 +12026,12 @@ window.RTV = (()=>{
   function openDetail(i){
     const icao = RT.icaos[i];
     if (!icao) return;
+    /* Au téléphone, on ne quitte plus le bilan : la barre du haut reste, et
+       la fiche du terrain se déplie sous sa carte. Ailleurs, la carte ouvre
+       la page entière comme avant. */
+    if (document.body.classList.contains("mobile")){ toggleDetail(i); return; }
     close();
     state.tab = SLOTS[i].tab;
-    if (document.body.classList.contains("mobile")){
-      /* mOpen vide le focus (c'est un chargement de terrain) : il se pose
-         juste après sa partie synchrone, avant le premier coup de peinture —
-         la fiche apparaît d'emblée sur la seule phase concernée. */
-      mOpen(icao);
-      state.routeFocus = SLOTS[i].tab;
-      mState.phase = SLOTS[i].tab; mState.open = SLOTS[i].tab;
-      renderMobile();
-      return;
-    }
     const el = document.getElementById("icao");
     if (el) el.value = icao;
     state.qfuIndex = null; state.qfuManual = false; state.qfuAuto = {};
@@ -11956,8 +12083,13 @@ window.RTV = (()=>{
   function close(){
     if (AC.role && AC.role.startsWith("RT")) acClose();
     closeNotam();
+    /* La fiche dépliée ici vit dans le bilan : refermé, elle doit retourner
+       sur la page du dessous, sans quoi l'écran d'accueil resterait nu. */
+    const wasOpen = RT.open!==null;
+    RT.open = null;
     ov.hidden = true;
     if (RT.timer){ clearInterval(RT.timer); RT.timer = null; }
+    if (wasOpen && document.body.classList.contains("mobile")) renderMobile();
   }
 
   /* ---------- la suite Preflight Lens ----------
@@ -12059,6 +12191,9 @@ window.RTV = (()=>{
   document.addEventListener("keydown", e=>{
     if (e.key!=="Escape" || ov.hidden) return;
     if (e.helpClosed || !helpOv.hidden) return;
+    /* Une fiche dépliée se referme d'abord : Échap défait le dernier geste,
+       il ne saute pas deux couches d'un coup. */
+    if (RT.open!==null){ fold(); return; }
     close();
   });
 
@@ -12088,8 +12223,10 @@ window.RTV = (()=>{
      se rejugent ; le garde ov.hidden rend l'appel gratuit bilan fermé.
      openNotam : la bande NOTAM des fiches ouvre CE panneau-là — un seul
      dévoileur de NOTAM dans la page, un seul geste à connaître. */
+  /* inlineOpen / renderDetail / fold : la fiche mobile dépliée sous une carte.
+     renderMobile les appelle — c'est lui qui sait quand tout se repeint. */
   return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render,
-          openNotam, closeNotam, goHost};
+          openNotam, closeNotam, goHost, inlineOpen, renderDetail, fold};
 })();
 
 loadSample();
