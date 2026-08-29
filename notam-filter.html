@@ -6360,7 +6360,7 @@ body .stat .k{
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
-          <span class="mleg"><i class="tag rwy">08/26</i>Runway QFU — main runway, all of them zoomed in</span>
+          <span class="mleg"><i class="tag rwy">08/26</i>Runway QFU, longest first</span>
         </div>
       </div>
     </div>
@@ -6503,10 +6503,10 @@ body .stat .k{
             to open its <b>minima</b>. A yellow <b>⚡</b> marks a
             station whose METAR reports a <b>CB</b> or whose TAF announces one. The <b>Wind</b> switch adds
             surface-wind arrows — one per 10 kt, gusts and trend groups included; <b>now/+1/+2/+3&nbsp;h</b> shows
-            the TAF wind as dashed arrows. From the regional zoom on, each aerodrome writes its <b>runway QFU</b>
-            under its code — <b>08/26</b>, the main runway alone at first, then the whole list as you <b>zoom
-            in</b>: three pairs at most, longest first, and the count of the others. The code and its QFU move
-            together to a side free of the wind arrows and the ⚡. Both views show them, no switch needed.</div>
+            the TAF wind as dashed arrows. Wherever a code is written, its <b>runway QFU</b> are written under
+            it — <b>08/26</b>, longest runway first, three pairs at most and the count of the others. The code
+            and its QFU move together to a side free of the wind arrows and the ⚡; where nothing fits, the code
+            stays and the QFU stand down. Both views show them, no switch needed.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div>
@@ -17347,14 +17347,15 @@ function renderInfo(icao) {
     };
 
     // ---- QFU des pistes, au zoom fort ------------------------------------
-    // Passé QFU_SCALE, chaque terrain écrit ses paires de piste sous son code
-    // OACI : on ne cherche plus QUEL terrain mais par où s'y poser. Les seuils
-    // sont dits en zoom, comme celui des codes (échelle = 1,4222 × 2^zoom).
-    // DEUX seuils, et c'est ce qui permet de les montrer tôt. Dès le zoom 7 —
-    // le niveau région — chaque terrain n'écrit QUE sa piste principale : une
-    // ligne, qui répond à « par où on se pose ici » sans couvrir la carte. À
-    // partir du zoom 8,5 la place est là et la liste s'ouvre.
-    const QFU_SCALE = 1.4222 * Math.pow(2, 7), QFU_FULL = 1.4222 * Math.pow(2, 8.5), QFU_MAX = 3;
+    // Chaque terrain écrit ses paires de piste sous son code OACI : on ne
+    // cherche pas seulement QUEL terrain, mais par où s'y poser.
+    // Pas de seuil propre : les QFU arrivent AVEC les codes OACI, au même
+    // cran (showLabels), et ils arrivent tous ensemble. Ce n'est pas un
+    // détail qu'on découvre en s'approchant — dès qu'un terrain est nommé,
+    // par où s'y poser fait partie de ce qu'on lit. La place manquante ne les
+    // fait pas rétrécir : elle les fait renoncer, le code reste (voir la
+    // pose en deux temps, plus bas).
+    const QFU_MAX = 3;
     // Les paires viennent de la graine des terrains — airfield-seed.js, celle
     // du module Minimas, que cette page ne charge PAS au démarrage : 1,6 Mo
     // qu'aucune autre vue ne réclame. Elle n'arrive donc qu'au premier zoom
@@ -17379,11 +17380,10 @@ function renderInfo(icao) {
     // au-delà l'étiquette couvrirait le terrain qu'elle annonce. Le
     // désignateur EST le QFU : « 08/26 » se lit 080/260 au magnétique, à
     // l'arrondi de dizaine près.
-    function qfuLines(icao, full) {
+    function qfuLines(icao) {
       const r = ((window.AD_SEED || {})[icao] || {}).r;
       if (!r || !r.length) return null;
       const sorted = r.slice().sort((a, b) => (b[1] || 0) - (a[1] || 0));
-      if (!full) return [sorted[0][0]];
       const lines = sorted.slice(0, QFU_MAX).map(x => x[0]);
       if (sorted.length > QFU_MAX) lines.push("+" + (sorted.length - QFU_MAX));
       return lines;
@@ -17677,25 +17677,26 @@ function renderInfo(icao) {
       const favSet = mapFavSet();
       const showLabels = v.scale > (mapMode === "wx" ? 91 : 58);   // un cran de molette = ×1.18
       const labelsMayDrop = mapMode === "wx" && v.scale <= 58 * 1.18 ** 5;
-      // Les QFU se posent SOUS la capsule du code, jamais ailleurs : à ce
-      // zoom la capsule est toujours là (son seuil est très en deçà), et une
-      // paire de pistes détachée de son code ne dirait pas de quel terrain
-      // elle parle. Le ton est neutre — ni la météo du point, ni la
-      // couverture NOTAM : la piste est de la géographie, elle ne se juge
-      // pas. Ils ne dépendent d'aucun interrupteur, et pas davantage de la
-      // vue : une piste ne change pas selon qu'on regarde les NOTAM ou le
-      // temps qu'il fait.
-      const showQfu = v.scale > QFU_SCALE && qfuSeedReady();
-      const qfuFull = v.scale > QFU_FULL;
-      const QFU_PX = 9.5, QFU_LH = 11 * dpr;
-      // La place que prendront les QFU d'un terrain, capsule comprise : c'est
-      // ELLE que la recherche de position teste, pas la capsule seule. Sans
+      // Les QFU se posent SOUS la capsule du code, jamais ailleurs : une paire
+      // de pistes détachée de son code ne dirait pas de quel terrain elle
+      // parle. D'où le seuil commun — ils arrivent avec les codes et s'en
+      // vont avec eux. Le ton est neutre : ni la météo du point, ni la
+      // couverture NOTAM, la piste est de la géographie et ne se juge pas.
+      // Ils ne dépendent d'aucun interrupteur, et pas davantage de la vue —
+      // une piste ne change pas selon qu'on regarde les NOTAM ou le temps
+      // qu'il fait.
+      const showQfu = showLabels && qfuSeedReady();
+      // Même corps que le code OACI : les QFU se lisent d'aussi loin que lui.
+      // C'est la COULEUR qui les met au second plan, pas la taille — un ton
+      // neutre sous une capsule colorée.
+      const QFU_PX = 11, QFU_LH = 13 * dpr;
+      // La place que prendront les QFU d'un terrain : la recherche de position
+      // essaie d'abord la capsule ET ses QFU ensemble, pour que le bloc entier
+      // évite les faisceaux de vent et les éclairs (déjà dans `placed`). Sans
       // ça, la capsule trouvait un côté libre et les QFU, ajoutés dessous
-      // après coup, retombaient sur un faisceau de vent ou sur l'éclair d'un
-      // voisin — les boîtes du vent sont pourtant déjà dans `placed`, il
-      // suffisait de leur présenter la bonne hauteur.
+      // après coup, retombaient dessus.
       const qfuBox = icao => {
-        const lines = showQfu ? qfuLines(icao, qfuFull) : null;
+        const lines = showQfu ? qfuLines(icao) : null;
         if (!lines) return null;
         ctx.save();
         ctx.font = "600 " + (QFU_PX * dpr) + "px 'Preflight Mono',monospace";
@@ -17785,31 +17786,40 @@ function renderInfo(icao) {
         if (showLabels) for (const { a, x, y, r, hit } of (labelsMayDrop ? [...world].reverse() : world)) {
           const w = ctx.measureText(a.icao).width;
           const pad = 6 * dpr, labelGap = r + 4 * dpr;
-          // La capsule et ses QFU ne font qu'un bloc pour la recherche de
-          // place : largeur du plus large des deux, hauteur des deux cumulée.
-          // La capsule tient le haut du bloc, les QFU pendent dessous.
+          /* Pose en DEUX TEMPS. Premier essai : la capsule ET ses QFU d'un
+             bloc, pour que l'ensemble tombe d'un côté libre du point — hors
+             des faisceaux de vent et des éclairs, qui sont dans `placed`.
+             Aucun côté ne prend le bloc entier : deuxième essai, la capsule
+             SEULE, exactement comme avant que les QFU n'existent, et les QFU
+             sont abandonnés. C'est l'ordre juste — le code nomme le terrain,
+             les pistes ne font que le compléter : quand la place manque, ce
+             sont elles qui cèdent, jamais lui. */
           const q = qfuBox(a.icao);
-          const bw = Math.max(w + pad * 2, q ? q.w + pad + 2 * dpr : 0);
-          const bh = boxH + (q ? q.h : 0);
-          // le point reste toujours affiché ; on cherche une position libre pour le libellé
-          // (droite, gauche, au-dessus, en-dessous) avant de forcer l'affichage en dernier recours.
-          const candidates = [
-            [x + labelGap, y - bh / 2],
-            [x - bw - labelGap, y - bh / 2],
-            [x - bw / 2, y - r - bh - 2 * dpr],
-            [x - bw / 2, y + r + 2 * dpr],
-          ];
-          let chosen = null;
-          for (const [cx0, cy0] of candidates) {
-            const box = [cx0, cy0, cx0 + bw, cy0 + bh];
-            let collide = false;
-            for (const p of placed) { if (box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1]) { collide = true; break; } }
-            if (!collide) { chosen = box; break; }
-          }
+          const fit = (bw, bh) => {
+            const cands = [
+              [x + labelGap, y - bh / 2],
+              [x - bw - labelGap, y - bh / 2],
+              [x - bw / 2, y - r - bh - 2 * dpr],
+              [x - bw / 2, y + r + 2 * dpr],
+            ];
+            for (const [cx0, cy0] of cands) {
+              const box = [cx0, cy0, cx0 + bw, cy0 + bh];
+              let collide = false;
+              for (const p of placed) { if (box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1]) { collide = true; break; } }
+              if (!collide) return box;
+            }
+            return null;
+          };
+          const capW = w + pad * 2;
+          const blockW = q ? Math.max(capW, q.w + pad + 2 * dpr) : capW;
+          let chosen = q ? fit(blockW, boxH + q.h) : null;
+          const qq = chosen ? q : null;
+          const bw = chosen ? blockW : capW;
+          if (!chosen) chosen = fit(capW, boxH);
           // aucune position libre : dans la plage nouvellement ouverte on
           // abandonne le libellé (le point reste, la couleur avec lui) ;
           // au-delà on l'affiche quand même, à la position par défaut.
-          if (!chosen && !labelsMayDrop) { const [cx0, cy0] = candidates[0]; chosen = [cx0, cy0, cx0 + bw, cy0 + bh]; }
+          if (!chosen && !labelsMayDrop) chosen = [x + labelGap, y - boxH / 2, x + labelGap + capW, y + boxH / 2];
           if (!chosen) continue;
           placed.push(chosen);
           const bx = chosen[0], by = chosen[1], cy = by + boxH / 2;
@@ -17823,7 +17833,7 @@ function renderInfo(icao) {
           ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = col; ctx.stroke();
           ctx.fillStyle = C.txt;
           ctx.textAlign = "left"; ctx.fillText(a.icao, bx + pad, cy); ctx.textAlign = "start";
-          drawQfu(q, bx + pad, by + boxH + 2 * dpr);
+          drawQfu(qq, bx + pad, by + boxH + 2 * dpr);
         }
       }
 
@@ -17879,27 +17889,30 @@ function renderInfo(icao) {
           ctx.font = (depArr ? "700 " : "600 ") + (labelPx * dpr) + "px 'Preflight Mono',monospace";
           const w = ctx.measureText(a.icao).width;
           const pad = 6 * dpr, bh = 14 * dpr;
-          // La capsule et ses QFU ne font qu'un bloc, comme à la couche
-          // mondiale : c'est le bloc entier qui cherche sa place, sinon les
-          // QFU ajoutés dessous retombaient sur le faisceau que la capsule
-          // venait d'éviter.
+          // Pose en deux temps, comme à la couche mondiale : le bloc entier
+          // d'abord — capsule et QFU —, la capsule seule en repli, les QFU
+          // abandonnés. Le libellé de la route, lui, ne disparaît jamais :
+          // faute de côté libre il prend la droite quand même.
           const q = qfuBox(a.icao);
-          const bw = Math.max(w + pad * 2, q ? q.w + pad + 2 * dpr : 0);
-          const th = bh + (q ? q.h : 0);
-          // Même règle que la couche mondiale : le libellé évite les faisceaux
-          // de vent — droite d'abord, puis gauche, dessus, dessous ; aucune
-          // place libre, la droite quand même (jamais de disparition).
-          const cands = [
-            [x + dotR + 3 * dpr, y - th / 2],
-            [x - bw - dotR - 3 * dpr, y - th / 2],
-            [x - bw / 2, y - dotR - th - 2 * dpr],
-            [x - bw / 2, y + dotR + 2 * dpr],
-          ];
-          let pick = cands[0];
-          for (const cnd of cands) {
-            const b = [cnd[0], cnd[1], cnd[0] + bw, cnd[1] + th];
-            if (!windBoxes.some(p => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1])) { pick = cnd; break; }
-          }
+          const capW = w + pad * 2;
+          const blockW = q ? Math.max(capW, q.w + pad + 2 * dpr) : capW;
+          const fit = (bw, th) => {
+            const cands = [
+              [x + dotR + 3 * dpr, y - th / 2],
+              [x - bw - dotR - 3 * dpr, y - th / 2],
+              [x - bw / 2, y - dotR - th - 2 * dpr],
+              [x - bw / 2, y + dotR + 2 * dpr],
+            ];
+            for (const cnd of cands) {
+              const b = [cnd[0], cnd[1], cnd[0] + bw, cnd[1] + th];
+              if (!windBoxes.some(p => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1])) return cnd;
+            }
+            return null;
+          };
+          let pick = q ? fit(blockW, bh + q.h) : null;
+          const qq = pick ? q : null;
+          const bw = pick ? blockW : capW;
+          if (!pick) pick = fit(capW, bh) || [x + dotR + 3 * dpr, y - bh / 2];
           boxX = pick[0]; boxY = pick[1]; boxW = bw; boxH = bh;
           // étiquette « pastille » arrondie (style capsule) : fond = couleur du point, texte foncé
           const rr = boxH / 2;
@@ -17912,7 +17925,7 @@ function renderInfo(icao) {
           ctx.fillStyle = C.txt;
           // Centré sur la capsule, plus sur le point : elle peut avoir déménagé.
           ctx.textAlign = "left"; ctx.fillText(a.icao, boxX + pad, boxY + boxH / 2); ctx.textAlign = "start";
-          drawQfu(q, boxX + pad, boxY + boxH + 2 * dpr);
+          drawQfu(qq, boxX + pad, boxY + boxH + 2 * dpr);
         }
         // zone cliquable : pastille (rayon élargi pour le tactile) + rectangle d'étiquette,
         // dans l'ordre de dessin (le dernier poussé = dessiné au-dessus, donc prioritaire au clic)
