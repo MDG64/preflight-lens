@@ -4949,7 +4949,7 @@ function controllingVis(metar, cfg, purpose, rwy){
 
   /* FAA works in statute miles when no RVR is reported for the runway (91.175(h)). */
   if (cfg.framework==="FAA"){
-    const sm = metar.visibility_sm != null ? metar.visibility_sm : +(visM/1609.344).toFixed(2);
+    const sm = metar.visibility_sm != null ? metar.visibility_sm : smObs(visM/M_PER_SM);
     return {value:sm, unit:"sm", source:"MET_VISIBILITY",
             note:"No RVR reported for the runway — reported visibility governs (14 CFR 91.175(h); never interpolate, use the next higher RVR value)."};
   }
@@ -4957,9 +4957,9 @@ function controllingVis(metar, cfg, purpose, rwy){
      qu'il a été émis quand il l'a été en milles : le convertir en mètres pour le
      reconvertir ensuite ne ferait qu'y ajouter un arrondi. */
   const du = visDispUnit("m");
-  const shown = v => v==null ? null : (du==="sm" ? visFromM(v,"sm") : v);
+  const shown = v => v==null ? null : (du==="sm" ? visFromM(v,"sm",-1) : v);
   const shownRaw = () => du!=="sm" ? visM
-                       : (metar.visibility_sm!=null ? metar.visibility_sm : visFromM(visM,"sm"));
+                       : (metar.visibility_sm!=null ? metar.visibility_sm : visFromM(visM,"sm",-1));
   if (purpose==="TAKEOFF"){
     return {value:shownRaw(), unit:du, source:"MET_VISIBILITY",
             note:"CMV is prohibited for take-off minima — raw met visibility used."};
@@ -5654,7 +5654,7 @@ function assess(role, ctx){
       rows:q1rows,
       reference: reqRef,
       rationale: (obs.value==null ? "No RVR and no visibility available — take-off cannot be assessed."
-        : `${obs.source==="RVR_MEASURED"?"RVR":"Visibility"} ${obs.value} ${unit} vs ${req} ${unit} required (${reqDriver}) → margin ${v.margin>=0?"+":""}${useSm?v.margin.toFixed(2):v.margin} ${unit}.`)
+        : `${obs.source==="RVR_MEASURED"?"RVR":"Visibility"} ${visText(obs.value,unit)} ${unit} vs ${visText(req,unit)} ${unit} required (${reqDriver}) → margin ${v.margin>=0?"+":""}${useSm?smText(v.margin):v.margin} ${unit}.`)
     });
     if (obs.source!=="RVR_MEASURED" && obs.value!=null)
       push({severity:"CAUTION", code:"CMV_PROHIBITED_FOR_TAKEOFF",
@@ -5727,8 +5727,8 @@ function assess(role, ctx){
         ceilReq = row.ceilAbs!=null ? row.ceilAbs : (((manDhFaa!=null ? manDhFaa : appUse.dh)||0) + row.ceil);
         planRef = isToAlt ? `${DS.faa.takeoffAlternate.ref} → OpSpec C055` : "OpSpec C055";
         const base = row.ceilAbs!=null
-          ? `Alternate minima are absolute for this case: ceiling ${row.ceilAbs} ft / visibility ${row.visSmAbs} SM (${row.label}).`
-          : `Alternate minima = landing minima + ${row.ceil} ft ceiling / +${row.visSm} SM visibility (${row.label}).`;
+          ? `Alternate minima are absolute for this case: ceiling ${row.ceilAbs} ft / visibility ${smText(row.visSmAbs)} SM (${row.label}).`
+          : `Alternate minima = landing minima + ${row.ceil} ft ceiling / +${smText(row.visSm)} SM visibility (${row.label}).`;
         planText = isToAlt
           ? `${base} 121.617 refers the weather requirement to the operator's OpSpecs, so the DERIVED (increased) C055 minima govern — this is where the FAA is stricter than EASA, which uses the actual landing minima. Distance: ${toAltDistanceRule(cfg)}. Assessed ${winTxt}.`
           : base;
@@ -5790,13 +5790,17 @@ function assess(role, ctx){
     if (isToAlt && cfg.toAltOeiFloor){
       const floorM = cfg.toAltOeiFloorRvrM;
       if (Number.isFinite(floorM) && floorM > 0){
-        const floor = isFAA ? +(floorM/1609.344).toFixed(2) : floorM;
+        /* Un plancher est une exigence : converti en milles, il monte au cran
+           publié supérieur — l'arrondi ne doit pas rendre la case moins
+           demandante que la capacité déclarée. */
+        const floor = isFAA ? smReq(floorM/M_PER_SM) : floorM;
         if (visReq == null || visReq < floor){
           const was = visReq;
           visReq = floor;
+          const fv = v => visText(v, visUnitCalc);
           push({severity:"CAUTION", code:"OEI_CAPABILITY_LIMITED",
-            message:`Take-off alternate raised to the OEI capability floor: ${floorM} m${was==null?"":` instead of the ${was} ${visUnitCalc} otherwise derived`}. ${DS.easa.takeoffAlternate.oei}`});
-          planText += ` OEI capability floor applied — ${floorM} m (pilot default, type over the required value to change it), so the assessment uses ${floor} ${visUnitCalc}${was==null?"":` and not the ${was} ${visUnitCalc} derived from the approach`}.`;
+            message:`Take-off alternate raised to the OEI capability floor: ${floorM} m${was==null?"":` instead of the ${fv(was)} ${visUnitCalc} otherwise derived`}. ${DS.easa.takeoffAlternate.oei}`});
+          planText += ` OEI capability floor applied — ${floorM} m (pilot default, type over the required value to change it), so the assessment uses ${fv(floor)} ${visUnitCalc}${was==null?"":` and not the ${fv(was)} ${visUnitCalc} derived from the approach`}.`;
         }
       }
       /* Plafond du plancher OEI. Champ facultatif : laissé vide, aucune
@@ -5860,7 +5864,9 @@ function assess(role, ctx){
        rendrait l'addition invérifiable. Le chiffre réglementaire, lui, reste
        écrit en toutes lettres dans le texte de la règle. */
     if (visUnit !== visUnitCalc){
-      const toDisp = v => visFromM(visToM(v, visUnitCalc), visUnit);
+      /* Exigence et incrément : la bascule d'unité les fait monter au cran
+         publié supérieur, jamais descendre. */
+      const toDisp = v => visFromM(visToM(v, visUnitCalc), visUnit, +1);
       if (visReq != null) visReq = toDisp(visReq);
       if (inc && inc.vis) inc = {...inc, vis: toDisp(inc.vis)};
     }
@@ -5872,7 +5878,7 @@ function assess(role, ctx){
 
     const lim = t.limiting || {};
     const rows = [];
-    const vObs = lim.vis_m==null ? null : visFromM(lim.vis_m, visUnit);
+    const vObs = lim.vis_m==null ? null : visFromM(lim.vis_m, visUnit, -1);
     rows.push({param:"Visibility / RVR", src:`Forecast, ${lim.visFrom||"prevailing"} — ${winTxt}`,
                observed:vObs, required:visReq, unit:visUnit, cmp:"min",
                report:"TAF", tafKind:"VIS", groupRaw: lim.visRaw});
@@ -5917,18 +5923,18 @@ function assess(role, ctx){
          s'écrit en milles, des deux côtés du « ≥ » — comparer 4828 m à 5000 m
          quand le TAF dit « 3SM » demandait une conversion de tête. */
       const nu = visDispUnit("m");
-      const nSm = v => v==null ? "—" : visFromM(v,"sm").toFixed(2);
-      const naObs = nu==="sm" ? nSm(lim.vis_m) : (lim.vis_m??"—");
-      const naReq = nu==="sm" ? nSm(na.visM) : na.visM;
+      const nSm = (v,dir) => v==null ? "—" : smText(visFromM(v,"sm",dir));
+      const naObs = nu==="sm" ? nSm(lim.vis_m,-1) : (lim.vis_m??"—");
+      const naReq = nu==="sm" ? nSm(na.visM,+1) : na.visM;
       res.noAlternate = {eligible:ok, reference:"CAT.OP.MPA.182(b)",
         detail:`Flight time ${cfg.flightTimeH} h (≤ ${na.maxFlightH}; destination ETA minus take-off ETA) · ${cfg.separateRunways} separate usable runways (≥ ${na.runways}; airfield record, closed pairs excluded) · ceiling ${ceilTxt} (≥ ${na.ceilFt}) · visibility ${naObs} ${nu==="sm"?"SM":"m"} (≥ ${naReq})`};
     } else {
       const na = DS.faa.oneTwoThree;
-      const visSm = lim.vis_m==null?null:+(lim.vis_m/1609.344).toFixed(2);
+      const visSm = lim.vis_m==null?null:smObs(lim.vis_m/M_PER_SM);
       const ceilOk = lim.ceiling_ft!=null ? lim.ceiling_ft>=na.ceilFt : noCeil;
       const ok = ceilOk && visSm!=null && visSm>=na.visSm;
       res.noAlternate = {eligible:ok, reference:na.ref+" — 1-2-3 rule",
-        detail:`Ceiling ${ceilTxt} (≥ ${na.ceilFt}) · visibility ${visSm??"—"} SM (≥ ${na.visSm}) within ETA ±1 h`};
+        detail:`Ceiling ${ceilTxt} (≥ ${na.ceilFt}) · visibility ${smText(visSm)} SM (≥ ${smText(na.visSm)}) within ETA ±1 h`};
     }
   }
 
@@ -6126,8 +6132,68 @@ function toAltCeilingFloor(){ return effCeil(undefined, cfg.toAltOeiFloorCeilFt)
    (EASA), pieds (RVR FAA) et milles terrestres (visibilité FAA). */
 const M_PER_SM = 1609.344, M_PER_FT = 0.3048;
 function visToM(v, unit){ return unit==="sm" ? v*M_PER_SM : unit==="ft" ? v*M_PER_FT : v; }
-function visFromM(m, unit){
-  return unit==="sm" ? +(m/M_PER_SM).toFixed(2)
+
+/* ---------- le mille terrestre s'écrit en fractions ----------
+   Aux États-Unis une visibilité ne s'écrit jamais en décimal. Les minima des
+   plaques du part 97 et les visibilités des METAR sont des fractions de mille
+   terrestre, posées sur une grille qui n'est pas régulière : huitièmes sous le
+   mille (1/2, 5/8, 3/4, 7/8), quarts de 1 à 3 (1 1/4, 2 1/2), milles entiers
+   au-delà. « 0.63 SM » ne figure sur aucune carte — le chiffre qui s'y lit est
+   « 5/8 », et un pilote qui compare sa case à sa plaque doit y retrouver le
+   même signe. */
+const SM_EPS = 0.001;                       // ~1,6 m : l'aller-retour par les mètres entiers ne doit pas déplacer un cran
+function smStep(v){ return v < 1 ? 0.125 : v <= 3 ? 0.25 : 1; }
+/* Ramener une valeur sur cette grille. Le SENS n'est pas une commodité
+   d'arrondi : une EXIGENCE monte au cran publié supérieur — aucune conversion
+   n'a le droit d'abaisser un minimum —, un RELEVÉ descend au cran inférieur,
+   ce qui est aussi la règle d'observation (une visibilité se rapporte à la
+   valeur reportable immédiatement inférieure). Une valeur déjà sur la grille
+   ne bouge pas. */
+function snapSm(v, dir){
+  if (v==null || !Number.isFinite(v) || v<=0) return v;
+  const step = smStep(v), n = v/step;
+  const k = Math.abs(v - Math.round(n)*step) < SM_EPS ? Math.round(n)
+          : dir>0 ? Math.ceil(n) : dir<0 ? Math.floor(n) : Math.round(n);
+  return +(k*step).toFixed(4);
+}
+const smReq = v => snapSm(v, +1);
+const smObs = v => snapSm(v, -1);
+/* La fraction telle qu'elle est imprimée : « 1 1/2 », jamais « 3/2 » ni
+   « 1.50 ». Ce qui ne tombe sur aucun seizième reste en décimal — une marge de
+   100 m n'a pas de fraction, et un chiffre inhabituel vaut mieux qu'une
+   fraction inventée. */
+function smText(v){
+  if (v==null || !Number.isFinite(v)) return "—";
+  const sign = v<0 ? "-" : "", a = Math.abs(v);
+  for (const den of [1,2,4,8,16]){
+    const n = a*den;
+    if (Math.abs(n-Math.round(n)) < 1e-6){
+      const k = Math.round(n);
+      if (den===1) return sign+String(k);
+      const whole = Math.floor(k/den), rest = k-whole*den;
+      return sign + (whole ? `${whole} ${rest}/${den}` : `${rest}/${den}`);
+    }
+  }
+  return sign + a.toFixed(2);
+}
+/* Une valeur dans son unité, prête à lire : fraction sous FAA, entier ailleurs. */
+const visText = (v, unit) => v==null ? "—" : (unit==="sm" ? smText(v) : String(Math.round(v)));
+/* Lecture d'un champ chiffré. Le pilote recopie ce qu'il a sous les yeux, et
+   sous FAA c'est « 1 1/2 » ou « 5/8 » : le champ l'accepte tel quel, sans
+   fermer la porte au décimal. */
+function parseNumField(txt){
+  const t = String(txt==null?"":txt).trim();
+  if (t==="") return null;
+  const m = t.match(/^(?:(\d+)[\s-]+)?(\d+)\s*\/\s*(\d+)$/);
+  if (m){ const d=+m[3]; return d ? (+(m[1]||0)) + (+m[2])/d : null; }
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+/* `dir` dit ce qu'on convertit : +1 une exigence, -1 un relevé. Sans lui, la
+   valeur tombe au cran le plus proche — sur la grille dans tous les cas, jamais
+   entre deux valeurs publiées. */
+function visFromM(m, unit, dir){
+  return unit==="sm" ? snapSm(m/M_PER_SM, dir===undefined ? 0 : dir)
        : unit==="ft" ? Math.round(m/M_PER_FT/100)*100
        : Math.round(m);
 }
@@ -6137,7 +6203,10 @@ function visFromM(m, unit){
 function visReqFor(role, unit){
   const o = state.visReq[role];
   if (!o || !Number.isFinite(o.v) || o.v <= 0) return null;
-  return o.unit === unit ? o.v : visFromM(visToM(o.v, o.unit), unit);
+  /* C'est une exigence : convertie, elle monte au cran publié supérieur. La
+     valeur d'origine reste celle qui est mémorisée — aucune bascule ne la
+     grignote d'aller-retour en aller-retour. */
+  return o.unit === unit ? o.v : visFromM(visToM(o.v, o.unit), unit, +1);
 }
 /* Enregistrer la saisie, ou rendre la main au moteur quand la case est vidée.
    Dans les deux cas la préférence est réécrite : « pas de valeur à moi » est un
@@ -6575,7 +6644,7 @@ function phaseRuleCards(role, r){
   if (isDep && isFAA){
     const T = DS.faa.takeoff;
     add("Take-off minima — standard", T.ref,
-      rulesList(T.standard.map(row=>({t:`${row.maxEng?"Two engines or fewer":"Three engines or more"} — visibility ${row.visSm} SM or RVR ${row.rvrFt} ft`,
+      rulesList(T.standard.map(row=>({t:`${row.maxEng?"Two engines or fewer":"Three engines or more"} — visibility ${smText(row.visSm)} SM or RVR ${row.rvrFt} ft`,
         on: row.maxEng ? c.engines<=2 : c.engines>=3}))),
       rulesP("RVR governs when it is reported for the runway; otherwise the visibility applies. No ceiling is part of a take-off minimum."));
     add("Lower than standard take-off", T.lts.ref,
@@ -6686,7 +6755,7 @@ function phaseRuleCards(role, r){
     }
     add("Landing minima — OpSpecs", "OpSpec C052 / C059 / C060",
       rulesList(DS.faa.landing.map(row=>({
-        t:`${row.id.replace(/_/g," ")} (${row.ref}) — ${row.noDh?"no DH":"DH "+row.dh+" ft"}, RVR ${row.rvrFt} ft${row.visSm?` / ${row.visSm} SM`:""} — ${row.cond}`,
+        t:`${row.id.replace(/_/g," ")} (${row.ref}) — ${row.noDh?"no DH":"DH "+row.dh+" ft"}, RVR ${row.rvrFt} ft${row.visSm?` / ${smText(row.visSm)} SM`:""} — ${row.cond}`,
         on: c.faaOperation===row.id}))));
     /* C055 ne parle qu'aux dégagements : à la destination, l'exigence est le
        minimum d'atterrissage lui-même, sans majoration. */
@@ -6697,18 +6766,18 @@ function phaseRuleCards(role, r){
       add("Alternate minima — derived", "OpSpec C055",
         rulesList(DS.faa.alternateC055.map(row=>({
           t: row.ceilAbs!=null
-            ? `${row.label} — ABSOLUTE: ceiling ${row.ceilAbs} ft, visibility ${row.visSmAbs} SM (RVR ${row.rvrFt} ft)`
-            : `${row.label} — landing minima + ${row.ceil} ft ceiling / + ${row.visSm} SM visibility`,
+            ? `${row.label} — ABSOLUTE: ceiling ${row.ceilAbs} ft, visibility ${smText(row.visSmAbs)} SM (RVR ${row.rvrFt} ft)`
+            : `${row.label} — landing minima + ${row.ceil} ft ceiling / + ${smText(row.visSm)} SM visibility`,
           on: c.faaAlternateRow===row.id}))),
         isToAlt ? rulesP(`121.617 refers the weather requirement to the operator's OpSpecs, so the DERIVED (increased) C055 minima above govern the take-off alternate, assessed ${DS.faa.takeoffAlternate.window}. This is where the FAA is stricter than EASA, which uses the actual landing minima.`) : null);
     }
     add("RVR ↔ visibility conversion", "14 CFR 91.175(h)",
-      rulesList(DS.faa.rvrToVis.map(([ft,sm])=>({t:`RVR ${ft} ft ≡ ${sm} SM`}))),
+      rulesList(DS.faa.rvrToVis.map(([ft,sm])=>({t:`RVR ${ft} ft ≡ ${smText(sm)} SM`}))),
       rulesP("Take the next value up, never an interpolation."));
     if (isDest){
       const na = DS.faa.oneTwoThree;
       add("Alternate not required — 1-2-3 rule", na.ref,
-        rulesP(`No alternate is required when, within ETA ±1 h, the forecast ceiling is at least ${na.ceilFt} ft AND the forecast visibility at least ${na.visSm} SM. Either criterion missed makes an alternate mandatory.`));
+        rulesP(`No alternate is required when, within ETA ±1 h, the forecast ceiling is at least ${na.ceilFt} ft AND the forecast visibility at least ${smText(na.visSm)} SM. Either criterion missed makes an alternate mandatory.`));
     }
   }
 
@@ -7195,11 +7264,22 @@ function runwaySvg(qfu, wind, comp, spdUsed){
 
 /* --------------------------- rendering --------------------------- */
 const cls = r => (r||"unknown").toLowerCase().replace(/_/g,"");
-const fmtNum = (v,u)=> v==null ? "—" : (u==="sm" ? v.toFixed(2)+" SM" : `${Math.round(v)} ${u}`);
+const fmtNum = (v,u)=> v==null ? "—" : (u==="sm" ? smText(v)+" SM" : `${Math.round(v)} ${u}`);
 /* Le mille terrestre s'écrit « SM » partout où une unité se lit, et son chiffre
-   porte deux décimales : « 3sm » en face de « 3.00 SM » se lit comme deux
-   grandeurs différentes alors que c'est la même. */
+   s'écrit comme sur la plaque : « 1 1/2 SM » en face du « 1 1/2SM » du METAR,
+   et non « 1.50 SM » — deux écritures pour la même grandeur se lisent comme
+   deux grandeurs. Voir smText(). */
 const unitLab = u => u==="sm" ? "SM" : u;
+/* Attributs d'un champ de visibilité / RVR. Sous FAA la case porte une
+   fraction — « 1 1/2 », « 5/8 » —, qu'un champ numérique refuserait de garder :
+   l'unité mille terrestre passe donc le champ en texte, et parseNumField() le
+   relit. Les autres unités gardent leur pas et leur pavé chiffré. Le décimal
+   reste accepté partout : « 0.5 » se range comme « 1/2 » et se réaffiche
+   ainsi. */
+const visFieldAttrs = (unit, step) => unit==="sm"
+  ? `type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"`
+  : `type="number" min="0" step="${step||50}" inputmode="decimal"`;
+const visFieldValue = (v, unit) => v==null ? "" : (unit==="sm" ? smText(v) : v);
 /* « no ceiling » plutôt qu'un tiret : le tiret dit qu'on ne sait pas, alors
    qu'ici on sait qu'il n'y en a pas. */
 const fmtObs = r => (r.observed==null && r.noCeiling) ? "no ceiling" : fmtNum(r.observed, r.unit);
@@ -7236,7 +7316,7 @@ function verdictBlock(v){
     : "";
   const rows = (v.rows||[]).map(r=>{
     const rv = rowVerdict(r);
-    const mtxt = rv.margin==null ? "—" : `${rv.margin>=0?"+":""}${r.unit==="sm"?rv.margin.toFixed(2):Math.round(rv.margin)} ${unitLab(r.unit)}`;
+    const mtxt = rv.margin==null ? "—" : `${rv.margin>=0?"+":""}${r.unit==="sm"?smText(rv.margin):Math.round(rv.margin)} ${unitLab(r.unit)}`;
     /* Sur la carte vent, la ligne qui porte le verdict se teinte comme lui. */
     const rowCls = !withThumb ? ""
       : (rv.result==="NO_GO" ? " class=\"bad\"" : rv.result==="MARGINAL" ? " class=\"warn\"" : "");
@@ -7320,7 +7400,7 @@ function optLabelIn(o, unit){
   if (o.v==null || !unit || unit===o.unit) return o.label||"";
   const v = reqInUnit(o.v, o.unit, unit);
   const tail = (o.label||"").split(" — ").slice(1).join(" — ");
-  return `${unit==="sm"?(+v).toFixed(2):v} ${unitLab(unit)} (${o.v} ${unitLab(o.unit)})${tail?" — "+tail:""}`;
+  return `${unit==="sm"?smText(v):v} ${unitLab(unit)} (${visText(o.v,o.unit)} ${unitLab(o.unit)})${tail?" — "+tail:""}`;
 }
 
 function derivedOptLabel(t){
@@ -7336,21 +7416,24 @@ function reqInUnit(v, from, to){
   if (v==null || from===to) return v;
   if (from==="ft" && to==="sm"){
     const row = DS.faa.rvrToVis.find(([rvr])=>rvr>=v);
-    return row ? row[1] : +(v/5280).toFixed(2);
+    return row ? row[1] : smReq(v/5280);
   }
   if (from==="m" && to==="ft") return Math.round(v/0.3048);
   if (from==="ft" && to==="m") return Math.round(v*0.3048);
   /* Mètres et milles : conversion directe, sans table. La table RVR → visibilité
      ci-dessus est une règle FAA sur des RVR en pieds ; un minimum EASA en mètres
      n'a pas de colonne réglementaire en milles, il n'y a que l'arithmétique. */
-  if (from==="m" && to==="sm") return visFromM(v, "sm");
+  if (from==="m" && to==="sm") return visFromM(v, "sm", +1);
   if (from==="sm" && to==="m") return Math.round(visToM(v, "sm"));
   return v;
 }
 
 function visMarginIn(unit){
   if (unit==="ft") return Math.round(cfg.visMarginM/0.3048);
-  if (unit==="sm") return +(cfg.visMarginM/1609.344).toFixed(2);
+  /* La marge d'alerte n'est pas un minimum publié : elle vient d'Operation
+     setup en mètres et reste ce qu'elle est, sans passer par la grille des
+     fractions — l'arrondir à un huitième la doublerait ou l'annulerait. */
+  if (unit==="sm") return +(cfg.visMarginM/M_PER_SM).toFixed(3);
   return cfg.visMarginM;
 }
 
@@ -7530,8 +7613,8 @@ function takeoffVisCells(r, obs){
          <span class="cmp">${cmp}</span>
          <span class="req-stack">
            <span class="req-lab" aria-hidden="true">Required</span>
-           <input id="toVisInput" class="to-ceil-in" type="number" min="0" step="${obsU==="sm"?"0.25":"50"}" inputmode="decimal"
-                  placeholder="—" value="${reqCmp==null?"":(obsU==="sm"?reqCmp.toFixed(2):reqCmp)}" data-unit="${obsU}"
+           <input id="toVisInput" class="to-ceil-in" ${visFieldAttrs(obsU)}
+                  placeholder="—" value="${visFieldValue(reqCmp,obsU)}" data-unit="${obsU}"
                   aria-label="Visibility or RVR required for take-off, in ${obsU}">
            <small class="req-u">${obsU==="sm"?"SM":obsU}</small>
          </span>
@@ -7618,8 +7701,8 @@ function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
   const pv = provAttrs(prov, req);
   const pd = dh ? provAttrs(dh.prov, dh.v) : {cls:"", tip:""};
   const st = (!cmpOn || req==null) ? null : visVerdict(obs, req, unit);
-  const input = `<input id="${id}" class="to-ceil-in" type="number" min="0" step="${unit==="sm"?"0.25":"50"}" inputmode="decimal"
-                placeholder="—" value="${req==null?"":(unit==="sm"?(+req).toFixed(2):req)}" data-unit="${unit}"
+  const input = `<input id="${id}" class="to-ceil-in" ${visFieldAttrs(unit)}
+                placeholder="—" value="${visFieldValue(req,unit)}" data-unit="${unit}"
                 aria-label="${(label||"Visibility or RVR")} required, in ${unitLab(unit)}">`;
   /* Sur les dégagements, la DH / MDH se saisit dans la même case que la
      vis / RVR : c'est d'elle que dérive le plafond de planification comparé
@@ -7762,7 +7845,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
   const isAltn = tabRole==="ERA" || tabRole==="DESTINATION_ALTERNATE";
   const role = r.role;
   const incCell = (r.planning && r.planning.inc && (r.planning.inc.ceil||r.planning.inc.vis))
-      ? cell("Planning increment", `+${r.planning.inc.ceil} ft / +${r.planning.inc.vis}${r.planning.unit==="sm"?" SM":" m"}`, null, r.planning.inc.label) : "";
+      ? cell("Planning increment", `+${r.planning.inc.ceil} ft / +${visText(r.planning.inc.vis, r.planning.unit)}${r.planning.unit==="sm"?" SM":" m"}`, null, r.planning.inc.label) : "";
   /* Le minimum d'atterrissage s'écrit dans l'unité du relevé : sous EASA c'est
      une RVR en mètres, mais devant un METAR américain en milles terrestres c'est
      en milles qu'il se lit, et la saisie s'enregistre dans cette unité-là. */
@@ -7793,7 +7876,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
   const destVisObs = u => {
     if (!isDest || u !== ((r.planning && r.planning.unit) || null)) return undefined;
     const m = (r.taf && r.taf.limiting) ? r.taf.limiting.vis_m : null;
-    return m==null ? null : visFromM(m, u);
+    return m==null ? null : visFromM(m, u, -1);
   };
   /* Vérifié ou pas, CHIFFRE PAR CHIFFRE : chaque minimum se cercle de vert
      quand sa provenance répond de lui, d'ambre sinon.
@@ -7872,7 +7955,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
      « visi / RVR + 800 m » — plutôt qu'un « +200 ft » qui laissait deviner sur
      quelle valeur il se pose. */
   const incCeilTxt = pinc.ceil ? `DH + ${pinc.ceil} ft` : "no planning increment";
-  const incVisTxt  = pinc.vis  ? `visi / RVR + ${pinc.vis}${pUnit==="sm"?" SM":" m"}` : "no planning increment";
+  const incVisTxt  = pinc.vis  ? `visi / RVR + ${visText(pinc.vis, pUnit)}${pUnit==="sm"?" SM":" m"}` : "no planning increment";
   /* La case plafond sert deux mises en page : seule en pleine largeur sur les
      autres phases d'atterrissage, appariée à la comparaison vis / RVR sur les
      dégagements. Construite une fois ici, placée plus bas. */
@@ -7891,7 +7974,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
     const pl = r.planning || {};
     const vUnit = pl.unit || (cfg.framework==="FAA" ? "sm" : "m");
     const vObsM = (r.taf && r.taf.limiting) ? r.taf.limiting.vis_m : null;
-    const vObs = vObsM==null ? null : (vUnit==="sm" ? +(vObsM/1609.344).toFixed(2) : vObsM);
+    const vObs = vObsM==null ? null : (vUnit==="sm" ? smObs(vObsM/M_PER_SM) : vObsM);
     const visCmp = compareCell({
       label:"Required visi / RVR",
       obs: vObs,
@@ -7914,7 +7997,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
     cells.push(visReqCell({
       id:"toAltVisInput",
       req: pl.visReq!=null ? pl.visReq : null,
-      obs: vObsM==null ? null : (vUnit==="sm" ? +(vObsM/1609.344).toFixed(2) : vObsM),
+      obs: vObsM==null ? null : (vUnit==="sm" ? smObs(vObsM/M_PER_SM) : vObsM),
       unit: vUnit,
       manual: visReqFor(role, vUnit)!=null,
       /* Le dégagement au décollage est un terrain où l'on ATTERRIRA : sa pente
@@ -7943,7 +8026,7 @@ function tafBlock(t){
      « 1 1/2SM » du texte brut se relit mal, et c'est le même chiffre. */
   const tu = visDispUnit(cfg.framework==="FAA" ? "sm" : "m");
   const tvis = m => m==null ? "—"
-    : (tu==="sm" ? `${visFromM(m,"sm").toFixed(2)} SM` : `${m} m`);
+    : (tu==="sm" ? `${smText(visFromM(m,"sm",-1))} SM` : `${m} m`);
   const prev = t.prevailing.map(s=>`<tr><td>${s.kind}</td><td>${seg(s)}</td><td>${tvis(s.cond.vis_m)} / ${s.cond.ceiling_ft??"no ceiling"}${s.cond.ceiling_ft?" ft":""}</td><td>${s.becmg?s.becmg.applied:"prevailing"}</td></tr>`).join("");
   const chg = [...t.considered, ...t.disregarded].sort((a,b)=>a.from-b.from).map(g=>
     `<tr><td>${g.kind}</td><td>${hhmm(g.from)}–${hhmm(g.to)}</td><td>${tvis(g.cond.vis_m)} / ${g.cond.ceiling_ft??"no ceiling"}${g.cond.ceiling_ft?" ft":""}</td>
@@ -8521,7 +8604,7 @@ function renderStage(tab, r){
     </div>
 
     ${needQfu ? "" : tafBlock(r.taf)}
-    ${needQfu ? "" : (r.noAlternate ? `<p class="note" style="margin-top:16px"><b>No-alternate check —</b> ${r.noAlternate.eligible?"criteria met":"criteria NOT met"}. ${r.noAlternate.detail}. Reference: CAT.OP.MPA.182(b).</p>`:"")}
+    ${needQfu ? "" : (r.noAlternate ? `<p class="note" style="margin-top:16px"><b>No-alternate check —</b> ${r.noAlternate.eligible?"criteria met":"criteria NOT met"}. ${r.noAlternate.detail}. Reference: ${r.noAlternate.reference}.</p>`:"")}
     ${warnBlock(r.warnings||[])}
   `;
 
@@ -8588,9 +8671,11 @@ function renderStage(tab, r){
   /* Saisie du plafond de décollage. Vide, effacé ou non positif = pas de
      critère : `null` est un choix explicite du pilote, distinct de `undefined`
      qui laisse la page suivre le setup. */
+  /* La visibilité américaine se tape comme elle s'imprime — « 1 1/2 », « 5/8 » :
+     parseNumField() lit la fraction aussi bien que le décimal. */
   const readCeil = el => {
-    const n = Number(el.value);
-    return (el.value.trim()==="" || !Number.isFinite(n) || n<=0) ? null : n;
+    const n = parseNumField(el.value);
+    return (n==null || n<=0) ? null : n;
   };
   /* Les saisies de phase se rangent sous le rôle ÉVALUÉ (roleFor) : sur
      l'onglet en route c'est le genre de dégagement choisi (fuel ERA, ETOPS…),
@@ -9139,7 +9224,7 @@ function mWindInfo(r){
   return {cross:r.wind.comp.cross, tail:Math.max(0,r.wind.comp.tail),
           st: wv ? cls(wv.result) : "unknown"};
 }
-const mFmtVal = (v,u)=> u==="sm" ? (+v).toFixed(2) : String(Math.round(v));
+const mFmtVal = (v,u)=> u==="sm" ? smText(+v) : String(Math.round(v));
 /* Chaque chiffre porte son unité, comme sur les cases de la version tablette :
    une unité posée une fois en fin de ligne se lisait comme celle du seul
    chiffre qu'elle suivait, et laissait le premier nu. */
@@ -9203,15 +9288,15 @@ function mVisInputHtml(id, req, unit, label, warn){
   return `<div class="m-req">
     <span>${label||"Vis / RVR"} required (${unitLab(unit)}) — empty to use the derived value</span>
     ${warn==null?"":`<span class="ga-warn">GA ${warn}% — check go-around performance</span>`}
-    <input id="${id}" class="to-ceil-in" type="number" min="0" step="${unit==="sm"?"0.25":"50"}" inputmode="decimal"
-           placeholder="—" value="${req==null?"":(unit==="sm"?(+req).toFixed(2):req)}" data-unit="${unit}"
+    <input id="${id}" class="to-ceil-in" ${visFieldAttrs(unit)}
+           placeholder="—" value="${visFieldValue(req,unit)}" data-unit="${unit}"
            aria-label="${label||"Visibility or RVR"} required for this phase, in ${unitLab(unit)}">
   </div>`;
 }
 
 function mMarginTxt(rv, unit){
   if (rv.margin==null) return "—";
-  return `${rv.margin>=0?"+":""}${unit==="sm"?rv.margin.toFixed(2):Math.round(rv.margin)} ${unitLab(unit)}`;
+  return `${rv.margin>=0?"+":""}${unit==="sm"?smText(rv.margin):Math.round(rv.margin)} ${unitLab(unit)}`;
 }
 
 /* Même sélecteur d'approche que la case « Approach » de la tablette, en ligne
@@ -9682,8 +9767,8 @@ function bindMobile(host){
   };
 
   const mReadCeil = el => {
-    const n = Number(el.value);
-    return (el.value.trim()==="" || !Number.isFinite(n) || n<=0) ? null : n;
+    const n = parseNumField(el.value);
+    return (n==null || n<=0) ? null : n;
   };
   /* La phase dépliée donne le rôle auquel les saisies s'appliquent : les champs
      ne sont rendus que sous elle. */
@@ -11039,7 +11124,7 @@ function favWxBaseTxt(m){
 }
 function favWxVisTxt(m){
   if (m.cavok) return "≥10 km";
-  if (m.visibility_sm!=null) return `${m.visibility_sm} SM`;
+  if (m.visibility_sm!=null) return `${smText(m.visibility_sm)} SM`;
   const v = m.visibility_m;
   if (v==null) return "—";
   if (v>=9999) return "≥10 km";
