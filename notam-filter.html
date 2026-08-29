@@ -6360,7 +6360,7 @@ body .stat .k{
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
-          <span class="mleg"><i class="tag rwy">08/26</i>Runway QFU, longest first</span>
+          <span class="mleg"><i class="tag rwy">08/26</i>Every runway QFU, longest first</span>
         </div>
       </div>
     </div>
@@ -6503,10 +6503,11 @@ body .stat .k{
             to open its <b>minima</b>. A yellow <b>⚡</b> marks a
             station whose METAR reports a <b>CB</b> or whose TAF announces one. The <b>Wind</b> switch adds
             surface-wind arrows — one per 10 kt, gusts and trend groups included; <b>now/+1/+2/+3&nbsp;h</b> shows
-            the TAF wind as dashed arrows. Wherever a code is written, its <b>runway QFU</b> are written under
-            it — <b>08/26</b>, longest runway first, three pairs at most and the count of the others. The code
-            and its QFU move together to a side free of the wind arrows and the ⚡; where nothing fits, the code
-            stays and the QFU stand down. Both views show them, no switch needed.</div>
+            the TAF wind as dashed arrows. Wherever a code is written, <b>every runway QFU</b> of that aerodrome
+            is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
+            together to a side free of the wind arrows and the ⚡; where they cannot travel together the code
+            keeps its place and the QFU find one of their own, further round the dot. Both views show them, no
+            switch needed.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div>
@@ -17352,10 +17353,12 @@ function renderInfo(icao) {
     // Pas de seuil propre : les QFU arrivent AVEC les codes OACI, au même
     // cran (showLabels), et ils arrivent tous ensemble. Ce n'est pas un
     // détail qu'on découvre en s'approchant — dès qu'un terrain est nommé,
-    // par où s'y poser fait partie de ce qu'on lit. La place manquante ne les
-    // fait pas rétrécir : elle les fait renoncer, le code reste (voir la
-    // pose en deux temps, plus bas).
-    const QFU_MAX = 3;
+    // par où s'y poser fait partie de ce qu'on lit.
+    // TOUTES les paires, sans plafond : un « +1 » ne dit rien à personne, et
+    // une piste qu'on ne nomme pas est une piste qu'on ne verra pas. Le cas
+    // extrême est connu et petit — 110 terrains ont quatre paires ou plus,
+    // deux en ont huit (KORD, et son voisin) : un bloc de huit lignes reste
+    // plus court que la carte, et il ne concerne qu'eux.
     // Les paires viennent de la graine des terrains — airfield-seed.js, celle
     // du module Minimas, que cette page ne charge PAS au démarrage : 1,6 Mo
     // qu'aucune autre vue ne réclame. Elle n'arrive donc qu'au premier zoom
@@ -17375,18 +17378,12 @@ function renderInfo(icao) {
       return false;
     }
     // La plus longue piste d'abord — c'est la principale, celle qu'on lit en
-    // premier, et la seule écrite sous le seuil de la liste complète. QFU_MAX
-    // paires au plus ensuite, et le compte des restantes en dernière ligne :
-    // au-delà l'étiquette couvrirait le terrain qu'elle annonce. Le
-    // désignateur EST le QFU : « 08/26 » se lit 080/260 au magnétique, à
-    // l'arrondi de dizaine près.
+    // premier. Le désignateur EST le QFU : « 08/26 » se lit 080/260 au
+    // magnétique, à l'arrondi de dizaine près.
     function qfuLines(icao) {
       const r = ((window.AD_SEED || {})[icao] || {}).r;
       if (!r || !r.length) return null;
-      const sorted = r.slice().sort((a, b) => (b[1] || 0) - (a[1] || 0));
-      const lines = sorted.slice(0, QFU_MAX).map(x => x[0]);
-      if (sorted.length > QFU_MAX) lines.push("+" + (sorted.length - QFU_MAX));
-      return lines;
+      return r.slice().sort((a, b) => (b[1] || 0) - (a[1] || 0)).map(x => x[0]);
     }
 
     function drawMap() {
@@ -17705,6 +17702,51 @@ function renderInfo(icao) {
         ctx.restore();
         return { lines, w, h: lines.length * QFU_LH + 2 * dpr };
       };
+      /* Les positions qu'un bloc peut prendre autour d'un point : les quatre
+         côtés puis les quatre diagonales, sur trois anneaux qui s'éloignent.
+         Le premier anneau colle au disque — c'est la place naturelle ; les
+         suivants existent pour les cas encombrés, un faisceau de vent au zoom
+         fort couvrant à lui seul tout le voisinage du point. */
+      const ringCands = (bw, bh, x, y, r) => {
+        const out = [];
+        for (const g of [r + 4 * dpr, r + 28 * dpr, r + 64 * dpr]) {
+          const d = g * 0.72;                       // diagonales : même écart, en biais
+          out.push(
+            [x + g, y - bh / 2], [x - bw - g, y - bh / 2],
+            [x - bw / 2, y + g], [x - bw / 2, y - bh - g],
+            [x + d, y + d], [x - bw - d, y + d],
+            [x + d, y - bh - d], [x - bw - d, y - bh - d]);
+        }
+        return out;
+      };
+      /* Surface commune entre une boîte et ce qui est déjà posé. Sert de
+         départage quand AUCUNE position n'est libre : on prend la moins
+         encombrée plutôt que de renoncer. */
+      const overlapArea = (b, boxes) => {
+        let a = 0;
+        for (const p of boxes) {
+          const w = Math.min(b[2], p[2]) - Math.max(b[0], p[0]);
+          const h = Math.min(b[3], p[3]) - Math.max(b[1], p[1]);
+          if (w > 0 && h > 0) a += w * h;
+        }
+        return a;
+      };
+      /* Les QFU qui n'ont pas trouvé place sous leur code cherchent seuls,
+         tout autour du point. Ils ne disparaissent JAMAIS : faute de position
+         libre ils prennent la moins encombrée. Une piste ne change pas d'une
+         minute à l'autre et on zoome POUR elle — c'est le code qui a besoin
+         d'être protégé du désordre, pas l'inverse. */
+      const placeQfuAlone = (q, x, y, r, placed) => {
+        let best = null, bestA = Infinity;
+        for (const [cx0, cy0] of ringCands(q.w, q.h, x, y, r)) {
+          const b = [cx0, cy0, cx0 + q.w, cy0 + q.h];
+          const ov = overlapArea(b, placed);
+          if (ov === 0) { best = b; break; }
+          if (ov < bestA) { bestA = ov; best = b; }
+        }
+        placed.push(best);
+        drawQfu(q, best[0], best[1]);
+      };
       const drawQfu = (q, x, yTop) => {
         if (!q) return;
         ctx.save();
@@ -17790,10 +17832,10 @@ function renderInfo(icao) {
              bloc, pour que l'ensemble tombe d'un côté libre du point — hors
              des faisceaux de vent et des éclairs, qui sont dans `placed`.
              Aucun côté ne prend le bloc entier : deuxième essai, la capsule
-             SEULE, exactement comme avant que les QFU n'existent, et les QFU
-             sont abandonnés. C'est l'ordre juste — le code nomme le terrain,
-             les pistes ne font que le compléter : quand la place manque, ce
-             sont elles qui cèdent, jamais lui. */
+             SEULE, exactement comme avant que les QFU n'existent — le code
+             nomme le terrain, il passe en premier. Les QFU, eux, ne sont pas
+             abandonnés pour autant : ils repartent chercher une place à eux,
+             ailleurs autour du point (placeQfuAlone). */
           const q = qfuBox(a.icao);
           const fit = (bw, bh) => {
             const cands = [
@@ -17833,7 +17875,8 @@ function renderInfo(icao) {
           ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = col; ctx.stroke();
           ctx.fillStyle = C.txt;
           ctx.textAlign = "left"; ctx.fillText(a.icao, bx + pad, cy); ctx.textAlign = "start";
-          drawQfu(qq, bx + pad, by + boxH + 2 * dpr);
+          if (qq) drawQfu(qq, bx + pad, by + boxH + 2 * dpr);
+          else if (q) placeQfuAlone(q, x, y, r, placed);
         }
       }
 
@@ -17891,8 +17934,9 @@ function renderInfo(icao) {
           const pad = 6 * dpr, bh = 14 * dpr;
           // Pose en deux temps, comme à la couche mondiale : le bloc entier
           // d'abord — capsule et QFU —, la capsule seule en repli, les QFU
-          // abandonnés. Le libellé de la route, lui, ne disparaît jamais :
-          // faute de côté libre il prend la droite quand même.
+          // renvoyés chercher une place à eux autour du point. Le libellé de
+          // la route, lui, ne disparaît jamais : faute de côté libre il prend
+          // la droite quand même.
           const q = qfuBox(a.icao);
           const capW = w + pad * 2;
           const blockW = q ? Math.max(capW, q.w + pad + 2 * dpr) : capW;
@@ -17925,7 +17969,8 @@ function renderInfo(icao) {
           ctx.fillStyle = C.txt;
           // Centré sur la capsule, plus sur le point : elle peut avoir déménagé.
           ctx.textAlign = "left"; ctx.fillText(a.icao, boxX + pad, boxY + boxH / 2); ctx.textAlign = "start";
-          drawQfu(qq, boxX + pad, boxY + boxH + 2 * dpr);
+          if (qq) drawQfu(qq, boxX + pad, boxY + boxH + 2 * dpr);
+          else if (q) placeQfuAlone(q, x, y, dotR, windBoxes.concat([[boxX, boxY, boxX + boxW, boxY + boxH]]));
         }
         // zone cliquable : pastille (rayon élargi pour le tactile) + rectangle d'étiquette,
         // dans l'ordre de dessin (le dernier poussé = dessiné au-dessus, donc prioritaire au clic)
@@ -18373,6 +18418,14 @@ function renderInfo(icao) {
     // la route entière (globe de la page Route), comportement d'origine.
     async function openMapOverlay(focusIcao, mode) {
       if (!(await ensureMapReady())) return;
+      /* La graine des terrains part DÈS L'OUVERTURE de la carte, sans attendre
+         le premier zoom qui réclamera les QFU. Elle est grosse (1,6 Mo) : au
+         premier zoom, elle arrivait avec plusieurs secondes de retard et les
+         QFU semblaient manquer, puis apparaître tout seuls. Ici, elle a le
+         temps du chargement du fond pour arriver. Rien n'attend après elle —
+         la carte s'ouvre et se dessine sans, et se redessine quand elle
+         arrive. */
+      qfuSeedReady();
       // Tentative de fond vectoriel. En cas d'échec (pas de WebGL2, script ou
       // archive absents hors ligne), GL.active reste faux et openMap() rend
       // exactement la carte d'avant — aucune régression sur ces appareils.
