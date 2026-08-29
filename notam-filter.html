@@ -6939,7 +6939,28 @@ body .stat .k{
         "VOR", "TACAN", "VORTAC", "RVR",
         "END ID LGT", "END IDENT LGT", "END IDENTIFIER LIGHT", " REIL",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
-      sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
+      sol: ["TWY", "TAXIWAY", "APRON",
+        // « STAND » (poste de stationnement) est encadré d'espaces à dessein,
+        // pour la raison exacte qui encadre « MOG » plus bas : la comparaison se
+        // fait par SOUS-CHAÎNE, et STANDARD contient STAND. Or « STANDARD » est
+        // le mot que tout NOTAM américain de minima de décollage emploie —
+        // « RWY 8L, STANDARD WITH MINIMUM CLIMB OF 500FT PER NM TO 520 ». Côté
+        // US il n'y a pas de ligne Q exploitable (QXXXX, quand ce n'est pas
+        // l'absence de ligne Q), donc le texte est le SEUL indice de phase : ce
+        // seul mot rangeait au sol une procédure de départ. Revue du 2026-08-29,
+        // cas réel KMIA « SID MIAMI INTL, MIAMI, FL. FOLZZ THREE DEPARTURE
+        // (RNAV)... TAKEOFF MINIMUMS: RWY 8L, STANDARD... » — classé
+        // Departure + Ground, listé sous « All ground NOTAMs », et peignant au
+        // plan les trois pistes qu'il cite au titre des minima.
+        // L'espace de GAUCHE compte autant que celle de droite (UNDERSTAND), et
+        // le pluriel a sa propre entrée : un poste réel s'écrit toujours suivi
+        // de son numéro (« STAND 12 », « STANDS 201 AND 202 »), jamais collé à
+        // un mot. Angle mort assumé, le même que pour « MOG » : un poste cité en
+        // fin de phrase (« ... ON STAND. ») n'est plus reconnu par ce mot-clé —
+        // ces messages-là citent de toute façon PARKING ou APRON, et le sens du
+        // repli est le bon : on rate un badge Ground, on n'en colle plus un faux
+        // sur un NOTAM de départ.
+        " STAND ", " STANDS ", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
         // Points/positions d'attente : marquages et aires de la surface, on les
         // franchit en roulant. Ajoutés le 2026-08-02 avec le retrait du
         // « HOLDING » générique de la liste « approche » (voir son commentaire).
@@ -22379,8 +22400,13 @@ window.addEventListener("scroll", hidePop, true);
        s'inverse. Sur fond sombre, une surface ressort en s'éclaircissant ;
        sur fond clair, en s'assombrissant. La piste, qui doit primer sur les
        taxiways, est donc la plus CLAIRE en nuit et la plus FONCÉE en jour.
-       Le halo lumineux, lui, n'a de sens que sur fond sombre : sur du blanc
-       il ne fait que salir la couleur.
+       La couleur, elle, est posée SANS halo lumineux, dans les deux thèmes :
+       un surlignage qui déborde de la chaussée qu'il désigne en brouille le
+       contour, or sur un plan de plateforme la limite EXACTE de la surface
+       fermée est l'information même. Le rouge s'arrête net, au liseré de la
+       voie — la même bordure sombre qui cerne déjà la chaussée au repos, et
+       qui reste visible sous la couleur puisque celle-ci est peinte à la
+       largeur de la chaussée, pas au-delà.
        Le plan a deux couleurs de surlignage franches : rouge « fermé » et vert
        « réouvert » (NOTAM CNL/VOID, reprise normale). La sévérité ne colore pas
        le plan — une surface est concernée ou elle ne l'est pas. La nuance
@@ -22439,8 +22465,7 @@ window.addEventListener("scroll", hidePop, true);
         off: "#828a91",
         offLabel: "#d4dce2",
         chipOff: "rgba(17,21,25,.96)",
-        halo: "rgba(0,0,0,.92)",
-        glow: true
+        halo: "rgba(0,0,0,.92)"
       },
 
       light: {
@@ -22494,8 +22519,7 @@ window.addEventListener("scroll", hidePop, true);
            (~3,9:1) et ne touche QUE la poignée de surfaces concernées par un
            NOTAM : l'effet autocollant reproché ci-dessus épargne la carte au
            repos, qui reste posée à plat. */
-        haloOn: "rgba(255,255,255,.92)",
-        glow: false
+        haloOn: "rgba(255,255,255,.92)"
       }
     };
     const planLight = () => document.body.classList.contains("light");
@@ -23851,7 +23875,6 @@ window.addEventListener("scroll", hidePop, true);
     function planHatchPts(ctx, pts, w, col, dim) {
       if (pts.length < 2) return;
       ctx.save();
-      if (!dim && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 10 * planDPR; }
       if (dim) ctx.globalAlpha = .62;
       ctx.strokeStyle = col; ctx.fillStyle = col;
       const lw = w * planDPR * Math.min(plan.view.k, 2.2);
@@ -23886,13 +23909,12 @@ window.addEventListener("scroll", hidePop, true);
        planStroke() écrase déjà globalAlpha pour ses pointillés. */
     const planA = (col, a) => (a == null || a >= 1) ? col
       : col + Math.round(Math.min(Math.max(a, 0), 1) * 255).toString(16).padStart(2, "0");
-    function planStroke(ctx, g, w, col, glow, dash) {
+    function planStroke(ctx, g, w, col, dash) {
       if (g.length < 2) return;
       ctx.beginPath();
       const a = planSC(g[0]); ctx.moveTo(a[0], a[1]);
       for (let i = 1; i < g.length; i++) { const p = planSC(g[i]); ctx.lineTo(p[0], p[1]); }
       ctx.save();
-      if (glow && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 11 * planDPR; }
       if (dash) { ctx.setLineDash([7 * planDPR, 5.5 * planDPR]); ctx.globalAlpha = .62; }
       ctx.strokeStyle = col; ctx.lineWidth = w * planDPR * Math.min(plan.view.k, 2.2);
       ctx.lineCap = dash ? "butt" : "round"; ctx.lineJoin = "round"; ctx.stroke();
@@ -24344,7 +24366,6 @@ window.addEventListener("scroll", hidePop, true);
     function planMark(ctx, xyProj, col, dim) {
       const p = planSCp(xyProj), r = 6.5 * planDPR;
       ctx.save();
-      if (!dim && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 10 * planDPR; }
       ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 7); ctx.fillStyle = col;
       if (dim) ctx.globalAlpha = .7;
       ctx.fill(); ctx.restore();
@@ -24445,7 +24466,7 @@ window.addEventListener("scroll", hidePop, true);
           if (s.t !== t) continue;
 
           for (const g of s.segs) {
-            planStroke(ctx, g, outerWidth, EDGE[t], false);
+            planStroke(ctx, g, outerWidth, EDGE[t]);
           }
         }
 
@@ -24453,7 +24474,7 @@ window.addEventListener("scroll", hidePop, true);
           if (s.t !== t) continue;
 
           for (const g of s.segs) {
-            planStroke(ctx, g, w, BASE[t], false);
+            planStroke(ctx, g, w, BASE[t]);
           }
         }
       };
@@ -24462,10 +24483,10 @@ window.addEventListener("scroll", hidePop, true);
          situent le terrain sans concurrencer le rouge d'une fermeture. */
       const BLD = planPal().bld, BLDE = planPal().bldEdge;
       for (const s of S) if (s.t === "bld") for (const g of s.segs) {
-        planFill(ctx, g, BLD); planStroke(ctx, g, 0.8, BLDE, false);
+        planFill(ctx, g, BLD); planStroke(ctx, g, 0.8, BLDE);
       }
       for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, BASE.apr);
-      for (const s of S) if (s.t === "apr") for (const g of s.segs) planStroke(ctx, g, 1, EDGE.apr, false);
+      for (const s of S) if (s.t === "apr") for (const g of s.segs) planStroke(ctx, g, 1, EDGE.apr);
       /* La PISTE passe par-dessus les taxiways, pas l'inverse : là où une bretelle
          rejoint la piste, le gris clair du taxiway et son liseré débordaient sur la
          chaussée et y dessinaient un coin plus pâle — la piste semblait entamée à
@@ -24491,8 +24512,7 @@ window.addEventListener("scroll", hidePop, true);
               ctx,
               g,
               PLAN_CENTER_W,
-              planPal().center,
-              false
+              planPal().center
             );
           }
         }
@@ -24510,7 +24530,7 @@ window.addEventListener("scroll", hidePop, true);
         ctx.fillStyle = planPal().hold; ctx.fill();
       }
       for (const s of S) if (s.t === "std") for (const g of s.segs) {
-        if (g.length >= 2) { planStroke(ctx, g, 1.3, BASE.std, false); continue; }
+        if (g.length >= 2) { planStroke(ctx, g, 1.3, BASE.std); continue; }
         const p = planSC(g[0]); ctx.beginPath();
         ctx.arc(p[0], p[1], 1.8 * planDPR * Math.min(plan.view.k, 2), 0, 7);
         ctx.fillStyle = BASE.std; ctx.fill();
@@ -24533,10 +24553,9 @@ window.addEventListener("scroll", hidePop, true);
           for (const g of s.segs) {
             // poste en ligne de guidage : on colore la LIGNE entière, sinon un
             // poste fermé ne se signalait que par un point isolé
-            if (g.length >= 2) { planStroke(ctx, g, 3.2, col, true, false); continue; }
+            if (g.length >= 2) { planStroke(ctx, g, 3.2, col); continue; }
             const p = planSC(g[0]); ctx.save();
             ctx.beginPath(); ctx.arc(p[0], p[1], 3.4 * planDPR * Math.min(plan.view.k, 2), 0, 7);
-            if (planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 9 * planDPR; }
             ctx.fillStyle = col; ctx.fill();
             ctx.restore();
           }
@@ -24545,7 +24564,7 @@ window.addEventListener("scroll", hidePop, true);
         if (s.t === "apr") {
           // remplissage à ~15 % — composé avec l'opacité de l'état, pas concaténé
           // à `col` qui peut déjà porter la sienne (hexa 8 chiffres).
-          for (const g of s.segs) { if (!dim) planFill(ctx, g, planA(st.col, .15 * (st.alpha == null ? 1 : st.alpha))); planStroke(ctx, g, 1.6, col, false, dim); }
+          for (const g of s.segs) { if (!dim) planFill(ctx, g, planA(st.col, .15 * (st.alpha == null ? 1 : st.alpha))); planStroke(ctx, g, 1.6, col, dim); }
           continue;
         }
         /* Découpe : si ce taxiway a des NOTAMs « BTN X AND Y » actifs, on ne peint
@@ -24585,7 +24604,6 @@ window.addEventListener("scroll", hidePop, true);
             if (c.cut.seg) {
               const pts = c.cut.seg.map(planSCp);
               ctx.save();
-              if (planPal().glow) { ctx.shadowColor = ccol; ctx.shadowBlur = 11 * planDPR; }
               ctx.strokeStyle = ccol; ctx.lineWidth = PLAN_W.twy * planDPR * Math.min(plan.view.k, 2.2);
               ctx.lineCap = "round"; ctx.lineJoin = "round";
               ctx.beginPath();
@@ -24606,7 +24624,7 @@ window.addEventListener("scroll", hidePop, true);
           continue;
         }
         const wRef = s.t === "rwy" ? PLAN_W.rwy : PLAN_W.twy;
-        for (const g of s.segs) planStroke(ctx, g, wRef, col, true, false);
+        for (const g of s.segs) planStroke(ctx, g, wRef, col);
         // et si en plus il y a des portions, leurs marqueurs restent utiles
         for (const c of cuts) for (const m of c.cut.marks) planMark(ctx, m, col, false);
       }
