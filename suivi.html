@@ -81,6 +81,10 @@ li.act:hover{background:var(--hover)}
    approches vérifiées sur 9 se lisait comme un terrain où rien n'a été
    fait — le gris ne distingue pas « pas commencé » de « presque bouclé ». */
 .cnt.partiel{color:var(--bleu)}
+/* Le trait de séparation : un titre, pas une ligne cliquable — il n'a ni
+   pastille ni compte, et `li.act` ne le vise pas. */
+.sep{background:var(--bg);padding:7px 14px;
+  font:700 10px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .vide{padding:26px 16px;color:var(--muted);text-align:center}
 .alerte{padding:18px;border:1px solid var(--amber);background:var(--amber-bg);color:var(--amber);
   border-radius:10px;font-size:14px}
@@ -276,9 +280,16 @@ function calcul(){
     terrains[cc] = liste;
     nTerOk += complets;
     pays.push({ cc: cc, nom: cc === "??" ? "Pays inconnu" : nomDe(cc), tot: liste.length,
-                ok: complets, entames: entames });
+                ok: complets, entames: entames, vu: (complets + entames) > 0 });
   }
-  pays.sort(function(x, y){ return x.nom.localeCompare(y.nom, "fr"); });
+  /* Deux groupes, alphabétiques chacun : d'abord les pays où au moins un
+     terrain porte une approche vérifiée, ensuite ceux où rien n'a commencé.
+     C'est la question qu'on pose à cette page — où en est-on — et la réponse
+     tenait jusqu'ici dispersée sur deux cents lignes. */
+  pays.sort(function(x, y){
+    if (x.vu !== y.vu) return x.vu ? -1 : 1;
+    return x.nom.localeCompare(y.nom, "fr");
+  });
   return { pays: pays, terrains: terrains, approches: approches,
            nApp: nApp, nOk: nOk, nAttente: nAttente, nTer: nTer, nTerOk: nTerOk };
 }
@@ -328,8 +339,19 @@ function rendre(){
     crumb.innerHTML = "<span>Pays</span>";
     var lp = D.pays.filter(function(p){
       return !f || p.nom.toLowerCase().indexOf(f) >= 0 || p.cc.toLowerCase().indexOf(f) >= 0; });
+    /* Un alphabet qui repart de A au milieu de la liste se lit comme un
+       défaut. Le trait le nomme — et ne paraît que si les deux groupes sont
+       là, sinon le filtre afficherait un titre sans rien dessous. */
+    var coupure = lp.some(function(p){ return p.vu; }) && lp.some(function(p){ return !p.vu; });
+    var vuPrec = true;
     h = lp.map(function(p){
-      return ligne(p.ok === p.tot, esc(p.nom), p.cc, p.ok + " / " + p.tot,
+      var sep = "";
+      if (coupure && vuPrec && !p.vu){
+        var nRien = lp.filter(function(q){ return !q.vu; }).length;
+        sep = '<li class="sep">Pas encore commencés · ' + nRien + '</li>';
+      }
+      vuPrec = p.vu;
+      return sep + ligne(p.ok === p.tot, esc(p.nom), p.cc, p.ok + " / " + p.tot,
         p.ok === p.tot ? "vert" : ((p.ok || p.entames) ? "partiel" : ""),
         'data-pays="' + p.cc + '"'); }).join("");
     h = lp.length ? "<ul>" + h + "</ul>" : '<div class="vide">Aucun pays ne correspond.</div>';
