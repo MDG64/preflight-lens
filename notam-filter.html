@@ -3392,6 +3392,35 @@
       }
     }
 
+    /* LA MÊME FLÈCHE, PAGE WEATHER. Cette page-là ne défile pas : son
+       en-tête est fixe et c'est la fenêtre des relevés qui bouge, sous elle.
+       La flèche se pose donc DANS la fenêtre (.wx-sheet est `relative`) et non
+       sur l'écran : elle glisse avec elle à l'ouverture, repart avec elle à la
+       croix, et n'a aucun état à tenir quand la fenêtre est rangée. Au-dessus
+       de la croix (z 2) parce qu'elles ne se croisent jamais — coins
+       opposés — mais que le relevé passe sous les deux. */
+    .to-top.in-sheet {
+      position: absolute;
+      z-index: 3
+    }
+
+    /* Le repère qui déclenche la flèche de la page Weather. Il n'a rien à
+       montrer : il tient la HAUTEUR à partir de laquelle on considère que le
+       haut du relevé est parti, et c'est tout. Elle vit ici, en CSS, et le
+       script la lit sur l'élément — aucun nombre en double.
+       140 px, comme l'en-tête de la page NOTAM : les deux flèches arrivent
+       après la même quantité de geste.
+       En `absolute` dans le conteneur qui défile, il suit le relevé sans
+       prendre une seule ligne dans le flux. */
+    .wx-top-mark {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1px;
+      height: 140px;
+      pointer-events: none
+    }
+
     /* ---------- bandeau « nouvelle version » ----------
        Caché par défaut : il n'apparaît que si le serveur porte une version
        plus récente que celle qui tourne. z-index au-dessus des overlays
@@ -5504,6 +5533,9 @@ body.light .stat.on {
        pendant que le relevé passe dessous. */
     .wx-sheet-scroll {
       height: 100%;
+      /* `relative` pour que le repère .wx-top-mark se cale sur le CONTENU et
+         défile avec lui, au lieu de rester collé à la fenêtre. */
+      position: relative;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       padding: 12px 20px calc(28px + env(safe-area-inset-bottom))
@@ -6560,11 +6592,20 @@ body .stat .k{
     <div class="wx-sheet" id="wxSheet" hidden>
       <button class="help-btn wx-sheet-x" id="wxSheetX" aria-label="Close the report" title="Close">×</button>
       <div class="wx-sheet-scroll" id="wxSheetScroll">
+        <!-- Repère invisible : voir .wx-top-mark. Il porte la hauteur au-delà
+             de laquelle la flèche de remontée paraît. -->
+        <div class="wx-top-mark" id="wxTopMark" aria-hidden="true"></div>
         <div class="wx-status" id="wxStatus"></div>
         <div id="wxBody"></div>
         <div class="wx-src">Source: NOAA/NWS Aviation Weather Center (aviationweather.gov). Decision support only —
           this display does not replace the official briefing of your company.</div>
       </div>
+      <!-- Flèche de remontée du relevé. Dans la fenêtre, pas sur l'écran :
+           c'est la fenêtre qui défile, et c'est elle que la flèche remonte. -->
+      <button class="to-top in-sheet" id="wxToTop" type="button" aria-label="Back to top" title="Back to top">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5.6M5.4 12.2 12 5.6l6.6 6.6"/></svg>
+      </button>
     </div>
   </div>
 
@@ -26058,6 +26099,48 @@ window.addEventListener("scroll", hidePop, true);
       btn.addEventListener("click", () => {
         const doux = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         window.scrollTo(doux ? { top: 0, behavior: "smooth" } : { top: 0 });
+      });
+      demander();
+    })();
+
+    /* ---------- la même flèche, page Weather ----------
+       Même règle, autre chose qui défile. Ici l'en-tête ne bouge pas : c'est
+       la fenêtre des relevés qui glisse sous lui, donc on ne surveille ni la
+       page ni le bandeau, mais le HAUT DU RELEVÉ — le repère .wx-top-mark,
+       posé au sommet du conteneur qui défile, avec `root` sur ce conteneur.
+
+       La même paire de signaux qu'à la page NOTAM, et pour la même raison :
+       l'observateur montre, vite et pendant l'inertie ; l'effacement exige EN
+       PLUS que le défilement soit réellement revenu au-dessus du repère, pour
+       qu'un changement de viewport ne puisse pas à lui seul retirer la
+       flèche. La hauteur du seuil n'est pas écrite ici : elle est lue sur le
+       repère, qui la tient en CSS.
+
+       Rien à raccorder pour les recouvrements : la flèche vit DANS la
+       fenêtre, elle disparaît donc avec elle. */
+    (function () {
+      const btn = document.getElementById("wxToTop");
+      const sc = document.getElementById("wxSheetScroll");
+      const marque = document.getElementById("wxTopMark");
+      if (!btn || !sc || !marque) return;
+      let horsVue = false;
+      function peindre() {
+        btn.classList.toggle("show", horsVue || sc.scrollTop >= marque.offsetHeight);
+      }
+      let prevue = false;
+      function demander() {
+        if (prevue) return;
+        prevue = true;
+        requestAnimationFrame(() => { prevue = false; peindre(); });
+      }
+      new IntersectionObserver(entrees => {
+        horsVue = !entrees[entrees.length - 1].isIntersecting;
+        peindre();
+      }, { root: sc, threshold: 0 }).observe(marque);
+      sc.addEventListener("scroll", demander, { passive: true });
+      btn.addEventListener("click", () => {
+        const doux = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        sc.scrollTo(doux ? { top: 0, behavior: "smooth" } : { top: 0 });
       });
       demander();
     })();
