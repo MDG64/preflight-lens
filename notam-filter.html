@@ -25985,6 +25985,23 @@ window.addEventListener("scroll", hidePop, true);
          flèche attendait donc la fin du geste au lieu de suivre le bandeau.
          Un IntersectionObserver, lui, est servi par le compositeur, pendant.
 
+       MAIS l'observateur ne décide pas SEUL de l'effacement, et c'est le point
+       délicat. Au téléphone, un balayage vers le haut rétracte la barre du
+       navigateur : la géométrie du viewport change sous la page, et le même
+       observateur peut alors annoncer brièvement que le bandeau est de retour
+       alors que personne n'est remonté. La flèche s'effaçait en plein
+       défilement, précisément au moment où on en avait besoin. Le même piège
+       est déjà décrit plus haut, pour le fond de #planOv.
+
+       D'où deux signaux au lieu d'un, et ils ne servent pas à la même chose :
+
+       — MONTRER est confié à l'observateur, qui est rapide et suit l'inertie.
+       — EFFACER exige EN PLUS que la page soit réellement revenue au-dessus du
+         bas du bandeau, mesuré en coordonnées DOCUMENT (scrollY contre
+         offsetTop + offsetHeight). Ces trois nombres-là ne bougent pas quand
+         la barre du navigateur se replie : un simple changement de viewport ne
+         peut donc plus effacer la flèche, seul un vrai retour en haut le peut.
+
        Seconde condition : aucun écran ne recouvre la page. Elle se lit à
        l'attribut `hidden` des recouvrements — ils s'ouvrent et se ferment
        tous par lui — plutôt qu'en doublant chaque bouton qui les ouvre : une
@@ -25996,22 +26013,44 @@ window.addEventListener("scroll", hidePop, true);
       const ecrans = Array.prototype.slice.call(document.querySelectorAll(
         ".home-screen, .wx-screen, .route-screen, .map-ov, .modal-ov, .favwx-ov"));
       let horsEcran = false;                  // le bandeau a-t-il quitté la vue
+      // Le bas du bandeau, dans le document et non dans l'écran.
+      function passeLeBandeau() {
+        const y = window.scrollY || document.documentElement.scrollTop || 0;
+        return y >= head.offsetTop + head.offsetHeight;
+      }
       function peindre() {
-        btn.classList.toggle("show", horsEcran && !ecrans.some(el => !el.hidden));
+        const recouvert = ecrans.some(el => !el.hidden);
+        btn.classList.toggle("show", !recouvert && (horsEcran || passeLeBandeau()));
+      }
+      let prevue = false;
+      function demander() {
+        if (prevue) return;
+        prevue = true;
+        requestAnimationFrame(() => { prevue = false; peindre(); });
       }
       new IntersectionObserver(entrees => {
         horsEcran = !entrees[entrees.length - 1].isIntersecting;
         peindre();
       }, { threshold: 0 }).observe(head);
+      // Le second signal. `scroll` seul arriverait trop tard au doigt — c'est
+      // pour ça que l'observateur existe —, mais il est ce qui réveille la
+      // flèche quand la barre du navigateur a menti à l'observateur.
+      window.addEventListener("scroll", demander, { passive: true });
+      window.addEventListener("resize", demander);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", demander);
+        window.visualViewport.addEventListener("scroll", demander);
+      }
       /* Fermer un écran ne fait défiler personne, donc n'apprend rien à
          l'observateur : sans cette veille, la flèche resterait effacée
          jusqu'au prochain geste. */
-      const veille = new MutationObserver(peindre);
+      const veille = new MutationObserver(demander);
       ecrans.forEach(el => veille.observe(el, { attributes: true, attributeFilter: ["hidden"] }));
       btn.addEventListener("click", () => {
         const doux = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         window.scrollTo(doux ? { top: 0, behavior: "smooth" } : { top: 0 });
       });
+      demander();
     })();
   </script>
 </body>
