@@ -16,6 +16,12 @@
        127.0.0.1:8787 : le proxy en développement local, cf. BACKEND_URL. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Détecteurs de données d'iOS, coupés comme sur minima.html. Sans cela,
+       la tablette souligne de son propre trait les suites de chiffres qu'elle
+       prend pour des heures, des dates ou des numéros de téléphone : les
+       groupes d'un METAR ou d'un TAF (« 291330Z », « 2912/3018 »), et les
+       périodes de validité qui ouvrent chaque NOTAM. -->
+  <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
   <!-- Pas de référencement tant que l'app n'est pas sur les stores (2026-08-04).
        N'interdit PAS l'accès : voir robots.txt. À retirer à la publication. -->
   <meta name="robots" content="noindex, nofollow">
