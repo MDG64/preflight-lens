@@ -3366,6 +3366,16 @@
     .mapwx-note.warn { color: var(--amber) }
     .mapwx-note.err { color: var(--red) }
 
+    /* La porte vers les minima du terrain affiché. `.btn` ne porte pas de
+       hauteur — il vit d'ordinaire dans une rangée qui la lui donne ; ici il
+       est seul dans un panneau qui défile, il pose donc la sienne. */
+    .mapwx-minima {
+      display: block;
+      width: 100%;
+      height: 34px;
+      margin-top: 12px;
+    }
+
     /* Rappel du geste : sur un écran tactile la poignée ne se voit pas,
        il faut le dire une fois. */
     .mapwx-hint {
@@ -6488,7 +6498,9 @@ body .stat .k{
             map draws it. Its switch flips between the <b>NOTAM view</b> and the <b>weather view</b>: one dot per
             METAR station, coloured by visibility and ceiling — <b>red</b> from 1&nbsp;000 m or 500 ft, <b>amber</b>
             from 2&nbsp;000 m or 1&nbsp;000 ft. Your <b>favourites</b> carry a dot <b>twice the usual size</b> —
-            the colour does not change, it still says the weather (or the NOTAM coverage). A yellow <b>⚡</b> marks a
+            starred here or in Minima, it is one map for both; the colour does not change, it still says the
+            weather (or the NOTAM coverage). Tap a dot to read its METAR and TAF, its wind on each runway, and
+            to open its <b>minima</b>. A yellow <b>⚡</b> marks a
             station whose METAR reports a <b>CB</b> or whose TAF announces one. The <b>Wind</b> switch adds
             surface-wind arrows — one per 10 kt, gusts and trend groups included; <b>now/+1/+2/+3&nbsp;h</b> shows
             the TAF wind as dashed arrows. From the regional zoom on, each aerodrome writes its <b>runway QFU</b>
@@ -14601,6 +14613,21 @@ E) ${e}`;
     let currentIcao = "";         // code OACI chargé
     let tab = null;               // onglet déplié : "fav", "route", ou aucun
     function loadFavs() { try { return JSON.parse(localStorage.getItem("notam_favs") || "[]"); } catch (e) { return []; } }
+    /* Les favoris que la CARTE grossit : ceux d'ici ET ceux du module Minimas
+       (clé `wl-minima-favs`, même origine). Depuis qu'il n'y a plus qu'une
+       carte pour les deux apps, c'est elle qui doit montrer les deux listes —
+       sinon un terrain mis en favori là-bas perdait son gros disque en
+       arrivant ici, alors que c'est le même pilote et le même vol. Les
+       étoiles, elles, restent séparées : ce sont deux gestes, dans deux
+       pages, sur deux objets différents. */
+    function mapFavSet() {
+      const out = new Set(favs);
+      try {
+        const a = JSON.parse(localStorage.getItem("wl-minima-favs") || "[]");
+        if (Array.isArray(a)) for (const c of a) if (typeof c === "string") out.add(c.toUpperCase());
+      } catch (e) { }
+      return out;
+    }
     function saveFavs(a) { try { localStorage.setItem("notam_favs", JSON.stringify(a)); } catch (e) { } }
     /* Routes favorites : une liste de listes de codes, dans l'ordre
        départ -> destination -> dégagement. Rangées à part des terrains
@@ -17646,6 +17673,8 @@ function renderInfo(icao) {
       // même arbitrage que MapLibre sur Weather Lens (text-allow-overlap),
       // on lit moins de codes mais on les lit. En vue NOTAM rien ne change,
       // les codes sont ce qu'on cherche des yeux.
+      // Une seule lecture des favoris par image, pour les deux couches.
+      const favSet = mapFavSet();
       const showLabels = v.scale > (mapMode === "wx" ? 91 : 58);   // un cran de molette = ×1.18
       const labelsMayDrop = mapMode === "wx" && v.scale <= 58 * 1.18 ** 5;
       // Les QFU se posent SOUS la capsule du code, jamais ailleurs : à ce
@@ -17701,7 +17730,6 @@ function renderInfo(icao) {
         // la météo (ou la couverture NOTAM). Le rayon devient donc propre à
         // chaque terrain (p.r) : l'écart de la capsule et la zone cliquable
         // le suivent.
-        const favSet = new Set(favs);
         const rOf = icao => favSet.has(icao) ? dotR * 2 : dotR;
         // anti-collision avec les libellés de villes du fond : on reprojette leurs boîtes
         // (calculées dans le référentiel du canvas de fond) dans le référentiel écran courant
@@ -17839,7 +17867,7 @@ function renderInfo(icao) {
         // c'est là que la route rentre dans le rang et partage le rayon
         // commun. En vue NOTAM elle garde son propre cran d'avance, qui dit
         // déjà le rôle de vol — le doubler en ferait une tache.
-        const favDot = wxView && favs.includes(a.icao) ? 2 : 1;
+        const favDot = wxView && favSet.has(a.icao) ? 2 : 1;
         const dotR = (wxView ? WORLD_DOT_R : (depArr ? 8 : 6.5)) * dpr * favDot;
         ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
         ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = (wxView ? 1.2 : 1.8) * dpr; ctx.stroke();
@@ -18557,6 +18585,17 @@ function renderInfo(icao) {
       const m = AIRPORTS[icao];
       const head = `<div class="mapwx-head"><span class="mapwx-code">${icao}</span>`
         + `<span class="mapwx-name">${m ? esc(m.city + " · " + m.cc) : ""}</span></div>`;
+      /* La porte vers les minima, depuis la carte : c'est le chemin que la
+         carte de Minima Lens portait avant qu'il n'y en ait plus qu'une — un
+         terrain repéré à la couleur de son point, et ses minima dans la
+         foulée. Même contrat que les trois autres portes (openMinima, ?dep=…).
+         Elle est là MÊME quand le relevé manque : c'est justement le moment
+         où l'on va voir ailleurs, et la page voisine, elle, a sa copie. */
+      const MINIMA_BTN = `<button class="btn mapwx-minima" type="button">Minima — DA/DH · RVR</button>`;
+      const bindMinima = () => {
+        const mb = body.querySelector(".mapwx-minima");
+        if (mb) mb.onclick = () => openMinima([{ icao }]);
+      };
       /* Même matière que la page Weather : blocs METAR/TAF, âges datés,
          TAF plié aux groupes d'évolution. */
       const render = (d, note, noteCls) => {
@@ -18570,7 +18609,9 @@ function renderInfo(icao) {
           + `<pre class="wx-raw${d && d.taf && d.taf.raw ? "" : " empty"}">${d && d.taf && d.taf.raw ? wxSevHtml(tafPretty(d.taf.raw)) : esc(wxAbsent("taf", icao, d))}</pre></div>`
           + wxRunwaysHtml(icao, d)
           + `<div class="wx-block" id="dwxSec" hidden></div>`
+          + MINIMA_BTN
           + `<p class="mapwx-hint">Swipe down to close.</p>`;
+        bindMinima();
         fitMapWxSide();
         /* La bande du jour se glisse en pied de panneau quand elle arrive —
            après les vents par QFU, qui parlent à la décision quand elle ne
@@ -18609,7 +18650,7 @@ function renderInfo(icao) {
         const cached = wxLoad(icao);
         const note = wxFailNote(e, cached);
         if (cached) render(cached, note, "err");
-        else { body.innerHTML = head + `<div class="mapwx-note err">${esc(note)}</div>`; fitMapWxSide(); }
+        else { body.innerHTML = head + `<div class="mapwx-note err">${esc(note)}</div>` + MINIMA_BTN; bindMinima(); fitMapWxSide(); }
       }
     }
     (() => { // fermeture du panneau : croix, et glissement du doigt vers le bas

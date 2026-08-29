@@ -1967,14 +1967,10 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 #mSetupHost{max-width:520px;margin:0 auto}
 #mSetupHost .setup-body{border-top:0;padding:0}
 
-/* ===================================================================
-   Carte METAR mondiale. Plein écran au-dessus de tout, fond MapLibre
-   repris de NOTAM Lens, points en couche `circle`. La légende reprend
-   les quatre catégories servies par /api/wx/map.
-   =================================================================== */
-#wxMapOv{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column}
-#wxMapOv[hidden]{display:none}
-body.mobile #wxMapOv:not([hidden]){display:flex}
+/* Barre pleine largeur, en tête d'une présentation plein écran. Elle a
+   habillé la carte METAR de cette page ; celle-ci a rejoint la carte de
+   Preflight Lens — une seule carte pour les deux apps, voir goHost — et la
+   barre ne sert plus qu'au bilan de vol, qui l'employait déjà. */
 .wxmap-bar{
   display:flex;align-items:center;gap:12px;padding:9px 14px;flex:none;
   background:var(--panel);border-bottom:1px solid var(--line2);
@@ -2003,225 +1999,7 @@ body.mobile #wxMapOv:not([hidden]){display:flex}
   #rtOv .m-gear,#rtOv .m-back{width:34px}
   #rtOv .m-link{padding:0 5px;font-size:11.5px}
 }
-.wxmap-host{position:relative;flex:1;min-height:0}
-#wxMap{position:absolute;inset:0}
-/* MapLibre pose sa propre taille de police ; on garde la nôtre. */
-#wxMap .maplibregl-canvas{outline:none}
-
-/* Bloc bas-gauche : interrupteur NOTAM empilé sur la légende. C'est lui qui
-   porte l'ancrage ; la légende n'est plus qu'une carte dans la pile. */
-.wxmap-tools{
-  position:absolute;left:10px;bottom:10px;z-index:5;
-  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
-  max-width:min(320px,calc(100% - 20px));
-}
-.wxmap-legend{
-  background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);
-  box-shadow:var(--elev);padding:9px 12px;display:flex;flex-direction:column;gap:4px;
-}
-/* Deux positions, comme un interrupteur mural : le rond est à gauche et vide,
-   les codes sont éteints ; on clique, il glisse à droite et se remplit de
-   vert, les codes sont à l'écran. Le trajet dit le geste, la couleur dit
-   l'état — même code vert que les pastilles de la légende juste en dessous. */
-.wxmap-notam{
-  display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;
-  background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);
-  box-shadow:var(--elev);padding:7px 12px;
-}
-.wxmap-notam:hover{border-color:var(--steel-dim)}
-.wxmap-notam input{position:absolute;opacity:0;width:0;height:0}
-.wxmap-notam .rd{
-  position:relative;width:30px;height:16px;border-radius:999px;flex:none;
-  border:1.5px solid var(--line2);background:transparent;
-  transition:border-color .15s,background .15s;
-}
-/* Le curseur lui-même : rond vide à gauche au repos. */
-.wxmap-notam .rd::after{
-  content:"";position:absolute;top:50%;left:1.5px;transform:translate(0,-50%);
-  width:11px;height:11px;border-radius:50%;
-  border:1.5px solid var(--line2);background:transparent;
-  transition:transform .16s ease,background .15s,border-color .15s;
-}
-.wxmap-notam input:checked+.rd{border-color:var(--green)}
-.wxmap-notam input:checked+.rd::after{
-  transform:translate(14px,-50%);background:var(--green);border-color:var(--green);
-}
-.wxmap-notam:hover .rd{border-color:var(--steel-dim)}
-.wxmap-notam input:focus-visible+.rd{outline:2px solid var(--cyan);outline-offset:2px}
-.wxmap-notam .lb{
-  font:600 10.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
-}
-.wxmap-notam input:checked~.lb{color:var(--text)}
-/* Sélecteur d'horizon du vent : quatre ronds à cocher, un seul allumé — le
-   rond se remplit de vert comme le curseur des interrupteurs voisins. Il
-   n'existe à l'écran que quand WIND montre ses flèches. */
-#wxMapOv:not(.wind-on) .wxwind-hours{display:none}
-.wxwind-hours{gap:12px;padding:7px 12px}
-.wxwind-hours .wh{
-  display:flex;align-items:center;gap:5px;background:none;border:0;padding:0;
-  cursor:pointer;font:600 10.5px/1 var(--sans);letter-spacing:.09em;
-  text-transform:uppercase;color:var(--muted);
-}
-.wxwind-hours .wh .c{
-  width:11px;height:11px;border-radius:50%;flex:none;
-  border:1.5px solid var(--line2);background:transparent;
-  transition:background .15s,border-color .15s;
-}
-.wxwind-hours .wh:hover{color:var(--text)}
-.wxwind-hours .wh:hover .c{border-color:var(--steel-dim)}
-.wxwind-hours .wh.on{color:var(--text)}
-.wxwind-hours .wh.on .c{background:var(--green);border-color:var(--green)}
-.wxwind-hours .wh:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
-/* Le bandeau LEGEND au-dessus du cartouche : même carte que les
-   interrupteurs, le mot à gauche, l'œil à droite. Replié, le cartouche
-   disparaît et le bandeau reste — c'est lui qui fait revenir la légende. */
-.wxleg-head{
-  display:flex;align-items:center;gap:9px;
-  background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);
-  box-shadow:var(--elev);padding:4px 8px 4px 12px;
-}
-.wxleg-head .lb{
-  font:600 10.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
-}
-.wxleg-eye{
-  display:flex;align-items:center;justify-content:center;flex:none;
-  width:22px;height:22px;padding:0;cursor:pointer;color:var(--muted);
-  background:none;border:0;border-radius:6px;
-}
-.wxleg-eye:hover{color:var(--text);background:var(--panel2)}
-.wxleg-eye svg{width:16px;height:16px;display:block}
-.wxleg-eye .off{display:none}
-#wxMapOv.leg-off .wxmap-legend{display:none}
-#wxMapOv.leg-off .wxleg-eye .on{display:none}
-#wxMapOv.leg-off .wxleg-eye .off{display:block}
-.wxleg{display:flex;align-items:center;gap:8px;font:12px/1.35 var(--sans);color:var(--text)}
-.wxleg .dot{width:9px;height:9px;border-radius:50%;flex:none}
-.wxleg .dot.red{background:var(--red)}
-.wxleg .dot.amber{background:var(--amber)}
-.wxleg .dot.green{background:var(--green)}
-.wxleg .dot.grey{background:var(--muted2)}
-/* L'attribution ne vit PAS dans le cartouche : celui-ci s'ouvre replié et se
-   replie encore quand le vent allonge la légende, le crédit ne serait alors
-   jamais à l'écran — ce que l'ODbL d'OpenStreetMap ne permet pas. Sa propre
-   pastille, sous la pile, reste visible dans le coin de la carte en toute
-   circonstance ; la page « ? » en donne la version longue et les licences. */
-.wxmap-attr{
-  font:10px/1.4 var(--sans);color:var(--muted2);
-  background:var(--panel);border:1px solid var(--line2);border-radius:4px;
-  box-shadow:var(--elev);padding:2px 7px;
-}
-.wxmap-attr a{color:inherit;text-decoration:underline;text-underline-offset:2px}
-.wxmap-attr a:hover{color:var(--text)}
-/* Les deux lignes NOTAM n'apparaissent qu'avec les étiquettes qu'elles
-   expliquent — légende muette tant que la carte ne les montre pas. */
-.wxleg.nt{display:none}
-#wxMapOv.notam-on .wxleg.nt{display:flex}
-/* Même règle pour les trois lignes du vent : elles n'expliquent les flèches
-   que quand l'interrupteur WIND les a fait apparaître. */
-.wxleg.wd{display:none}
-#wxMapOv.wind-on .wxleg.wd{display:flex}
-.wxleg .wda{font:700 12px/1 var(--num);font-style:normal;flex:none;letter-spacing:-.08em;min-width:24px}
-.wxleg .wda.g{color:var(--green)}
-.wxleg .wda.a{color:var(--amber)}
-.wxleg .wda.r{color:var(--red)}
-.wxleg .wda.f{color:var(--muted)}
-.wxleg .wda.cb{color:var(--gold)}
-.wxleg .tag{font:700 11px/1 var(--num);letter-spacing:.06em;flex:none;font-style:normal}
-.wxleg .tag.dl{color:var(--green)}
-.wxleg .tag.nd{color:var(--red)}
-/* Les QFU ne portent aucun verdict — ni météo, ni téléchargement : la piste
-   est de la géographie. Le ton neutre de la légende dit exactement ça. */
-.wxleg .tag.rwy{color:var(--muted)}
-
-/* Panneau METAR/TAF : au clic sur un point ou sur un code, il monte du bas et
-   se pose SUR la carte, sans la couvrir — la station cliquée et son voisinage
-   restent lisibles au-dessus. Une bulle ancrée au point, elle, se plaçait où
-   elle pouvait et masquait justement ce qu'on venait de viser.
-   Il se referme comme il est venu : un glissement du doigt vers le bas. */
-.wxside{
-  position:absolute;left:0;right:0;bottom:0;z-index:10;
-  max-height:min(70%,540px);display:flex;flex-direction:column;
-  background:var(--panel);border-top:1px solid var(--line2);box-shadow:var(--elev-hi);
-  border-radius:14px 14px 0 0;
-  transform:translateY(101%);           /* 101% : l'ombre portée sort aussi du cadre */
-  transition:transform .22s ease;
-}
-.wxside.open{transform:translateY(0)}
-/* La poignée : une barre qu'on voit et qu'on saisit. `touch-action:none` la
-   réserve à nous — sinon le navigateur prend le glissement vers le bas pour un
-   défilement, aucun pointermove n'arrive et le panneau ne se ferme jamais. */
-.wxside-grip{flex:none;height:22px;position:relative;cursor:grab;touch-action:none}
-.wxside-grip::before{
-  content:"";position:absolute;left:50%;top:9px;width:38px;height:4px;
-  margin-left:-19px;border-radius:2px;background:var(--line2);
-}
-/* Pendant le glissement, le panneau suit le doigt : plus de transition, sinon
-   il traîne d'un cinquième de seconde derrière lui. Et plus de sélection —
-   le même geste à la souris surlignerait le relevé. */
-.wxside.drag{transition:none;user-select:none}
-.wxside[hidden]{display:none}
-/* Le corps EST le conteneur de défilement : c'est SA valeur de touch-action
-   que le navigateur consulte, pas celle du panneau au-dessus. Le pan-y lui
-   laisse le défilement du relevé ; la fermeture, elle, se prend par la
-   poignée. `contain` garde le défilement en bout de course pour lui, sans le
-   laisser déborder sur la carte. */
-.wxside-body{flex:1;min-height:0;overflow:auto;padding:2px 14px 16px;touch-action:pan-y;overscroll-behavior:contain}
-/* Relevé assez court pour tenir sans défiler : il n'y a plus de défilement à
-   protéger, le doigt ferme le panneau depuis n'importe où. */
-.wxside-body.short{touch-action:none}
-.wxside-x{
-  position:absolute;right:6px;top:6px;z-index:1;
-  background:none;border:0;cursor:pointer;color:var(--muted);
-  font:18px/1 var(--sans);padding:4px 8px;border-radius:8px;
-}
-.wxside-x:hover{background:var(--panel2);color:var(--text)}
-.wxpop-head{display:flex;align-items:center;gap:8px;padding-right:26px}
-.wxpop-dot{width:10px;height:10px;border-radius:50%;flex:none}
-.wxpop-icao{font:700 15px/1 var(--num);letter-spacing:.06em}
-.wxpop-age{color:var(--muted);font-size:11px}
-.wxpop-sec{margin-top:9px}
 .wxpop-lbl{font:600 10px/1 var(--sans);letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
-/* Le relevé ne défile plus dans sa propre boîte : c'est le panneau entier qui
-   défile, sur toute la hauteur de la carte. */
-.wxpop-raw{
-  font-family:var(--mono);font-size:12px;line-height:1.5;word-break:break-word;
-  background:var(--field);border:1px solid var(--line);border-radius:6px;
-  padding:6px 8px;
-}
-.wxpop-raw mark{color:inherit;background:none;border-radius:3px;padding:1px 2px}
-.wxpop-raw mark.sev-amber{background:color-mix(in srgb,var(--amber) 32%,transparent)}
-.wxpop-raw mark.sev-red{background:color-mix(in srgb,var(--red) 32%,transparent)}
-.wxpop-open{margin-top:10px}
-/* Rappel du geste, sous le bouton : sur un écran tactile la poignée ne se
-   voit pas, il faut le dire une fois. */
-.wxside-hint{
-  margin-top:12px;font:11px/1.4 var(--sans);color:var(--muted2);
-}
-/* QFU du relevé : vent efficace et traversier, sous METAR et TAF. Une ligne
-   par QFU, deux colonnes — le vent du METAR à gauche, le pire de la journée
-   (METAR ou TAF, rafales comprises) à droite. Colonnes en max-content : la
-   colonne max se lit collée à celle du METAR, pas repoussée au bord droit. */
-.rwx{
-  display:grid;grid-template-columns:auto max-content max-content;justify-content:start;
-  gap:4px 12px;align-items:baseline;
-  font:500 12px/1.5 var(--mono);font-variant-numeric:tabular-nums;
-  background:var(--field);border:1px solid var(--line);border-radius:6px;
-  padding:8px 10px;
-}
-.rwx .h{font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:var(--muted2);text-transform:uppercase}
-.rwx .id{font-weight:700;color:var(--text)}
-.rwx .c{white-space:nowrap}
-/* Le vent se lit vert tant qu'il reste ordinaire ; seule la composante qui
-   sort du cadre se teinte. */
-.rwx .ok{color:var(--green)}
-.rwx .warn{color:var(--amber)}
-.rwx .bad{color:var(--red)}
-.rwx .xw{color:var(--muted)}
-/* L'heure du groupe METAR/TAF qui donne la composante, collée à sa valeur. */
-.rwx .t{font-size:9px;color:var(--muted2);margin-left:2px}
-/* Rafale VRB d'un TEMPO/PROB, écartée des composantes : rappelée sous la
-   table — le triangle, l'heure du groupe et le vent. */
-.rwx .vrb{grid-column:1/-1;color:var(--amber);font-size:11px}
 /* Bande météo du jour : quatre instantanés — heure, pictogramme, température —
    sous le TAF. Les échéances visent le matin, le midi, l'après-midi et le soir
    SOLAIRES du terrain (déduits de sa longitude), mais s'étiquettent en Z,
@@ -2252,8 +2030,9 @@ body.mobile #wxMapOv:not([hidden]){display:flex}
    L'autre présentation de Minima Lens : la route entière — départ,
    destination, dégagement destination — sur un seul écran, un terrain par
    carte, chacun jugé par LE MÊME moteur que son onglet de phase. Plein
-   écran comme la carte METAR ; au-dessus des réglages mobiles (60), sous
-   la carte (80) et la page « ? » (90). */
+   écran ; au-dessus des réglages mobiles (60) et sous la page « ? » (90).
+   Le 80 laissé libre était celui de la carte METAR, partie rejoindre celle
+   de Preflight Lens. */
 #rtOv{position:fixed;inset:0;z-index:75;background:var(--bg);display:flex;flex-direction:column}
 #rtOv[hidden]{display:none}
 body.mobile #rtOv:not([hidden]){display:flex}
@@ -2344,8 +2123,8 @@ body.mobile #rtOv:not([hidden]){display:flex}
 .rt-nmore{font:400 10px/1.4 var(--sans);color:var(--muted)}
 /* Le NOTAM en entier : il monte du bas de l'écran et se pose SUR ce qu'on
    lisait, sans le couvrir — le bilan comme la fiche d'un terrain restent
-   lisibles au-dessus. Même panneau que celui des relevés de la carte METAR,
-   mêmes gestes : la croix, Échap, ou un glissement du doigt vers le bas.
+   lisibles au-dessus. Trois gestes pour le refermer : la croix, Échap, ou
+   un glissement du doigt vers le bas.
    Fixé au bloc de vue, plus au bilan : la bande NOTAM d'une fiche l'ouvre
    aussi, bilan fermé. Au-dessus de toutes les surcouches (95 au plus haut) —
    c'est toujours la dernière ouverte. */
@@ -2448,7 +2227,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
     <button class="btn primary go" id="fetchBtn" title="Fetch this aerodrome"
             aria-label="Fetch this aerodrome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 12h15M12 5.4l6.6 6.6L12 18.6"/></svg></button>
     <button class="btn" id="rtBtn" title="Minima — departure, destination and alternate at a glance">Flight</button>
-    <button class="btn" id="mapBtn" title="World METAR map — visibility and ceiling at a glance">Map</button>
+    <button class="btn" id="mapBtn" title="Map — this aerodrome on the Preflight Lens map">Map</button>
     <div class="fetch-state" id="fetchState">Fictitious example loaded — not a real report.</div>
     <div class="hdr-actions">
       <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day / night mode">☀</button>
@@ -2596,22 +2375,10 @@ body.mobile #rtOv:not([hidden]){display:flex}
       <div class="hd-row">
         <div class="hd-vis"><span class="hd-chip">Map</span></div>
         <div class="hd-arr">→</div>
-        <div class="hd-desc">World <b>METAR map</b>: one dot per station, coloured by visibility and ceiling —
-          <b>red</b> from 1&nbsp;000 m or 500 ft, <b>amber</b> from 2&nbsp;000 m or 1&nbsp;000 ft, green above.
-          Your <b>favourites</b> carry a dot <b>twice the usual size</b> — the colour does not change, it still
-          says the weather. Tap a dot to read its METAR and TAF, and to load it here. A yellow <b>⚡</b> marks a station whose METAR
-          reports a <b>CB</b> or whose TAF announces one. The <b>Wind</b> switch adds surface-wind
-          arrows — one arrow per 10 kt, blowing downwind onto the station; green up to 20 kt, amber up
-          to 30, red above. The arrow always shows the strongest wind the METAR announces — gusts
-          and trend groups (TEMPO, BECMG) included; a variable-direction gust (a squall's
-          <b>VRB</b> under TEMPO) has no direction to draw, so the main wind keeps the arrow and
-          the gust raises the <b>⚠</b> marker on its own — amber above 40 kt, red above 50. The <b>now / +1h / +2h / +3h</b> selector shows the wind the TAF forecasts
-          for that hour, as dashed arrows; a station whose TAF gives no wind for that hour keeps its
-          METAR wind. From the regional zoom on, each aerodrome writes its <b>runway QFU</b> beside its
-          dot — <b>08/26</b>, the main runway alone at first, then the whole list as you <b>zoom in</b>:
-          three pairs at most, longest first, and the count of the others. They step aside from the wind
-          arrows and the ⚡, they come from your own aerodrome record when you have edited one and from
-          the seed otherwise, and they need no switch.</div>
+        <div class="hd-desc">Open the <b>Preflight Lens map</b> on the aerodrome shown. There is <b>one map for
+          both apps</b>, and it is that one: it draws your route, it switches between the weather view and the
+          NOTAM coverage view, and it carries its own offline basemap — none of which this page ever had. It is
+          another document, so the aerodrome travels in the address; the map hands it back the same way.</div>
       </div>
       <div class="hd-row">
         <div class="hd-vis"><span class="hd-btn">☀</span></div>
@@ -2714,7 +2481,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
       <div class="hd-sec">On the phone</div>
       <p class="hd-p">Below 600 px the layout becomes a single column: favourites, ICAO, evaluation time, then one
         line per phase. The top bar carries <b>Home</b> back to the start screen, the <b>waypoints</b> to the same
-        Minima screen, <b>NOTAM</b> out to Preflight Lens, and <b>Map</b> to the same world map; the gear opens the
+        Minima screen, <b>NOTAM</b> out to Preflight Lens, and <b>Map</b> to its map; the gear opens the
         same setup and the <b>?</b> this same page. The engine, the parser and the database are the same — only the
         layout changes.</p>
 
@@ -2722,8 +2489,10 @@ body.mobile #rtOv:not([hidden]){display:flex}
            le CC BY de MET Norway (crédit + lien vers la licence), sans autre
            abri depuis que la bande du jour et le volet des favoris n'affichent
            plus leur ligne de source. Les autres crédits dus vivent déjà à
-           l'écran : l'ODbL au coin de la carte — hors cartouche, il survit au
-           repli de la légende —, le SIA et le NATS au pied du panneau terrain.
+           l'écran : le SIA et le NATS au pied du panneau terrain. L'ODbL
+           d'OpenStreetMap est parti avec la carte, qui est celle de Preflight
+           Lens désormais — c'est elle qui porte le crédit, au coin du fond
+           qu'elle affiche.
            Les pictos Yr (MIT) portent leur notice dans vendor/weather/LICENSE :
            rien à afficher. Le domaine public (NOAA, OurAirports, FAA) n'exige
            rien : parti. -->
@@ -2751,88 +2520,6 @@ body.mobile #rtOv:not([hidden]){display:flex}
     <button class="m-back" id="mOvClose" aria-label="Close settings">×</button>
   </div>
   <div id="mSetupHost"></div>
-</div>
-<!-- Carte METAR mondiale : un point par station, couleur = visibilité/plafond
-     du dernier METAR (catégories calculées par le serveur, /api/wx/map). Fond
-     MapLibre repris de NOTAM Lens, panneau METAR+TAF au clic sur un point.
-     Piloté par WXMAP, en fin de script. -->
-<div id="wxMapOv" hidden>
-  <div class="wxmap-bar">
-    <span class="wxmap-title">METAR map</span>
-    <span class="wxmap-state" id="wxMapState">Loading…</span>
-    <button class="m-back ov-help" id="wxMapHelp" aria-label="How to use" title="How to use">?</button>
-    <button class="m-back" id="wxMapClose" aria-label="Close map" title="Close map">×</button>
-  </div>
-  <div class="wxmap-host">
-    <div id="wxMap"></div>
-    <!-- Panneau METAR/TAF, rempli par openSide(). Il monte du bas, se pose sur
-         la carte sans la couvrir, et repart d'un glissement du doigt vers le
-         bas — la poignée dit où le prendre. -->
-    <aside class="wxside" id="wxSide" hidden aria-label="Reports for the selected aerodrome">
-      <div class="wxside-grip" aria-hidden="true"></div>
-      <button class="wxside-x" id="wxSideX" aria-label="Close reports" title="Close reports">×</button>
-      <div class="wxside-body" id="wxSideBody"></div>
-    </aside>
-    <!-- Bloc bas-gauche : l'interrupteur NOTAM juste au-dessus de la légende
-         qu'il complète — on allume les codes et on lit leur code couleur au
-         même endroit, sans traverser l'écran. -->
-    <div class="wxmap-tools">
-      <label class="wxmap-notam" title="Show each station's ICAO code, coloured by NOTAM download state">
-        <input type="checkbox" id="wxNotamChk">
-        <span class="rd" aria-hidden="true"></span>
-        <span class="lb">NOTAM</span>
-      </label>
-      <label class="wxmap-notam" title="Show surface wind at each station — one arrow per 10 kt, strongest wind announced (gusts and TEMPO included), blowing downwind onto the station; a variable-direction gust (VRB in a squall) has no arrow to give, so it raises the warning marker instead">
-        <input type="checkbox" id="wxWindChk">
-        <span class="rd" aria-hidden="true"></span>
-        <span class="lb">Wind</span>
-      </label>
-      <!-- Sélecteur d'horizon du vent, visible seulement quand WIND est
-           allumé : NOW = vent du METAR, +1/+2/+3 h = vent prévu par le TAF à
-           cette heure-là (flèches en pointillés) ; un terrain dont le TAF ne
-           change pas le vent garde celui du METAR. -->
-      <div class="wxmap-notam wxwind-hours" id="wxWindHours" role="radiogroup" aria-label="Wind time"
-           title="Wind time — NOW shows the METAR wind; +1/+2/+3 h show the TAF forecast wind (dashed arrows). Stations whose TAF gives no wind for that hour keep their METAR wind.">
-        <button type="button" class="wh on" data-h="0" aria-label="METAR wind now"><i class="c" aria-hidden="true"></i>now</button>
-        <button type="button" class="wh" data-h="1" aria-label="TAF wind in 1 hour"><i class="c" aria-hidden="true"></i>+1h</button>
-        <button type="button" class="wh" data-h="2" aria-label="TAF wind in 2 hours"><i class="c" aria-hidden="true"></i>+2h</button>
-        <button type="button" class="wh" data-h="3" aria-label="TAF wind in 3 hours"><i class="c" aria-hidden="true"></i>+3h</button>
-      </div>
-      <!-- Le bandeau LEGEND coiffe le cartouche ; son œil le replie et le fait
-           revenir — la carte se lit alors sans légende, le bandeau seul reste.
-           Les interrupteurs, eux, ne bougent pas — on ne cache que ce qui
-           EXPLIQUE, jamais ce qui AGIT. -->
-      <div class="wxleg-head">
-        <span class="lb">Legend</span>
-        <button class="wxleg-eye" id="wxLegEye" type="button" aria-label="Hide or show the legend" title="Hide / show legend">
-          <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-          <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-        </button>
-      </div>
-      <div class="wxmap-legend">
-        <span class="wxleg"><i class="dot red"></i>VIS ≤ 1 000 m or ceiling ≤ 500 ft</span>
-        <span class="wxleg"><i class="dot amber"></i>VIS ≤ 2 000 m or ceiling ≤ 1 000 ft</span>
-        <span class="wxleg"><i class="dot green"></i>VIS &gt; 2 000 m and ceiling &gt; 1 000 ft</span>
-        <span class="wxleg"><i class="dot grey"></i>No usable data</span>
-        <span class="wxleg nt"><i class="tag dl">LFPG</i>NOTAM downloaded — readable offline</span>
-        <span class="wxleg nt"><i class="tag nd">LFBO</i>NOTAM not downloaded</span>
-        <span class="wxleg wd"><i class="wda g">↑</i>Wind/gust 3–10 kts</span>
-        <span class="wxleg wd"><i class="wda g">↑↑</i>Wind/gust 11–20 kts</span>
-        <span class="wxleg wd"><i class="wda a">↑↑↑</i>Wind/gust 21–30 kts</span>
-        <span class="wxleg wd"><i class="wda r">↑↑↑</i>Wind/gust 31–40 kts</span>
-        <span class="wxleg wd"><i class="wda a">⚠</i>Wind/gust 41–50 kts</span>
-        <span class="wxleg wd"><i class="wda r">⚠</i>Wind/gust &gt; 50 kts</span>
-        <span class="wxleg wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
-        <span class="wxleg"><i class="wda cb">⚡</i>CB in the METAR or the TAF</span>
-        <span class="wxleg"><i class="tag rwy">08/26</i>Runway QFU — main runway, all of them zoomed in</span>
-      </div>
-      <!-- Crédit obligatoire du fond de carte, hors du cartouche pour survivre
-           à son repli. Repris en entier — licences et liens — dans Data
-           sources, page « ? ». -->
-      <div class="wxmap-attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank"
-          rel="noopener">OpenStreetMap</a> contributors · OpenFreeMap · wx AWC</div>
-    </div>
-  </div>
 </div>
 <!-- Bilan de vol : la route — départ, destination, dégagement destination —
      jugée d'un seul écran par le même moteur que les onglets de phase. Les
@@ -6309,7 +5996,7 @@ const state = {
      destination que Destination, le dégagement que Dest. alternate. `null` =
      présentation complète. La page focalisée le reste quel que soit le
      terrain qu'on y charge — le créneau de la route suit (RTV.retarget) ;
-     seuls Home (mobile) et la carte METAR ramènent les cinq onglets. */
+     seul Home (mobile) ramène les cinq onglets. */
   routeFocus:null
 };
 /* Valeur effective d'un plafond : la saisie de la page si elle existe, sinon
@@ -8887,8 +8574,8 @@ function reparse(){
     /* Une page focalisée le reste : le terrain qui vient d'arriver — écrit
        dans la case, choisi en favori, ou son relevé collé à la main — prend
        le créneau de la route au lieu de rendre les cinq onglets. On ne sort
-       du module que par Home (mobile) ou par la carte METAR, qui vident le
-       focus avant de charger. */
+       du module que par Home (mobile), qui vide le focus avant de
+       charger. */
     if (state.routeFocus!=null && window.RTV) window.RTV.retarget(st);
   }
   if (state.metar && state.metar.day!=null) cfg.day = state.metar.day;
@@ -9687,7 +9374,7 @@ function mobileHeadHtml(){
               title="Minima — the whole route at a glance">${RT_ICON}</button>
       <a class="m-link" id="mNotamLink" href="./notam-filter.html"
          title="Preflight Lens — NOTAM briefing">NOTAM</a>
-      <button class="m-link" id="mMapBtn" aria-label="World METAR map" title="World METAR map"><span class="m-link-big">Map</span></button>
+      <button class="m-link" id="mMapBtn" aria-label="Map — this aerodrome on the Preflight Lens map" title="Map — the aerodrome shown"><span class="m-link-big">Map</span></button>
       <button class="m-gear" id="mGear" aria-label="Default settings" title="Default settings">${GEAR_ICON}</button>
       <button class="m-gear" id="mTheme" aria-label="Toggle theme" title="Day / night mode"></button>
       <button class="m-gear" id="mHelp" aria-label="How to use" title="How to use">?</button>
@@ -9762,7 +9449,7 @@ function bindMobile(host){
   if (th) th.onclick = ()=>{ const b = document.getElementById("themeBtn"); if (b) b.click(); };
   paintMobileTheme();
   const mapb = host.querySelector("#mMapBtn");
-  if (mapb) mapb.onclick = ()=>window.WXMAP && window.WXMAP.open();
+  if (mapb) mapb.onclick = ()=>window.RTV && window.RTV.goHost("map", [currentIcao()]);
   const rtb = host.querySelector("#mRtBtn");
   if (rtb) rtb.onclick = ()=>window.RTV && window.RTV.open();
   /* Retour à l'accueil : le terrain ouvert est refermé, et avec lui la phase
@@ -10181,8 +9868,6 @@ function applyTheme(light){
      hauteur ajustée se repose du bon côté (textarea ou enveloppe). */
   fitReports();
   document.querySelector('meta[name="theme-color"]').setAttribute("content", light ? "#e8e8e8" : "#0d1117");
-  /* La carte METAR suit le thème — si elle a déjà été ouverte. */
-  if (window.WXMAP) window.WXMAP.setTheme(light);
 }
 let lightMode = false;
 try {
@@ -10879,8 +10564,8 @@ function acSelect(icao){
   acClose();
   if (rtSlot!=null){ if (window.RTV) window.RTV.pick(rtSlot, icao); return; }
   /* Une page focalisée le reste : le terrain écrit ici prend le créneau de la
-     route (retarget, via reparse). On ne sort du module que par Home (mobile)
-     ou par la carte METAR. */
+     route (retarget, via reparse). On ne sort du module que par Home
+     (mobile). */
   if (document.body.classList.contains("mobile")){ mOpen(icao); return; }
   const input = document.getElementById("icao");
   if (input){ input.value = icao; input.blur(); }
@@ -11795,8 +11480,8 @@ window.RTV = (()=>{
     fitSheet();
   }
 
-  /* Le glissement vers le bas ferme — même geste que le panneau des relevés de
-     la carte METAR. Le doigt posé dans un NOTAM qui défile appartient au
+  /* Le glissement vers le bas ferme. Le doigt posé dans un NOTAM qui défile
+     appartient au
      défilement, sauf s'il est déjà en haut de course ; un départ vers le haut
      ou nettement horizontal rend la main pour de bon. */
   (function bindSheetSwipe(){
@@ -12089,10 +11774,31 @@ window.RTV = (()=>{
      du bilan, elle ramène à la page de départ, et une route en réserve ici —
      celle de la dernière session — n'a pas à écraser celle que le pilote a
      saisie là-bas. */
-  const HOST_URL = "./notam-filter.html";
-  function goHost(view){
+  /* Où vit l'hôte, dans l'ordre du plus sûr au moins sûr :
+     — `window.WL_HOST_URL` quand on veut le désigner à la main ;
+     — servie sous le nom de la COPIE DÉPLOYÉE (minima.html), la page a
+       notam-filter.html pour voisin de palier : le chemin relatif y mène
+       quelle que soit l'origine — production, page GitHub, coquille Android —
+       et le service worker sert le voisin hors ligne comme il sert celle-ci ;
+     — servie sous son nom de TRAVAIL depuis localhost (le serveur node du
+       dossier Weather Lens, qui n'a pas ce voisin), le dépôt Preflight servi
+       en statique à côté : c'est le port de .claude/launch.json, et c'est
+       aussi celui que le proxy local autorise. Même esprit que WL_API_BASE
+       pour les relevés — en développement, rien ne doit dépendre du domaine
+       public ;
+     — le domaine public sinon. */
+  const HOST_URL = window.WL_HOST_URL
+    || (/\/minima\.html$/i.test(location.pathname) ? "./notam-filter.html"
+      : /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) ? "http://localhost:8098/notam-filter.html"
+      : "https://notam.feyndev.com/");
+  /* `icaos` : les terrains à emmener. Le bilan passe ses trois créneaux ; le
+     bouton Map de la page, lui, n'a qu'un terrain à montrer — celui qui est
+     ouvert —, et il prend le premier créneau. Les créneaux vides sont sautés,
+     l'hôte remplit ses cases avec ce qui arrive. */
+  function goHost(view, icaos){
+    const list = icaos || RT.icaos;
     const q = new URLSearchParams({view});
-    SLOTS.forEach((s,i)=>{ if (RT.icaos[i]) q.set(s.key, RT.icaos[i]); });
+    SLOTS.forEach((s,i)=>{ if (list[i]) q.set(s.key, list[i]); });
     location.href = HOST_URL + "?" + q.toString();
   }
 
@@ -12142,16 +11848,19 @@ window.RTV = (()=>{
   document.getElementById("rtNotam").onclick = ()=>goHost("notam");
   document.getElementById("rtMap").onclick   = ()=>goHost("map");
   document.getElementById("rtWx").onclick    = ()=>goHost("wx");
+  /* Le bouton Map de la barre de la page : la carte est celle de l'hôte, sur
+     le terrain ouvert ici. Il n'y en a plus qu'une pour les deux apps — celle
+     de Preflight porte la route, la vue NOTAM et son fond hors ligne, que
+     celle-ci n'a jamais eus. */
+  document.getElementById("mapBtn").onclick  = ()=>goHost("map", [currentIcao()]);
   document.addEventListener("visibilitychange", ()=>{
     if (!document.hidden && RT.timer && !ov.hidden) fetchWx();
   });
-  /* Échap : la page « ? » d'abord (elle marque e.helpClosed), la carte METAR
-     ensuite — son écouteur est posé APRÈS celui-ci et se sert seul. Ne reste
-     que le bilan au premier plan. */
+  /* Échap : la page « ? » d'abord (elle marque e.helpClosed) ; ne reste
+     ensuite que le bilan au premier plan. */
   document.addEventListener("keydown", e=>{
     if (e.key!=="Escape" || ov.hidden) return;
     if (e.helpClosed || !helpOv.hidden) return;
-    if (!document.getElementById("wxMapOv").hidden) return;
     close();
   });
 
@@ -12182,1190 +11891,7 @@ window.RTV = (()=>{
      openNotam : la bande NOTAM des fiches ouvre CE panneau-là — un seul
      dévoileur de NOTAM dans la page, un seul geste à connaître. */
   return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render,
-          openNotam, closeNotam};
-})();
-
-/* =====================================================================
-   CARTE METAR MONDIALE
-   Fond vectoriel repris de NOTAM Lens : MapLibre chargé à la demande
-   depuis vendor/ (rien n'alourdit le démarrage), tuiles OpenFreeMap,
-   mêmes palettes jour/nuit. Les stations viennent de /api/wx/map — le
-   serveur calcule la catégorie, la page ne fait que colorer :
-     rouge  VIS ≤ 1 000 m ou plafond ≤ 500 ft
-     ambre  VIS ≤ 2 000 m ou plafond ≤ 1 000 ft
-     vert   VIS > 2 000 m et plafond > 1 000 ft
-     gris   pas de données exploitables
-   Le clic sur un point va chercher le brut via /api/wx?ids= — une
-   lecture mémoire côté serveur — et l'affiche dans une bulle.
-   ===================================================================== */
-window.WXMAP = (() => {
-  const GL_JS = "vendor/maplibre-gl-5.6.0.js";
-  const GL_CSS = "vendor/maplibre-gl-5.6.0.css";
-  /* TileJSON, pas une URL de tuile datée : l'alias résout vers le snapshot le
-     plus récent d'OpenFreeMap — l'URL figée de NOTAM Lens finirait par mourir
-     avec le ménage de leurs archives (elle n'y est nécessaire que pour le
-     protocole pmtiles hors ligne, qu'on n'embarque pas ici). */
-  const OFM_TILEJSON = "https://tiles.openfreemap.org/planet";
-  const GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
-  const LABEL_FONT = ["Noto Sans Bold"];
-  const REFRESH_MS = 60000;
-  /* Emprise de repli : l'Europe, du Portugal à la Pologne et de la
-     Méditerranée à la Scandinavie du Sud. */
-  const EUROPE_BOUNDS = [[-12, 34], [32, 60]];
-  const FIT_OPTS = { padding:40, duration:0, maxZoom:8 };
-  /* Écart (en degrés) au-delà duquel une station n'est plus tenue pour
-     voisine du bloc déjà cadré. Voir applyOpenView(). */
-  const CLUSTER_GAP = 8;
-
-  /* Couleurs des points : celles des LED de l'app, par thème. Le halo remet
-     un liseré de fond sous chaque point — sans lui, deux points qui se
-     chevauchent fusionnent en tache. */
-  const DOTS = {
-    dark:  { grey:"#5e656c", green:"#34d39a", amber:"#f6b23e", red:"#ff5d6c", halo:"#0e1114", cb:"#f6c945", rwy:"#a3b4c2" },
-    light: { grey:"#9aa6b0", green:"#12936a", amber:"#cf7a12", red:"#e5484d", halo:"#ffffff", cb:"#c98a08", rwy:"#44586a" },
-  };
-
-  /* Palette et style du FOND — repris tels quels de NOTAM Lens (chemin en
-     ligne, schéma OpenMapTiles). Voir notam-filter.html pour la genèse des
-     valeurs : contrastes réglés pour rester lisibles en plein soleil (jour)
-     et compatibles vision nocturne (nuit). */
-  function glPalette(light){
-    return light
-      ? { land:"#ffffff", sea:"#a9c8e0", lake:"#a9c8e0", lakeEdge:"#7c9fba",
-          coast:"#566f83", border:"#758fa4", river:"#78a4c4", dot:"#77899a",
-          cover:"#dae8d5", road:"#8a9dac", roadHi:"#66808f" }
-      : { land:"#1b2229", sea:"#070a0d", lake:"#080c10", lakeEdge:"#2e3e4d",
-          coast:"#5f7080", border:"#4e5c6a", river:"#3a5162", dot:"#697886",
-          cover:"#232d26", road:"#465464", roadHi:"#617484" };
-  }
-  /* Mélange deux couleurs #rrggbb : t = 0 rend `a`, t = 1 rend `b`. Sert à
-     atténuer une nappe SANS la rendre translucide — voir la couche d'eau. */
-  function mix(a, b, t){
-    const rgb = h => [1,3,5].map(i => parseInt(h.slice(i, i+2), 16));
-    const [ar,ag,ab] = rgb(a), [br,bg,bb] = rgb(b);
-    const c = (x,y) => Math.round(x + (y - x) * t).toString(16).padStart(2,"0");
-    return "#" + c(ar,br) + c(ag,bg) + c(ab,bb);
-  }
-  function glStyle(light){
-    const C = glPalette(light);
-    /* En plein jour, la palette NOTAM Lens dispute la vedette aux surcouches :
-       mer bleue et couvert vert éteignent les flèches de vent et les pastilles.
-       Ici le fond n'est qu'un repère — tout ce qui est peint sur la terre
-       blanche s'efface à moitié, et les couleurs météo reprennent le dessus.
-       La nuit, rien ne bouge : le fond sombre ne concurrence personne. */
-    const FB = light ? .45 : 1;
-    /* Routes et fleuves, un cran plus bas encore : simples repères au sol,
-       ils se lisaient toujours trop en plein jour sur PC et tablette face aux
-       surcouches météo. La nuit, rien ne bouge. */
-    const FR = light ? .5 : 1;
-    return { version:8,
-      /* Les glyphes ne servent qu'aux étiquettes OACI : le fond, lui, n'a
-         aucun texte. Sans réseau, MapLibre les réclame en vain et les codes
-         ne s'affichent pas — la carte reste entière pour autant. */
-      glyphs:GLYPHS,
-      sources:{ o:{ type:"vector", url:OFM_TILEJSON } },
-      layers:[
-        { id:"bg", type:"background", paint:{ "background-color":C.land } },
-        { id:"cover", type:"fill", source:"o", "source-layer":"landcover", paint:{ "fill-color":C.cover, "fill-opacity":.9*FB } },
-        /* Le trait de côte passe SOUS l'eau, et c'est voulu. Les polygones
-           d'eau des tuiles sont découpés au bord de chaque tuile : souligner
-           leur contour dessinerait aussi ces coupures, d'où les traits bien
-           droits en plein océan quand on zoome. Dessiné avant le remplissage,
-           le contour est recouvert par l'eau de la tuile voisine — la coupure
-           disparaît — tandis que la vraie côte garde sa moitié côté terre.
-           D'où la largeur doublée : seule la moitié se voit. */
-        { id:"coast", type:"line", source:"o", "source-layer":"water", filter:["==",["get","class"],"ocean"],
-          paint:{ "line-color":C.coast, "line-opacity":FB, "line-width":["interpolate",["linear"],["zoom"],3,1.2,8,2.2] } },
-        { id:"lake-edge", type:"line", source:"o", "source-layer":"water", filter:["!=",["get","class"],"ocean"],
-          paint:{ "line-color":C.lakeEdge, "line-opacity":FB, "line-width":["interpolate",["linear"],["zoom"],3,1.2,8,2] } },
-        /* L'eau doit rester OPAQUE, sinon la parade ci-dessus tombe : à 45 %
-           d'opacité (le mode jour), le remplissage ne masquait plus la couture
-           dessinée dessous et la longue droite reparaissait en pleine mer.
-           L'atténuation du jour est donc obtenue en mélangeant la couleur au
-           blanc de la terre, pas en laissant voir au travers. À FB = 1 (nuit),
-           mix() rend la teinte d'origine : rien ne change. */
-        { id:"water", type:"fill", source:"o", "source-layer":"water",
-          paint:{ "fill-color":["case",["==",["get","class"],"ocean"],mix(C.land,C.sea,FB),mix(C.land,C.lake,FB)], "fill-opacity":1 } },
-        { id:"river", type:"line", source:"o", "source-layer":"waterway", minzoom:5,
-          paint:{ "line-color":C.river, "line-opacity":FB*FR, "line-width":["interpolate",["linear"],["zoom"],5,.5,12,1.6] } },
-        { id:"bnd", type:"line", source:"o", "source-layer":"boundary", filter:["<=",["get","admin_level"],2],
-          paint:{ "line-color":C.border, "line-opacity":FB, "line-width":["interpolate",["linear"],["zoom"],3,.7,9,1.4], "line-dasharray":[3,3] } },
-        { id:"road-major", type:"line", source:"o", "source-layer":"transportation", minzoom:5,
-          filter:["in",["get","class"],["literal",["motorway","trunk"]]],
-          paint:{ "line-color":C.roadHi, "line-opacity":FB*FR, "line-width":["interpolate",["linear"],["zoom"],5,.6,10,1.9,14,3.4] } },
-        { id:"aero-a", type:"fill", source:"o", "source-layer":"aeroway", minzoom:10, paint:{ "fill-color":C.dot, "fill-opacity":.45*FB } },
-        { id:"aero-l", type:"line", source:"o", "source-layer":"aeroway", minzoom:10, paint:{ "line-color":C.dot, "line-opacity":FB, "line-width":1.2 } },
-      ] };
-  }
-
-  let map = null, timer = null, lastGeo = null, labelsOn = false, windOn = false;
-  /* Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h. */
-  let windHour = 0;
-  /* Trois flèches au plus — la légende ne parle pas d'autre chose : ↑, ↑↑,
-     ↑↑↑. Au-delà de 30 kt le faisceau est rouge, une flèche de plus
-     n'apprendrait rien — on plafonne le dessin, pas la donnée. */
-  const WIND_MAX = 3;
-  /* Géométrie du faisceau, reprise d'addWindIcons() : n flèches côte à côte,
-     STEP entre deux, PAD de marge — la LARGEUR de l'icône, donc la place que
-     le faisceau prend EN TRAVERS du vent. C'est elle que les QFU doivent
-     franchir pour ne pas se poser dessus. Écran tactile — pas de souris,
-     téléphone ou tablette : l'icône y plafonne plus haut, l'écart suit. */
-  const W_STEP = 9, W_PAD = 3;
-  const touchUI = matchMedia("(max-width: 600px), (hover: none) and (pointer: coarse)").matches;
-  const WIND_SIZE_MAX = touchUI ? 2.2 : 1.6;
-  /* Écart de l'éclair au centre du point, en pixels d'icône : juste au-delà
-     du disque et de son liseré, loin en deçà du bout des flèches (GAP 10 +
-     SHAFT 26). Serré au plus près (24 → 16) : l'éclair appartient au terrain,
-     il ne flotte pas à côté — et le travers du vent le garde hors du
-     faisceau, qui ne commence qu'à GAP du centre. */
-  const CB_R = 16;
-  /* Facteur de taille du disque : ×2 pour un favori. Posé une fois, réutilisé
-     dans chaque palier de zoom du rayon. */
-  const FAV_X2 = ["case",["get","fav"],2,1];
-  /* ---------- QFU des pistes ----------
-     Chaque terrain écrit ses paires de piste à côté de son point. Les paires
-     viennent de la fiche de l'utilisateur quand il en a une — elle prime
-     partout ailleurs dans l'app, elle prime aussi ici — sinon de la graine.
-     La plus longue d'abord : c'est la piste principale, celle qu'on lit en
-     premier. Le désignateur EST le QFU : « 08/26 » se lit 080/260 au
-     magnétique, à l'arrondi de dizaine près ; les caps exacts sont sur la
-     fiche, la carte n'en porte pas la précision.
-     DEUX seuils, et c'est ce qui permet de les montrer tôt. Dès QFU_ZOOM —
-     le niveau région, bien avant que le fond ne dessine les pistes — chaque
-     terrain n'écrit QUE sa piste principale : une ligne, qui répond à « par
-     où on se pose ici » sans couvrir la carte. À partir de QFU_FULL, la
-     place est là et la liste s'ouvre : QFU_MAX paires, une par ligne, et le
-     compte des restantes en dernière ligne — au-delà l'étiquette couvrirait
-     le terrain qu'elle annonce. */
-  const QFU_ZOOM = 7, QFU_FULL = 8.5, QFU_MAX = 3;
-  function qfuPairs(icao){
-    /* Fiche éditée : ses paires font foi. Sinon la graine, lue brute — on ne
-       passe pas par adGet(), qui décode aussi approches et balisage pour
-       plusieurs milliers de terrains dont la carte ne montre que le nom. */
-    const u = adUserDb[icao];
-    const rw = u ? u.runways.map(r => [r.pair, r.len])
-                 : (((window.AD_SEED || {})[icao] || {}).r || []).map(r => [r[0], r[1]]);
-    if (!rw.length) return null;
-    const sorted = rw.slice().sort((a,b) => (b[1] || 0) - (a[1] || 0));
-    const lines = sorted.slice(0, QFU_MAX).map(r => r[0]);
-    if (sorted.length > QFU_MAX) lines.push(`+${sorted.length - QFU_MAX}`);
-    return { one: lines[0], all: lines.join("\n") };
-  }
-  const isLight = () => document.body.classList.contains("light");
-  const dots = () => DOTS[isLight() ? "light" : "dark"];
-  const zz = n => String(n).padStart(2,"0");
-  const hhmmZ = d => `${zz(d.getUTCHours())}:${zz(d.getUTCMinutes())}`;
-
-  /* ---------- NOTAM récupérés : le CONTRAT avec NOTAM Lens ----------
-     Minima Lens ne télécharge aucun NOTAM. Il lit seulement la liste des
-     terrains dont NOTAM Lens a mis les NOTAM en cache, pour dire code par
-     code ce qui restera lisible une fois la connexion coupée. Deux sources,
-     réunies : window.WL_NOTAM_CACHE (posée en mémoire par l'hôte) et la clé
-     `wl-notam-cache` du localStorage (tableau d'OACI, ou objet dont les clés
-     sont des OACI). Même esprit que nfGet/nfSet : le module d'en face
-     remplira, la signature ne bouge plus.
-     Liste absente ou illisible : rien n'est réputé téléchargé. La carte le
-     dit en rouge — se taire laisserait croire à une couverture qu'on n'a
-     pas. */
-  const NC_KEY = "wl-notam-cache";
-  function notamCached(){
-    const set = new Set();
-    const add = v => { for (const s of (v||[])) if (typeof s === "string") set.add(s.toUpperCase()); };
-    add(window.WL_NOTAM_CACHE);
-    try{
-      const raw = localStorage.getItem(NC_KEY);
-      if (raw){ const d = JSON.parse(raw); add(Array.isArray(d) ? d : Object.keys(d || {})); }
-    } catch(_){}
-    /* L'index hors-ligne que notam-filter.html écrit RÉELLEMENT
-       (notam_data_idx, même origine sur le site déployé) compte aussi — le
-       contrat wl-notam-cache restait sinon lettre morte. */
-    try{ add(JSON.parse(localStorage.getItem("notam_data_idx") || "[]")); } catch(_){}
-    return set;
-  }
-
-  /* Relit le cache et le reporte sur les points déjà affichés. Appelée à
-     chaque rafraîchissement ET à l'allumage des étiquettes : NOTAM Lens peut
-     avoir téléchargé entre-temps, dans une autre fenêtre. */
-  function applyCache(){
-    if (!lastGeo) return;
-    const cached = notamCached();
-    for (const f of lastGeo.features) f.properties.dl = cached.has(f.properties.icao);
-    const src = map && map.getSource("wx");
-    if (src) src.setData(lastGeo);
-  }
-
-  function setStateLine(text, err){
-    const el = document.getElementById("wxMapState");
-    el.textContent = text;
-    el.className = "wxmap-state" + (err ? " err" : "");
-  }
-
-  /* ---------- Flèches de vent ----------
-     Une icône par combinaison nombre × couleur : n flèches côte à côte dans la
-     MOITIÉ HAUTE du canvas, POINTES VERS LE BAS — vers le centre, où vit le
-     point de la station, avec un écart (GAP) pour ne jamais le toucher.
-     L'ancre du symbole étant le centre, la rotation (direction d'où VIENT le
-     vent) pose le faisceau au vent du terrain : les flèches arrivent dessus et
-     leur pointe le désigne, comme le vent lui-même. Deux passes de trait —
-     halo du fond d'abord, couleur ensuite — comme le liseré des points.
-     Recréées à chaque style.load : setStyle() jette aussi les images. */
-  function addWindIcons(){
-    const c = dots();
-    const tones = { g:c.green, a:c.amber, r:c.red };
-    /* PR 4 et non 2 : sur écran tactile l'icône monte à ×2,2 — dessinée à
-       ×2 seulement, elle arrivait floue sur un écran dense. */
-    const SHAFT = 26, HEAD = 6, STEP = 9, GAP = 10, PAD = 3, PR = 4;
-    for (let n = 1; n <= WIND_MAX; n++){
-      for (const tone in tones){
-        /* Chaque combinaison existe en deux traits : plein pour le vent
-           OBSERVÉ (METAR, sélecteur NOW), pointillé — le fût seulement, la
-           pointe reste pleine pour garder son cap lisible — pour le vent
-           PRÉVU par le TAF (+1/+2/+3 h). */
-        for (const dash of [null, [4, 3.2]]){
-          const name = `wind-${n}-${tone}` + (dash ? "-d" : "");
-          if (map.hasImage(name)) map.removeImage(name);
-          const w = n*STEP + PAD*2, h = (GAP + SHAFT + PAD)*2;
-          const cv = document.createElement("canvas");
-          cv.width = w*PR; cv.height = h*PR;
-          const g = cv.getContext("2d");
-          g.scale(PR, PR);
-          g.lineCap = "round"; g.lineJoin = "round";
-          for (const [col, lw] of [[c.halo, 5], [tones[tone], 2.4]]){
-            g.strokeStyle = col; g.lineWidth = lw;
-            for (let i = 0; i < n; i++){
-              /* La pointe s'arrête à GAP du centre : c'est l'écart qui sépare la
-                 flèche du disque, quel que soit le cap. */
-              const x = PAD + STEP/2 + i*STEP, tip = h/2 - GAP, top = tip - SHAFT;
-              g.setLineDash(dash || []);
-              g.beginPath();
-              g.moveTo(x, top); g.lineTo(x, tip);
-              g.stroke();
-              g.setLineDash([]);
-              g.beginPath();
-              g.moveTo(x - HEAD*0.75, tip - HEAD); g.lineTo(x, tip); g.lineTo(x + HEAD*0.75, tip - HEAD);
-              g.stroke();
-            }
-          }
-          map.addImage(name, g.getImageData(0, 0, cv.width, cv.height), { pixelRatio: PR });
-        }
-      }
-    }
-    /* Triangles d'alerte « ! » : ambre au-delà de 40 kt, rouge au-delà de
-       50 kt. Posés par la couche wx-warn au DÉBUT des flèches — au vent, à
-       l'opposé du terrain — mais SANS tourner avec elles : un point
-       d'exclamation se lit debout. Deux passes comme les flèches, halo du
-       fond puis couleur. */
-    for (const [suffix, col] of [["a", c.amber], ["r", c.red]]){
-      const name = `wind-warn-${suffix}`;
-      if (map.hasImage(name)) map.removeImage(name);
-      const W = 20, H = 18;
-      const cv = document.createElement("canvas");
-      cv.width = W*PR; cv.height = H*PR;
-      const g = cv.getContext("2d");
-      g.scale(PR, PR);
-      g.lineJoin = "round"; g.lineCap = "round";
-      const tri = () => {
-        g.beginPath();
-        g.moveTo(W/2, 2); g.lineTo(2.5, H-2.5); g.lineTo(W-2.5, H-2.5); g.closePath();
-      };
-      g.strokeStyle = c.halo; g.lineWidth = 4; tri(); g.stroke();
-      g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 1.5; tri(); g.fill(); g.stroke();
-      g.strokeStyle = c.halo; g.lineWidth = 2;
-      g.beginPath(); g.moveTo(W/2, 7); g.lineTo(W/2, 11.2); g.stroke();
-      g.fillStyle = c.halo;
-      g.beginPath(); g.arc(W/2, 13.8, 1.2, 0, 7); g.fill();
-      map.addImage(name, g.getImageData(0, 0, cv.width, cv.height), { pixelRatio: PR });
-    }
-  }
-
-  /* ---------- Éclair du cumulonimbus ----------
-     Un CB observé au METAR ou annoncé par le TAF dans les trois heures pose un
-     petit éclair JAUNE à côté du terrain — la couleur du danger orageux, celle
-     qu'aucune flèche de vent n'emploie : l'œil ne peut pas les confondre. Deux
-     passes comme les flèches, halo du fond d'abord pour que le trait survive à
-     n'importe quel fond, couleur ensuite. Recréé à chaque style.load, comme
-     tout ce que setStyle() jette. */
-  function addCbIcon(){
-    const c = dots();
-    const PR = 4, W = 14, H = 20;
-    const name = "wx-cb";
-    if (map.hasImage(name)) map.removeImage(name);
-    const cv = document.createElement("canvas");
-    cv.width = W*PR; cv.height = H*PR;
-    const g = cv.getContext("2d");
-    g.scale(PR, PR);
-    g.lineJoin = "round"; g.lineCap = "round";
-    const bolt = () => {
-      g.beginPath();
-      g.moveTo(8.8, 2); g.lineTo(3.2, 11.4); g.lineTo(6.9, 11.4);
-      g.lineTo(5.3, 18); g.lineTo(11, 8.6); g.lineTo(7.3, 8.6);
-      g.closePath();
-    };
-    g.strokeStyle = c.halo; g.lineWidth = 3.4; bolt(); g.stroke();
-    g.fillStyle = c.cb; g.strokeStyle = c.cb; g.lineWidth = 1.2;
-    bolt(); g.fill(); g.stroke();
-    map.addImage(name, g.getImageData(0, 0, cv.width, cv.height), { pixelRatio: PR });
-  }
-
-  /* Rappelée à chaque `style.load` : setStyle() (changement de thème) efface
-     sources et couches, il faut tout reposer. `circle-sort-key` fait dessiner
-     les catégories sévères en dernier, donc AU-DESSUS — dézoomé, un point
-     rouge ne doit jamais disparaître sous ses voisins verts. */
-  function addWxLayers(){
-    if (!map || map.getSource("wx")) return;
-    const c = dots();
-    map.addSource("wx", { type:"geojson", data: lastGeo || { type:"FeatureCollection", features:[] } });
-    addWindIcons();
-    addCbIcon();
-    /* Passé le zoom 8, le faisceau continue de grossir jusqu'au plafond de
-       CETTE carte (zoom 11) : près du terrain, la flèche reste un objet qu'on
-       lit, pas un détail qui se noie dans le fond. Sur écran tactile — pas de
-       souris, téléphone ou tablette, même critère que Preflight Lens — le
-       plafond monte à ×2,2 : l'écran est petit, le doigt est gros, la flèche
-       doit se voir de plus loin. */
-    const SIZE = ["interpolate",["linear"],["zoom"],2,.55,6,.8,8,1,11, WIND_SIZE_MAX];
-    /* ---------- QFU des pistes ----------
-       Dès le zoom QFU_ZOOM la piste principale s'écrit, la liste complète
-       vient à QFU_FULL (voir qfuPairs). Ils ne dépendent d'aucun
-       interrupteur : la piste ne change pas selon qu'on regarde les NOTAM ou
-       le vent. Ton neutre et sans verdict — ni la météo du disque, ni l'état
-       de téléchargement du code : c'est de la géographie, elle ne se juge
-       pas.
-       Posée EN PREMIER, et c'est tout l'inverse de ce que l'ordre de dessin
-       laisse croire : MapLibre place les symboles de la DERNIÈRE couche en
-       premier, si bien qu'une couche ajoutée en fin de liste chasse toutes
-       les autres. C'est déjà ce qui obligeait l'éclair du CB à s'exclure du
-       placement (icon-ignore-placement, plus bas) ; les QFU posés après les
-       flèches les faisaient disparaître de la même façon — mesuré, vent
-       affiché = zéro flèche au zoom 10. Première couche, donc dessinés SOUS
-       les disques et les faisceaux : leur écart les en tient à distance, et
-       leur halo les détache du fond.
-       Et, comme l'éclair, ils sortent du placement : la boîte de collision
-       d'un faisceau est symétrique — elle couvre les deux côtés du point,
-       pas seulement celui où la flèche est dessinée —, si bien qu'un terrain
-       venteux perdait ses QFU alors que la place était libre à l'œil
-       (mesuré : LFPN, 18G26 kt, zéro QFU au zoom 10). Ce qui les tient à
-       l'écart des autres signes n'est donc pas le placement mais leur écart
-       calculé, au travers du vent et à l'opposé de l'éclair. Une paire de
-       pistes ne se laisse pas éclaircir : elle ne change pas d'une minute à
-       l'autre, on zoome POUR elle. */
-    map.addLayer({
-      id:"wx-qfu", type:"symbol", source:"wx", minzoom:QFU_ZOOM,
-      filter:["!=",["get","qfu"],""],
-      layout:{
-        "text-field":["step",["zoom"],["get","qfu1"],QFU_FULL,["get","qfu"]],
-        "text-font":LABEL_FONT,
-        "text-size":["interpolate",["linear"],["zoom"],QFU_ZOOM,8,QFU_FULL,9.5,11,11],
-        "text-anchor":["get","qanc"],
-        "text-offset":["get","qoff"],
-        "text-line-height":1.15,
-        "text-letter-spacing":.04,
-        "text-allow-overlap":true,
-        "text-ignore-placement":true,
-      },
-      paint:{
-        "text-color":c.rwy,
-        "text-halo-color":c.halo,
-        "text-halo-width":1.4,
-      },
-    });
-    /* Les flèches se posent AVANT les points : ajoutées en premier, elles
-       restent sous les disques et les codes OACI. `icon-allow-overlap:false`
-       laisse MapLibre éclaircir la carte dézoomée, et le tri par vitesse
-       décroissante garde alors les vents FORTS — quand la place manque, c'est
-       le coup de vent qui doit survivre, pas la brise. `minzoom:3` coupe tout
-       en deçà du niveau continent : les flèches apparaissent deux crans de
-       zoom plus tôt qu'avant, dès qu'on reconnaît un pays — plus bas, sur une
-       carte du monde, elles ne racontent plus rien, seuls les disques colorés
-       parlent, et l'interrupteur WIND reste allumé pour le retour au zoom
-       utile. */
-    map.addLayer({
-      id:"wx-wind", type:"symbol", source:"wx", minzoom:3,
-      filter:["!=",["get","wicon"],""],
-      layout:{
-        "icon-image":["get","wicon"],
-        "icon-rotate":["get","wrot"],
-        "icon-rotation-alignment":"map",
-        "icon-size":SIZE,
-        "icon-allow-overlap":false,
-        "icon-padding":1,
-        "symbol-sort-key":["-",0,["get","wspd"]],
-        visibility: windOn ? "visible" : "none",
-      },
-    });
-    /* Triangle d'alerte au-delà de 40 kt (rouge au-delà de 50) : posé au
-       DÉBUT du faisceau — au vent, à l'opposé du terrain — par un décalage
-       calculé du cap (woff), mais sans icon-rotate : le « ! » reste debout.
-       `icon-allow-overlap:true` : une alerte ne se laisse pas éclaircir par
-       la place qui manque. Même icon-size que les flèches, l'offset suit. */
-    map.addLayer({
-      id:"wx-warn", type:"symbol", source:"wx", minzoom:3,
-      filter:["!=",["get","wwarn"],""],
-      layout:{
-        "icon-image":["get","wwarn"],
-        "icon-offset":["get","woff"],
-        "icon-size":SIZE,
-        "icon-allow-overlap":true,
-        visibility: windOn ? "visible" : "none",
-      },
-    });
-    /* Éclair du CB : posé à 90° du vent — le seul secteur que rien ne
-       réclame, le faisceau vivant au vent du terrain, le triangle « ! » au
-       bout de ce faisceau et le code OACI sous le vent. Vent éteint ou
-       absent, il se range à droite du point, l'étiquette étant alors
-       au-dessus. `icon-allow-overlap:true` : un orage ne se laisse pas
-       éclaircir par la place qui manque. Même icon-size que les flèches, pour
-       que l'écart calculé en woff/cboff reste le même à l'écran. Il ne dépend
-       PAS de l'interrupteur WIND : le CB se voit toujours. */
-    map.addLayer({
-      id:"wx-cb", type:"symbol", source:"wx", minzoom:3,
-      filter:["==",["get","cb"],true],
-      layout:{
-        "icon-image":"wx-cb",
-        "icon-offset":["get","cboff"],
-        "icon-size":SIZE,
-        "icon-allow-overlap":true,
-        /* …et `icon-ignore-placement` avec : l'éclair se pose DANS la boîte
-           de collision du faisceau de vent, qui est symétrique et couvre les
-           deux côtés du point. Sans ça, l'éclair — jamais éclairci puisqu'il
-           s'autorise le chevauchement — chassait la flèche de son propre
-           terrain : mesuré, CB affiché = zéro flèche à LFLX. Il n'occupe donc
-           plus la place, il ne fait que se poser ; c'est son écart calculé
-           (au travers du vent) qui l'empêche de couvrir quoi que ce soit. */
-        "icon-ignore-placement":true,
-      },
-    });
-    map.addLayer({
-      id:"wx-dots", type:"circle", source:"wx",
-      layout:{ "circle-sort-key":["get","cat"] },
-      paint:{
-        "circle-color":["match",["get","cat"],3,c.red,2,c.amber,1,c.green,c.grey],
-        /* Un favori porte un disque de rayon DOUBLE, à tous les zooms : sur
-           une carte de plusieurs centaines de points, les siens se retrouvent
-           d'un coup d'œil sans rien lire. La couleur, elle, ne change pas —
-           c'est toujours la météo qu'elle dit. Le facteur se pose DANS chaque
-           palier, pas autour de l'interpolation : MapLibre n'accepte ["zoom"]
-           qu'en entrée d'un interpolate de tête. */
-        "circle-radius":["interpolate",["linear"],["zoom"],
-          1,["*",FAV_X2,2.1], 3,["*",FAV_X2,3], 6,["*",FAV_X2,4.8], 10,["*",FAV_X2,7.5]],
-        "circle-stroke-color":c.halo,
-        "circle-stroke-width":["interpolate",["linear"],["zoom"],1,.4,6,1],
-        "circle-opacity":.92,
-      },
-    });
-    /* Étiquettes OACI, éteintes par défaut. `text-allow-overlap:false` laisse
-       MapLibre faire le tri : une étiquette qui ne rentre pas est supprimée
-       plutôt que superposée — dézoomé sur le Bénélux, on lit moins de codes
-       mais on les lit. `symbol-sort-key` monte les non téléchargés en tête de
-       ce tri : quand la place manque, c'est le manque qui doit rester
-       visible. La couleur, elle, ne dit QUE l'état de téléchargement — le
-       disque en dessous garde la météo. `minzoom` les retient jusqu'au zoom
-       3 : au-delà en arrière il ne reste qu'une poignée de rescapés, dont le
-       tri n'apprend plus rien. Dès le zoom 3 les codes reviennent — assez tôt
-       pour lire l'Europe de l'Ouest d'un coup. Aux deux premiers crans, le
-       texte rétrécit et `text-padding` retombe à 1 : moins d'espace réclamé
-       autour de chaque code, donc plus de codes survivent au tri. */
-    map.addLayer({
-      id:"wx-icao", type:"symbol", source:"wx", minzoom:3,
-      layout:{
-        "text-field":["get","icao"],
-        "text-font":LABEL_FONT,
-        "text-size":["interpolate",["linear"],["zoom"],3,8.5,4,9.5,6,10.5,8,12,10,13],
-        /* Ancre et décalage par STATION : sous le vent quand une flèche est
-           posée, au-dessus du point sinon — calculés par applyWindProps. */
-        "text-anchor":["get","lanc"],
-        "text-offset":["get","loff"],
-        "text-letter-spacing":.06,
-        "text-allow-overlap":false,
-        "text-padding":["interpolate",["linear"],["zoom"],3,1,6,3],
-        "symbol-sort-key":["case",["get","dl"],1,0],
-        visibility: labelsOn ? "visible" : "none",
-      },
-      paint:{
-        "text-color":["case",["get","dl"],c.green,c.red],
-        "text-halo-color":c.halo,
-        "text-halo-width":1.4,
-      },
-    });
-  }
-
-  /* Interrupteur des étiquettes. On rallume par la visibilité de la couche,
-     pas en la reconstruisant : le tri des symboles est déjà calculé. */
-  function setLabels(on){
-    labelsOn = !!on;
-    document.getElementById("wxNotamChk").checked = labelsOn;
-    document.getElementById("wxMapOv").classList.toggle("notam-on", labelsOn);
-    if (labelsOn) applyCache();
-    if (map && map.getLayer("wx-icao"))
-      map.setLayoutProperty("wx-icao", "visibility", labelsOn ? "visible" : "none");
-  }
-
-  /* Interrupteur du vent, jumeau de celui des étiquettes : la couche existe
-     toujours, seule sa visibilité bascule. L'éteindre ramène l'horizon sur
-     NOW — au rallumage, la carte repart du vent OBSERVÉ, pas d'une prévision
-     choisie à la visite d'avant. */
-  function setWind(on){
-    windOn = !!on;
-    document.getElementById("wxWindChk").checked = windOn;
-    document.getElementById("wxMapOv").classList.toggle("wind-on", windOn);
-    /* Allumer le vent rallonge la légende de six lignes : on la replie du
-       même geste. Le bandeau reste, l'œil la rappelle. */
-    if (windOn) document.getElementById("wxMapOv").classList.add("leg-off");
-    /* Recalcul dans les deux sens : les étiquettes OACI suivent le vent
-       (elles se rangent sous le vent quand les flèches s'affichent, et
-       reviennent au-dessus du point quand on les éteint). */
-    setWindHour(windOn ? windHour : 0);
-    for (const id of ["wx-wind", "wx-warn"])
-      if (map && map.getLayer(id))
-        map.setLayoutProperty(id, "visibility", windOn ? "visible" : "none");
-  }
-
-  /* Icône, cap et poids d'un point selon l'horizon choisi. NOW dessine le
-     vent du METAR en trait plein ; +1/+2/+3 h dessinent le vent que le TAF
-     donne pour cette heure-là — et faute d'un groupe TAF qui gouverne cet
-     instant, le vent du METAR reste. Tout l'horizon prévu passe en pointillé,
-     vent TAF ou METAR conservé : c'est la VUE qui est une prévision. */
-  function applyWindProps(p){
-    let w = p.wm || null;                        // [dir, spd, gst, pointe] du METAR
-    if (windHour > 0 && p.wf && p.wf[windHour-1]) w = p.wf[windHour-1];
-    p.wicon = ""; p.wrot = 0; p.wspd = 0; p.wwarn = ""; p.woff = [0,0];
-    p.lanc = "bottom"; p.loff = [0,-0.85];
-    /* Sans flèche à éviter, l'éclair se range à droite du point : l'étiquette
-       OACI est alors au-dessus, la place est libre. */
-    p.cboff = [CB_R, 0];
-    /* Les QFU prennent le DESSOUS du point : le code OACI tient le dessus,
-       l'éclair la droite, le triangle « ! » d'une rafale sans direction la
-       gauche — c'est le dernier côté libre. Serrés contre le point : sans
-       faisceau, rien ne les en écarte. */
-    p.qanc = "top"; p.qoff = [0, 0.9];
-    /* Deux vitesses, et elles ne disent pas la même chose. `eff` est le vent
-       qui fait la FLÈCHE — il lui faut une direction et de quoi souffler.
-       `peak` est la POINTE ANNONCÉE : le serveur y ajoute la rafale qu'il a
-       écartée de la flèche faute de direction (le VRB d'un grain). C'est elle
-       qui allume le triangle « ! » : une rafale de 45 kt reste une rafale de
-       45 kt, même quand on ne sait pas d'où elle vient. Le triangle se pose
-       alors au vent du terrain, dans le cap du vent principal — le seul qu'on
-       connaisse — et, sans faisceau à prolonger, il se serre contre le point. */
-    if (!w) return;
-    const eff = w[0] != null && w[1] >= 3 ? Math.max(w[1], w[2] || 0) : 0;
-    const peak = Math.max(eff, w[3] || 0);
-    if (!eff && peak <= 40) return;              // rien à dessiner
-    /* Aucun cap du tout — vent principal VRB lui aussi, ou calme : il n'y a
-       pas d'octant « au vent » où poser le triangle. Il prend alors la GAUCHE
-       du point, en face de l'éclair du CB qui tient la droite, à la même
-       distance : l'étiquette OACI garde le dessus, et les trois signes se
-       partagent le tour du terrain sans se marcher dessus. Le triangle ne
-       tourne pas — il ne prétend donc à aucune direction, ce qui est
-       exactement ce qu'on sait de cette rafale. */
-    if (w[0] == null){
-      p.wspd = peak;
-      p.wwarn = peak > 50 ? "wind-warn-r" : "wind-warn-a";
-      p.woff = [-CB_R, 0];
-      return;
-    }
-    p.wrot = w[0] % 360;
-    p.wspd = peak;
-    if (eff){
-      const n = Math.min(WIND_MAX, Math.ceil(eff/10));
-      /* La couleur suit le NOMBRE de flèches, jamais l'inverse : ambre à la
-         troisième, donc au-DESSUS de 20 kt et non à partir de 20 — sinon
-         20 kt pile donnait deux flèches ambre, que la légende ne connaît pas. */
-      const tone = eff > 30 ? "r" : eff > 20 ? "a" : "g";
-      p.wicon = `wind-${n}-${tone}` + (windHour > 0 ? "-d" : "");
-    }
-    /* Au-delà de 40 kt, le triangle « ! » — rouge au-delà de 50. Il se pose
-       au début du faisceau (GAP+SHAFT du centre, plus sa propre place), dans
-       la direction d'où VIENT le vent : l'offset refait la rotation que
-       l'icône, restée debout, ne fait pas. */
-    if (peak > 40){
-      p.wwarn = peak > 50 ? "wind-warn-r" : "wind-warn-a";
-      const th = p.wrot * Math.PI/180, R = eff ? 53 : 30;   // GAP 10 + SHAFT 26 + 17 d'air
-      p.woff = [Math.round(R*Math.sin(th)), Math.round(-R*Math.cos(th))];
-    }
-    /* Le code OACI déménage SOUS LE VENT : le faisceau vit au vent du
-       terrain, l'octant opposé est le seul toujours libre, quel que soit le
-       cap. Huit ancres, une par octant de la direction où le vent VA —
-       l'ancre colle le bord du texte le plus proche du disque, le décalage
-       l'en écarte. Vent coupé (interrupteur), calme ou VRB : l'étiquette
-       reste à sa place d'origine, au-dessus du point. */
-    if (windOn){
-      /* L'éclair prend le travers du vent : à 90° du faisceau, donc hors des
-         flèches, hors du triangle « ! » qui les prolonge, et hors du code
-         OACI qui, lui, se range sous le vent. */
-      const th = p.wrot * Math.PI/180;
-      p.cboff = [Math.round(CB_R*Math.cos(th)), Math.round(CB_R*Math.sin(th))];
-      const LBL = [
-        ["bottom",       [0, -0.85]], ["bottom-left", [0.55, -0.6]],
-        ["left",         [0.8,  0 ]], ["top-left",    [0.55,  0.6]],
-        ["top",          [0,  0.8 ]], ["top-right",   [-0.55, 0.6]],
-        ["right",        [-0.8, 0 ]], ["bottom-right",[-0.55,-0.6]],
-      ];
-      const oct = Math.round(((p.wrot + 180) % 360) / 45) % 8;
-      p.lanc = LBL[oct][0]; p.loff = LBL[oct][1];
-      /* Les QFU prennent le travers OPPOSÉ à l'éclair : le tour du point se
-         partage alors en quatre — flèche au vent, code sous le vent, éclair
-         d'un bord, pistes de l'autre. Aucun des quatre ne se marche dessus,
-         quel que soit le cap du vent.
-         Le bon octant ne suffit pourtant pas : le faisceau est LARGE — n
-         flèches côte à côte, en travers du vent, exactement le côté où les
-         QFU se rangent —, et serrés contre le point ils se posaient dedans.
-         L'écart franchit donc sa demi-largeur, comptée à la taille MAXIMALE
-         de l'icône : l'écart, lui, est en cadratins, il suit la taille du
-         texte et non le zoom, il doit donc tenir au cran le plus large. Une
-         flèche de plus (10 kt de plus) pousse les QFU d'autant. */
-      const qoct = Math.round(((p.wrot + 270) % 360) / 45) % 8;
-      const half = (n => (n*W_STEP + W_PAD*2) / 2)(Math.min(WIND_MAX, Math.ceil(eff/10)) || 1);
-      const gap = half * WIND_SIZE_MAX / 11 + 0.4;      // 11 px : le texte au zoom plein
-      const [ux, uy] = LBL[qoct][1], ul = Math.hypot(ux, uy);
-      p.qanc = LBL[qoct][0]; p.qoff = [ux / ul * gap, uy / ul * gap];
-    }
-    /* Le disque d'un favori est deux fois plus large : son code s'écarte
-       d'autant, sinon il se poserait dessus au zoom fort — l'écart est en
-       cadratins, il suit donc déjà la taille du texte, pas celle du point. */
-    if (p.fav){
-      p.loff = [p.loff[0] * 1.6, p.loff[1] * 1.6];
-      p.qoff = [p.qoff[0] * 1.6, p.qoff[1] * 1.6];
-    }
-  }
-
-  /* Sélecteur d'horizon : un rond s'allume, toutes les flèches se recalculent
-     sur les mêmes points — pas de nouvelle requête, les vents TAF sont déjà
-     dans le flux de la carte. */
-  function setWindHour(h){
-    windHour = h;
-    document.querySelectorAll("#wxWindHours .wh").forEach(b =>
-      b.classList.toggle("on", +b.dataset.h === h));
-    if (!lastGeo) return;
-    for (const f of lastGeo.features) applyWindProps(f.properties);
-    const src = map && map.getSource("wx");
-    if (src) src.setData(lastGeo);
-  }
-
-  async function refresh(){
-    try{
-      const r = await fetch(`${WX_API}/api/wx/map`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      const cached = notamCached();
-      /* Le vent arrive du flux en queue de ligne : [icao,lat,lon,cat,wdir,wspd]
-         puis la rafale wgst quand elle dépasse la moyenne ; wdir/wspd absents
-         si calme ou METAR périmé, wdir null si VRB. Une flèche par tranche de
-         10 kt entamée ; nombre et couleur suivent le vent le plus FORT annoncé
-         (rafale comprise : 19G29 pèse 29 kt) — mêmes seuils que la traversière
-         du panneau (20 et 30 kt). La rotation est la direction d'où VIENT le
-         vent : l'icône porte son faisceau au-dessus du centre, il se pose donc
-         AU VENT du terrain, pointes vers lui — la flèche montre le terrain
-         qu'elle va balayer. Une huitième valeur suit la rafale quand une
-         pointe annoncée SANS direction (le VRB d'un grain) dépasse ce vent :
-         elle ne fait pas de flèche — on ne sait pas d'où elle vient — mais
-         elle allume le triangle « ! ».
-         d.winds porte à part les vents PRÉVUS par TAF : par OACI, un triplet
-         [dir,spd,gst] par horizon +1/+2/+3 h — plus la même pointe en
-         quatrième valeur —, ou 0 quand le TAF ne gouverne pas cet instant. Chaque point garde son METAR (wm) et ses prévisions
-         (wf) : le sélecteur d'horizon rejoue applyWindProps sans re-requêter. */
-      const winds = d.winds || {};
-      /* d.cb : les terrains dont le METAR ou le TAF annonce un cumulonimbus,
-         quelle que soit l'heure — l'éclair jaune de la carte. Il ne suit pas
-         le sélecteur d'horizon : c'est un signal, pas une prévision horaire,
-         et il reste allumé tant que le CB est écrit quelque part. */
-      const cbs = new Set(d.cb || []);
-      /* Favoris relus à chaque rafraîchissement — la carte se rouvre par
-         refresh(), donc une étoile posée entre deux visites est prise. */
-      const favs = new Set(favList());
-      lastGeo = { type:"FeatureCollection", features: d.stations.map(([icao,lat,lon,cat,wdir,wspd,wgst,wpk]) => {
-        const q = qfuPairs(icao);
-        const p = { icao, cat, dl: cached.has(icao), cb: cbs.has(icao),
-                    fav: favs.has(icao), qfu: q ? q.all : "", qfu1: q ? q.one : "",
-                    wicon:"", wrot:0, wspd:0,
-                    wm: (wspd >= 2 || wpk) ? [wdir ?? null, wspd || 0, wgst || 0, wpk || 0] : 0,
-                    wf: winds[icao] || 0 };
-        applyWindProps(p);
-        return { type:"Feature", geometry:{ type:"Point", coordinates:[lon,lat] }, properties:p };
-      }) };
-      const src = map && map.getSource("wx");
-      if (src) src.setData(lastGeo);
-      setStateLine(
-        `${d.count} stations · updated ${d.updated ? hhmmZ(new Date(d.updated)) + "Z" : "—"}`
-          + (d.stale ? " · feed interrupted — colours may be outdated" : ""),
-        d.stale);
-    } catch(err){
-      /* On ne détruit rien : les points affichés restent, la ligne d'état dit
-         que le rafraîchissement a échoué, et la minuterie réessaiera. */
-      setStateLine(`Could not load stations (${err.message}) — will retry.`, true);
-    }
-  }
-
-  /* Préfixe OACI du pays : une seule lettre pour les grands blocs d'un seul
-     pays (K États-Unis, C Canada, Y Australie, Z Chine), deux ailleurs. */
-  function icaoPrefix(icao){
-    return /^[KCYZ]/.test(icao) ? icao.slice(0,1) : icao.slice(0,2);
-  }
-
-  /* Vue d'ouverture : le pays du premier favori, cadré par l'emprise des
-     stations qui partagent son préfixe OACI — pas de contours de pays à
-     embarquer pour ça. Sans favori, ou si son pays n'a aucune station
-     connue, on ouvre sur l'Europe. */
-  function applyOpenView(){
-    if (!map) return;
-    const fav = favList()[0];
-    if (!fav){ map.fitBounds(EUROPE_BOUNDS, FIT_OPTS); return; }
-
-    const p = icaoPrefix(fav);
-    const pts = []; let home = null;
-    for (const f of (lastGeo && lastGeo.features) || []){
-      const [lon, lat] = f.geometry.coordinates;
-      /* Le flux contient quelques positions aberrantes (latitudes hors
-         bornes, 0/0 des stations sans coordonnées) : une seule suffirait à
-         étirer le cadre sur un demi-hémisphère. */
-      if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180) || (lat === 0 && lon === 0)) continue;
-      if (f.properties.icao === fav) home = [lon, lat];
-      if (icaoPrefix(f.properties.icao) === p) pts.push([lon, lat]);
-    }
-    if (!pts.length){
-      if (home) map.jumpTo({ center: home, zoom:5 });
-      else map.fitBounds(EUROPE_BOUNDS, FIT_OPTS);
-      return;
-    }
-
-    /* Le cadre part du favori (ou du barycentre médian de son pays) et
-       s'étend de proche en proche : une station séparée du bloc déjà retenu
-       par plus de CLUSTER_GAP degrés est laissée dehors. C'est ce qui écarte
-       les territoires lointains — les Malouines sous EG, Saint-Pierre sous
-       LF — qui autrement feraient reculer la carte d'un océan. */
-    const median = i => { const v = pts.map(q=>q[i]).sort((a,b)=>a-b); return v[v.length>>1]; };
-    const anchor = home || [median(0), median(1)];
-    const gap = ([lon,lat]) =>
-      Math.max(anchor[0]-lon, lon-anchor[0], anchor[1]-lat, lat-anchor[1]);
-    pts.sort((a,b)=>gap(a)-gap(b));
-
-    let box = [[anchor[0],anchor[1]],[anchor[0],anchor[1]]];
-    for (const [lon,lat] of pts){
-      const out = Math.max(box[0][0]-lon, lon-box[1][0], box[0][1]-lat, lat-box[1][1]);
-      if (out > CLUSTER_GAP) continue;
-      box = [[Math.min(box[0][0],lon), Math.min(box[0][1],lat)],
-             [Math.max(box[1][0],lon), Math.max(box[1][1],lat)]];
-    }
-    map.fitBounds(box, FIT_OPTS);
-  }
-
-  /* ---------- QFU du relevé : vent efficace et traversier ----------
-     Le panneau est découplé du moteur : le vent se lit au jeton directement
-     dans les textes bruts (WIND_RE), et les QFU sortent de la base terrains
-     pour le terrain CLIQUÉ — même logique que qfusOf, qui elle ne connaît
-     que le terrain courant de l'app. */
-  function sideQfus(icao){
-    const rec = adGet(icao);
-    const pairs = rec && rec.runways.length ? rec.runways.map(r=>r.pair) : (RWY_DB[icao]||[]);
-    const magvar = rec && Number.isFinite(rec.magvar) ? rec.magvar : 0;
-    const norm = d => { const x = Math.round(d)%360; return x<=0 ? x+360 : x; };
-    const qfus = [];
-    for (const pair of pairs){
-      const rw = rec && rec.runways.find(r=>r.pair===pair);
-      pair.split("/").forEach((p,i)=>{
-        const id = p.trim();
-        /* Piste hélico (suffixe H, comme 08H/26H chez Preflight Lens) : pas
-           de vent à juger ici. La base actuelle n'en a pas — précaution pour
-           une future recompilation de la graine. */
-        if (/H$/.test(id)) return;
-        const num = parseInt(id.replace(/[LCR]/,""),10);
-        let deg;
-        if (rw && rw.qfu && Number.isFinite(rw.qfu[id])) deg = norm(rw.qfu[id]);
-        else if (rw && Number.isFinite(rw.hdgT) && rec && Number.isFinite(rec.magvar))
-          deg = norm(rw.hdgT + (i===0?0:180) - rec.magvar);
-        else deg = norm(num*10);
-        qfus.push({id, deg});
-      });
-    }
-    return {qfus, magvar};
-  }
-  /* Tous les groupes de vent d'un texte brut, convertis en nœuds : un seul
-     dans un METAR, un par groupe d'évolution dans un TAF. Chaque vent porte
-     l'heure `t` {d, h, mi} de son groupe — heure d'observation du METAR,
-     début de validité ou de période (ddhh/ddhh) dans un TAF, ou FMddhhmm :
-     ces jetons précèdent toujours le vent qu'ils datent. Seuls les groupes
-     ddhh/ddhh (période TEMPO/BECMG/validité) n'ont pas de minute — c'est là
-     qu'on rajoute 00, pas sur un METAR ou un FM dont la minute est réelle.
-     Un VRB porté par un TEMPO ou un PROB (grain d'orage, typiquement) n'a
-     pas de direction exploitable : son pire cas mettrait toute la rafale en
-     arrière et en travers de chaque piste — on l'écarte des composantes.
-     Au-delà de 10 kt il ne s'efface pas pour autant : il ressort dans
-     `out.vrb`, que la table rappelle en garde — heure du groupe et vent. */
-  function sideWinds(raw){
-    const out = [];
-    let t = null, tempo = false;
-    for (const tok of String(raw||"").trim().split(/\s+/)){
-      let m;
-      if (tok==="TEMPO" || /^PROB\d{2}$/.test(tok)){ tempo = true; continue; }
-      if (tok==="BECMG"){ tempo = false; continue; }
-      if ((m = /^(\d{2})(\d{2})(\d{2})Z$/.exec(tok))){ t = {d:+m[1], h:+m[2], mi:+m[3]}; continue; }
-      if ((m = /^FM(\d{2})(\d{2})(\d{2})$/.exec(tok))){ tempo = false; t = {d:+m[1], h:+m[2], mi:+m[3]}; continue; }
-      if ((m = /^(\d{2})(\d{2})\/\d{4}$/.exec(tok))){ t = {d:+m[1], h:+m[2], mi:0}; continue; }
-      if (!(m = WIND_RE.exec(tok))) continue;
-      const k = m[4]==="MPS" ? 1.94384 : m[4]==="KMH" ? 1/1.852 : 1;
-      const spd = Math.round(parseInt(m[2],10)*k);
-      const gust = m[3] ? Math.round(parseInt(m[3],10)*k) : null;
-      if (tempo && m[1]==="VRB"){
-        if (Math.max(spd, gust||0) > 10){
-          if (!out.vrb) out.vrb = [];
-          out.vrb.push({spd, gust, t});
-        }
-        continue;
-      }
-      out.push({dir: /^\d{3}$/.test(m[1]) ? parseInt(m[1],10) : null, spd, gust, t});
-    }
-    return out;
-  }
-  /* Composantes d'un vent sur un QFU. Sans direction (VRB, ///), pire cas :
-     tout le vent en arrière ET tout le vent en travers. `useGust` : la
-     colonne « pire de la journée » juge sur la rafale quand il y en a une. */
-  function sideComp(deg, magvar, w, useGust){
-    const s = useGust && w.gust!=null ? Math.max(w.spd, w.gust) : w.spd;
-    if (w.dir==null) return {head:-s, cross:s, sign:1};
-    const a = (w.dir - magvar - deg)*Math.PI/180;
-    const x = Math.round(s*Math.sin(a));
-    return {head: Math.round(s*Math.cos(a)), cross: Math.abs(x), sign: x>=0?1:-1};
-  }
-  /* Une case : vent efficace puis traversière, la flèche dans le sens où le
-     vent pousse ; chaque composante se teinte selon sa propre sévérité. Dans la
-     colonne max, chaque composante porte l'heure de SON groupe — le pire vent
-     efficace et la pire traversière peuvent venir de deux moments différents.
-     Le jour ne s'écrit que s'il diffère du jour de référence (celui du METAR). */
-  function sideTimeTag(t, refDay){
-    if (!t) return "";
-    return `<span class="t">${t.d===refDay?"":pad2(t.d)+"/"}${pad2(t.h)}${pad2(t.mi)}Z</span>`;
-  }
-  /* Seuils de couleur : vert tant que la composante reste ordinaire. Le vent
-     de face l'est toujours ; le vent arrière vire au rouge au-delà de 9 kt ;
-     la traversière passe à l'ambre au-delà de 20 kt, au rouge au-delà de 30. */
-  function sideWindTone(v, amber, red){
-    return v>red ? "bad" : (amber!=null && v>amber ? "warn" : "ok");
-  }
-  function sideWindCell(c, refDay){
-    if (!c) return `<span class="c xw">—</span>`;
-    const eff = c.head>=0
-      ? `<span class="ok">↓${c.head}kt</span>`
-      : `<span class="${sideWindTone(-c.head, null, 9)}">↑${-c.head}kt</span>`;
-    return `<span class="c">${eff}${sideTimeTag(c.tEff, refDay)} `
-         + `<span class="${sideWindTone(c.cross, 20, 30)}">${c.sign>=0?"←":"→"}${c.cross}kt</span>${sideTimeTag(c.tX, refDay)}</span>`;
-  }
-  function sideRunwaysHtml(icao, s){
-    const {qfus, magvar} = sideQfus(icao);
-    if (!qfus.length) return "";
-    const metarWs = sideWinds(s.metar && s.metar.raw);
-    const metarW = metarWs[0] || null;
-    const tafWs = sideWinds(s.taf && s.taf.raw);
-    const all = (metarW ? [metarW] : []).concat(tafWs);
-    if (!all.length) return "";
-    const refDay = metarW && metarW.t ? metarW.t.d : (all[0].t ? all[0].t.d : null);
-    const rows = qfus.map(q=>{
-      /* Rafale comprise, comme partout : la colonne « now » doit dire la même
-         chose que la table de vent de la page principale, où la rafale
-         annoncée gouverne toujours les composantes. */
-      const now = metarW ? sideComp(q.deg, magvar, metarW, true) : null;
-      /* Pire cas de la journée, composante par composante : le minimum de
-         vent de face et le maximum de traversière peuvent venir de deux
-         groupes différents du TAF — chacun garde l'heure du sien. */
-      let head = Infinity, cross = -1, sign = 1, tEff = null, tX = null;
-      for (const w of all){
-        const c = sideComp(q.deg, magvar, w, true);
-        if (c.head < head){ head = c.head; tEff = w.t; }
-        if (c.cross > cross){ cross = c.cross; sign = c.sign; tX = w.t; }
-      }
-      return {id:q.id, now, max:{head, cross, sign, tEff, tX}};
-    });
-    /* Le meilleur QFU en tête, comme la table de vent de la page principale. */
-    rows.sort((a,b)=>(b.now?b.now.head:b.max.head)-(a.now?a.now.head:a.max.head));
-    /* Les rafales VRB écartées des composantes reviennent en garde sous la
-       table : l'heure de leur groupe et le vent, toutes directions possibles. */
-    const vrb = (metarWs.vrb||[]).concat(tafWs.vrb||[]);
-    const vrbHtml = vrb.map(w =>
-      `<span class="vrb">⚠️ ${w.t ? (w.t.d===refDay?"":pad2(w.t.d)+"/")+pad2(w.t.h)+pad2(w.t.mi)+"Z " : ""}VRB${w.spd}${w.gust!=null?"G"+w.gust:""}kt</span>`).join("");
-    return `<div class="wxpop-sec"><div class="wxpop-lbl">Runways</div><div class="rwx">
-      <span></span><span class="h">METAR</span><span class="h">Max today</span>
-      ${rows.map(r=>`<span class="id">${r.id}:</span>${sideWindCell(r.now, refDay)}${sideWindCell(r.max, refDay)}`).join("")}
-      ${vrbHtml}
-    </div></div>`;
-  }
-
-  /* ---------- Panneau latéral METAR/TAF ----------
-     `sideSeq` protège de deux clics rapprochés : la réponse d'un terrain
-     abandonné n'écrase pas celle du terrain qu'on regarde. */
-  let sideSeq = 0, sideArm = null;
-
-  function sideEl(){ return document.getElementById("wxSide"); }
-
-  function closeSide(){
-    const el = sideEl();
-    sideSeq++;
-    clearTimeout(sideArm);
-    el.style.pointerEvents = "";                       // ce qui arrivera après n'est plus attendu
-    el.classList.remove("open");
-    el.style.transform = "";
-    /* On attend la fin du glissement pour cacher : sinon le panneau
-       disparaît d'un coup au lieu de sortir par le bas. */
-    setTimeout(() => { if (!el.classList.contains("open")) el.hidden = true; }, 240);
-  }
-
-  /* Le relevé tient-il sans défiler ? Si oui, le doigt peut fermer le panneau
-     depuis n'importe où ; sinon le défilement garde le geste vertical et seule
-     la poignée ferme. */
-  function fitSide(){
-    const b = document.getElementById("wxSideBody");
-    b.classList.toggle("short", b.scrollHeight <= b.clientHeight + 1);
-  }
-
-  async function openSide(feat){
-    const { icao, cat } = feat.properties;
-    const c = dots();
-    const col = [c.grey, c.green, c.amber, c.red][cat] || c.grey;
-    const head = `<div class="wxpop-head"><i class="wxpop-dot" style="background:${col}"></i>`
-      + `<span class="wxpop-icao">${icao}</span>`;
-    const el = sideEl(), body = document.getElementById("wxSideBody");
-    const seq = ++sideSeq;
-    /* La bande du jour part tout de suite, en parallèle du relevé ; son échec
-       est avalé — elle est un plus, jamais une condition. */
-    const dayP = fetchDayWx(icao).catch(() => null);
-
-    el.hidden = false;
-    el.style.transform = "";
-    body.scrollTop = 0;
-    body.innerHTML = `${head}<span class="wxpop-age">loading…</span></div>`;
-    fitSide();
-    /* Un calcul de style forcé entre `hidden = false` et la classe qui ouvre :
-       sans lui le navigateur regroupe les deux changements, part du panneau
-       déjà visible et n'anime rien. */
-    void el.offsetWidth;
-    el.classList.add("open");
-    /* Le panneau se pose sous le doigt qui vient de taper le point. Tant
-       qu'il glisse, il ne prend aucun clic : sans ce délai, le geste
-       d'ouverture peut retomber sur « Open in Minima » — qui referme la
-       carte et renvoie à la page principale, alors qu'on venait juste de
-       demander à voir le relevé. */
-    el.style.pointerEvents = "none";
-    clearTimeout(sideArm);
-    sideArm = setTimeout(() => { el.style.pointerEvents = ""; }, 400);
-
-    try{
-      const r = await fetch(`${WX_API}/api/wx?ids=${icao}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const s = (await r.json()).stations[icao] || {};
-      if (seq !== sideSeq) return;   // panneau refermé ou rouvert ailleurs
-      const metar = s.metar ? mMarkedHtml(s.metar.raw, []) : "No METAR available.";
-      const taf = s.taf ? mMarkedHtml(s.taf.raw, [])
-        : (s.status === "no-taf" ? "No TAF published for this aerodrome." : "No TAF available.");
-      const age = s.metar ? escapeHtmlText(ageLabel(s.metar.ageMin)) : "";
-      body.innerHTML = `${head}<span class="wxpop-age">${age}</span></div>
-        <div class="wxpop-sec"><div class="wxpop-lbl">METAR</div><div class="wxpop-raw">${metar}</div></div>
-        <div class="wxpop-sec"><div class="wxpop-lbl">TAF</div><div class="wxpop-raw">${taf}</div></div>
-        ${sideRunwaysHtml(icao, s)}
-        <div class="wxpop-sec" id="dwxSec" hidden></div>
-        <button class="btn sm wxpop-open" type="button">Open in Minima</button>
-        <p class="wxside-hint">Swipe down to close.</p>`;
-      fitSide();
-      armOpenButton(body, icao);
-      dayP.then(d => {
-        if (seq !== sideSeq || !d || !Array.isArray(d.slots) || !d.slots.some(Boolean)) return;
-        const sec = document.getElementById("dwxSec");
-        if (!sec) return;
-        sec.innerHTML = dayWxSecHtml(d);
-        sec.hidden = false;
-        fitSide();
-      });
-    } catch(err){
-      if (seq !== sideSeq) return;
-      body.innerHTML = `${head}<span class="wxpop-age">—</span></div>
-        <div class="wxpop-sec"><div class="wxpop-raw">Could not fetch the reports (${escapeHtmlText(err.message)}).</div></div>`;
-      fitSide();
-    }
-  }
-
-  /* Le bouton qui quitte la carte n'obéit qu'à un clic entier : il faut que le
-     doigt ou la souris se soit POSÉ sur lui. Un clic qui n'a fait que traverser
-     — celui-là même qui vient d'ouvrir le panneau sous le curseur — n'a pas de
-     `pointerdown` sur le bouton, et ne part donc pas charger le terrain en
-     refermant la carte. */
-  function armOpenButton(body, icao){
-    const btn = body.querySelector(".wxpop-open");
-    if (!btn) return;
-    let armed = false;
-    btn.addEventListener("pointerdown", () => { armed = true; });
-    /* `detail === 0` : activation au clavier (Entrée, Espace), qui n'a
-       évidemment pas de pointeur derrière elle — elle reste valable. */
-    btn.addEventListener("click", e => { if (armed || e.detail === 0) loadInApp(icao); });
-  }
-
-  /* Glissement de fermeture, vers le bas. Le panneau ne suit le doigt que si
-     le geste part franchement vers le bas : en dessous de GRAB_PX on ne sait
-     pas encore si l'utilisateur veut fermer ou faire défiler le relevé, et
-     trancher trop tôt lui volerait l'un ou l'autre. Vers le haut, rien ne
-     bouge — il n'y a rien à découvrir de ce côté. */
-  function bindSideSwipe(){
-    const el = sideEl();
-    const GRAB_PX = 8, SHUT_PX = 55;
-    let id = null, x0 = 0, y0 = 0, dy = 0, taken = false, gone = false;
-
-    el.addEventListener("pointerdown", e => {
-      if (id !== null) return;
-      /* Doigt posé dans un relevé qui défile : le geste appartient au
-         défilement, sauf s'il est déjà en haut de course. */
-      const body = document.getElementById("wxSideBody");
-      if (body.contains(e.target) && !body.classList.contains("short") && body.scrollTop > 0) return;
-      id = e.pointerId; x0 = e.clientX; y0 = e.clientY; dy = 0; taken = false; gone = false;
-    });
-
-    el.addEventListener("pointermove", e => {
-      if (e.pointerId !== id) return;
-      dy = e.clientY - y0;
-      if (!taken){
-        if (Math.abs(dy) < GRAB_PX && Math.abs(e.clientX - x0) < GRAB_PX) return;
-        /* Nettement plus horizontal que vertical, ou départ vers le haut :
-           ce n'est pas une fermeture, on rend la main pour de bon. Le facteur
-           1.5 pardonne le doigt qui part en arc. */
-        if (dy < 0 || Math.abs(e.clientX - x0) > Math.abs(dy) * 1.5){ id = null; return; }
-        taken = true; gone = true;
-        el.classList.add("drag");
-        /* La capture garde les mouvements pour nous si le doigt sort du
-           panneau — utile justement quand il le pousse hors de l'écran. */
-        try{ el.setPointerCapture(e.pointerId); } catch(_){}
-      }
-      el.style.transform = `translateY(${Math.max(0, dy)}px)`;
-    });
-
-    const release = e => {
-      if (e.pointerId !== id) return;
-      id = null;
-      if (!gone) return;
-      el.classList.remove("drag");
-      /* Passé le seuil, on laisse le panneau finir sa sortie ; en deçà, il
-         revient se coller au bord. */
-      if (dy >= SHUT_PX) closeSide();
-      else el.style.transform = "";
-    };
-    el.addEventListener("pointerup", release);
-    el.addEventListener("pointercancel", release);
-  }
-
-  function loadLib(){
-    if (window.maplibregl) return Promise.resolve(true);
-    return new Promise(res => {
-      const css = document.createElement("link"); css.rel = "stylesheet"; css.href = GL_CSS;
-      document.head.appendChild(css);
-      const s = document.createElement("script"); s.src = GL_JS;
-      s.onload = () => res(true); s.onerror = () => res(false);
-      document.head.appendChild(s);
-    });
-  }
-
-  async function open(){
-    document.getElementById("wxMapOv").hidden = false;
-    /* La légende s'ouvre REPLIÉE : la carte se donne d'abord à voir, les
-       explications ne prennent la place qu'à la demande — un coup d'œil sur
-       le bandeau LEGEND les fait revenir. */
-    document.getElementById("wxMapOv").classList.add("leg-off");
-    closeSide();                       // pas de relevé hérité de la visite d'avant
-    setStateLine("Loading stations…", false);
-    if (!map){
-      if (!(await loadLib())){
-        setStateLine("Map library missing (vendor/maplibre-gl-5.6.0.js) — cannot draw the map.", true);
-        return;
-      }
-      map = new maplibregl.Map({
-        container: document.getElementById("wxMap"),
-        style: glStyle(isLight()),
-        bounds: EUROPE_BOUNDS, fitBoundsOptions:{ padding:40 }, attributionControl:false,
-        dragRotate:false, pitchWithRotate:false, maxZoom:11, fadeDuration:0,
-      });
-      map.touchZoomRotate.disableRotation();
-      map.on("style.load", addWxLayers);
-      map.on("click", "wx-dots", e => { if (e.features && e.features[0]) openSide(e.features[0]); });
-      map.on("mouseenter", "wx-dots", () => { map.getCanvas().style.cursor = "pointer"; });
-      map.on("mouseleave", "wx-dots", () => { map.getCanvas().style.cursor = ""; });
-      /* Le clic passe aussi par les étiquettes : viser un code de quatre
-         lettres est plus facile que viser un point de 5 px. */
-      map.on("click", "wx-icao", e => { if (e.features && e.features[0]) openSide(e.features[0]); });
-      map.on("mouseenter", "wx-icao", () => { map.getCanvas().style.cursor = "pointer"; });
-      map.on("mouseleave", "wx-icao", () => { map.getCanvas().style.cursor = ""; });
-      /* Les QFU sont cliquables au même titre : au zoom fort ils sont parfois
-         la seule étiquette du terrain — les codes OACI restent éteints tant
-         qu'on n'a pas basculé NOTAM. */
-      map.on("click", "wx-qfu", e => { if (e.features && e.features[0]) openSide(e.features[0]); });
-      map.on("mouseenter", "wx-qfu", () => { map.getCanvas().style.cursor = "pointer"; });
-      map.on("mouseleave", "wx-qfu", () => { map.getCanvas().style.cursor = ""; });
-      bindSideSwipe();
-    } else {
-      map.resize();   // l'overlay était en display:none, le canvas a une taille nulle
-    }
-    /* Le cadrage a besoin des coordonnées des stations : on attend le
-       rafraîchissement. S'il échoue, `lastGeo` peut rester vide — on tombe
-       alors sur l'Europe, ce qui est le repli voulu. */
-    await refresh();
-    applyOpenView();
-    setLabels(document.getElementById("wxNotamChk").checked);
-    /* Le vent repart toujours ÉTEINT : la carte s'ouvre sur les couleurs des
-       points, le faisceau ne revient que si on le rallume — le navigateur
-       peut restaurer la case cochée d'une visite passée, on ne s'y fie pas. */
-    setWind(false);
-    clearInterval(timer);
-    timer = setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
-  }
-
-  function close(){
-    document.getElementById("wxMapOv").hidden = true;
-    clearInterval(timer); timer = null;
-    closeSide();
-  }
-
-  /* Retour au premier plan, carte ouverte : on n'attend pas le prochain tick —
-     un appareil rangé une heure revient sur les couleurs d'avant, et c'est
-     précisément là qu'elles risquent d'être vieilles. Même geste que la page
-     des relevés (fetchWeather sur visibilitychange). `timer` sert de témoin
-     d'ouverture : il ne vit que carte affichée. */
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && timer && !document.getElementById("wxMapOv").hidden) refresh();
-  });
-
-  /* Changement de thème : re-style complet. addWxLayers() repose les points
-     via le `style.load` qui suit, avec la palette du nouveau thème. */
-  function setTheme(light){
-    if (map) map.setStyle(glStyle(light));
-  }
-
-  function loadInApp(icao){
-    close();
-    /* Terrain choisi sur la carte : on quitte le module bilan de vol, la
-       présentation complète reprend — sur téléphone comme sur tablette. */
-    state.routeFocus = null;
-    if (document.body.classList.contains("mobile")){ mOpen(icao); return; }
-    const el = document.getElementById("icao");
-    el.value = icao;
-    refreshAdPanel(); renderFavBar();
-    fetchWeather();
-  }
-
-  document.getElementById("mapBtn").onclick = open;
-  document.getElementById("wxMapClose").onclick = close;
-  document.getElementById("wxMapHelp").onclick = openHelp;
-  document.getElementById("wxNotamChk").onchange = e => setLabels(e.target.checked);
-  document.getElementById("wxWindChk").onchange = e => setWind(e.target.checked);
-  document.querySelectorAll("#wxWindHours .wh").forEach(b => {
-    b.onclick = () => setWindHour(+b.dataset.h);
-  });
-  document.getElementById("wxLegEye").onclick = () =>
-    document.getElementById("wxMapOv").classList.toggle("leg-off");
-  document.getElementById("wxSideX").onclick = closeSide;
-  /* Échap referme d'abord le relevé, la carte ensuite : on quitte les
-     couches dans l'ordre où on les a ouvertes. */
-  document.addEventListener("keydown", e => {
-    if (e.key !== "Escape" || document.getElementById("wxMapOv").hidden) return;
-    if (e.helpClosed || !document.getElementById("helpOv").hidden) return;  // la couche du dessus d'abord
-    if (sideEl().classList.contains("open")) closeSide();
-    else close();
-  });
-
-  /* setLabels et refreshCache sont publics pour le module NOTAM : après un
-     téléchargement, un appel à refreshCache() reverdit les codes concernés
-     sans rouvrir la carte. */
-  return { open, close, setTheme, loadInApp, setLabels, refreshCache: applyCache };
+          openNotam, closeNotam, goHost};
 })();
 
 loadSample();
