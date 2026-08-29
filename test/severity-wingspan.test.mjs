@@ -34,7 +34,7 @@ const html = readFileSync(join(HERE, "..", "notam-filter.html"), "utf8").replace
 async function chargerSeverity() {
   const L = html.split("\n");
   const debut = L.findIndex(l => l.includes("const SUBJECT_CATEGORIES = {"));
-  const fin = L.findIndex(l => l.includes("return { categories: [...cats], severity: severity(q, e), source };"));
+  const fin = L.findIndex(l => l.includes("return { categories: [...cats], severity: severity(q, e, cnl), source };"));
   assert.ok(debut >= 0 && fin > debut, "marqueurs de la section de classification introuvables");
   const src = [
     L.slice(debut, fin + 2).join("\n"),

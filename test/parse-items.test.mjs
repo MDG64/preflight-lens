@@ -39,13 +39,17 @@ const html = readFileSync(join(HERE, "..", "notam-filter.html"), "utf8").replace
 async function chargerParseNotam() {
   const ordre = /const ITEM_ORDRE = ("[A-Z]+");/.exec(html);
   assert.ok(ordre, "ITEM_ORDRE introuvable dans notam-filter.html");
+  const cancel = /const CANCEL_HEAD_RE = (\/.*\/);/.exec(html);
+  assert.ok(cancel, "CANCEL_HEAD_RE introuvable dans notam-filter.html");
   const fns = ["cleanHtml", "itemMarkers", "field", "innerBody", "unwrapOriginalNotam", "parseNotam"].map(nom => {
     const re = new RegExp(`function ${nom}\\([^)]*\\) \\{[\\s\\S]*?\\n {4}\\}`);
     const m = re.exec(html);
     assert.ok(m, `function ${nom}() introuvable dans notam-filter.html`);
     return m[0];
   });
-  const src = ["const ITEM_ORDRE = " + ordre[1] + ";", ...fns, "export { parseNotam };"].join("\n");
+  const src = ["const ITEM_ORDRE = " + ordre[1] + ";",
+               "const CANCEL_HEAD_RE = " + cancel[1] + ";",
+               ...fns, "export { parseNotam };"].join("\n");
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 

@@ -7111,8 +7111,12 @@ body .stat .k{
        08/123). Une vraie fin de phrase reste bloquée : « . » suivi du saut de
        ligne tombe sous le même garde-fou que « . » suivi d'une espace. */
     const OBST_LGT_OOS_RE = /\b(?:OBST|OBSTACLES?|CRANES?|MASTS?)\b(?:(?!\.\s)[^,;:]){0,120}?\b(?:LGTS?|LIGHTS?)\b(?:(?!\.\s)[^,;:]){0,120}?\b(?:U\/S|UNSERVICEABLE|UNSERV|NOT AVBL|NOT AVAILABLE|OUT OF SERVICE)\b/g;
-    function severity(q, e) {
+    function severity(q, e, cnl) {
       const [subj, cond] = qcodeParts(q), t = (e || "").toUpperCase();
+      // NOTAMC : le message ne fait qu'en RETIRER un autre (cf. CANCEL_HEAD_RE).
+      // Rien à y faire, quoi que recopie son texte — Information, toujours, et
+      // avant toute lecture du Q-code ou des mots de fermeture.
+      if (cnl) return "info";
       // Passage en Information UNIQUEMENT pour les NOTAM dont le sujet EST un poste
       // de stationnement (code Q « MP »). On ne se base PAS sur le mot « stand » dans
       // le texte : une fermeture de taxiway/piste qui cite un stand reste critique.
@@ -7190,7 +7194,7 @@ body .stat .k{
       }
       return sev;
     }
-    function classifyNotam(q, e) {
+    function classifyNotam(q, e, cnl) {
       let cats = categoriesFromQcode(q), source = cats.size ? "qcode" : "none";
       const tc = categoriesFromText(e);
       if (tc.size) { tc.forEach(x => cats.add(x)); source = source === "qcode" ? "qcode+text" : "text"; }
@@ -7226,7 +7230,7 @@ body .stat .k{
         if (faibles.size) { cats = faibles; source = "text"; }
       }
       if (!cats.size) { cats = new Set(["non_classe"]); source = "unclassified"; }
-      return { categories: [...cats], severity: severity(q, e), source };
+      return { categories: [...cats], severity: severity(q, e, cnl), source };
     }
 
     /* ============================================================
@@ -7364,6 +7368,27 @@ body .stat .k{
       if (!new RegExp("^" + id + "\\s+NOTAM[CNR]\\b").test(e)) return e;
       return field(e, "E") || e;
     }
+    /* NOTAMC — MESSAGE D'ANNULATION. Son en-tête cite le NOTAM qu'il lève
+       (« A2541/26 NOTAMC A2443/26 ») et la source US RECOPIE derrière lui le
+       texte annulé, simplement suffixé de CANCELED :
+
+           A2541/26 NOTAMC A2443/26
+           E) TWY Q BTN TWY Q1 AND TWY Z CLSD TO ACFT WINGSPAN MORE THAN 118FT
+              CANCELED                                    <- KMIA, 26 AOUT 2026
+
+       Lu au premier degré, ce CLSD sortait la voie en rouge Critical et la
+       couchait fermée sur le plan : l'inverse exact de ce que le message
+       annonce. Le CANCELED de queue ne rattrapait rien — CNL_TEXT n'écoute que
+       les formes « NOTAM CNL/CANCELLED/WITHDRAWN/VOID », et son garde-fou
+       isActiveRestriction (fait pour « CLSD, PREVIOUS NOTAM CNL », où c'est la
+       NOUVELLE fermeture qui prime) aurait de toute façon gardé le rouge.
+       L'EN-TÊTE, lui, est sans ambiguïté : un NOTAMC n'impose jamais rien, il
+       ne fait que retirer un message. C'est la lecture qu'a déjà le détecteur
+       de drapeaux de Minima Lens (nfaDetect, « if (/\bNOTAMC\b/) continue »).
+       Ancré sur l'identifiant de tête — ICAO (A2541/26) ou domestique US
+       (07/211) — pour ne jamais confondre avec un corps qui CITERAIT le mot.
+       Les 8 NOTAMC de KMIA relevés ce jour-là matchent tous. */
+    const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})\s+NOTAMC\b/;
     function parseNotam(raw) {
       const text = unwrapOriginalNotam(cleanHtml(raw));
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
@@ -7373,11 +7398,12 @@ body .stat .k{
       // évite un faux "(sans id)" alors que l'ID existe (vu sur HSSS
       // A0050/26, A0052/26 — absents sans ce correctif).
       const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
+      const cnl = CANCEL_HEAD_RE.test(text);
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
       if (qm) { const p = qm[1].split("/").map(s => s.trim()); qcode = p[1] || ""; traffic = p[2] || ""; purpose = p[3] || ""; scope = p[4] || ""; }
       return {
-        id, raw: text, qcode, scope, traffic, purpose,
+        id, cnl, raw: text, qcode, scope, traffic, purpose,
         a: field(text, "A"), b: field(text, "B"), c: field(text, "C"), d: field(text, "D"),
         e: innerBody(field(text, "E"), id)
       };
@@ -15599,7 +15625,7 @@ function renderInfo(icao) {
     }
 
     function renderFromRaw(raw) {
-      current = (raw || []).map(r => { const n = parseNotam(r); return { ...n, ...classifyNotam(n.qcode, n.e), schedule: parseSchedule(n.d) }; });
+      current = (raw || []).map(r => { const n = parseNotam(r); return { ...n, ...classifyNotam(n.qcode, n.e, n.cnl), schedule: parseSchedule(n.d) }; });
       activeCats.clear();
       activeSev = null;
       render();
@@ -19047,9 +19073,13 @@ function renderInfo(icao) {
       /\bADVISED\s+NOT\s+TO\s+(?:ENTER|OPERATE|FLY|OVERFLY|PLAN)\b/,
       /\bCONFLICT\s+ZONE\b/
     ];
-    function firSeverity(q, e) {
-      const base = severity(q, e);
+    function firSeverity(q, e, cnl) {
+      const base = severity(q, e, cnl);
       if (base === "critical") return base;
+      // Un NOTAMC n'impose rien (cf. CANCEL_HEAD_RE) : ni FIR_CRITICAL_EXTRA_RE
+      // ni FIR_CONFLICT_RE ne doivent le repeindre en rouge sur les mots que
+      // recopie le message qu'il annule.
+      if (cnl) return base;
       const t = (e || "").toUpperCase();
       if (FIR_CRITICAL_EXTRA_RE.test(t)) return "critical";
       if (FIR_CONFLICT_RE.some(re => re.test(t))) return "critical";
@@ -19093,8 +19123,8 @@ function renderInfo(icao) {
       // Parser et afficher
       const parsed = notams.map(raw => {
         const p = parseNotam(raw);
-        const c = classifyNotam(p.qcode, p.e);
-        return { ...p, ...c, severity: firSeverity(p.qcode, p.e), schedule: parseSchedule(p.d) };
+        const c = classifyNotam(p.qcode, p.e, p.cnl);
+        return { ...p, ...c, severity: firSeverity(p.qcode, p.e, p.cnl), schedule: parseSchedule(p.d) };
       });
 
       // Tri par sévérité décroissante : rouge, puis ambre, puis vert. Tri
@@ -22041,7 +22071,7 @@ window.addEventListener("scroll", hidePop, true);
        Prudence : un mot de levée ne l'emporte que si aucun mot de fermeture actif
        (CLSD, U/S…) n'est présent. « CLSD, PREVIOUS NOTAM CNL » doit rester peint —
        c'est la nouvelle fermeture qui prime, pas l'ancienne levée. */
-    /* Deux façons dont un NOTAM annonce une LEVÉE plutôt qu'une fermeture :
+    /* Trois façons dont un NOTAM annonce une LEVÉE plutôt qu'une fermeture :
          (a) le NOTAM lui-même est retiré (« NOTAM CNL », « NOTAM CANCELLED »,
              un simple « ... CNL. » en fin de message) — le message entier est
              annulé, ce qu'il décrivait par ailleurs ne s'applique plus.
@@ -22061,6 +22091,10 @@ window.addEventListener("scroll", hidePop, true);
     const RESUME_OK_RE = /\bOK\.?\s*$/;
     function isResumption(n) {
       const T = (n.e || "").toUpperCase();
+      // (c) le message est un NOTAMC — il ANNULE un autre NOTAM (cf.
+      // CANCEL_HEAD_RE). Sa recopie du texte levé ne doit rien peindre en
+      // rouge : c'est une levée, donc le vert, exactement comme un « NOTAM CNL ».
+      if (n.cnl) return true;
       if (CNL_TEXT.some(k => T.includes(k))) return true;
       if (/(?:^|\s)CNL\.?(?:\s|$)/.test(T)) return true;         // "... CNL." isolé, ex. événement annulé
       if (RESUME_TEXT.some(k => T.includes(k)) || RESUME_OK_RE.test(T))
