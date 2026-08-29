@@ -6,15 +6,17 @@
 <title>Minima</title>
 <meta name="theme-color" content="#0d1117">
 <meta name="apple-mobile-web-app-title" content="Minima">
-<!-- MODULE de Preflight Lens (2026-08-28) : cette page est la copie déployée
-     de « Minima Lens.html » (dépôt Weather Lens, où vivent le serveur local et
-     le journal chiffré). Toute évolution se fait DANS LES DEUX fichiers — même
-     règle de double livraison que la carte. Les écarts assumés entre les deux
-     copies tiennent en trois points : polices -v3 « Preflight Mono » (les
-     mêmes fichiers que l'hôte, conformes au Reserved Font Name de l'OFL),
-     identité visible « Minima », lien retour relatif vers l'accueil.
-     La police est servie depuis le projet et non depuis un CDN — l'app doit
-     démarrer hors ligne. Trois graisses seulement (400/500/600) : le 700 est
+<!-- MODULE de Preflight Lens (2026-08-28) : cette page est la SEULE source du
+     module Minima depuis le 2026-08-29. La copie qui vivait dans le dépôt
+     Weather Lens (« Minima Lens.html ») est supprimée : elle n'en différait que
+     par le nom de la police, l'identité affichée, le lien retour et le service
+     worker — aucune logique, et une double livraison à payer à chaque
+     modification. Le serveur local de Weather Lens, où vivent l'API météo et le
+     journal chiffré, sert désormais CE fichier (WL_APP_ROOT) : ce qu'on vérifie
+     en local est exactement ce qui est en ligne.
+     La police, « Preflight Mono » -v3, est celle de l'hôte, renommée pour le
+     Reserved Font Name de l'OFL. Elle est servie depuis le projet, pas d'un
+     CDN — l'app doit démarrer hors ligne. Trois graisses seulement (400/500/600) : le 700 est
      synthétisé par le navigateur, comme dans l'app hôte. -->
 <link rel="preload" href="fonts/ibm-plex-mono-v20-latin-400-v3.woff2" as="font" type="font/woff2" crossorigin>
 <style>
