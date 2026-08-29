@@ -20243,6 +20243,10 @@ var HL_APCH_ANY=new Set(["ILS","LOC","LLZ","LDA","IGS","SDF","MLS","GLS","VOR","
   "TACAN","RNAV","RNP","GNSS","GPS","LPV","LNAV","VNAV","PAR","SRA","ASR","PRM"]);
 var HL_APCH_SUP=new Set(["DME","GP"]);
 var HL_CAT_RE=/^(?:I|II|III)[ABC]?(?:\/(?:I|II|III)[ABC]?)*$/;
+/* Ce qui dépasse du sol : le NOTAM d'obstacle se lit à l'objet avant de se
+   lire à la hauteur. TWR y figure aussi — c'est le même mot abrégé, et une
+   tour fermée se repère du même coup d'œil qu'une grue érigée. */
+var HL_OBST=new Set(["OBST","OBSTACLE","OBSTACLES","CRANE","CRANES","TOWER","TOWERS","TWR"]);
 function hlApch(up){
   var parts=up.split("/"), any=false;
   for(var i=0;i<parts.length;i++){
@@ -20279,7 +20283,7 @@ function hlMap(toks){
   for(var i=0;i<toks.length;i++){
     if(!toks[i].word) continue;
     var up=toks[i].s.toUpperCase();
-    if(hlApch(up)){ hi[i]=true; continue; }
+    if(hlApch(up)||HL_OBST.has(up)){ hi[i]=true; continue; }
     if(up==="CAT"){
       var j=i+1;
       while(j<toks.length&&!toks[j].word&&/^[ \t]*$/.test(toks[j].s)) j++;
