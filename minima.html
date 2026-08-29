@@ -281,6 +281,11 @@ body.light .btn:hover{background:#e3edf1}
 body.light .btn.primary{background:var(--cyan);border-color:var(--cyan);color:#fff}
 body.light .btn.primary:hover{background:#0b87ac;border-color:#0b87ac}
 .btn.sm{height:32px;padding:0 12px;font-size:11px}
+/* Deux entrées de la barre du coffre sont des liens et non des boutons (elles
+   ouvrent fiches.html et suivi.html). `.btn` a été écrit pour <button>, qui
+   centre son contenu et n'a pas de soulignement : posé sur un <a>, il laissait
+   passer le trait du navigateur et laissait le mot collé en haut du cadre. */
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 /* Le bouton d'envoi de la case ICAO : un symbole seul, à la largeur d'une
    pastille. Sans mot à porter, le cadre se resserre sur le dessin.
    La flèche est TRACÉE et non écrite : le → des polices est un trait de texte,
@@ -332,32 +337,57 @@ body.light .btn.primary:hover{background:#0b87ac;border-color:#0b87ac}
 /* Relevés en proportionnel, comme l'EFB de référence : plus compact et plus
    lisible en continu. Les groupes ne s'alignent donc plus en colonnes — c'est
    le compromis assumé de ce choix. */
+/* Le textarea reste la couche qu'on tape, mais il ne montre plus rien : son
+   encre est transparente et c'est la surcouche, dessous, qui porte le texte
+   lisible et ses couleurs. Le curseur, lui, garde la sienne — c'est tout ce
+   qu'il reste à voir de la case.
+   `resize` retiré : taFit() cale déjà la hauteur sur le relevé entier, et une
+   poignée qui allongeait le textarea sans allonger la surcouche coupait
+   maintenant du TEXTE, plus seulement une teinte. */
 .report textarea{
-  width:100%;border:0;outline:0;background:transparent;resize:vertical;
-  font:400 16px/1.6 var(--sans);color:var(--text);min-height:104px;padding:0;
+  width:100%;border:0;outline:0;background:transparent;resize:none;
+  font:400 16px/1.6 var(--sans);color:transparent;caret-color:var(--text);
+  min-height:104px;padding:0;
   letter-spacing:.005em;position:relative;z-index:1;
 }
 .report textarea::placeholder{color:var(--muted2);font-size:14px}
-/* Superposition qui souligne, dans le texte brut, le groupe vis/RVR/plafond
-   qui gouverne la limitation affichée : le texte de la surcouche est
-   transparent, seul le fond des <mark> se voit, aligné sous les vrais
-   caractères du textarea grâce à une police et un habillage identiques. */
+/* Sélection translucide : l'encre sélectionnée étant transparente, un fond
+   opaque effacerait le texte de la surcouche au lieu de le mettre en valeur. */
+.report textarea::selection{background:color-mix(in srgb,var(--cyan) 34%,transparent)}
+/* Surcouche qui porte le texte brut du relevé et met en couleur le groupe
+   vis/RVR/plafond qui gouverne la limitation affichée. Elle est alignée sous
+   les vrais caractères du textarea grâce à une police et un habillage
+   identiques — c'est ce qui fait tomber le curseur au bon endroit.
+   Cet alignement interdit à un <mark> de changer la MÉTRIQUE du texte : ni
+   gras, ni interlettrage, ni marge intérieure. Seule l'encre change — la même
+   règle que les noms mis en avant dans un NOTAM (.etext mark.nhl), et pour la
+   même raison : un relevé compte beaucoup de groupes, autant de pavés teintés
+   le hachaient. */
 .ta-wrap{position:relative}
 .ta-backdrop{
   position:absolute;inset:0;margin:0;padding:0;border:0;
-  font:400 16px/1.6 var(--sans);letter-spacing:.005em;color:transparent;
+  font:400 16px/1.6 var(--sans);letter-spacing:.005em;color:var(--text);
   white-space:pre-wrap;word-wrap:break-word;overflow:hidden;
   pointer-events:none;
 }
-.ta-backdrop mark{color:transparent;border-radius:3px;padding:1px 0}
-.ta-backdrop mark.go{background:color-mix(in srgb,var(--green) 40%,transparent)}
-.ta-backdrop mark.marginal{background:color-mix(in srgb,var(--amber) 42%,transparent)}
-.ta-backdrop mark.nogo{background:color-mix(in srgb,var(--red) 42%,transparent)}
-.ta-backdrop mark.unknown{background:color-mix(in srgb,var(--steel-dim) 40%,transparent)}
-/* Teinte de sévérité : lecture brute du message, posée très légèrement pour ne
-   pas se confondre avec le verdict des minimas. */
-.ta-backdrop mark.sev-amber{background:color-mix(in srgb,var(--amber) 30%,transparent)}
-.ta-backdrop mark.sev-red{background:color-mix(in srgb,var(--red) 30%,transparent)}
+.ta-backdrop mark{background:none;padding:0;border-radius:0}
+/* Le groupe RETENU par l'évaluation est en plus appuyé — d'un gras d'encre et
+   non d'un gras de police : `font-weight` élargirait les glyphes et le curseur
+   du textarea, resté à la métrique maigre, dériverait de tout ce qui suit.
+   Deux ombres portées d'un tiers de pixel épaississent le trait sans déplacer
+   un seul caractère. */
+.ta-backdrop mark.go,.ta-backdrop mark.marginal,
+.ta-backdrop mark.nogo,.ta-backdrop mark.unknown{
+  text-shadow:.35px 0 0 currentColor,-.35px 0 0 currentColor;
+}
+.ta-backdrop mark.go{color:var(--green)}
+.ta-backdrop mark.marginal{color:var(--amber)}
+.ta-backdrop mark.nogo{color:var(--red)}
+.ta-backdrop mark.unknown{color:var(--steel)}
+/* Sévérité : même encre pleine, mais maigre — c'est la lecture brute du
+   message, pas le groupe qui porte la limitation affichée. */
+.ta-backdrop mark.sev-amber{color:var(--amber)}
+.ta-backdrop mark.sev-red{color:var(--red)}
 
 /* ---------- panneau setup ---------- */
 .setup{
@@ -1700,16 +1730,19 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
 .m-age.stale{color:var(--red)}
 .m-raw{font:400 14px/1.55 var(--sans);color:var(--text);overflow-wrap:anywhere;white-space:pre-wrap}
 .m-raw i{color:var(--muted2)}
-/* Groupe retenu par l'évaluation, surligné dans le texte brut. Contrairement
-   à la surcouche de la version tablette, le texte reste ici bien réel : la
-   teinte doit donc laisser lire les caractères par-dessus. */
-.m-raw mark{color:var(--text);border-radius:3px;padding:1px 2px}
-.m-raw mark.go{background:color-mix(in srgb,var(--green) 38%,transparent)}
-.m-raw mark.marginal{background:color-mix(in srgb,var(--amber) 40%,transparent)}
-.m-raw mark.nogo{background:color-mix(in srgb,var(--red) 40%,transparent)}
-.m-raw mark.unknown{background:color-mix(in srgb,var(--steel-dim) 38%,transparent)}
-.m-raw mark.sev-amber{background:color-mix(in srgb,var(--amber) 30%,transparent)}
-.m-raw mark.sev-red{background:color-mix(in srgb,var(--red) 30%,transparent)}
+/* Groupe retenu par l'évaluation, en couleur dans le texte brut. Le texte
+   n'est ici recouvert par aucun textarea : rien n'interdit le gras, qui rend
+   au petit écran le poids que la surcouche de la version tablette ne peut pas
+   se permettre. */
+.m-raw mark{background:none;border-radius:0;padding:0;font-weight:600}
+.m-raw mark.go{color:var(--green)}
+.m-raw mark.marginal{color:var(--amber)}
+.m-raw mark.nogo{color:var(--red)}
+.m-raw mark.unknown{color:var(--steel)}
+/* Sévérité : même encre pleine, maigre — la lecture brute du message, pas le
+   groupe qui porte la limitation affichée. */
+.m-raw mark.sev-amber{color:var(--amber);font-weight:400}
+.m-raw mark.sev-red{color:var(--red);font-weight:400}
 
 /* ---------- sélecteur de phase, au-dessus des QFU ----------
    Cinq phases plus « All ». Une phase choisie isole tout ce qui suit — les
