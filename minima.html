@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Détecteurs de données d'iOS. Un relevé est plein de suites de chiffres
+     qu'ils prennent pour des heures, des dates ou des numéros de téléphone —
+     « 291330Z », « 2912/3018 », « Q1013 » — et qu'ils soulignent alors dans
+     une couleur qui n'est pas la nôtre. Invisible tant que la surcouche des
+     cadres portait un texte transparent ; visible depuis qu'elle porte le
+     texte lisible. -->
+<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
 <title>Minima</title>
 <meta name="theme-color" content="#0d1117">
 <meta name="apple-mobile-web-app-title" content="Minima">
@@ -2337,19 +2344,33 @@ body.mobile #rtOv:not([hidden]){display:flex}
   <input type="file" id="adImportFile" accept="application/json,.json" hidden>
 
   <!-- Pas de titre au-dessus des cadres : le relevé se nomme lui-même sur sa
-       première ligne (voir withKindLine). -->
+       première ligne (voir withKindLine).
+       Les quatre attributs qui suivent `spellcheck` coupent les services de
+       texte de Safari, qui soulignent chacun à leur manière et ne se règlent
+       pas ensemble : `spellcheck` ne tient que le correcteur orthographique,
+       `autocorrect` la correction automatique d'iOS (le trait qui apparaît
+       sous un mot qu'elle veut réécrire), `writingsuggestions` les
+       propositions en ligne apparues avec Safari 18, `autocomplete` le
+       remplissage. C'est la même panoplie que la case ICAO. Sans elles, un
+       METAR entier est un texte inconnu du dictionnaire : la tablette le
+       souligne mot à mot. -->
+
   <div class="reports">
     <div class="report">
       <span class="age" id="metarAge"></span>
       <div class="ta-wrap">
         <div class="ta-backdrop" id="metarHl" aria-hidden="true"></div>
-        <textarea id="metarIn" spellcheck="false" placeholder="Paste the raw METAR here"></textarea>
+        <textarea id="metarIn" spellcheck="false" autocorrect="off" autocapitalize="off"
+                  autocomplete="off" writingsuggestions="false"
+                  placeholder="Paste the raw METAR here"></textarea>
       </div>
     </div>
     <div class="report">
       <div class="ta-wrap">
         <div class="ta-backdrop" id="tafHl" aria-hidden="true"></div>
-        <textarea id="tafIn" spellcheck="false" placeholder="Paste the raw TAF here"></textarea>
+        <textarea id="tafIn" spellcheck="false" autocorrect="off" autocapitalize="off"
+                  autocomplete="off" writingsuggestions="false"
+                  placeholder="Paste the raw TAF here"></textarea>
       </div>
     </div>
   </div>
