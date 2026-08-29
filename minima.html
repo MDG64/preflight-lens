@@ -3359,8 +3359,18 @@ async function mjFlush(){
    n'existe, et après un import de fichier, pour que la sauvegarde restaurée y
    entre aussi. Le serveur écarte les doublons, l'opération est donc rejouable
    sans dommage. */
-function mjPushAll(){
+/* `listesNues` : verser aussi les valeurs SANS date ni auteur, celles d'avant
+   l'existence du journal. Réservé au tout premier versement, quand le journal
+   est vide — et à lui seul.
+   POURQUOI CE GARDE-FOU. Depuis que l'API sert au non-certifié un journal sans
+   `log`, une série lue anonymement arrive ici dépourvue de son journal de
+   saisies. Sans ce drapeau, la branche ci-dessous la prenait pour de la donnée
+   d'avant et la renvoyait ligne par ligne, horodatée à l'époque zéro : le
+   consensus comptait alors chaque valeur deux fois. C'est arrivé le
+   2026-08-30, sur 643 séries. */
+function mjPushAll(opts){
   if (!mjOn) return 0;
+  const listesNues = !!(opts && opts.listesNues);
   let n = 0;
   for (const [icao, rec] of Object.entries(adUserDb)){
     mjQueue({t:"fiche", at: rec.at || Date.now(), by: rec.by, icao, rec}); n++;
@@ -3372,7 +3382,7 @@ function mjPushAll(){
        une par ligne pour que le consensus continue de les compter. Le fichier
        dit ainsi la vérité : ces valeurs existent, on ne sait pas de quand elles
        datent. Elles ne détrôneront jamais une valeur vérifiée. */
-    if (!s.log){
+    if (!s.log && listesNues){
       let i = 0;
       for (const dh of (s.dh || [])) mjQueue({t:"minima", at: ++i, icao, end, type, dh, verified:false}), n++;
       for (const rvr of (s.rvr || [])) mjQueue({t:"minima", at: ++i, icao, end, type, rvr, verified:false}), n++;
@@ -3414,7 +3424,8 @@ async function mjBoot(){
        rien demander — c'est une copie des données de l'utilisateur sur sa propre
        machine, et c'est tout l'objet du journal. Le panneau le dit. */
     if (data.journal && !data.journal.lines && (Object.keys(adUserDb).length || Object.keys(adStats).length)){
-      const pushed = mjPushAll();
+      /* Journal vide : c'est LE cas où les valeurs sans date doivent monter. */
+      const pushed = mjPushAll({listesNues: true});
       adToolsMsg = {ok:true, text:`local database written to the encrypted journal (${pushed} records)`};
     } else if (n && (n.fiches || n.stats)){
       adToolsMsg = {ok:true, text:`journal read — ${n.fiches} record(s), ${n.stats} minima series merged`};
