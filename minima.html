@@ -1933,6 +1933,13 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
   font:700 9px/1 var(--mono);letter-spacing:.12em;padding:4px 7px;border-radius:4px;
   border:1px solid var(--line2);background:var(--grey-bg);color:var(--muted);text-transform:uppercase;
 }
+.ad-apps{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;margin-top:8px;
+  padding:10px;border:1px solid var(--line2);border-radius:6px;background:var(--grey-bg)}
+.ad-apps-hd{font:700 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ad-app{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.ad-app.moi .ad-app-nom{color:var(--green);font-weight:600}
+.ad-app-nom{flex:0 0 auto}
+.ad-app-date{flex:1 1 auto;color:var(--muted);font:11px var(--mono)}
 .ad-badge.consensus,.ad-badge.verified{background:var(--green-bg);color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent)}
 /* Ambre : proposé par la carte, PAS ENCORE VALIDÉ — ni le vert d'une
    valeur qui gouverne le calcul, ni le gris d'un simple standard. */
@@ -3216,6 +3223,55 @@ const MJ_OUTBOX_KEY = "wl-minima-outbox";
 const MJ_OWNER_KEY = "wl-minima-owner-code";
 let mjOwnerCode = "";
 try { mjOwnerCode = localStorage.getItem(MJ_OWNER_KEY) || ""; } catch(e){}
+/* ---------- appareil certifié ----------
+   Le code d'enrôlement ne sert plus qu'UNE FOIS, ici : le serveur délivre en
+   échange un certificat propre à CET appareil, et l'inscrit à son registre.
+   Trois conséquences, et c'est tout l'intérêt du changement : on sait qui est
+   enrôlé, on révoque un appareil perdu sans changer le secret des autres, et
+   le serveur peut refuser le sixième — un code qui fuite n'ouvre pas un parc.
+   L'ancien code partagé reste envoyé tant qu'aucun certificat n'est là : un
+   appareil qui n'a pas encore été certifié continue de valider. */
+const MJ_CERT_KEY = "wl-terrains-cert";
+let mjCert = "";
+try { mjCert = localStorage.getItem(MJ_CERT_KEY) || ""; } catch(e){}
+let mjRegistre = null;      // le registre des appareils, chargé à la demande
+let mjRegistreOuvert = false;
+
+/* L'identité de cet appareil sur toutes les requêtes du coffre. Le certificat
+   d'abord ; le code de transition seulement à défaut. */
+function mjEntetes(base){
+  const h = Object.assign({}, base || {});
+  if (mjCert) h["X-Terrains-Cert"] = mjCert;
+  else if (mjOwnerCode) h["X-Minima-Owner"] = mjOwnerCode;
+  return h;
+}
+
+async function mjCertifier(nom, code){
+  const r = await fetch(MJ_BASE + "/api/appareils/enrolement", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({code: code, nom: nom})});
+  const o = await r.json().catch(()=>({}));
+  if (!r.ok || !o.ok) throw new Error(o.error || ("HTTP " + r.status));
+  mjCert = o.certificat;
+  try { localStorage.setItem(MJ_CERT_KEY, mjCert); } catch(e){}
+  return o;
+}
+
+async function mjChargerRegistre(){
+  try {
+    const r = await fetch(MJ_BASE + "/api/appareils", {headers: mjEntetes(), cache:"no-store"});
+    mjRegistre = r.ok ? await r.json() : null;
+  } catch(e){ mjRegistre = null; }
+  return mjRegistre;
+}
+
+async function mjRevoquer(id){
+  const r = await fetch(MJ_BASE + "/api/appareils/" + encodeURIComponent(id),
+                        {method:"DELETE", headers: mjEntetes()});
+  const o = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(o.error || ("HTTP " + r.status));
+  return o;
+}
 /* Le journal étant sur une adresse absolue, une page ouverte en file:// peut
    l'atteindre aussi — le backend admet l'origine « null » des pages locales,
    comme pour la météo. */
@@ -3255,8 +3311,7 @@ async function mjFlush(){
   mjSending = true;
   const batch = mjOutbox.slice(0, 2000);
   try {
-    const r = await fetch(MJ_URL, {method:"POST", headers:{"Content-Type":"application/json",
-                                  ...(mjOwnerCode ? {"X-Minima-Owner": mjOwnerCode} : {})},
+    const r = await fetch(MJ_URL, {method:"POST", headers: mjEntetes({"Content-Type":"application/json"}),
                                   body: JSON.stringify({records: batch})});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const out = await r.json();
@@ -3335,7 +3390,7 @@ function mjPushAll(){
 async function mjBoot(){
   if (!mjOn){ refreshAdPanel(true); return; }
   try {
-    const r = await fetch(MJ_URL, {cache:"no-store"});
+    const r = await fetch(MJ_URL, {cache:"no-store", headers: mjEntetes()});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     const n = adImport(data);
@@ -9975,14 +10030,42 @@ function adToolsHtml(){
     <button class="btn sm" data-ad="export"${(nf||ns)?"":" disabled"}>Export JSON</button>
     <button class="btn sm" data-ad="import">Import JSON…</button>
     ${(mjState.mode!=="off" && (nf||ns)) ? `<button class="btn sm" data-ad="journalPush">Write all to journal</button>` : ""}
-    ${mjState.mode!=="off" ? `<button class="btn sm" data-ad="ownerCode" title="${mjOwnerCode
-        ? "Owner code set — your entries are written to the shared journal as verified, for all your devices. Click to change or forget it."
-        : "Enter the owner code so your entries are written to the shared journal as verified, for all your devices"}">${mjOwnerCode ? "Owner ✓" : "Owner code…"}</button>` : ""}
+    ${mjState.mode!=="off" ? (mjCert
+        ? `<button class="btn sm" data-ad="appareils" title="This device is certified. Click to see every certified device and revoke one.">Devices ✓</button>`
+        : `<button class="btn sm" data-ad="certifier" title="Certify this device with the enrolment code, so your entries are written to the shared journal as verified">Certify this device…</button>`) : ""}
     ${devHtml}
     <span class="note">Held in this browser for this address, and written to the shared encrypted
     journal — one journal for all your devices. Each entry is stamped with the date and the anonymous device identifier
     above, which says nothing about you. ${state}${msg}</span>
     ${mjNote()}
+    ${mjRegistreHtml()}
+  </div>`;
+}
+
+/* Le registre des appareils, déplié à la demande. Il dit trois choses qu'on
+   ne savait pas dire avant : combien d'appareils portent votre identité,
+   depuis quand, et lequel est celui-ci. La croix en révoque un — et celui-là
+   seulement. */
+function mjRegistreHtml(){
+  if (!mjRegistreOuvert) return "";
+  if (!mjRegistre) return `<span class="note ko">Device registry unreachable.</span>`;
+  const d = new Date();
+  const quand = t => { try { return new Date(t).toLocaleDateString(); } catch(e){ return "—"; } };
+  const lignes = mjRegistre.appareils.map(a=>{
+    const moi = a.id === mjRegistre.moi;
+    return `<div class="ad-app${moi?" moi":""}">
+      <span class="ad-app-nom">${escapeHtmlText(a.nom)}${moi?" — this device":""}</span>
+      <span class="ad-app-date">enrolled ${quand(a.cree)} · last seen ${quand(a.dernierAcces)}</span>
+      <button class="ad-x" data-ad="revoquer" data-id="${a.id}"
+              title="Revoke this device — it will no longer validate minima">×</button>
+    </div>`;
+  }).join("");
+  return `<div class="ad-apps">
+    <div class="ad-apps-hd">${mjRegistre.appareils.length} / ${mjRegistre.plafond} certified devices · ${mjRegistre.restant} slot(s) left</div>
+    ${lignes}
+    <span class="note">The enrolment code certifies a device once; each device then carries its own
+    certificate. Revoking one leaves the others untouched. The server refuses a sixth device — a
+    leaked code cannot open a fleet.</span>
   </div>`;
 }
 
@@ -10008,7 +10091,8 @@ function mjNote(){
   if (wait) bits.push(`${wait} waiting`);
   /* L'état propriétaire vient de la DERNIÈRE écriture : un code refusé se voit
      ici, pas dans une erreur — le serveur a bien écrit, mais en communautaire. */
-  if (mjOwnerCode) bits.push(mjState.owner === false ? "owner code REFUSED — check it" : "owner ✓");
+  if (mjCert) bits.push(mjState.owner === false ? "certificate REFUSED — certify again" : "certified device");
+  else if (mjOwnerCode) bits.push(mjState.owner === false ? "owner code REFUSED — check it" : "owner ✓ (not certified yet)");
   return `<span class="note ok">Encrypted journal — ${bits.join(" · ") || "ready"}.
     Append-only, signed, shared by all your devices; the keys never travel with it.</span>`;
 }
@@ -10341,6 +10425,49 @@ function bindAdPanel(){
                  + "their signature is history, not a label to rewrite.")) return;
       adToolsMsg = {ok:true, text:`new device ${adDeviceShort(adDeviceReset())}`};
       refreshAdPanel(true);
+      return;
+    }
+    if (act==="certifier"){
+      const nom = prompt("Name this device — it will appear in the registry, and each "
+                       + "validation will be signed with it.\n\nFor example: PC, Xiaomi, iPad.");
+      if (nom === null || !nom.trim()) return;
+      const code = prompt("Enrolment code.\n\nIt is used once, here: the server hands back a "
+                        + "certificate that belongs to this device alone.");
+      if (code === null || !code.trim()) return;
+      adToolsMsg = {ok:true, text:"certifying…"};
+      refreshAdPanel(true);
+      mjCertifier(nom.trim(), code.trim()).then(o=>{
+        /* Tout renvoyer : ce que cet appareil avait saisi sans certificat a été
+           rangé en communautaire ; signé, il remonte en vérifié. */
+        const pushed = mjPushAll();
+        adToolsMsg = {ok:true, text:`device certified as "${o.nom}" — ${o.restant} slot(s) left, ${pushed} record(s) re-sent`};
+        refreshAdPanel(true);
+      }).catch(e=>{
+        adToolsMsg = {ok:false, text:`certification refused — ${e.message}`};
+        refreshAdPanel(true);
+      });
+      return;
+    }
+    if (act==="appareils"){
+      mjRegistreOuvert = !mjRegistreOuvert;
+      if (!mjRegistreOuvert){ refreshAdPanel(true); return; }
+      mjChargerRegistre().then(()=>refreshAdPanel(true));
+      refreshAdPanel(true);
+      return;
+    }
+    if (act==="revoquer"){
+      const id = btn.dataset.id;
+      const a = (mjRegistre && mjRegistre.appareils.find(x=>x.id===id)) || {nom:id};
+      const moi = mjRegistre && id === mjRegistre.moi;
+      if (!confirm(`Revoke "${a.nom}"?\n\n${moi
+        ? "This is the device you are using: it will stop validating minima until you certify it again."
+        : "That device will stop validating minima. The others are untouched."}`)) return;
+      mjRevoquer(id).then(o=>{
+        if (moi){ mjCert = ""; try { localStorage.removeItem(MJ_CERT_KEY); } catch(e){} }
+        adToolsMsg = {ok:true, text:`"${o.nom}" revoked — ${o.restant} slot(s) left`};
+        return mjChargerRegistre();
+      }).then(()=>refreshAdPanel(true))
+        .catch(e=>{ adToolsMsg = {ok:false, text:`revocation refused — ${e.message}`}; refreshAdPanel(true); });
       return;
     }
     if (act==="ownerCode"){
