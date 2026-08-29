@@ -7400,9 +7400,9 @@ body .stat .k{
        ne fait que retirer un message. C'est la lecture qu'a déjà le détecteur
        de drapeaux de Minima Lens (nfaDetect, « if (/\bNOTAMC\b/) continue »).
        Ancré sur l'identifiant de tête — ICAO (A2541/26) ou domestique US
-       (07/211) — pour ne jamais confondre avec un corps qui CITERAIT le mot.
-       Les 8 NOTAMC de KMIA relevés ce jour-là matchent tous. */
-    const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})\s+NOTAMC\b/;
+       (07/211, 6/7302) — pour ne jamais confondre avec un corps qui CITERAIT
+       le mot. Les 8 NOTAMC de KMIA relevés ce jour-là matchent tous. */
+    const CANCEL_HEAD_RE = /^\s*\(?(?:[A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4})\s+NOTAMC\b/;
     function parseNotam(raw) {
       const text = unwrapOriginalNotam(cleanHtml(raw));
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
@@ -7411,7 +7411,19 @@ body .stat .k{
       // parenthèse ouvrante avant l'ID (format NOTAM standard) : la tolérer
       // évite un faux "(sans id)" alors que l'ID existe (vu sur HSSS
       // A0050/26, A0052/26 — absents sans ce correctif).
-      const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
+      //
+      // LE CYCLE PEUT N'AVOIR QU'UN CHIFFRE. Les NOTAM FDC — procédures,
+      // minima, cartes — sont numérotés « chiffre de l'année / séquence »,
+      // « 6/7302 » pour 2026, et non « mois / séquence ». Exiger deux chiffres
+      // devant la barre les renvoyait tous à « (sans id) » : 664 NOTAM sur
+      // 5719, soit 11,6 %, relevés le 2026-08-29 sur 48 grands terrains US
+      // (25 sur 179 au seul KMIA). Le pilote voyait le message mais ne pouvait
+      // pas le citer. Une seule forme dans tout le relevé — un chiffre, une
+      // barre, quatre chiffres, cycles 4, 5 et 6 (les FDC vivent des années) —
+      // et zéro NOTAM non-US concerné : élargir le cycle à un ou deux chiffres
+      // suffit et ne touche à rien d'autre. C'est déjà la lecture de Minima
+      // Lens (nfaDetect), qui n'avait pas la même borne.
+      const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{1,2}\/\d{3,4})/) || [])[1] || "(sans id)";
       const cnl = CANCEL_HEAD_RE.test(text);
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
