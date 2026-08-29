@@ -2607,10 +2607,11 @@ body.mobile #rtOv:not([hidden]){display:flex}
           <b>VRB</b> under TEMPO) has no direction to draw, so the main wind keeps the arrow and
           the gust raises the <b>⚠</b> marker on its own — amber above 40 kt, red above 50. The <b>now / +1h / +2h / +3h</b> selector shows the wind the TAF forecasts
           for that hour, as dashed arrows; a station whose TAF gives no wind for that hour keeps its
-          METAR wind. <b>Zoom in</b> and each aerodrome writes its <b>runway QFU</b> beside its dot —
-          <b>08/26</b>, longest runway first, three pairs at most and the count of the others. They come
-          from your own aerodrome record when you have edited one, from the seed otherwise, and they
-          need no switch.</div>
+          METAR wind. From the regional zoom on, each aerodrome writes its <b>runway QFU</b> beside its
+          dot — <b>08/26</b>, the main runway alone at first, then the whole list as you <b>zoom in</b>:
+          three pairs at most, longest first, and the count of the others. They step aside from the wind
+          arrows and the ⚡, they come from your own aerodrome record when you have edited one and from
+          the seed otherwise, and they need no switch.</div>
       </div>
       <div class="hd-row">
         <div class="hd-vis"><span class="hd-btn">☀</span></div>
@@ -2823,7 +2824,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
         <span class="wxleg wd"><i class="wda r">⚠</i>Wind/gust &gt; 50 kts</span>
         <span class="wxleg wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
         <span class="wxleg"><i class="wda cb">⚡</i>CB in the METAR or the TAF</span>
-        <span class="wxleg"><i class="tag rwy">08/26</i>Runway QFU — zoom in to read them</span>
+        <span class="wxleg"><i class="tag rwy">08/26</i>Runway QFU — main runway, all of them zoomed in</span>
       </div>
       <!-- Crédit obligatoire du fond de carte, hors du cartouche pour survivre
            à son repli. Repris en entier — licences et liens — dans Data
@@ -12304,6 +12305,14 @@ window.WXMAP = (() => {
      ↑↑↑. Au-delà de 30 kt le faisceau est rouge, une flèche de plus
      n'apprendrait rien — on plafonne le dessin, pas la donnée. */
   const WIND_MAX = 3;
+  /* Géométrie du faisceau, reprise d'addWindIcons() : n flèches côte à côte,
+     STEP entre deux, PAD de marge — la LARGEUR de l'icône, donc la place que
+     le faisceau prend EN TRAVERS du vent. C'est elle que les QFU doivent
+     franchir pour ne pas se poser dessus. Écran tactile — pas de souris,
+     téléphone ou tablette : l'icône y plafonne plus haut, l'écart suit. */
+  const W_STEP = 9, W_PAD = 3;
+  const touchUI = matchMedia("(max-width: 600px), (hover: none) and (pointer: coarse)").matches;
+  const WIND_SIZE_MAX = touchUI ? 2.2 : 1.6;
   /* Écart de l'éclair au centre du point, en pixels d'icône : juste au-delà
      du disque et de son liseré, loin en deçà du bout des flèches (GAP 10 +
      SHAFT 26). Serré au plus près (24 → 16) : l'éclair appartient au terrain,
@@ -12313,31 +12322,34 @@ window.WXMAP = (() => {
   /* Facteur de taille du disque : ×2 pour un favori. Posé une fois, réutilisé
      dans chaque palier de zoom du rayon. */
   const FAV_X2 = ["case",["get","fav"],2,1];
-  /* ---------- QFU des pistes, au zoom fort ----------
-     Passé QFU_ZOOM, chaque terrain écrit ses paires de piste à côté de son
-     point : c'est le zoom où le fond dessine déjà les pistes (couches
-     aero-*), et où l'on cherche non plus quel terrain mais par où s'y poser.
-     Les paires viennent de la fiche de l'utilisateur quand il en a une —
-     elle prime partout ailleurs dans l'app, elle prime aussi ici — sinon de
-     la graine. La plus longue d'abord : c'est la piste principale, celle
-     qu'on lit en premier. QFU_MAX paires au plus, une par ligne, et le
+  /* ---------- QFU des pistes ----------
+     Chaque terrain écrit ses paires de piste à côté de son point. Les paires
+     viennent de la fiche de l'utilisateur quand il en a une — elle prime
+     partout ailleurs dans l'app, elle prime aussi ici — sinon de la graine.
+     La plus longue d'abord : c'est la piste principale, celle qu'on lit en
+     premier. Le désignateur EST le QFU : « 08/26 » se lit 080/260 au
+     magnétique, à l'arrondi de dizaine près ; les caps exacts sont sur la
+     fiche, la carte n'en porte pas la précision.
+     DEUX seuils, et c'est ce qui permet de les montrer tôt. Dès QFU_ZOOM —
+     le niveau région, bien avant que le fond ne dessine les pistes — chaque
+     terrain n'écrit QUE sa piste principale : une ligne, qui répond à « par
+     où on se pose ici » sans couvrir la carte. À partir de QFU_FULL, la
+     place est là et la liste s'ouvre : QFU_MAX paires, une par ligne, et le
      compte des restantes en dernière ligne — au-delà l'étiquette couvrirait
-     le terrain qu'elle annonce. Le désignateur EST le QFU : « 08/26 » se lit
-     080/260 au magnétique, à l'arrondi de dizaine près ; les caps exacts
-     sont sur la fiche, la carte n'en porte pas la précision. */
-  const QFU_ZOOM = 9, QFU_MAX = 3;
-  function qfuLabel(icao){
+     le terrain qu'elle annonce. */
+  const QFU_ZOOM = 7, QFU_FULL = 8.5, QFU_MAX = 3;
+  function qfuPairs(icao){
     /* Fiche éditée : ses paires font foi. Sinon la graine, lue brute — on ne
        passe pas par adGet(), qui décode aussi approches et balisage pour
        plusieurs milliers de terrains dont la carte ne montre que le nom. */
     const u = adUserDb[icao];
     const rw = u ? u.runways.map(r => [r.pair, r.len])
                  : (((window.AD_SEED || {})[icao] || {}).r || []).map(r => [r[0], r[1]]);
-    if (!rw.length) return "";
+    if (!rw.length) return null;
     const sorted = rw.slice().sort((a,b) => (b[1] || 0) - (a[1] || 0));
     const lines = sorted.slice(0, QFU_MAX).map(r => r[0]);
     if (sorted.length > QFU_MAX) lines.push(`+${sorted.length - QFU_MAX}`);
-    return lines.join("\n");
+    return { one: lines[0], all: lines.join("\n") };
   }
   const isLight = () => document.body.classList.contains("light");
   const dots = () => DOTS[isLight() ? "light" : "dark"];
@@ -12511,15 +12523,14 @@ window.WXMAP = (() => {
        souris, téléphone ou tablette, même critère que Preflight Lens — le
        plafond monte à ×2,2 : l'écran est petit, le doigt est gros, la flèche
        doit se voir de plus loin. */
-    const touchUI = matchMedia("(max-width: 600px), (hover: none) and (pointer: coarse)").matches;
-    const SIZE = ["interpolate",["linear"],["zoom"],2,.55,6,.8,8,1,11, touchUI ? 2.2 : 1.6];
+    const SIZE = ["interpolate",["linear"],["zoom"],2,.55,6,.8,8,1,11, WIND_SIZE_MAX];
     /* ---------- QFU des pistes ----------
-       À partir du zoom QFU_ZOOM — le cran où le fond dessine déjà les pistes
-       et où l'on ne cherche plus QUEL terrain mais par où s'y poser. Ils ne
-       dépendent d'aucun interrupteur : la piste ne change pas selon qu'on
-       regarde les NOTAM ou le vent. Ton neutre et sans verdict — ni la météo
-       du disque, ni l'état de téléchargement du code : c'est de la
-       géographie, elle ne se juge pas.
+       Dès le zoom QFU_ZOOM la piste principale s'écrit, la liste complète
+       vient à QFU_FULL (voir qfuPairs). Ils ne dépendent d'aucun
+       interrupteur : la piste ne change pas selon qu'on regarde les NOTAM ou
+       le vent. Ton neutre et sans verdict — ni la météo du disque, ni l'état
+       de téléchargement du code : c'est de la géographie, elle ne se juge
+       pas.
        Posée EN PREMIER, et c'est tout l'inverse de ce que l'ordre de dessin
        laisse croire : MapLibre place les symboles de la DERNIÈRE couche en
        premier, si bien qu'une couche ajoutée en fin de liste chasse toutes
@@ -12542,9 +12553,9 @@ window.WXMAP = (() => {
       id:"wx-qfu", type:"symbol", source:"wx", minzoom:QFU_ZOOM,
       filter:["!=",["get","qfu"],""],
       layout:{
-        "text-field":["get","qfu"],
+        "text-field":["step",["zoom"],["get","qfu1"],QFU_FULL,["get","qfu"]],
         "text-font":LABEL_FONT,
-        "text-size":["interpolate",["linear"],["zoom"],QFU_ZOOM,9,11,11],
+        "text-size":["interpolate",["linear"],["zoom"],QFU_ZOOM,8,QFU_FULL,9.5,11,11],
         "text-anchor":["get","qanc"],
         "text-offset":["get","qoff"],
         "text-line-height":1.15,
@@ -12724,7 +12735,8 @@ window.WXMAP = (() => {
     p.cboff = [CB_R, 0];
     /* Les QFU prennent le DESSOUS du point : le code OACI tient le dessus,
        l'éclair la droite, le triangle « ! » d'une rafale sans direction la
-       gauche — c'est le dernier côté libre. */
+       gauche — c'est le dernier côté libre. Serrés contre le point : sans
+       faisceau, rien ne les en écarte. */
     p.qanc = "top"; p.qoff = [0, 0.9];
     /* Deux vitesses, et elles ne disent pas la même chose. `eff` est le vent
        qui fait la FLÈCHE — il lui faut une direction et de quoi souffler.
@@ -12793,9 +12805,19 @@ window.WXMAP = (() => {
       /* Les QFU prennent le travers OPPOSÉ à l'éclair : le tour du point se
          partage alors en quatre — flèche au vent, code sous le vent, éclair
          d'un bord, pistes de l'autre. Aucun des quatre ne se marche dessus,
-         quel que soit le cap du vent. */
+         quel que soit le cap du vent.
+         Le bon octant ne suffit pourtant pas : le faisceau est LARGE — n
+         flèches côte à côte, en travers du vent, exactement le côté où les
+         QFU se rangent —, et serrés contre le point ils se posaient dedans.
+         L'écart franchit donc sa demi-largeur, comptée à la taille MAXIMALE
+         de l'icône : l'écart, lui, est en cadratins, il suit la taille du
+         texte et non le zoom, il doit donc tenir au cran le plus large. Une
+         flèche de plus (10 kt de plus) pousse les QFU d'autant. */
       const qoct = Math.round(((p.wrot + 270) % 360) / 45) % 8;
-      p.qanc = LBL[qoct][0]; p.qoff = LBL[qoct][1];
+      const half = (n => (n*W_STEP + W_PAD*2) / 2)(Math.min(WIND_MAX, Math.ceil(eff/10)) || 1);
+      const gap = half * WIND_SIZE_MAX / 11 + 0.4;      // 11 px : le texte au zoom plein
+      const [ux, uy] = LBL[qoct][1], ul = Math.hypot(ux, uy);
+      p.qanc = LBL[qoct][0]; p.qoff = [ux / ul * gap, uy / ul * gap];
     }
     /* Le disque d'un favori est deux fois plus large : son code s'écarte
        d'autant, sinon il se poserait dessus au zoom fort — l'écart est en
@@ -12851,8 +12873,9 @@ window.WXMAP = (() => {
          refresh(), donc une étoile posée entre deux visites est prise. */
       const favs = new Set(favList());
       lastGeo = { type:"FeatureCollection", features: d.stations.map(([icao,lat,lon,cat,wdir,wspd,wgst,wpk]) => {
+        const q = qfuPairs(icao);
         const p = { icao, cat, dl: cached.has(icao), cb: cbs.has(icao),
-                    fav: favs.has(icao), qfu: qfuLabel(icao),
+                    fav: favs.has(icao), qfu: q ? q.all : "", qfu1: q ? q.one : "",
                     wicon:"", wrot:0, wspd:0,
                     wm: (wspd >= 2 || wpk) ? [wdir ?? null, wspd || 0, wgst || 0, wpk || 0] : 0,
                     wf: winds[icao] || 0 };
