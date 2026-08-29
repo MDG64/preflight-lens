@@ -7792,17 +7792,22 @@ function phaseChartGa(tabRole){
 
 function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
   const cmpOn = obs !== undefined;
-  /* `prov` : la valeur EXIGÉE est-elle vérifiée ? Vrai pour le cadre vert, faux
-     pour l'ambre, absent quand la case ne porte pas un minimum de la base
-     terrains (l'exigence finale d'un dégagement au décollage, par exemple) — le
-     chiffre reste alors nu. Un champ vide ne se cercle pas non plus : il n'y a
-     pas de chiffre dont on pourrait dire la provenance. La DH des dégagements
-     porte le sien, dans `dh.prov`. */
+  /* `prov` : d'où vient la valeur EXIGÉE. Deux provenances valent le cadre vert
+     — "VERIFIED", le relevé de la carte d'approche enregistré dans la base
+     terrains, et "COMPANY", le minimum approuvé de l'exploitant ; "UNVERIFIED"
+     prend l'ambre. `null` ne cercle rien : la case ne porte alors pas un
+     minimum dont on puisse dire la provenance (l'exigence finale d'un
+     dégagement au décollage, par exemple), le chiffre reste nu. Un champ vide
+     ne se cercle pas non plus : il n'y a pas de chiffre dont on pourrait dire
+     la provenance. La DH des dégagements porte le sien, dans `dh.prov`.
+     Voir provOf(), qui traduit le pilote de la valeur en l'un des trois. */
+  const PROV_TIP = {
+    VERIFIED:"Verified minimum — recorded on this device from the approach chart. Applied as it stands.",
+    COMPANY:"Approved company minimum — the value from your OM-B, entered in Operation setup. It replaces the table, chart and airfield-database values, and it is the one that governs.",
+    UNVERIFIED:"Minimum not verified — standard table, user consensus or hand-entered value. Check it against the official approach chart."};
   const provAttrs = (p, v) => (p==null || v==null) ? {cls:"", tip:""} : {
-    cls: p ? " min-ver" : " min-unver",
-    tip: ` title="${p
-      ? "Verified minimum — recorded on this device from the approach chart. Applied as it stands."
-      : "Minimum not verified — standard table, user consensus or hand-entered value. Check it against the official approach chart."}"`};
+    cls: p==="UNVERIFIED" ? " min-unver" : " min-ver",
+    tip: ` title="${PROV_TIP[p]}"`};
   const pv = provAttrs(prov, req);
   const pd = dh ? provAttrs(dh.prov, dh.v) : {cls:"", tip:""};
   const st = (!cmpOn || req==null) ? null : visVerdict(obs, req, unit);
@@ -7983,17 +7988,30 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
     return m==null ? null : visFromM(m, u);
   };
   /* Vérifié ou pas, CHIFFRE PAR CHIFFRE : chaque minimum se cercle de vert
-     quand il vient de la base terrains comme valeur vérifiée, d'ambre sinon.
+     quand sa provenance répond de lui, d'ambre sinon.
+     DEUX provenances répondent du chiffre. La base terrains comme valeur
+     VÉRIFIÉE — relevée sur la carte d'approche puis enregistrée ici. Et le
+     minimum APPROUVÉ de l'exploitant, saisi dans Operation setup : c'est le
+     chiffre opposable, celui que l'équipage vole ; il est appliqué après la
+     base terrains et la remplace, si bien qu'un terrain dont les minima sont
+     vérifiés se lisait en ambre dès qu'une approbation les relevait — le cadre
+     disait « non vérifié » de la seule valeur qui gouvernait.
      La DH et la vis / RVR ne se vérifient pas ensemble — une carte de CAT III
      ne publie pas de DH, et la vis / RVR relevée sur elle n'a pas à porter
-     l'ambre de la hauteur que la table réglementaire a fournie à côté.
-     Une valeur tapée dans le champ n'est pas vérifiée : le pilote l'a peut-être
-     lue sur la carte, mais rien ne l'a enregistrée comme telle. */
+     l'ambre de la hauteur que la table réglementaire a fournie à côté ; une
+     approbation qui ne porte que sur l'une laisse l'autre à sa provenance.
+     Une valeur tapée dans la case de la phase n'est vérifiée par rien : le
+     pilote l'a peut-être lue sur la carte, mais rien ne l'a enregistrée comme
+     telle, et elle passe donc après l'approbation comme après la base. */
+  const provOf = (driver, manual) => manual ? "UNVERIFIED"
+    : driver==="COMPANY_APPROVAL"      ? "COMPANY"
+    : driver==="AIRFIELD_DB_VERIFIED"  ? "VERIFIED"
+    : "UNVERIFIED";
   const dhDisp = dhReqFor(role)!=null ? dhReqFor(role)
                : (a.circling ? (a.ceilingRequired!=null?a.ceilingRequired:a.dh)
                              : (a.noDh ? null : a.dh));
-  const visVer = a.rvrDriver==="AIRFIELD_DB_VERIFIED" && visReqFor(role, aDisp)==null;
-  const dhVer  = a.dhDriver==="AIRFIELD_DB_VERIFIED" && dhReqFor(role)==null;
+  const visVer = provOf(a.rvrDriver, visReqFor(role, aDisp)!=null);
+  const dhVer  = provOf(a.dhDriver,  dhReqFor(role)!=null);
   const landVisCell = isToAlt ? "" : visReqCell({
           id:"appVisReqInput",
           req: aReq,
@@ -8034,7 +8052,7 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
           /* Même minimum, autre unité : la colonne en milles se cercle comme
              la case au-dessus, sans quoi deux écritures du même chiffre
              n'auraient pas la même provenance à l'écran. */
-          prov: a.rvrDriver==="AIRFIELD_DB_VERIFIED" && visReqFor(role, "sm")==null
+          prov: provOf(a.rvrDriver, visReqFor(role, "sm")!=null)
         })]:[]),
         ...(incCell && !isAltn ? [incCell] : []) ];
   /* Sur les dégagements l'incrément ne s'affiche plus dans une case à part : il
