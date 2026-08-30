@@ -3114,6 +3114,14 @@ const AD_APP_TYPES = [
      graine, parce qu'elle change d'une carte à l'autre ; la ligne l'affiche
      à côté du libellé, sans quoi « Sidestep » ne dirait pas où l'on se pose. */
   {id:"SIDESTEP",  label:"Sidestep", noRwy:true},
+  /* Le circling à tracé prescrit est une AUTRE manœuvre, pas une variante
+     d'écriture du circling : la carte impose un tracé au lieu de laisser
+     manœuvrer à vue, souvent de jour seulement, et publie pour lui ses
+     propres minima — 1170 ft à La Corogne, 1830 à Pampelune, là où la table
+     de circling tiendrait dans 600. D'où sa ligne à part, et surtout aucun
+     standard : la table des catégories chiffre le circling ordinaire, pas
+     celui-là. adStdMinima le laisse donc tomber, comme le sidestep. */
+  {id:"CIRCLING_P_TRK", label:"Circling — prescribed tracks", noRwy:true},
   /* RNP AR — autorisation requise. Précision de navigation portée à
      0,30 NM, trajectoires courbes au plus près du relief : c'est ce qui
      rend praticables des terrains encaissés comme Nice 22 ou Marseille 31.
@@ -10770,6 +10778,13 @@ function refreshAdPanel(force){
       appRows.push({end, type:"SIDESTEP", i:"s", circ:true,
                     lbl: vers ? `Sidestep ${vers}` : "Sidestep"});
     }
+    /* Le circling à tracé prescrit ferme les lignes de sa piste au même titre.
+       Il ne remplace pas le circling ordinaire quand les deux sont publiés :
+       ce sont deux manœuvres différentes, aux minima différents, et le pilote
+       choisit celle qu'il vole. */
+    if (adChartMinima(icao, end, "CIRCLING_P_TRK") || (adStatList(icao, end, "CIRCLING_P_TRK")||{}).verified)
+      appRows.push({end, type:"CIRCLING_P_TRK", i:"p", circ:true,
+                    lbl:"Circling — prescribed tracks"});
   });
   /* Puis LE CIRCLING DU TERRAIN, s'il y en a un — voir AD_END_AD. Il vient en
      dernier parce qu'il est le repli : le circling d'une piste donnée reste la
@@ -10780,6 +10795,13 @@ function refreshAdPanel(force){
   if (adChartMinima(icao, AD_END_AD, "CIRCLING")
       || (adStatList(icao, AD_END_AD, "CIRCLING")||{}).verified)
     appRows.push({end:AD_END_AD, type:"CIRCLING", i:"c", circ:true, ad:true});
+  /* Et le tracé prescrit d'une carte sans piste — Albacete en publie un. Même
+     raison que ci-dessus : sans cette ligne, la valeur était compilée, comptée
+     à valider, et invalidable à jamais. */
+  if (adChartMinima(icao, AD_END_AD, "CIRCLING_P_TRK")
+      || (adStatList(icao, AD_END_AD, "CIRCLING_P_TRK")||{}).verified)
+    appRows.push({end:AD_END_AD, type:"CIRCLING_P_TRK", i:"p", circ:true, ad:true,
+                  lbl:"Circling — prescribed tracks, aerodrome"});
   const typeOpts = sel => AD_APP_TYPES.filter(t=>(!t.noRwy||t.id===sel) && (!t.ar||cfg.rnpArApproved||t.id===sel))
     .map(t=>`<option value="${t.id}" ${t.id===sel?"selected":""}>${t.label}</option>`).join("");
   const cnt = list => { const n={}; (list||[]).forEach(v=>{n[v]=(n[v]||0)+1;});
