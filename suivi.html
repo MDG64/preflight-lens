@@ -115,6 +115,7 @@ var LABEL = {
   LPV:"RNP — LPV", LNAV_VNAV:"RNP — LNAV/VNAV", LNAV:"RNP — LNAV", LP:"RNP — LP",
   LOC:"LOC", VOR_DME:"VOR / DME", VOR:"VOR", NDB_DME:"NDB / DME", NDB:"NDB",
   RNP_AR:"RNP AR — RNP 0.30", CIRCLING:"Circling",
+  CIRCLING_P_TRK:"Circling — prescribed tracks",
   /* Repli seul : une ligne de sidestep porte son propre libellé, piste
      d'atterrissage comprise. Ce nom-ci ne sert qu'aux graines qui ne
      nomment pas la cible. */
@@ -252,7 +253,7 @@ function calcul(){
          doit la compter comme les autres, sans quoi elle reste du travail à
          faire que cette page ne sait pas montrer. */
       var bouts = Object.keys(a);
-      if (nc && nc["-"] && nc["-"].CIRCLING) bouts.push("-");
+      if (nc && nc["-"] && (nc["-"].CIRCLING || nc["-"].CIRCLING_P_TRK)) bouts.push("-");
       for (var bi = 0; bi < bouts.length; bi++){
         var end = bouts[bi];
         var types = (a[end] || []).slice();
@@ -268,6 +269,11 @@ function calcul(){
            proposait, cette page ne le comptait ni fait ni à faire, et un
            terrain se lisait complet avec une ligne en attente. */
         if (nc && nc[end] && nc[end].SIDESTEP) types.push("SIDESTEP");
+        /* Le circling à trace prescrite est une ligne À PART du circling
+           ordinaire — sa carte impose la trajectoire et chiffre ses propres
+           minima. Il se compte donc pour lui-même, sous sa piste comme sous
+           le terrain entier. */
+        if (nc && nc[end] && nc[end].CIRCLING_P_TRK) types.push("CIRCLING_P_TRK");
         for (var j = 0; j < types.length; j++){
           var type = types[j];
           /* Le sidestep se pose sur l'AUTRE extrémité : « Sidestep 21L » et
