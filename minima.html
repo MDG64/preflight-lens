@@ -9601,6 +9601,18 @@ function mWindInfo(r){
   return {cross:r.wind.comp.cross, tail:Math.max(0,r.wind.comp.tail),
           st: wv ? cls(wv.result) : "unknown"};
 }
+/* Le plafond de la phase, comme la vis/RVR juste au-dessus : la ligne de Q2 qui
+   porte la prévision face à l'exigence de planification. `null` quand la phase
+   n'exige aucun plafond — un décollage, ou une approche qui n'en publie pas :
+   il n'y a alors rien à comparer, et une case vide se lirait comme un critère
+   manquant. */
+function mCeilInfo(r){
+  const v2 = (r.verdicts||[]).find(v=>v.question==="Q2_DISPATCH");
+  const row = v2 && (v2.rows||[]).find(y=>/Ceiling/i.test(y.param));
+  if (!row || row.required==null) return null;
+  return {obs:row.observed, req:row.required, unit:row.unit||"ft",
+          st:cls(rowVerdict(row).result), noCeiling:!!row.noCeiling};
+}
 const mFmtVal = (v,u)=> u==="sm" ? smText(+v) : String(Math.round(v));
 /* Chaque chiffre porte son unité, comme sur les cases de la version tablette :
    une unité posée une fois en fin de ligne se lisait comme celle du seul
@@ -9617,6 +9629,36 @@ const maxCompSt = (obs, lim)=> obs==null || lim==null ? "unknown"
 /* Chemin retour des classes CSS vers les codes du moteur, pour repasser par
    worstOf() quand un verdict a été recomposé à l'affichage. */
 const M_RANK = {go:"GO", marginal:"MARGINAL", nogo:"NO_GO", unknown:"UNKNOWN"};
+
+/* ---------- les cases de comparaison du téléphone ----------
+   Une seule écriture pour les deux endroits qui les portent : la ligne de phase
+   de la fiche terrain et la carte du bilan de vol. Elles s'étaient écrites deux
+   fois, et le plafond n'avait atterri que dans la seconde — d'où une fiche qui
+   comparait la visibilité et taisait le plafond. */
+const mCmpRow = (k, st, val)=>`<span class="m-cmp edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":""}">
+    <span class="k">${k}</span><span class="val">${val}</span>
+    <span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span></span>`;
+function mVisRow(vis){
+  const cmp = vis.obs==null || vis.req==null ? "" : (vis.obs < vis.req ? "&lt;" : "≥");
+  return mCmpRow("VIS/RVR", vis.st,
+    `<span class="o${oCls(vis.st)}">${vis.obs!=null?mUnitVal(vis.obs,vis.unit):"—"}</span> ${cmp} ${vis.req!=null?mUnitVal(vis.req,vis.unit):"—"}`);
+}
+/* Sans exigence de plafond, pas de case : voir mCeilInfo. Un ciel sans base
+   nuageuse se dit en toutes lettres plutôt que par un tiret, qui se lirait
+   comme une prévision manquante. */
+function mCeilRow(c){
+  if (!c) return "";
+  const obs = c.obs!=null ? mUnitVal(c.obs,"ft") : (c.noCeiling ? "no cloud base" : "—");
+  const cmp = c.obs==null || c.req==null ? "" : (c.obs < c.req ? "&lt;" : "≥");
+  return mCmpRow("CEIL", c.st,
+    `<span class="o${oCls(c.st)}">${obs}</span> ${cmp} ${mUnitVal(c.req,"ft")}`);
+}
+function mWindRow(w){
+  if (!w) return mCmpRow("WIND", "unknown", "—");
+  return mCmpRow("WIND", w.st,
+    `<span class="wl">XW <span class="o${oCls(maxCompSt(w.cross, cfg.maxCrosswindKt))}">${mUnitVal(w.cross,"kt")}</span> ${cmpSign(w.cross, cfg.maxCrosswindKt, "max")} ${mUnitVal(cfg.maxCrosswindKt,"kt")}</span>`
+   +`<span class="wl">TW <span class="o${oCls(maxCompSt(w.tail, cfg.maxTailwindKt))}">${mUnitVal(w.tail,"kt")}</span> ${cmpSign(w.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span>`);
+}
 
 /* ---------- détail d'une phase ----------
    Le même contenu que la scène de la version tablette, ramené à une table de
@@ -10282,23 +10324,23 @@ function mobileResultsHtml(){
     const r = results[i];
     const vis = mVisInfo(tb, r);
     const wind = mWindInfo(r);
+    /* Le plafond se compare sur la ligne, entre la vis/RVR et le vent — comme
+       il le fait déjà sur la carte du bilan de vol, et comme la case du bandeau
+       de la version tablette. Sans lui, la fiche portait bien l'exigence dans
+       son champ saisissable mais rien en regard : un chiffre sans comparaison
+       n'est pas un verdict. Le décollage n'en a pas, ses minima sont en
+       visibilité ou RVR seule. */
+    const ceil = tb.role==="DEPARTURE" ? null : mCeilInfo(r);
     const st = phaseState(tb, r);
     const open = mState.open===i;
-    const cmp = vis.obs==null || vis.req==null ? "" : (vis.obs < vis.req ? "&lt;" : "≥");
     return `<div class="m-phase v-${st}">
       <button class="m-phase-row" data-i="${i}" aria-expanded="${open}"
               title="${tb.t} — ${STATE_LABEL[st]} · tap for the detail">
         <span class="pname">${tb.t}</span>
         <span class="pdata">
-          <span class="m-cmp edge-${vis.st}${vis.st==="nogo"?" bad":vis.st==="marginal"?" warn":""}"><span class="k">VIS/RVR</span>
-            <span class="val"><span class="o${oCls(vis.st)}">${vis.obs!=null?mUnitVal(vis.obs,vis.unit):"—"}</span> ${cmp} ${vis.req!=null?mUnitVal(vis.req,vis.unit):"—"}</span>
-            <span class="ico ${vis.st}" role="img" aria-label="${STATE_LABEL[vis.st]}">${STATE_ICON[vis.st]}</span></span>
-          <span class="m-cmp edge-${wind?wind.st:"unknown"}${wind&&wind.st==="nogo"?" bad":wind&&wind.st==="marginal"?" warn":""}"><span class="k">WIND</span>
-            ${wind
-              ? `<span class="val"><span class="wl">XW <span class="o${oCls(maxCompSt(wind.cross, cfg.maxCrosswindKt))}">${mUnitVal(wind.cross,"kt")}</span> ${cmpSign(wind.cross, cfg.maxCrosswindKt, "max")} ${mUnitVal(cfg.maxCrosswindKt,"kt")}</span><span class="wl">TW <span class="o${oCls(maxCompSt(wind.tail, cfg.maxTailwindKt))}">${mUnitVal(wind.tail,"kt")}</span> ${cmpSign(wind.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span></span>
-                 <span class="ico ${wind.st}" role="img" aria-label="${STATE_LABEL[wind.st]}">${STATE_ICON[wind.st]}</span>`
-              : `<span class="val">—</span>`}
-          </span>
+          ${mVisRow(vis)}
+          ${mCeilRow(ceil)}
+          ${mWindRow(wind)}
         </span>
         <span class="pthumb"><span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span></span>
         <span class="m-chev" aria-hidden="true">▾</span>
@@ -12242,16 +12284,6 @@ window.RTV = (()=>{
     }
   }
 
-  /* Le plafond de la ligne Q2 — la seule à en porter un pour un atterrissage.
-     Rien à dire (pas d'exigence) = pas de ligne sur la carte. */
-  function ceilInfo(r){
-    const v2 = (r.verdicts||[]).find(v=>v.question==="Q2_DISPATCH");
-    const row = v2 && (v2.rows||[]).find(y=>/Ceiling/i.test(y.param));
-    if (!row || row.required==null) return null;
-    return {obs:row.observed, req:row.required, unit:row.unit||"ft",
-            st:cls(rowVerdict(row).result), noCeiling:!!row.noCeiling};
-  }
-
   /* Le verdict d'un créneau : assessAll() complet sur le terrain substitué,
      puis la phase du créneau seule est retenue. Les extraits (vis, plafond,
      vent, QFU) se prennent AVANT la restitution — ils lisent l'état global.
@@ -12274,7 +12306,7 @@ window.RTV = (()=>{
           ? cls(worstOf([M_RANK[vis.st]].concat(wind ? [M_RANK[wind.st]] : [])))
           : cls(r.overall);
       return {icao, name:mAdName(icao), st, vis, wind,
-              ceil: tb.role==="DEPARTURE" ? null : ceilInfo(r),
+              ceil: tb.role==="DEPARTURE" ? null : mCeilInfo(r),
               qfu:q, closed, closedPair:pair, alerts:nfAlerts(icao),
               eta:etaDate(tb.role),
               obsTime: wx && wx.obsTime!=null ? wx.obsTime : null,
@@ -12393,30 +12425,8 @@ window.RTV = (()=>{
     const c = min>=AGE_STALE_MIN ? " stale" : min>=AGE_WARN_MIN ? " warn" : "";
     return `<span class="rt-age${c}">METAR ${ageLabel(min)}</span>`;
   }
-  /* Les cases sont celles des lignes de phase mobiles (.m-cmp), reprises
-     telles quelles : même liseré de verdict, même teinte sur la valeur qui
-     le porte. */
-  const cmpRow = (k, st, val)=>`<span class="m-cmp edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":""}">
-      <span class="k">${k}</span><span class="val">${val}</span>
-      <span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span></span>`;
-  function visRow(vis){
-    const cmp = vis.obs==null || vis.req==null ? "" : (vis.obs < vis.req ? "&lt;" : "≥");
-    return cmpRow("VIS/RVR", vis.st,
-      `<span class="o${oCls(vis.st)}">${vis.obs!=null?mUnitVal(vis.obs,vis.unit):"—"}</span> ${cmp} ${vis.req!=null?mUnitVal(vis.req,vis.unit):"—"}`);
-  }
-  function ceilRow(c){
-    if (!c) return "";
-    const obs = c.obs!=null ? mUnitVal(c.obs,"ft") : (c.noCeiling ? "no cloud base" : "—");
-    const cmp = c.obs==null || c.req==null ? "" : (c.obs < c.req ? "&lt;" : "≥");
-    return cmpRow("CEIL", c.st,
-      `<span class="o${oCls(c.st)}">${obs}</span> ${cmp} ${mUnitVal(c.req,"ft")}`);
-  }
-  function windRow(w){
-    if (!w) return cmpRow("WIND", "unknown", "—");
-    return cmpRow("WIND", w.st,
-      `<span class="wl">XW <span class="o${oCls(maxCompSt(w.cross, cfg.maxCrosswindKt))}">${mUnitVal(w.cross,"kt")}</span> ${cmpSign(w.cross, cfg.maxCrosswindKt, "max")} ${mUnitVal(cfg.maxCrosswindKt,"kt")}</span>`
-     +`<span class="wl">TW <span class="o${oCls(maxCompSt(w.tail, cfg.maxTailwindKt))}">${mUnitVal(w.tail,"kt")}</span> ${cmpSign(w.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span>`);
-  }
+  /* Les cases sont celles des lignes de phase mobiles (.m-cmp) : mVisRow /
+     mCeilRow / mWindRow, la même écriture pour les deux vues. */
 
   /* Le pied d'alerte : une ligne par piste, ILS ou rampe qu'un NOTAM retire,
      triangle « ! » ambre en tête, et le numéro du NOTAM en lien — il dévoile
@@ -12457,7 +12467,7 @@ window.RTV = (()=>{
         ${ageHtml(s.obsTime)}
         <span class="rt-chev" aria-hidden="true">▾</span></span>
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
-      <span class="rt-rows">${visRow(s.vis)}${ceilRow(s.ceil)}${windRow(s.wind)}</span>
+      <span class="rt-rows">${mVisRow(s.vis)}${mCeilRow(s.ceil)}${mWindRow(s.wind)}</span>
       ${alertsHtml(s)}
       ${s.err ? `<span class="rt-note">Engine error: ${escapeHtmlText(s.err)}</span>`
         : s.noWx ? `<span class="rt-note dim">No reports available.</span>`
