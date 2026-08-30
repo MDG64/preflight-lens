@@ -306,12 +306,18 @@ async function fileRetirer(id) {
     tx.oncomplete = ok; tx.onerror = () => ko(tx.error);
   });
 }
+/* La file bloquée par un certificat refusé n'est PAS une file qui attend le
+   réseau, et lui promettre le contraire fait attendre pour rien : le vidage
+   retiendra la raison de son dernier échec pour que la note la dise. */
+let fileBloquee = false;
 async function majAttente() {
   let n = 0;
   try { n = (await fileLire()).length; } catch (e) { /* pas d'IndexedDB : tant pis */ }
   const el = $('attente-note');
   el.hidden = !n;
-  el.textContent = n + ' fiche(s) en attente — elles partiront dès le retour du réseau.';
+  el.textContent = n + ' fiche(s) en attente — ' + (fileBloquee
+    ? 'elles ne partent pas : le serveur refuse le certificat de cet appareil. Recertifie-le dans ⚙, elles partiront seules ensuite.'
+    : 'elles partiront dès le retour du réseau.');
 }
 
 /* L'envoi nu, sans barre de progression : c'est celui de la file. */
@@ -336,12 +342,14 @@ async function viderFile() {
     for (const rec of await fileLire()) {
       try {
         const final = await envoyer(rec.blob, rec.nom);
+        fileBloquee = false;
         await fileRetirer(rec.id);
         $('journal').insertAdjacentHTML('afterbegin', '<li>' + final + ' · différée</li>');
       } catch (e) {
         /* On s'arrête au PREMIER échec plutôt que d'insister : si le réseau
            est retombé ou le certificat révoqué, marteler n'aide personne. La
            file reste entière et repartira au prochain réveil. */
+        fileBloquee = e.statut === 403;
         break;
       }
     }
