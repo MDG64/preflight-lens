@@ -2788,11 +2788,23 @@
        aide de lecture, pas le message. La puce AI dit sa provenance — le NOTAM
        au-dessous reste la seule référence. */
     .ssum {
-      font: italic 500 12.5px/1.5 var(--sans);
+      /* Même corps que .etext (13px) : la phrase se lit AVANT le NOTAM, pas
+         en note de bas de page — retour propriétaire du 2026-08-30. */
+      font: italic 500 13px/1.55 var(--sans);
       color: var(--muted2);
       margin: 0 0 7px;
       padding-left: 12px;
       word-break: break-word
+    }
+
+    /* L'amorce « What? » : en romain et en gras là où la phrase est en
+       italique — c'est elle qui accroche l'œil au survol de la liste. */
+    .ssum .wq {
+      font-style: normal;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: .04em;
+      margin-right: 2px
     }
 
     .ssum .ai {
@@ -16284,7 +16296,7 @@ function renderInfo(icao) {
           <span class="qc gl" role="button" tabindex="0" data-q="${esc(n.qcode || "")}" data-t="${esc(n.traffic || "")}" data-p="${esc(n.purpose || "")}" data-s="${esc(n.scope || "")}">${esc(n.qcode || "—")}</span>
           <div class="tags">${tags}</div>
         </div>
-        ${n.summary ? `<div class="ssum">${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
+        ${n.summary ? `<div class="ssum"><span class="wq">What?</span> ${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
         <div class="etext">${annotate(n.e || n.raw)}</div>
         <div class="meta">
           <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
@@ -25493,7 +25505,7 @@ window.addEventListener("scroll", hidePop, true);
             <span class="qc">${esc(n.qcode || "—")}</span>
             ${tag ? `<div class="tags"><span class="tag sol">${esc(tag)}</span></div>` : ""}
           </div>
-          ${n.summary ? `<div class="ssum">${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
+          ${n.summary ? `<div class="ssum"><span class="wq">What?</span> ${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
           <div class="etext">${esc(n.e || n.raw)}</div>
           <div class="meta">
             <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
