@@ -6142,9 +6142,12 @@ function assess(role, ctx){
 
     /* Plafond exigé saisi sur la carte de phase. Même contrat que la vis / RVR,
        et pour toutes les phases : ce que la case montre est ce qui gouverne.
-       Vidée, elle ne dit pas « valeur du moteur » mais « aucun critère de
-       plafond » — c'est le seul moyen d'écarter une exigence que la table
-       impose et que la carte du terrain ne porte pas. */
+       Trois états, et le champ VIDE n'est plus l'un d'eux : `undefined` = rien
+       de saisi, la valeur dérivée gouverne (celle de la base terrains quand
+       elle en fournit une) ; un nombre = la valeur du pilote ; `null` = le
+       pilote a écarté le critère, ce qui s'écrit maintenant en tapant 0 et se
+       lit dans la case. Vider la case rend la main au moteur, comme sur la
+       vis / RVR et sur la DH — voir readCeilReq(). */
     {
       const manCeil = state.ceilReq[role];
       if (manCeil !== undefined){
@@ -6154,10 +6157,10 @@ function assess(role, ctx){
         ceilDriver = ceilReq!=null ? "PILOT_ENTERED" : null;
         push({severity:"CAUTION", code:"CEIL_REQ_MANUAL",
           message: ceilReq==null
-            ? `Ceiling requirement cleared by hand${wasC==null?"":` — the ${wasC} ft otherwise required is no longer applied`}. No ceiling criterion is used for this phase; check that the chart in force really carries none.`
+            ? `Ceiling criterion removed by hand — 0 entered in the Ceiling box${wasC==null?"":`, so the ${wasC} ft otherwise required is no longer applied`}. No ceiling criterion is used for this phase; check that the chart in force really carries none. Clearing the box brings the derived value back.`
             : `Ceiling requirement entered by hand: ${ceilReq} ft${wasC==null?" — the derivation required none on its own":` instead of the ${wasC} ft otherwise required`}. Your value governs, and it is your responsibility to check it against the OM-B and the aerodrome chart.`});
         planText += ceilReq==null
-          ? ` Ceiling requirement cleared by hand — none is applied.`
+          ? ` Ceiling criterion removed by hand (0 entered) — none is applied.`
           : ` Ceiling requirement set by hand — ${ceilReq} ft${wasC==null?"":` in place of the ${wasC} ft derived above`}.`;
       }
     }
@@ -6522,7 +6525,14 @@ function setVisReqFor(role, v, unit){
                      : {v, unit: unit || (cfg.framework==="FAA" ? "sm" : "m")};
   saveToAltPref();
 }
-function setCeilReqFor(role, v){ state.ceilReq[role] = v; saveToAltPref(); }
+/* `undefined` EFFACE le réglage — la page reprend la valeur dérivée, celle de
+   la base terrains quand elle en fournit une. `null` est l'autre chose : le
+   pilote a écarté le critère de plafond, et ça se garde. */
+function setCeilReqFor(role, v){
+  if (v === undefined) delete state.ceilReq[role];
+  else state.ceilReq[role] = v;
+  saveToAltPref();
+}
 /* DH / MDH de planification : la saisie de la phase si elle existe, sinon rien —
    contrairement au plafond, vider la case ne retire aucun critère, elle rend
    simplement la main à la valeur dérivée de l'approche. */
@@ -7987,7 +7997,7 @@ const provAttrs = (p, v, tips) => (p==null || v==null) ? {cls:"", tip:""} : {
    n'est comparé à rien se lisait comme le critère lui-même. Ce que la case
    affiche est ce qui gouverne : l'exigence dérivée tant que le pilote ne l'a pas
    retouchée, la sienne ensuite, et rien du tout s'il la vide. */
-function ceilingCell({id, req, obs, filled, aria, label, noCeiling, prov}){
+function ceilingCell({id, req, obs, filled, aria, label, noCeiling, prov, none}){
   const st = req==null ? null
            : (obs==null ? (noCeiling ? "go" : "unknown") : cls(verdictOf(obs, req, "ftAAL").result));
   /* Le plafond se cercle comme la vis / RVR d'à côté : un minimum vérifié se
@@ -8004,11 +8014,13 @@ function ceilingCell({id, req, obs, filled, aria, label, noCeiling, prov}){
          <span class="req-stack${pc.cls}"${pc.tip}>
            <span class="req-lab" aria-hidden="true">Required</span>
            <input id="${id}" class="to-ceil-in" type="number" min="0" step="50" inputmode="numeric"
-                  placeholder="—" value="${req!=null?req:""}" aria-label="${aria}">
+                  placeholder="—" value="${req!=null?req:(none?0:"")}" aria-label="${aria}">
          </span>
          ${req!=null?`<span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}" title="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>`:""}
        </span>
-       <span class="d">${req!=null?filled:"empty — no ceiling criterion applied"}</span>
+       <span class="d">${req!=null?filled
+         :none?"0 — criterion removed by hand; clear the box to bring the derived value back"
+         :"empty — nothing derived, no ceiling criterion applied"}</span>
      </div>`;
 }
 
@@ -8313,15 +8325,19 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
       req: (r.planning && r.planning.ceilReq!=null) ? r.planning.ceilReq : null,
       obs: (r.taf && r.taf.limiting) ? r.taf.limiting.ceiling_ft : null,
       noCeiling: !!(r.taf && r.taf.limiting && (r.taf.limiting.cavok || r.taf.limiting.noCeiling)),
-      filled: isAltn ? (state.ceilReq[role]!==undefined ? "your value, kept" : incCeilTxt)
-            : state.ceilReq[role]!==undefined ? "required, in ft — your value, kept"
+      filled: isAltn ? (state.ceilReq[role]!==undefined ? "your value, kept — clear the box for the derived value" : incCeilTxt)
+            : state.ceilReq[role]!==undefined ? "required, in ft — your value, kept; clear the box for the derived value"
             : ceilProvOf(r)==="VERIFIED" ? "required, in ft — airfield db verified, type over it"
             : "required, in ft — derived, type over it",
       /* Le plafond exigé se cercle comme la vis / RVR : vérifié en base, il est
          vert ; issu d'une table ou tapé à la main, ambre ; incrémenté ou sorti
          d'un plancher, nu — il n'est plus le chiffre d'aucune carte. */
       prov: ceilProvOf(r),
-      aria:"Ceiling required for this phase — leave empty to ignore"
+      /* `null` en réglage = critère écarté à la main : la case l'écrit 0 plutôt
+         que de rester vide, sans quoi cet état ne se verrait pas et ne se
+         déferait plus — une case déjà vide ne déclenche aucun change. */
+      none: state.ceilReq[role]===null,
+      aria:"Ceiling required for this phase, in ft — leave empty to use the derived value, 0 to apply no ceiling criterion"
     });
   if (isAltn){
     const pl = r.planning || {};
@@ -9022,12 +9038,19 @@ function renderStage(tab, r){
 
   const es = inner.querySelector("#eraSel"); if (es) es.onchange = ()=>{ cfg.eraRole=es.value; render(); };
 
-  /* Saisie du plafond de décollage. Vide, effacé ou non positif = pas de
-     critère : `null` est un choix explicite du pilote, distinct de `undefined`
-     qui laisse la page suivre le setup. */
   /* La visibilité américaine se tape comme elle s'imprime — « 1 1/2 », « 5/8 » :
      parseNumField() lit la fraction aussi bien que le décimal. */
   const readCeil = el => {
+    const n = parseNumField(el.value);
+    return (n==null || n<=0) ? null : n;
+  };
+  /* Le plafond exigé se lit à part, parce qu'il a un état de plus. Vidée, la
+     case ne dit pas « aucun critère » : elle rend la main au moteur et la
+     valeur dérivée revient — celle de la base terrains quand elle en fournit
+     une, comme sur la vis / RVR et sur la DH. Écarter le critère se tape : un
+     0, qui reste écrit dans la case et s'efface comme le reste. */
+  const readCeilReq = el => {
+    if (String(el.value==null?"":el.value).trim()==="") return undefined;
     const n = parseNumField(el.value);
     return (n==null || n<=0) ? null : n;
   };
@@ -9035,7 +9058,7 @@ function renderStage(tab, r){
      l'onglet en route c'est le genre de dégagement choisi (fuel ERA, ETOPS…),
      pas « ERA » — le moteur ne lit que le premier. */
   const tac = inner.querySelector("#phaseCeilInput");
-  if (tac) tac.onchange = ()=>{ setCeilReqFor(roleFor(tab), readCeil(tac)); render(); };
+  if (tac) tac.onchange = ()=>{ setCeilReqFor(roleFor(tab), readCeilReq(tac)); render(); };
   const tdh = inner.querySelector("#phaseDhInput");
   if (tdh) tdh.onchange = ()=>{ setDhReqFor(roleFor(tab), readCeil(tdh)); render(); };
 
@@ -9627,11 +9650,13 @@ function mReqSelectHtml(r){
 
 /* Même champ plafond que sur tablette, en ligne de formulaire. Rendu quelle que
    soit la valeur : vide est un état à voir, pas une case à cacher. */
-function mCeilInputHtml(id, req, aria){
+/* Même contrat que la case de tablette : vidée, la valeur dérivée revient ;
+   0 écarte le critère et reste écrit dans le champ. */
+function mCeilInputHtml(id, req, aria, none){
   return `<div class="m-req">
-    <span>Ceiling required (ft) — empty to ignore</span>
+    <span>Ceiling required (ft) — empty for the derived value, 0 for none</span>
     <input id="${id}" class="to-ceil-in" type="number" min="0" step="50" inputmode="numeric"
-           placeholder="—" value="${req!=null?req:""}" aria-label="${aria}">
+           placeholder="—" value="${req!=null?req:(none?0:"")}" aria-label="${aria}">
   </div>`;
 }
 
@@ -9770,7 +9795,8 @@ function mDetailHtml(tb, r){
     ${mDhField}
     ${isDep ? "" : mCeilInputHtml("mPhaseCeilInput",
                       (r.planning && r.planning.ceilReq!=null) ? r.planning.ceilReq : null,
-                      "Ceiling required for this phase — leave empty to ignore")}
+                      "Ceiling required for this phase, in ft — leave empty to use the derived value, 0 to apply no ceiling criterion",
+                      state.ceilReq[roleFor(tb)]===null)}
     ${rows.length ? `<table class="m-dtable">
       <thead><tr><th>Parameter</th><th>Obs.</th><th>Req.</th><th>Margin</th><th></th></tr></thead>
       <tbody>${rows.join("")}</tbody>
@@ -10124,13 +10150,20 @@ function bindMobile(host){
     const n = parseNumField(el.value);
     return (n==null || n<=0) ? null : n;
   };
+  /* Même lecture à trois états que sur tablette — vidée, la case rend la main
+     à la valeur dérivée ; 0 écarte le critère. Voir readCeilReq(). */
+  const mReadCeilReq = el => {
+    if (String(el.value==null?"":el.value).trim()==="") return undefined;
+    const n = parseNumField(el.value);
+    return (n==null || n<=0) ? null : n;
+  };
   /* La phase dépliée donne le rôle auquel les saisies s'appliquent : les champs
      ne sont rendus que sous elle. */
   /* Même règle que sur tablette : les saisies se rangent sous le rôle évalué —
      sur l'onglet en route, le genre de dégagement choisi et non « ERA ». */
   const mRole = TABS[mState.open] ? roleFor(TABS[mState.open]) : null;
   const mtac = host.querySelector("#mPhaseCeilInput");
-  if (mtac && mRole) mtac.onchange = ()=>{ setCeilReqFor(mRole, mReadCeil(mtac)); render(); };
+  if (mtac && mRole) mtac.onchange = ()=>{ setCeilReqFor(mRole, mReadCeilReq(mtac)); render(); };
   const mtdh = host.querySelector("#mPhaseDhInput");
   if (mtdh && mRole) mtdh.onchange = ()=>{ setDhReqFor(mRole, mReadCeil(mtdh)); render(); };
   [["#mToVisInput", cfg.framework==="FAA"?"ft":"m"],
