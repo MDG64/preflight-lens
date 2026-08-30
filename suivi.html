@@ -113,7 +113,12 @@ code{font-family:var(--mono);font-size:12px}
 var LABEL = {
   CAT_III:"ILS CAT III", CAT_II:"ILS CAT II", CAT_I:"ILS / GLS / MLS CAT I",
   LPV:"RNP — LPV", LNAV_VNAV:"RNP — LNAV/VNAV", LNAV:"RNP — LNAV", LP:"RNP — LP",
-  LOC:"LOC", VOR:"VOR", NDB:"NDB", CIRCLING:"Circling"
+  LOC:"LOC", VOR_DME:"VOR / DME", VOR:"VOR", NDB_DME:"NDB / DME", NDB:"NDB",
+  RNP_AR:"RNP AR — RNP 0.30", CIRCLING:"Circling",
+  /* Repli seul : une ligne de sidestep porte son propre libellé, piste
+     d'atterrissage comprise. Ce nom-ci ne sert qu'aux graines qui ne
+     nomment pas la cible. */
+  SIDESTEP:"Sidestep"
 };
 var STATS_KEY = "wl-airfield-minima-stats";
 /* ---- d'où viennent les chiffres ----
@@ -257,18 +262,31 @@ function calcul(){
            l'ajouter partout gonflerait le reste à faire d'une ligne
            qu'aucune carte ne réclame. */
         if (nc && nc[end] && nc[end].CIRCLING) types.push("CIRCLING");
+        /* Le sidestep est une manœuvre lui aussi, sous la piste de SA carte,
+           et il se relève exactement comme le circling. L'oublier ici le
+           rendait invalidable de fait : le panneau de l'application le
+           proposait, cette page ne le comptait ni fait ni à faire, et un
+           terrain se lisait complet avec une ligne en attente. */
+        if (nc && nc[end] && nc[end].SIDESTEP) types.push("SIDESTEP");
         for (var j = 0; j < types.length; j++){
           var type = types[j];
+          /* Le sidestep se pose sur l'AUTRE extrémité : « Sidestep 21L » et
+             non « Sidestep », sinon la ligne tait l'essentiel. La cible est
+             dans `s` de la graine, lue comme dans la fiche de l'application ;
+             sans elle, le mot nu plutôt que rien. */
+          var cible = type === "SIDESTEP"
+            ? ((SEED[t.icao] || {}).s || {})[end] : null;
+          var lbl = type === "SIDESTEP" ? (cible ? "Sidestep " + cible : "Sidestep") : null;
           /* Interdite par la carte : elle sort du décompte. La compter
              comme « à faire » gonflerait indéfiniment un reste à faire
              que rien ne pourra jamais solder. */
           if (interditParCarte(t.icao, end, type)) {
-            lignes.push({ end: end, type: type, ok: false, attente: false, interdit: true });
+            lignes.push({ end: end, type: type, lbl: lbl, ok: false, attente: false, interdit: true });
             continue;
           }
           var v = estVerifie(stats, t.icao, end, type);
           var p = !v && proposeParCarte(t.icao, end, type);
-          lignes.push({ end: end, type: type, ok: v, attente: p });
+          lignes.push({ end: end, type: type, lbl: lbl, ok: v, attente: p });
           if (v) ok++; else if (p) att++;
         }
       }
@@ -432,12 +450,12 @@ function rendre(){
     var la = D.approches[terrain] || [];
     h = la.map(function(a){
       if (a.interdit) return '<li><span class="tick na">✕</span>' +
-        '<span class="lbl"><span class="nom">' + esc(LABEL[a.type] || a.type) + '</span><br>' +
+        '<span class="lbl"><span class="nom">' + esc(a.lbl || LABEL[a.type] || a.type) + '</span><br>' +
         '<span class="det">' + (a.end === "-" ? "tout le terrain" : "piste " + esc(a.end)) +
         '</span></span><span class="cnt interdit">interdit par la carte</span></li>';
       var etat = a.ok ? "vérifié" : (a.attente ? "à valider" : "à faire");
       return "<li>" + tick(a.ok) + '<span class="lbl"><span class="nom">' +
-        esc(LABEL[a.type] || a.type) + '</span><br><span class="det">' +
+        esc(a.lbl || LABEL[a.type] || a.type) + '</span><br><span class="det">' +
         (a.end === "-" ? "tout le terrain" : "piste " + esc(a.end)) +
         '</span></span><span class="cnt ' + (a.ok ? "vert" : (a.attente ? "attente" : "")) + '">' +
         etat + "</span></li>"; }).join("");
