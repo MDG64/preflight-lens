@@ -239,15 +239,23 @@ function calcul(){
     var liste = [], complets = 0, entames = 0;
     for (var i = 0; i < par[cc].length; i++){
       var t = par[cc][i];
-      var a = SEED[t.icao].a, lignes = [], ok = 0, att = 0;
-      for (var end in a){
-        var types = a[end].slice();
+      var a = SEED[t.icao].a, nc = SEED[t.icao].n, lignes = [], ok = 0, att = 0;
+      /* Les extrémités de la graine, PLUS « - » quand une carte de circling
+         pur y a livré ses minima — « RNP A », « LOC A », un NDB dont le titre
+         ne nomme aucune piste. Ces cartes publient pour le terrain entier ;
+         Minima Lens leur donne la ligne « Circling — aerodrome », et le suivi
+         doit la compter comme les autres, sans quoi elle reste du travail à
+         faire que cette page ne sait pas montrer. */
+      var bouts = Object.keys(a);
+      if (nc && nc["-"] && nc["-"].CIRCLING) bouts.push("-");
+      for (var bi = 0; bi < bouts.length; bi++){
+        var end = bouts[bi];
+        var types = (a[end] || []).slice();
         /* Le circling n'est pas dans la liste des approches — c'est une
            manœuvre — mais il se relève et se valide comme elles, sous la
            piste de sa carte. Il ne compte que là où une carte l'a livré :
            l'ajouter partout gonflerait le reste à faire d'une ligne
            qu'aucune carte ne réclame. */
-        var nc = SEED[t.icao].n;
         if (nc && nc[end] && nc[end].CIRCLING) types.push("CIRCLING");
         for (var j = 0; j < types.length; j++){
           var type = types[j];
@@ -430,7 +438,7 @@ function rendre(){
       var etat = a.ok ? "vérifié" : (a.attente ? "à valider" : "à faire");
       return "<li>" + tick(a.ok) + '<span class="lbl"><span class="nom">' +
         esc(LABEL[a.type] || a.type) + '</span><br><span class="det">' +
-        "piste " + esc(a.end) +
+        (a.end === "-" ? "tout le terrain" : "piste " + esc(a.end)) +
         '</span></span><span class="cnt ' + (a.ok ? "vert" : (a.attente ? "attente" : "")) + '">' +
         etat + "</span></li>"; }).join("");
     h = la.length ? "<ul>" + h + "</ul>" : '<div class="vide">Aucune approche connue.</div>';

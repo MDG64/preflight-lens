@@ -3302,7 +3302,10 @@ function adStdMinima(id){
   }
   const t = AD_APP_TYPES.find(a=>a.id===id);
   if (!t || !t.fac) return null;
-  const dh = DS.easa.dh.t4[t.fac];
+  /* Même garde que le moteur : sans bloc FAS publié, le minimum système d'un
+     LPV est 250 ft. La case proposait 200 — un LPV 200 que rien n'atteste, et
+     qui suffisait à faire passer l'approche pour une Type B. */
+  const dh = (t.fac==="GNSS_SBAS_LPV" && !isLpv200(cfg)) ? 250 : DS.easa.dh.t4[t.fac];
   if (dh==null) return null;
   const t9row = DS.easa.rvr.t9.find(r=>dh>=r[0] && dh<=r[1]);
   const t9 = t9row ? t9row[2][0] : null;
@@ -3822,6 +3825,14 @@ function dirResolve(query){
    Clé icao|extrémité|type ; deux listes brutes (DH ft, RVR m) qui gardent
    chaque saisie. Le consensus d'une liste est la valeur majoritaire à au
    moins 3 occurrences — à égalité, la plus élevée, par prudence. */
+/* L'EXTRÉMITÉ QUI N'EN EST PAS UNE. Une carte de circling pur — « RNP A »,
+   « LOC A », un NDB dont le titre ne nomme aucune piste — publie ses minima
+   pour le terrain entier : la manœuvre ne se commence au terme d'aucune
+   approche de piste, et l'atterrissage se fait sur celle que les conditions
+   permettent. La graine range ces lignes sous cette extrémité-là, qu'aucun
+   `rec.runways` ne portera jamais ; elles se relèvent, se valident et se
+   lisent comme les autres, sous cette clé. */
+const AD_END_AD = "-";
 function adStatList(icao, end, type){ return adStats[icao+"|"+end+"|"+type] || null; }
 function adRecordMinima(icao, end, type, dh, rvr){
   const k = icao+"|"+end+"|"+type;
@@ -3919,6 +3930,21 @@ function adConsensus(icao, end, type){
   if (!s) return null;
   const dh = adModeOf(s.dh), rvr = adModeOf(s.rvr);
   return (dh || rvr) ? {dh, rvr} : null;
+}
+/* L'EXTRÉMITÉ SOUS LAQUELLE LIRE LA LIGNE. C'est celle du QFU choisi, et ce
+   n'est discutable pour aucune approche : une approche se vole vers une piste.
+   Le circling seul a un repli, et il ne s'ouvre que quand la piste choisie ne
+   dit rien — ni valeur validée, ni consensus. Alors, et alors seulement, la
+   valeur du terrain (AD_END_AD) prend le relais : c'est celle d'une carte de
+   circling pur, elle est publiée pour ce terrain-là, et la préférer à la table
+   réglementaire c'est préférer ce qu'une carte publie à ce qu'un tableau
+   suppose. L'ORDRE NE S'INVERSE JAMAIS : la carte de la piste choisie chiffre
+   la manœuvre au terme de SON approche, et rien ne la remplace. */
+function adLookupEnd(icao, end, type){
+  if (type !== "CIRCLING" || !icao || !end || end === AD_END_AD) return end;
+  if (adVerified(icao, end, type) || adConsensus(icao, end, type)) return end;
+  return (adVerified(icao, AD_END_AD, type) || adConsensus(icao, AD_END_AD, type))
+    ? AD_END_AD : end;
 }
 /* Minima par défaut affiché par la fiche : la valeur vérifiée du propriétaire
    d'abord, sinon le consensus (3 valeurs identiques), sinon le standard du
@@ -5292,7 +5318,7 @@ function computeApproachMinima(cfg){
   const cands = [];
   if (cfg.publishedOch) cands.push({v:cfg.publishedOch, d:"OCH_PUBLISHED"});
   let t4 = DS.easa.dh.t4[cfg.facility];
-  if (cfg.facility==="GNSS_SBAS_LPV" && !(cfg.fasValM!=null && cfg.fasValM<=35)){
+  if (cfg.facility==="GNSS_SBAS_LPV" && !isLpv200(cfg)){
     t4 = 250;
     warnings.push({severity:"CAUTION", code:"VALUE_PENDING_VALIDATION",
       message:"LPV at DH 200 ft requires a published FAS data block with VAL <= 35 m. Without it the system minimum is 250 ft (Type A / APV)."});
@@ -5518,15 +5544,34 @@ function toAltDistanceRule(cfg){
 
 /* Une approche de type A (minimum système >= 250 ft) ou une manœuvre à vue
    exige un plafond ; une type B (CAT I/II/III) n'en demande pas. */
+/* LPV 200 : le seul APV qui se tienne avec les CAT I. Il lui faut un bloc de
+   données FAS publié dont la VAL ne dépasse pas 35 m — c'est cette condition,
+   et elle seule, qui autorise la DH à 200 ft (AMC3 CAT.OP.MPA.110, Table 4).
+   Une seule définition pour tout le fichier : le minimum système du moteur, le
+   standard proposé par la fiche et le classement Type A/B la lisent ici. */
+function isLpv200(cfg){
+  return !!cfg && cfg.facility==="GNSS_SBAS_LPV" && cfg.fasValM!=null && cfg.fasValM<=35;
+}
 /* Type A ou Type B : la frontière est la HAUTEUR, pas le moyen (Annexe I des
    définitions, CAT.OP.MPA.110) — Type A = MDH/DH à 250 ft ou plus, Type B en
-   dessous. Une 2D/NPA est toujours Type A (ses minima de système partent à
-   250 ft) ; une APV se classe par sa DH réelle : un VNAV/LNAV à DA 300 est
-   Type A, un LPV à DH 200 est Type B au même titre qu'une CAT I — et une
-   CAT I poussée à DH 280 par l'OCH devient, elle, Type A. */
+   dessous. Mais la même définition ÉNUMÈRE le Type B : CAT I, CAT II, CAT III
+   — et le LPV 200 qui se range avec elles. Une opération qu'aucune de ces
+   lignes ne nomme reste Type A, QUELLE QUE SOIT la DH qu'on lui applique.
+   C'est par là que le plafond disparaissait à la destination : une DH
+   d'exploitant à 100 ft, ou un relevé de carte sous 250 ft, faisait lire
+   « Type B » sur un LPV que rien n'autorise à descendre à 200 — et le critère
+   de plafond s'effaçait avec le classement. Une DH basse abaisse la hauteur de
+   décision ; elle ne donne ni l'infrastructure ni l'approbation qui font une
+   Type B. Une 2D/NPA est Type A par construction, un Baro-VNAV aussi (son
+   minimum système ne descend jamais sous 250 ft).
+   Dans l'autre sens la hauteur garde le dernier mot : une CAT I poussée à
+   DH 280 par l'OCH redevient Type A, et une CAT III sans DH est Type B. */
+const TYPE_B_OPS = ["CAT_I","CAT_II","CAT_III","SA_CAT_I","SA_CAT_II"];
 function isTypeAOrCircling(cfg, app){
   if (app.circling || cfg.guidance==="2D" || cfg.opCategory==="NPA") return true;
-  return app.dh!=null && app.dh >= 250;
+  if (!(TYPE_B_OPS.includes(cfg.opCategory) || isLpv200(cfg))) return true;
+  if (app.noDh) return false;
+  return app.dh==null || app.dh >= 250;
 }
 
 /* --------------------------- assessment --------------------------- */
@@ -5607,9 +5652,17 @@ function assess(role, ctx){
   /* Terrain et QFU passés au pont : ils lui servent à choisir entre la
      ligne avec DME et celle sans, selon ce que la fiche publie. */
   const adType = adTypeFromCfg(cfg, adIcao, adEnd);
+  /* SAUF POUR UN CIRCLING QUE LA CARTE DE CETTE PISTE NE CHIFFRE PAS : il se
+     lit alors sous le terrain, où les cartes de circling pur publient le leur.
+     Le repli ne touche rien d'autre — voir adLookupEnd. */
+  const adRead = adLookupEnd(adIcao, adEnd, adType);
+  const adFromAD = adRead !== adEnd;
   /* LA CARTE INTERDIT CETTE OPÉRATION. On ne corrige pas un minimum, on
      refuse l'opération : la table réglementaire donnerait un chiffre pour
-     quelque chose que la carte ne permet pas. */
+     quelque chose que la carte ne permet pas.
+     L'interdiction se lit SOUS LA PISTE CHOISIE, jamais sous le repli : une
+     carte de circling pur qui refuse la catégorie D ne dit rien du circling
+     publié au terme de l'ILS de la piste en service. */
   if (adIcao && adType && adEnd && adChartInterdit(adIcao, adEnd, adType)){
     app.dh = null; app.rvr = null; app.visSm = null;
     app.dhDriver = "CHART_NOT_AUTHORIZED"; app.rvrDriver = "CHART_NOT_AUTHORIZED";
@@ -5617,8 +5670,8 @@ function assess(role, ctx){
     push({severity:"CRITICAL", code:"CHART_NOT_AUTHORIZED",
       message:`The approach chart publishes NO minima for ${adTypeLabel(adType)} on ${adIcao} RWY ${ctx.rwyDesignator} in aircraft category ${cfg.acCategory} — the operation is not authorized. No standard minima are substituted.`});
   } else if (adIcao && adType && adEnd){
-    const av = adVerified(adIcao, adEnd, adType);
-    const cons = adConsensus(adIcao, adEnd, adType);
+    const av = adVerified(adIcao, adRead, adType);
+    const cons = adConsensus(adIcao, adRead, adType);
     const dhPick  = av && av.dh!=null  ? {v:av.dh,  why:"verified"} : (cons && cons.dh  ? {v:cons.dh.v,  why:`×${cons.dh.n}`}  : null);
     const rvrPick = av && av.rvr!=null ? {v:av.rvr, why:"verified"} : (cons && cons.rvr ? {v:cons.rvr.v, why:`×${cons.rvr.n}`} : null);
     if (dhPick || rvrPick){
@@ -5643,7 +5696,7 @@ function assess(role, ctx){
       if (app.circling && dhPick) app.ceilingRequired = dhPick.v;
       const verified = (dhPick && dhPick.why==="verified") || (rvrPick && rvrPick.why==="verified");
       push({severity:"INFO", code:"AIRFIELD_DB_MINIMA_APPLIED",
-        message:`Airfield database minima applied for ${adIcao} RWY ${ctx.rwyDesignator} — ${adTypeLabel(adType)}: ${parts.join(" · ")}. ${verified?"Verified value entered on this device — applied immediately.":"At least 3 identical user entries."} Cross-check against official charts.`});
+        message:`Airfield database minima applied for ${adIcao} RWY ${ctx.rwyDesignator} — ${adTypeLabel(adType)}: ${parts.join(" · ")}. ${verified?"Verified value entered on this device — applied immediately.":"At least 3 identical user entries."}${adFromAD?` No circling line is recorded for RWY ${ctx.rwyDesignator}: this is the aerodrome circling value, read on a circling-only chart whose title names no runway.`:""} Cross-check against official charts.`});
     }
   }
 
@@ -10680,6 +10733,15 @@ function refreshAdPanel(force){
     if (adChartMinima(icao, end, "CIRCLING") || (adStatList(icao, end, "CIRCLING")||{}).verified)
       appRows.push({end, type:"CIRCLING", i:"c", circ:true});
   });
+  /* Puis LE CIRCLING DU TERRAIN, s'il y en a un — voir AD_END_AD. Il vient en
+     dernier parce qu'il est le repli : le circling d'une piste donnée reste la
+     valeur la plus proche de ce qu'on vole. Sans cette ligne, ce qu'une carte
+     de circling pur publie était compilé dans la graine, compté « à valider »
+     par l'atelier, et invalidable à jamais — la fiche ne montrant que les
+     extrémités réelles, aucun Record ne pouvait le porter au journal. */
+  if (adChartMinima(icao, AD_END_AD, "CIRCLING")
+      || (adStatList(icao, AD_END_AD, "CIRCLING")||{}).verified)
+    appRows.push({end:AD_END_AD, type:"CIRCLING", i:"c", circ:true, ad:true});
   const typeOpts = sel => AD_APP_TYPES.filter(t=>(!t.noRwy||t.id===sel) && (!t.ar||cfg.rnpArApproved||t.id===sel))
     .map(t=>`<option value="${t.id}" ${t.id===sel?"selected":""}>${t.label}</option>`).join("");
   const cnt = list => { const n={}; (list||[]).forEach(v=>{n[v]=(n[v]||0)+1;});
@@ -10706,11 +10768,17 @@ function refreshAdPanel(force){
       : srcs.includes("consensus")
       ? `<span class="ad-badge consensus" title="At least 3 identical user entries — this value is now the application default">user ✓</span>`
       : `<span class="ad-badge" title="Standard minima of the approach type — no user value yet">std</span>`;
+    /* La ligne du terrain ne porte pas de numéro de piste : elle n'en a pas.
+       « AD » plutôt qu'un tiret nu, qui se lirait comme une case vide. */
+    const endLbl = a.ad
+      ? `<span title="Published by a circling-only chart — its title names no runway. These minima govern the manoeuvre whatever runway you land on, unless the chart of the selected runway publishes a circling line of its own.">AD</span>`
+      : a.end;
+    const circLbl = a.ad ? "Circling — aerodrome" : a.circ ? "Circling" : null;
     /* Une opération que la carte interdit ne se propose pas, ne se valide
        pas et n'affiche aucun standard : la ligne dit non, et c'est tout. */
     if (adChartInterdit(icao, a.end, a.type)) return `<tr>
-      <td style="font-weight:600">${a.end}</td>
-      <td>${a.circ ? "Circling" : adTypeLabel(a.type)}</td>
+      <td style="font-weight:600">${endLbl}</td>
+      <td>${circLbl || adTypeLabel(a.type)}</td>
       <td class="ad-def"><span class="ad-badge na" title="The approach chart publishes no minima for this operation in your aircraft category — whether it reads « Not published » or « Not authorized », there is nothing to fly to. No default is offered.">no minima published</span></td>
       <td colspan="${own?4:3}" class="ad-stats">the chart publishes no minima for category ${(cfg && cfg.acCategory) || "—"}</td>
       <td></td>
@@ -10734,8 +10802,8 @@ function refreshAdPanel(force){
         + ` Pre-filled below: press Record to validate it.`
       : "";
     return `<tr>
-      <td style="font-weight:600">${a.end}</td>
-      <td>${a.circ ? "Circling" : `<select data-ad="appType" data-end="${a.end}" data-i="${a.i}" aria-label="Approach type">${typeOpts(a.type)}</select>`}</td>
+      <td style="font-weight:600">${endLbl}</td>
+      <td>${circLbl || `<select data-ad="appType" data-end="${a.end}" data-i="${a.i}" aria-label="Approach type">${typeOpts(a.type)}</select>`}</td>
       <td class="ad-def">${eff.dh.v==null?"—":eff.dh.v+" ft"} · ${eff.rvr.v==null?"—":eff.rvr.v+" m"} ${badge}</td>
       <td><input class="ad-num" type="number" min="0" step="10" id="adDh_${a.end}_${a.i}" placeholder="DH ft"
                  value="${ch && ch.dh!=null ? ch.dh : ""}" aria-label="Report a DA/DH (ft)"></td>
