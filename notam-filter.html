@@ -7256,11 +7256,39 @@ body .stat .k{
       vol: ["AERODROME CLSD", "AD CLSD", "ARP CLSD", "AIRPORT CLOSED", "AIRSPACE", "PROHIBITED",
         "RESTRICTED AREA", "DANGER AREA", "ZRT", "TRA ACT", " ACT ", "FUEL", "AVGAS", "JET A1",
         "RFF", "RESCUE", "FIRE FIGHTING", "CAT DOWNGRADED", "TWR", "TOWER", " ATC ", "AFIS",
-        "CUSTOMS", "IMMIGRATION", "OPR HR", "AD HR", "GPS", "GNSS", "RAIM"],
+        "CUSTOMS", "IMMIGRATION", "OPR HR", "AD HR", "GPS", "GNSS", "RAIM",
+        // « AD AP CLSD » : la forme US de la fermeture de terrain, que les trois
+        // formes voisines juste au-dessus rataient — « AD CLSD » n'est pas une
+        // sous-chaîne de « AD AP CLSD ». Cas réel KLAX 05/277 (revue du
+        // 2026-08-30, sans ligne Q) : « AD AP CLSD TO NON SKED TRANSIENT GA ACFT
+        // EXC 24HR PPR ». Fermeture CONDITIONNELLE — elle ne vise qu'une
+        // catégorie de trafic — mais la phase ne se discute pas : c'est l'accès
+        // au terrain, comme les trois autres.
+        "AD AP CLSD",
+        // Relais radio déportés (RCO) : ils portent la couverture radio EN
+        // ROUTE, pas le service d'un terrain. Deux cas réels KMIA du
+        // 2026-08-30, tous deux sans ligne Q — 06/253 « COM ANDROS TOWN ISLAND
+        // REMOTE COM OUTLET 118.4/318.1 U/S » et 07/383 « COM GRAND BAHAMA
+        // REMOTE COM OUTLET 126.9 CHANGED TO 122.2 » — que rien ne touchait.
+        // « COM » seul reste EXCLU à dessein : le mot ouvre la moitié des
+        // NOTAM américains de service, il rangerait en vol tout ce qui
+        // communique, tour de contrôle comprise.
+        "REMOTE COM OUTLET", "REMOTE COMMUNICATIONS OUTLET"],
       approche: ["ILS", "LLZ", "LOC", "LOCALIZER", "LOCALISER", "GLIDE", " GP ", "DME", "VOR", "NDB",
         "TACAN", "VORTAC", "MARKER", "RNAV", "RNP", "GLS", "LPV", "LNAV", "VNAV", "IAP", "APCH",
         "APPROACH", "STAR", "MISSED", "MINIMA", "MINIMUM", "RVR", "PAPI", "VASI",
         "APCH LGT", "RWY LGT", "RUNWAY LIGHT", "RCLL", "REDL", "TRANSITION",
+        // Rampes d'approche nommées par leur SIGLE, seule forme qu'emploient les
+        // NOTAM US — et ceux-ci n'ont pas de ligne Q, donc le texte est l'unique
+        // indice. Cas réel KMCO 08/248 (revue du 2026-08-30) : « RWY 17L ALSF-2
+        // NOW SSALR », un déclassement de rampe qui ne touchait aucun mot-clé.
+        // « APCH LGT » juste au-dessus ne couvre que la forme épelée.
+        // RLLS (Runway Lead-in Lighting System) est de la même famille : une
+        // rampe qui GUIDE VERS la piste, donc de l'approche. Cas réel KJFK
+        // 08/416, « RWY 13L RLLS HOTEL SECTION U/S ».
+        // Sigles seulement, pas leurs cousins non observés (MALSR, ODALS…) :
+        // ce fichier ne code que des motifs vus en vrai.
+        "ALSF", "SSALR", "RLLS", "LEAD-IN LIGHT", "LEAD IN LIGHT",
         // Feux d'identification d'extrémité de piste (REIL) : voir le
         // commentaire de la liste « depart », ils valent pour les deux phases.
         "END ID LGT", "END IDENT LGT", "END IDENTIFIER LIGHT", " REIL",
@@ -7306,7 +7334,12 @@ body .stat .k{
       // angle mort que la manche à air. Revue du 2026-08-20, A5236/26 (QFTAS)
       // « RVR THR 06, MEDIAN AND 24 NOT AVBL » affiché Arrival seul ; corrigé
       // avec le sujet Q FT (transmissomètre) passé en approche+départ.
-      depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
+      // L'axe de piste effacé est traité par MOTIF et non par mot-clé : voir
+      // FREETEXT_PATTERNS sous cette table, avec la mesure qui l'impose.
+      // « SID » a quitté cette liste le 2026-08-30 pour FREETEXT_PATTERNS :
+      // en sous-chaîne, le sigle se logeait dans SIDE, AIRSIDE, OUTSIDE,
+      // SIDESTEP, NORTHSIDE, CONSIDER. Voir la mesure avec le motif.
+      depart: ["DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
         "VOR", "TACAN", "VORTAC", "RVR",
         "END ID LGT", "END IDENT LGT", "END IDENTIFIER LIGHT", " REIL",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
@@ -7359,7 +7392,64 @@ body .stat .k{
         // comparaison se fait par sous-chaîne, et MOGAS (essence automobile)
         // est un sujet carburant qui n'a rien à voir avec le stationnement.
         " MOG ", "MAX ON GROUND", "MAXIMUM ON GROUND",
-        "POTABLE WATER", "WATER TRUCK"],
+        "POTABLE WATER", "WATER TRUCK",
+        // Radar de surface (SMR) : c'est l'œil de la tour sur les AIRES DE
+        // MANŒUVRE — sa panne se gère au roulage, pas en vol. Cas réel KMCO
+        // 08/208 (revue du 2026-08-30), « SVC SMR U/S », sans ligne Q.
+        // « SMR » est encadré d'espaces pour la raison exacte qui encadre
+        // « MOG » et « STAND » : la comparaison se fait par SOUS-CHAÎNE, et un
+        // sigle de trois lettres se loge dans trop de mots pour circuler nu.
+        // La forme épelée le complète, elle n'a pas besoin de la même garde.
+        " SMR ", "SURFACE MOVEMENT RADAR"],
+    };
+    /* MOTIFS de texte, quand un mot-clé ne suffit pas à dire DE QUOI on parle.
+       La table ci-dessus compare par SOUS-CHAÎNE : elle ne sait pas exiger qu'un
+       mot en précède un autre. Certains sujets en ont besoin, et l'axe peint en
+       est le cas type.
+
+       AXE DE PISTE EFFACÉ — motif le plus répété de la file de revue : 7 cas
+       relevés le 2026-08-30 (KJFK 07/472, KMIA 08/284, 08/455, 08/456, KATL
+       07/013, KMCO 08/177, KGPT 06/071), tous US, tous SANS ligne Q, donc sans
+       aucun indice hors du texte — ils ressortaient en « Unclassified ».
+
+       APPROCHE + DÉPART : l'axe peint sert à s'aligner au DÉCOLLAGE autant qu'à
+       tenir l'axe à l'atterrissage. Le LLM n'a retenu qu'« approche » pour les
+       sept — le même angle mort déjà corrigé trois fois par la revue humaine :
+       manche à air (2026-07-28), REIL (2026-08-08), oiseaux (LFPO A1234/26,
+       2026-08-30). On suit le précédent, pas le LLM.
+
+       POURQUOI UN MOTIF ET PAS « CL MARKINGS » EN MOT-CLÉ : mesure du
+       2026-08-30 sur 4178 NOTAM réels de 54 terrains — le mot-clé nu touchait
+       74 NOTAM, dont 49 CITENT UN TAXIWAY. Deux familles qu'il confondait :
+         - l'axe d'un TAXIWAY (« TWY B CL MARKINGS FOR TWY MB NOT STD »), qui se
+           roule et n'a rien d'une affaire d'approche ;
+         - les marquages de SORTIE de piste (« RWY 17L LEAD OFF CL MARKINGS AT
+           TWY N4 OBSC »), qui guident vers le taxiway APRÈS l'atterrissage.
+       Les deux gardent leur Ground par « TWY » ; leur coller Arrival+Departure
+       était un faux badge sur les deux tiers des cas, pas un angle mort
+       marginal. Le motif exige donc RWY + son numéro IMMÉDIATEMENT avant
+       « CL MARKINGS » : « LEAD OFF » glissé entre les deux suffit à l'écarter,
+       et un TWY nommé devant n'a pas de numéro de piste à offrir.
+       À ne pas confondre avec RCLL (feux d'axe, liste « approche » seule) : ce
+       sont les FEUX, pas la peinture — leur rang n'est pas rouvert ici. */
+    const RWY_CL_MARKING_RE = /\bRWY\s+\d{1,2}[LRC]?(?:\/\d{1,2}[LRC]?)?\s+(?:CL|CENTERLINE|CENTRE LINE)\s+MARKINGS?\b/;
+    /* « SID » EN MOT ENTIER, et pas en sous-chaîne. Le sigle vivait dans la
+       liste « depart » depuis l'origine, où la comparaison par sous-chaîne le
+       faisait mordre au milieu d'autres mots. Mesure du 2026-08-30 sur 4178
+       NOTAM réels de 54 terrains : 348 contiennent la suite « SID », mais 140
+       — deux sur cinq — ne l'ont QUE dans un autre mot, et récoltaient un
+       badge Departure sans rapport. Le détail : SIDE (115), SIDESTEP (9),
+       AIRSIDE (8), NORTHSIDE (3), OUTSIDE (3), CONSIDER (2). Cas type
+       rencontré en vérifiant l'axe de piste : « RWY 17L LEAD OFF CL MARKINGS
+       RIGHT SIDE AT TWY N4 OBSC », un marquage de sortie de piste classé
+       Departure à cause de « SIDE ».
+       Le pluriel n'a pas besoin d'être prévu : sur ces 4178 NOTAM, « SID » est
+       toujours au singulier (217 occurrences en mot entier), jamais « SIDS ».
+       La ponctuation, elle, est déjà couverte par la limite de mot — les
+       formes réelles « SID, », « SID/STAR » et « SID): » matchent. */
+    const FREETEXT_PATTERNS = {
+      approche: [RWY_CL_MARKING_RE],
+      depart:   [RWY_CL_MARKING_RE, /\bSID\b/],
     };
     // Mots-clés de CAUSE : ils disent ce qui se passe, pas OÙ. « MAINT » n'est
     // pas un lieu — on répare aussi bien un balisage qu'un TACAN ou un radar —
@@ -7449,6 +7539,11 @@ body .stat .k{
       const t = " " + e.toUpperCase() + " ", found = new Set();
       for (const c in FREETEXT_KEYWORDS)
         if (FREETEXT_KEYWORDS[c].some(k => t.includes(k))) found.add(c);
+      // Motifs (cf. FREETEXT_PATTERNS) : même rang que les mots-clés, ils
+      // s'ajoutent au même ensemble. Ils existent pour les sujets qu'une
+      // sous-chaîne ne sait pas isoler.
+      for (const c in FREETEXT_PATTERNS)
+        if (FREETEXT_PATTERNS[c].some(re => re.test(t))) found.add(c);
       return found;
     }
     function categoriesFromWeakText(e) {
