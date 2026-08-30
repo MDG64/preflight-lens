@@ -18166,8 +18166,48 @@ function renderInfo(icao) {
           { id: "road-minor", type: "line", source: "o", "source-layer": "transportation", minzoom: 8,
             filter: ["in", ["get", "class"], ["literal", ["primary", "secondary", "tertiary"]]],
             paint: { "line-color": road, "line-opacity": FB * FR, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .6, 14, 2] } },
-          { id: "aero-a", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "fill-color": C.dot, "fill-opacity": .45 * FB } },
-          { id: "aero-l", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "line-color": C.dot, "line-opacity": FB, "line-width": 1.2 } }
+          // Le terrain en cinq couches au lieu d'une. La version d'origine
+          // peignait TOUTE la couche aeroway avec un `fill` a 45 % et un
+          // `line` de 1,2 px, sans regarder la classe ; deux defauts s'y
+          // cumulaient des qu'on zoomait.
+          //   1. `fill-opacity` s'ACCUMULE d'un polygone a l'autre : emprise,
+          //      aires de trafic et seuils se recouvrent, chaque passage
+          //      eclaircit, et le couvert vegetal transparait dessous. Le
+          //      terrain virait a la tache pale marbree. Meme parade que pour
+          //      la couche d'eau : des surfaces OPAQUES obtenues par mix().
+          //   2. La piste et les bretelles etaient le MEME trait, a tous les
+          //      zooms. A z16 la piste — le seul objet du terrain qui serve a
+          //      decider — se confondait avec la douzaine de taxiways, et
+          //      restait un cheveu alors que la carte avait grossi.
+          // D'ou les largeurs en `exponential 2` sur le zoom : doubler par
+          // cran de zoom, c'est exactement une largeur CONSTANTE AU SOL.
+          // Passe z13 la piste est donc tracee a ses ~45 m reels et les
+          // bretelles a ~23 m — la carte cesse d'etre un schema.
+          // Les tuiles s'arretent a z14 : au-dela MapLibre sur-zoome, mais la
+          // geometrie reste vectorielle, donc nette. C'etait bien le style,
+          // pas la donnee, qui manquait de definition.
+          { id: "aero-ad", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10,
+            filter: ["==", ["get", "class"], "aerodrome"],
+            paint: { "fill-color": mix(C.land, C.dot, .16 * FB) } },
+          { id: "aero-ad-l", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10,
+            filter: ["==", ["get", "class"], "aerodrome"],
+            paint: { "line-color": mix(C.land, C.dot, .55 * FB), "line-width": ["interpolate", ["linear"], ["zoom"], 10, .6, 13, 1.1] } },
+          { id: "aero-ap", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 12,
+            filter: ["in", ["get", "class"], ["literal", ["apron", "helipad"]]],
+            paint: { "fill-color": mix(C.land, C.dot, .34 * FB) } },
+          { id: "aero-twy", type: "line", source: "o", "source-layer": "aeroway", minzoom: 12,
+            filter: ["==", ["get", "class"], "taxiway"],
+            paint: { "line-color": mix(C.land, C.dot, .44 * FB), "line-opacity": FB,
+                     "line-width": ["interpolate", ["exponential", 2], ["zoom"], 12, .5, 13, 1.3, 18, 42] } },
+          // Certains terrains portent la piste en polygone (LFPG), d'autres en
+          // ligne seule (LECO) : les deux sont peints, de la meme couleur.
+          { id: "aero-rwy-a", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10,
+            filter: ["==", ["get", "class"], "runway"],
+            paint: { "fill-color": mix(C.land, C.dot, .9 * FB) } },
+          { id: "aero-rwy", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10,
+            filter: ["==", ["get", "class"], "runway"],
+            paint: { "line-color": mix(C.land, C.dot, .9 * FB), "line-opacity": FB,
+                     "line-width": ["interpolate", ["exponential", 2], ["zoom"], 10, 1, 12, 2.2, 13, 3.4, 18, 109] } }
         );
       }
       return { version: 8, sources: { o: src }, layers: L };
