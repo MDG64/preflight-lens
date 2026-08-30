@@ -3200,8 +3200,8 @@ function syncPlanningFromDb(qOpt){
     cfg.flightTimeH = Math.max(0, Math.round(ms/360000)/10);
   }
   /* Lignes « two or more » de la planification (Tables 3 et 4) : la base
-     terrains sait si le terrain les mérite. Type B = CAT I/II/III, ou
-     LPV / LNAV-VNAV dont la DH effective est sous 250 ft ; il en faut sur
+     terrains sait si le terrain les mérite. Type B = CAT I/II/III, ou le
+     LPV 200 déclaré dont la DH relevée est sous 250 ft ; il en faut sur
      DEUX paires de pistes ouvertes distinctes. Type A « distinct navaids » =
      deux familles de moyens différentes (LOC, VOR, NDB, GNSS) parmi les
      approches disponibles. Les approches écartées par drapeau NOTAM et les
@@ -3218,7 +3218,11 @@ function syncPlanningFromDb(qOpt){
           if (nfApproachOut(icao, end, t)) continue;
           if (["CAT_III","CAT_II","CAT_I"].includes(t)) hasB = true;
           else if (["LPV","LNAV_VNAV"].includes(t)){
-            const eff = adEffMinima(icao, end, t);
+            /* Même critère que le classement de la phase : seul le LPV 200
+               déclaré (bloc FAS, VAL <= 35 m) rejoint les CAT I. Un Baro-VNAV
+               n'y descend jamais, et un LPV sans bloc FAS non plus — la DH lue
+               sur la fiche ne suffit pas à le classer Type B. */
+            const eff = (t==="LPV" && hasFasBlock(cfg)) ? adEffMinima(icao, end, t) : null;
             if (eff && eff.dh.v!=null && eff.dh.v<250) hasB = true;
             else typeAFams.add("GNSS");
           }
@@ -3305,7 +3309,7 @@ function adStdMinima(id){
   /* Même garde que le moteur : sans bloc FAS publié, le minimum système d'un
      LPV est 250 ft. La case proposait 200 — un LPV 200 que rien n'atteste, et
      qui suffisait à faire passer l'approche pour une Type B. */
-  const dh = (t.fac==="GNSS_SBAS_LPV" && !isLpv200(cfg)) ? 250 : DS.easa.dh.t4[t.fac];
+  const dh = (t.fac==="GNSS_SBAS_LPV" && !hasFasBlock(cfg)) ? 250 : DS.easa.dh.t4[t.fac];
   if (dh==null) return null;
   const t9row = DS.easa.rvr.t9.find(r=>dh>=r[0] && dh<=r[1]);
   const t9 = t9row ? t9row[2][0] : null;
@@ -5548,9 +5552,17 @@ function toAltDistanceRule(cfg){
    données FAS publié dont la VAL ne dépasse pas 35 m — c'est cette condition,
    et elle seule, qui autorise la DH à 200 ft (AMC3 CAT.OP.MPA.110, Table 4).
    Une seule définition pour tout le fichier : le minimum système du moteur, le
-   standard proposé par la fiche et le classement Type A/B la lisent ici. */
+   standard proposé par la fiche et le classement Type A/B la lisent ici.
+   DEUX PORTES, parce que le type d'approche ne se lit pas toujours au même
+   endroit : `hasFasBlock` ne juge que le bloc FAS, pour les appelants qui
+   tiennent déjà le LPV par ailleurs (la fiche, la base terrains) ; `isLpv200`
+   y ajoute la vérification du moyen pour ceux qui n'ont que la configuration
+   en main. */
+function hasFasBlock(cfg){
+  return !!cfg && cfg.fasValM!=null && cfg.fasValM<=35;
+}
 function isLpv200(cfg){
-  return !!cfg && cfg.facility==="GNSS_SBAS_LPV" && cfg.fasValM!=null && cfg.fasValM<=35;
+  return !!cfg && cfg.facility==="GNSS_SBAS_LPV" && hasFasBlock(cfg);
 }
 /* Type A ou Type B : la frontière est la HAUTEUR, pas le moyen (Annexe I des
    définitions, CAT.OP.MPA.110) — Type A = MDH/DH à 250 ft ou plus, Type B en
@@ -5969,21 +5981,28 @@ function assess(role, ctx){
       /* Destination : pas d'incrément, mais le plafond N'EST PAS toujours
          absent — même règle que le dégagement au décollage (lignée EU-OPS
          1.297 Table 1, reprise par les AMC de CAT.OP.MPA.182) : pour une
-         approche Type A (MDH/DH ≥ 250 ft — LNAV, VNAV/LNAV à DA ≥ 250, VOR…)
-         ou un circling, le plafond prévu doit atteindre la MDH/DH. Une
-         Type B (CAT I à DH 200, LPV à 200…) reste jugée sur la seule
-         RVR/visibilité. */
+         approche Type A (LNAV, VNAV/LNAV, LPV sans bloc FAS, VOR…) ou un
+         circling, le plafond prévu doit atteindre la MDH/DH. Seule une Type B
+         — CAT I/II/III et le LPV 200 déclaré, sous 250 ft — reste jugée sur la
+         seule RVR/visibilité. */
       const destTypeA = isDest && isTypeAOrCircling(cfg, appUse);
       ceilReq = isDest
         ? (appUse.circling ? appUse.ceilingRequired
            : destTypeA ? (appUse.dh || null) : null)
         : ceilBase + (inc.ceil||0);
+      /* Type A sans DH dérivable : le critère existe, le chiffre manque. Le
+         taire laisserait la phase se juger sur la seule visibilité sans que
+         rien ne le dise — la case plafond est saisissable, encore faut-il
+         savoir qu'il faut la remplir. */
+      if (isDest && destTypeA && ceilReq==null)
+        push({severity:"CAUTION", code:"CEIL_REQ_UNDERIVED",
+          message:"Type A approach: the forecast ceiling must be at or above the MDH/DH, but no DH could be derived for this approach. Read the MDH/DH on the chart in force and type it into the Ceiling box — until then the phase is judged on visibility alone."});
       planRef = isDest ? "CAT.OP.MPA.182 / .185" : `${DS.easa.planning.ref} — ${inc.label}`;
       planText = isDest
         ? `At destination the forecast must be at or above the applicable landing minima within ETA ±1 h. Planning increments apply to alternates, not to the destination itself. ${
             appUse.circling ? "Circling: the ceiling must also be at or above the circling MDH."
-            : destTypeA ? `Type A approach (MDH/DH at or above 250 ft): the ceiling must also be at or above the MDH/DH — ${appUse.dh} ft here.`
-            : "Type B approach (DH below 250 ft): RVR/VIS only — no ceiling criterion."}`
+            : destTypeA ? `Type A approach: the ceiling must also be at or above the MDH/DH${appUse.dh!=null?` — ${appUse.dh} ft here`:", and none could be derived here — read it on the chart and type it in"}.`
+            : "Type B approach (CAT I, II, III or a declared LPV 200, DH below 250 ft): RVR/VIS only — no ceiling criterion."}`
         : `Planning minima = landing minima + ${inc.ceil} ft ceiling / +${inc.vis} m visibility (${inc.label}, ${(PLANNING_SCHEME_NAME[schemeUsed]||PLANNING_SCHEME_NAME.BASIC).t}).`;
       /* Un schéma abaissé ne passe pas en silence : il vaut par l'approbation
          de l'exploitant, pas par le clic qui l'a choisi. Le drapeau chiffre ce
@@ -6923,8 +6942,8 @@ function phaseRuleCards(role, r){
        et réciproquement. */
     add("Ceiling — which cases require one", isToAlt ? `CAT.OP.MPA.110 · ${DS.easa.takeoffAlternate.ref}` : "CAT.OP.MPA.110 · AMC1 CAT.OP.MPA.182",
       rulesList([
-        {t:"Type B approach (DH below 250 ft — CAT I, II, III, and an APV flown to a DH under 250 ft): RVR alone. NO ceiling requirement for a straight-in approach.", on:!typeA},
-        {t:"Type A approach (MDH/DH at or above 250 ft — 2D/NPA, and APV at 250 ft or more): straight-in minima are DH/MDH + RVR; the ceiling is not a criterion of the approach itself either.", on:typeA && !app.circling},
+        {t:"Type B approach (DH below 250 ft — CAT I, II, III, and the LPV 200 that stands with them: published FAS data block with VAL 35 m or less): RVR alone. NO ceiling requirement for a straight-in approach.", on:!typeA},
+        {t:"Type A approach (everything the Type B list does not name — 2D/NPA, LNAV/VNAV, LPV without a published FAS data block, and a CAT I raised to 250 ft or more by its OCH): straight-in minima are DH/MDH + RVR; the ceiling is not a criterion of the approach itself either. A DH lowered by a company approval or typed by hand does not turn it into a Type B.", on:typeA && !app.circling},
         {t:"Circling: the MDH IS the ceiling required — the manoeuvre is flown in sight of the aerodrome.", on:!!app.circling},
         isToAlt
           ? {t:"Here, on the take-off alternate: ceiling at or above MDH when the approach is Type A or a circling manoeuvre; a Type B approach requires none.", on:true}
