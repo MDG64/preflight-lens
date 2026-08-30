@@ -12566,6 +12566,39 @@ mjBoot();
    directement dessus, par-dessus l'exemple déjà rendu. */
 RTV.boot();
 
+/* ---------- ?ad=LFBO — entrer sur la fiche terrain, dépliée ----------
+   Le troisième contrat d'URL de cette page, après la route (?dep&dest&altn)
+   et la vue de retour (?view=). Il vise le panneau « Airfield database »,
+   c'est-à-dire l'endroit où les minima proposés par une carte se valident
+   d'un clic sur Record.
+
+   C'est le lien que pose la liste « to verify » de l'accueil de Preflight
+   Lens : sans lui, elle nommerait des terrains sans pouvoir y conduire, et
+   il faudrait retaper le code à la main pour chacun.
+
+   On ne passe PAS par mOpen() : celui-ci vide les relevés, relance un fetch
+   météo et remet l'état mobile à zéro. Ici on ne vient pas voler, on vient
+   valider — le strict nécessaire suffit, et rien de ce qui était affiché
+   n'a besoin d'être jeté. */
+try {
+  const adWanted = (new URLSearchParams(location.search).get("ad") || "").trim().toUpperCase();
+  if (/^[A-Z]{4}$/.test(adWanted)) {
+    const el = document.getElementById("icao");
+    if (el) el.value = adWanted;
+    refreshAdPanel(true);
+    renderFavBar();
+    const panel = document.getElementById("adPanel");
+    if (panel) {
+      panel.open = true;
+      /* Au tour suivant : le panneau vient d'être réécrit, sa hauteur n'est
+         pas encore connue et le défilement viserait à côté. */
+      requestAnimationFrame(() => {
+        try { panel.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {}
+      });
+    }
+  }
+} catch (e) { /* adresse difforme : la page s'ouvre normalement */ }
+
 /* Le service worker de l'HÔTE (sw.js, clé notam-filter-*) : cette page est
    pré-cachée avec ses deux bases, elle doit donc s'ouvrir en vol même si le
    pilote n'est jamais passé par l'accueil. L'échec reste bruyant, comme dans

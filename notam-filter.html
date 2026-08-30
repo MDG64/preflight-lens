@@ -5323,9 +5323,53 @@ body.light .stat.on {
       color: var(--muted)
     }
 
-    .fiches-note b {
+    .fiches-note b,
+    .verif-note b {
       color: var(--amber);
       font-weight: 600
+    }
+
+    /* Les terrains à valider. Même famille visuelle que la note ci-dessus —
+       elles disent deux moments du même travail : lire la carte, puis
+       valider ce qu'elle a livré. */
+    .verif-note {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--amber);
+      border-radius: 10px;
+      background: var(--bg2);
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--muted)
+    }
+
+    .verif-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px
+    }
+
+    /* Une cible au pouce : ces puces se cliquent sur téléphone, debout, entre
+       deux vols. 34 px de haut, jamais moins. */
+    .verif-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 11px;
+      border: 1px solid var(--line2);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .08em;
+      text-decoration: none
+    }
+
+    .verif-chip:hover {
+      border-color: var(--amber);
+      color: var(--amber)
     }
 
     /* Sans cadre depuis le 19 aout 2026 : plus de fond, de liseré ni d'ombre
@@ -6601,6 +6645,11 @@ body .stat .k{
            Reste `hidden` par défaut : un appareil sans certificat ne
            l'affiche jamais, et le compte à zéro non plus. -->
       <p class="fiches-note" id="fichesNote" hidden></p>
+
+      <!-- Les terrains dont une carte a livré ses minima sans que personne
+           les ait encore validés. Chaque puce mène au panneau qui les
+           valide (minima.html?ad=…). Même règle que suivi.html. -->
+      <div class="verif-note" id="verifNote" hidden></div>
     </div>
   </div>
 
@@ -21475,12 +21524,102 @@ window.addEventListener("scroll", hidePop, true);
         el.hidden = false;
       } catch { /* hors ligne, certificat révoqué : on se tait */ }
     }
-    majFichesEnAttente();
-    /* Le compte bouge pendant que l'app est au second plan — on photographie,
-       le PC tire, on traite. Le retour à l'écran est le bon moment pour
-       redemander, et le seul qui ne coûte rien quand personne ne regarde. */
+    /* ============================================================
+       Les terrains dont une carte a livré ses minima sans que personne les
+       ait encore validés — l'étape d'APRÈS la lecture des fiches.
+
+       MÊME RÈGLE QUE suivi.html, et ce n'est pas un hasard : une série est
+       proposée quand la graine porte `n[piste][type]` avec au moins une
+       valeur qui n'est pas « NA » (une case interdite n'attend aucune
+       validation, il n'y a rien à valider) ; elle est validée quand le
+       journal en porte un `verified` ou un `verifiedBy[catégorie]` chiffré.
+       Deux pages qui répondraient différemment à « reste-t-il du travail »
+       ne se consulteraient plus.
+
+       LA GRAINE N'ARRIVE QUE POUR L'EXPLOITANT. Elle pèse 1,6 Mo et cette
+       page ne la charge pas au démarrage, à dessein. On ne défait pas ce
+       choix : elle n'est demandée qu'ici, après le certificat, sur
+       l'appareil qui s'en sert déjà dans Minima — le service worker l'a donc
+       en cache, et le chargement est local.
+
+       Le journal du proxy fait foi plutôt que le stockage local : la
+       validation peut avoir eu lieu sur un autre appareil, et l'annoncer
+       « à valider » ferait refaire du travail déjà fait.
+       ============================================================ */
+    function grainePrete() {
+      if (window.AD_SEED) return Promise.resolve(true);
+      return new Promise((ok) => {
+        const s = document.createElement("script");
+        s.src = "./airfield-seed.js";
+        s.onload = () => ok(!!window.AD_SEED);
+        s.onerror = () => ok(false);
+        document.head.appendChild(s);
+      });
+    }
+
+    function estValide(stats, cle) {
+      const s = stats[cle];
+      if (!s) return false;
+      const v = [s.verified];
+      for (const k in (s.verifiedBy || {})) v.push(s.verifiedBy[k]);
+      return v.some(x => x && (Number.isFinite(x.dh) || Number.isFinite(x.rvr)));
+    }
+
+    async function majTerrainsAValider() {
+      const el = $("#verifNote");
+      if (!el) return;
+      let cert = "";
+      try { cert = localStorage.getItem("wl-terrains-cert") || ""; } catch { return; }
+      if (!cert) return;
+
+      let stats = null;
+      try {
+        const r = await fetch(BACKEND_URL + "/api/minima", { headers: { "X-Terrains-Cert": cert } });
+        if (r.ok) { const o = await r.json(); stats = o && o.stats; }
+      } catch { /* hors ligne : le stockage local dira ce qu'il sait */ }
+      if (!stats) {
+        try { stats = JSON.parse(localStorage.getItem("wl-airfield-minima-stats") || "{}"); }
+        catch { return; }
+      }
+
+      if (!await grainePrete()) return;
+      const seed = window.AD_SEED || {};
+      const aValider = [];
+      for (const icao in seed) {
+        const n = seed[icao] && seed[icao].n;
+        if (!n) continue;
+        let reste = false;
+        for (const end in n) {
+          for (const type in n[end]) {
+            const cats = n[end][type];
+            let propose = false;
+            for (const c in cats) if (cats[c] !== "NA") { propose = true; break; }
+            if (propose && !estValide(stats, icao + "|" + end + "|" + type)) { reste = true; break; }
+          }
+          if (reste) break;
+        }
+        if (reste) aValider.push(icao);
+      }
+      if (!aValider.length) { el.hidden = true; return; }
+      aValider.sort();
+
+      const n = aValider.length;
+      el.innerHTML = "<b>" + n + "</b> airfield" + (n > 1 ? "s" : "")
+        + " with chart minima to verify — open one to press Record."
+        + '<div class="verif-chips">'
+        + aValider.map(i => '<a class="verif-chip" href="./minima.html?ad=' + i + '">' + i + "</a>").join("")
+        + "</div>";
+      el.hidden = false;
+    }
+
+    function majAtelier() { majFichesEnAttente(); majTerrainsAValider(); }
+    majAtelier();
+    /* Les deux comptes bougent pendant que l'app est au second plan — on
+       photographie, le PC tire, on traite, on valide dans Minima et on
+       revient. Le retour à l'écran est le bon moment pour redemander, et le
+       seul qui ne coûte rien quand personne ne regarde. */
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) majFichesEnAttente();
+      if (!document.hidden) majAtelier();
     });
 
     /* Retour du module Minimas : LE MÊME contrat, dans l'autre sens. La page
