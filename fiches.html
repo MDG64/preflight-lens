@@ -113,6 +113,10 @@
   .succes { color: var(--ok); font-size: 17px; font-weight: 600; }
   .erreur { background: #3a1f1f; border: 1px solid var(--alerte); border-radius: 10px; padding: 12px; font-size: 14px; line-height: 1.4; display: none; }
   .erreur.actif { display: block; }
+  /* Deux phrases dans la même carte (l'état du certificat et la consigne
+     d'enrôlement) se collaient l'une à l'autre et se lisaient comme un seul
+     paragraphe. */
+  .carte > p + p { margin-top: 10px; }
   ul.journal { list-style: none; font-size: 13px; color: var(--sourd); display: flex; flex-direction: column; gap: 4px; }
   ul.journal li::before { content: '✓ '; color: var(--ok); }
   footer { text-align: center; color: var(--sourd); font-size: 12px; padding-top: 12px; }
@@ -129,8 +133,15 @@
 
   <!-- Première ouverture : le jeton, saisi une fois. -->
   <section class="ecran" id="ecran-config">
+    <!-- Cet écran sert DEUX fois : à l'enrôlement, et chaque fois qu'on
+         ouvre ⚙. Un appareil déjà certifié qui relisait « cet appareil doit
+         être certifié » avait toutes les raisons de croire qu'il ne l'était
+         plus. On lui dit donc ce qu'il en est — et on le demande au serveur,
+         parce que c'est lui seul qui sait si le certificat vaut encore. -->
     <div class="carte">
-      <p class="note">Cet appareil doit être <b>certifié</b> une fois. Donne-lui un
+      <p class="succes" id="cfg-certifie" hidden></p>
+      <p class="note" id="cfg-etat" hidden></p>
+      <p class="note" id="cfg-enrolement">Cet appareil doit être <b>certifié</b> une fois. Donne-lui un
       nom, colle le <b>code d'enrôlement</b>, et le serveur lui délivre son propre
       certificat. Le code ne sert que là : ensuite, cet appareil a le sien, et il
       se révoque tout seul depuis Minima Lens si tu le perds.</p>
@@ -150,6 +161,7 @@
     <div class="erreur" id="err-config"></div>
     <div class="pile">
       <button class="principal" id="btn-config">Certifier cet appareil</button>
+      <button class="discret" id="btn-retour" hidden>← Retour</button>
     </div>
   </section>
 
@@ -238,12 +250,13 @@ function erreur(id, msg) {
 
 /* ---------- démarrage ---------- */
 function demarrer() {
-  $('pied').textContent = 'v3.1 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'non certifié')
+  $('pied').textContent = 'v3.2 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'non certifié')
     + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   // Le serveur par défaut se montre dès la première ouverture : un champ
   // vide faisait croire qu'il y avait quelque chose à trouver soi-même.
   $('cfg-serveur').value = CFG.serveur;
   montrer(CFG.cert ? 'ecran-principal' : 'ecran-config');
+  if (!CFG.cert) etatCertificat();
   majAttente();
   viderFile();
 }
@@ -367,7 +380,61 @@ $('btn-reglages').onclick = () => {
   $('cfg-jeton').value = '';
   $('cfg-serveur').value = CFG.serveur;
   montrer('ecran-config');
+  etatCertificat();
 };
+$('btn-retour').onclick = () => montrer('ecran-principal');
+
+/* ---------- ce que cet écran dit de l'appareil ----------
+   Trois états, et un seul est une invitation à taper un code :
+     - pas de certificat → la consigne d'enrôlement, comme avant ;
+     - certificat, et le serveur le reconnaît → on le CONFIRME, avec le nom
+       sous lequel il est inscrit : plus personne ne recertifie par doute ;
+     - certificat, mais refusé → on le dit franchement, parce que c'est
+       exactement le cas où les photos partent dans le vide.
+   Le serveur est la seule source qui vaille : un certificat rangé ici peut
+   avoir été révoqué depuis, et rien dans le téléphone ne le sait. */
+function etatCertificat() {
+  const certifie = $('cfg-certifie'), etat = $('cfg-etat'), enrolement = $('cfg-enrolement');
+  const nomLocal = CFG.nom || 'cet appareil';
+  enrolement.hidden = !!CFG.cert;
+  $('btn-retour').hidden = !CFG.cert;
+  $('btn-config').textContent = CFG.cert ? 'Recertifier cet appareil' : 'Certifier cet appareil';
+  if (!CFG.cert) { certifie.hidden = true; etat.hidden = true; return; }
+  certifie.hidden = false;
+  certifie.textContent = '✓ Cet appareil est certifié';
+  etat.hidden = false;
+  etat.className = 'note';
+  etat.textContent = 'Inscrit sous le nom « ' + nomLocal + ' ». Vérification auprès du serveur…';
+  fetch(CFG.serveur + '/api/appareils', { headers: entetes() }).then(async r => {
+    const o = await r.json().catch(() => ({}));
+    /* Un 403 ne veut pas toujours dire « révoqué » : le proxy refuse aussi
+       les origines qu'il ne connaît pas, avec le même code. Seul le motif
+       distingue les deux, et accuser à tort un certificat sain enverrait
+       recertifier pour rien. */
+    if (r.status === 403 && /certifi/i.test(o.error || '')) {
+      certifie.hidden = true;
+      enrolement.hidden = false;
+      etat.className = 'erreur actif';
+      etat.textContent = '⚠ Le serveur ne reconnaît plus ce certificat — révoqué, ou registre'
+        + ' refait. Les fiches envoyées ne partiraient nulle part : recertifie cet appareil'
+        + ' avec le code d\'enrôlement.';
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status + (o.error ? ' — ' + o.error : ''));
+    const moi = (o.appareils || []).find(a => a.id === o.moi);
+    if (moi && moi.nom !== CFG.nom) CFG.nom = moi.nom;   // le registre fait foi
+    etat.textContent = 'Le serveur le reconnaît sous le nom « ' + ((moi && moi.nom) || nomLocal)
+      + ' » — rien à faire ici. ' + (o.appareils || []).length + ' appareil(s) certifié(s) sur '
+      + o.plafond + '.';
+    $('pied').textContent = 'v3.2 · ' + (CFG.nom || 'appareil certifié')
+      + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
+  }).catch(() => {
+    /* Injoignable n'est pas révoqué : on ne fait pas peur pour un Wi-Fi
+       absent, et on ne rassure pas non plus tout à fait. */
+    etat.textContent = 'Inscrit sous le nom « ' + nomLocal + ' ». Serveur injoignable pour'
+      + ' l\'instant — impossible de confirmer maintenant, réessaie une fois le réseau revenu.';
+  });
+}
 
 /* ---------- prise de vue et confirmation ---------- */
 let photo = null;     // le Blob en attente d'envoi
