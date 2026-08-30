@@ -46,6 +46,12 @@ const ASSETS = [
   // règle 3 les sert « réseau d'abord », comme l'annuaire — le pré-cache ne
   // fige rien, il garantit seulement le premier lancement hors ligne.
   "./minima.html", "./airfield-seed.js", "./aircraft-db.js",
+  // La liste des manœuvres (2026-08-30), lue par le module minima ET par le
+  // suivi. Elle ne se régénère pas comme les bases : c'est du code, elle suit
+  // donc l'app. Sans elle, la fiche terrain n'affiche plus ni circling ni
+  // sidestep, et le suivi ne les compte plus — les deux pages en dépendent
+  // désormais, et le pré-cache doit les servir ensemble hors ligne.
+  "./manoeuvres.js",
   // Le suivi de la base : il lit le journal partage quand il le peut, et sa
   // derniere copie connue sinon -- encore faut-il que la PAGE soit la. Sans
   // ce pre-cache, hors ligne on n'aurait meme pas l'ecran pour le dire.

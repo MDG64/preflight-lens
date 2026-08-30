@@ -2713,6 +2713,10 @@ body.mobile #rtOv:not([hidden]){display:flex}
      l'app fonctionne sur ses replis internes. -->
 <script src="airfield-seed.js"></script>
 <script src="aircraft-db.js"></script>
+<!-- La liste des manœuvres, partagée avec la page de suivi : elles doivent
+     énumérer exactement les mêmes lignes, sans quoi un terrain se lit complet
+     avec du travail en attente. Voir l'en-tête de manoeuvres.js. -->
+<script src="manoeuvres.js"></script>
 <script>
 /* =====================================================================
    WEATHER LENS — reference dataset (weatherlens-minima-reference v1.0.0)
@@ -3099,29 +3103,15 @@ const AD_APP_TYPES = [
   {id:"VOR",       label:"VOR", fac:"VOR", np:true},
   {id:"NDB_DME",   label:"NDB / DME", fac:"NDB_DME", np:true},
   {id:"NDB",       label:"NDB", fac:"NDB", np:true},
-  /* Le circling suit la piste de SA carte — la manœuvre se commence au terme
-     de l'approche de cette piste, et c'est cette carte-là qui publie ses
-     minima. Mais ce n'est pas une approche : `noRwy` l'écarte des listes où
-     l'on choisit une approche POUR une piste, où il serait un contresens. */
-  {id:"CIRCLING",  label:"Circling", noRwy:true},
-  /* Le sidestep est une manœuvre lui aussi, et il suit la même règle que le
-     circling : il reste sous la piste de SA carte. On se pose sur l'autre
-     extrémité, mais c'est l'approche publiée ici qui autorise la manœuvre et
-     qui en chiffre les minima. `noRwy` l'écarte donc des mêmes listes.
-     Aucune table réglementaire ne lui donne de standard — adStdMinima le
-     laisse tomber faute de `fac`, et c'est voulu : seule la carte chiffre.
-     La piste d'atterrissage n'est pas dans l'identifiant mais dans `s` de la
-     graine, parce qu'elle change d'une carte à l'autre ; la ligne l'affiche
-     à côté du libellé, sans quoi « Sidestep » ne dirait pas où l'on se pose. */
-  {id:"SIDESTEP",  label:"Sidestep", noRwy:true},
-  /* Le circling à tracé prescrit est une AUTRE manœuvre, pas une variante
-     d'écriture du circling : la carte impose un tracé au lieu de laisser
-     manœuvrer à vue, souvent de jour seulement, et publie pour lui ses
-     propres minima — 1170 ft à La Corogne, 1830 à Pampelune, là où la table
-     de circling tiendrait dans 600. D'où sa ligne à part, et surtout aucun
-     standard : la table des catégories chiffre le circling ordinaire, pas
-     celui-là. adStdMinima le laisse donc tomber, comme le sidestep. */
-  {id:"CIRCLING_P_TRK", label:"Circling — prescribed tracks", noRwy:true},
+  /* LES MANŒUVRES — circling, sidestep, circling à tracé prescrit — viennent
+     de manoeuvres.js, qui les décrit une fois pour cette fiche ET pour la page
+     de suivi : les deux doivent énumérer exactement les mêmes lignes. Ce qui
+     vaut pour toutes se pose ici, une fois : ce ne sont pas des approches, donc
+     `noRwy` les écarte des listes où l'on choisit une approche POUR une piste,
+     où elles seraient un contresens ; et aucune n'a de `fac`, donc adStdMinima
+     les laisse tomber — seule la carte les chiffre. Le pourquoi de chacune est
+     écrit à côté de sa définition, dans manoeuvres.js. */
+  ...AD_MANOEUVRES.map(m=>({id:m.id, label:m.label, noRwy:true})),
   /* RNP AR — autorisation requise. Précision de navigation portée à
      0,30 NM, trajectoires courbes au plus près du relief : c'est ce qui
      rend praticables des terrains encaissés comme Nice 22 ou Marseille 31.
@@ -3854,7 +3844,9 @@ function dirResolve(query){
    permettent. La graine range ces lignes sous cette extrémité-là, qu'aucun
    `rec.runways` ne portera jamais ; elles se relèvent, se valident et se
    lisent comme les autres, sous cette clé. */
-const AD_END_AD = "-";
+/* L'extrémité des cartes qui ne nomment aucune piste. Définie dans
+   manoeuvres.js, avec les lignes qui s'y rangent — le suivi lit la même. */
+const AD_END_AD = window.AD_END_AD;
 function adStatList(icao, end, type){ return adStats[icao+"|"+end+"|"+type] || null; }
 function adRecordMinima(icao, end, type, dh, rvr){
   const k = icao+"|"+end+"|"+type;
@@ -10763,45 +10755,36 @@ function refreshAdPanel(force){
        supprimer la mauvaise approche. */
     ((rec.approaches && rec.approaches[end])||[])
       .forEach((type,i)=>{ if (visible(type)) appRows.push({end,type,i}); });
-    /* Le circling ferme les lignes de SA piste : la manœuvre se commence au
+    /* LES MANŒUVRES ferment les lignes de LEUR piste : chacune se commence au
        terme de l'approche de cette piste, et c'est cette carte-là qui publie
-       ses minima. Il n'apparaît que là où une carte les a livrés — ou là où
-       une valeur a déjà été validée, sans quoi la retirer serait impossible. */
-    if (adChartMinima(icao, end, "CIRCLING") || (adStatList(icao, end, "CIRCLING")||{}).verified)
-      appRows.push({end, type:"CIRCLING", i:"c", circ:true});
-    /* Le sidestep ferme les lignes de sa piste au même titre, et pour la même
-       raison. Son libellé porte la piste où l'on se pose, lue dans `s` de la
-       graine : « Sidestep » seul ne dirait pas l'essentiel. Faute de cible
-       publiée, on garde le mot nu plutôt que de taire la ligne. */
-    if (adChartMinima(icao, end, "SIDESTEP") || (adStatList(icao, end, "SIDESTEP")||{}).verified){
-      const vers = (((window.AD_SEED || {})[icao] || {}).s || {})[end];
-      appRows.push({end, type:"SIDESTEP", i:"s", circ:true,
-                    lbl: vers ? `Sidestep ${vers}` : "Sidestep"});
-    }
-    /* Le circling à tracé prescrit ferme les lignes de sa piste au même titre.
-       Il ne remplace pas le circling ordinaire quand les deux sont publiés :
-       ce sont deux manœuvres différentes, aux minima différents, et le pilote
-       choisit celle qu'il vole. */
-    if (adChartMinima(icao, end, "CIRCLING_P_TRK") || (adStatList(icao, end, "CIRCLING_P_TRK")||{}).verified)
-      appRows.push({end, type:"CIRCLING_P_TRK", i:"p", circ:true,
-                    lbl:"Circling — prescribed tracks"});
+       ses minima. Aucune ne remplace l'autre quand plusieurs sont publiées —
+       ce sont des manœuvres différentes, aux minima différents, et le pilote
+       choisit celle qu'il vole. Elles n'apparaissent que là où une carte les a
+       livrées — ou là où une valeur a déjà été validée, sans quoi la retirer
+       serait impossible. La liste vient de manoeuvres.js : c'est elle, et
+       elle seule, que la page de suivi énumère aussi. */
+    AD_MANOEUVRES.forEach(m=>{
+      if (adChartMinima(icao, end, m.id) || (adStatList(icao, end, m.id)||{}).verified)
+        appRows.push({end, type:m.id, i:m.i, circ:true,
+                      lbl:adManoeuvreLabel(m, icao, end)});
+    });
   });
-  /* Puis LE CIRCLING DU TERRAIN, s'il y en a un — voir AD_END_AD. Il vient en
-     dernier parce qu'il est le repli : le circling d'une piste donnée reste la
-     valeur la plus proche de ce qu'on vole. Sans cette ligne, ce qu'une carte
-     de circling pur publie était compilé dans la graine, compté « à valider »
-     par l'atelier, et invalidable à jamais — la fiche ne montrant que les
-     extrémités réelles, aucun Record ne pouvait le porter au journal. */
-  if (adChartMinima(icao, AD_END_AD, "CIRCLING")
-      || (adStatList(icao, AD_END_AD, "CIRCLING")||{}).verified)
-    appRows.push({end:AD_END_AD, type:"CIRCLING", i:"c", circ:true, ad:true});
-  /* Et le tracé prescrit d'une carte sans piste — Albacete en publie un. Même
-     raison que ci-dessus : sans cette ligne, la valeur était compilée, comptée
-     à valider, et invalidable à jamais. */
-  if (adChartMinima(icao, AD_END_AD, "CIRCLING_P_TRK")
-      || (adStatList(icao, AD_END_AD, "CIRCLING_P_TRK")||{}).verified)
-    appRows.push({end:AD_END_AD, type:"CIRCLING_P_TRK", i:"p", circ:true, ad:true,
-                  lbl:"Circling — prescribed tracks, aerodrome"});
+  /* Puis LES MANŒUVRES DU TERRAIN, celles qu'une carte sans piste publie —
+     voir AD_END_AD. Elles viennent en dernier parce qu'elles sont le repli :
+     la manœuvre d'une piste donnée reste la valeur la plus proche de ce qu'on
+     vole. Sans ces lignes, ce qu'une carte de circling pur — ou de tracé
+     prescrit, comme à Albacete — publie était compilé dans la graine, compté
+     « à valider » par l'atelier, et invalidable à jamais : la fiche ne montrant
+     que les extrémités réelles, aucun Record ne pouvait le porter au journal.
+     Aucune manœuvre n'est écartée d'avance : ce que la graine range sous « - »
+     s'affiche, fût-ce sous un nom fabriqué. Taire une ligne faute de l'avoir
+     prévue est précisément la panne qu'on répare. */
+  AD_MANOEUVRES.forEach(m=>{
+    if (adChartMinima(icao, AD_END_AD, m.id)
+        || (adStatList(icao, AD_END_AD, m.id)||{}).verified)
+      appRows.push({end:AD_END_AD, type:m.id, i:m.i, circ:true, ad:true,
+                    lbl:adManoeuvreLabel(m, icao, AD_END_AD, true)});
+  });
   const typeOpts = sel => AD_APP_TYPES.filter(t=>(!t.noRwy||t.id===sel) && (!t.ar||cfg.rnpArApproved||t.id===sel))
     .map(t=>`<option value="${t.id}" ${t.id===sel?"selected":""}>${t.label}</option>`).join("");
   const cnt = list => { const n={}; (list||[]).forEach(v=>{n[v]=(n[v]||0)+1;});
@@ -10842,7 +10825,12 @@ function refreshAdPanel(force){
     const endLbl = a.ad
       ? `<span title="Published by a circling-only chart — its title names no runway. These minima govern the manoeuvre whatever runway you land on, unless the chart of the selected runway publishes a circling line of its own.">AD</span>`
       : a.end;
-    const circLbl = a.lbl || (a.ad ? "Circling — aerodrome" : a.circ ? "Circling" : null);
+    /* Une manœuvre porte son libellé, fabriqué par adManoeuvreLabel ; une
+       approche n'en a pas et prend le sélecteur de type. Les replis d'avant
+       — « Circling », « Circling — aerodrome » écrits ici — ont disparu avec
+       la liste unique : deux endroits qui nomment la même ligne finissent par
+       la nommer différemment. */
+    const circLbl = a.lbl || null;
     /* Une opération que la carte interdit ne se propose pas, ne se valide
        pas et n'affiche aucun standard : la ligne dit non, et c'est tout. */
     if (adChartInterdit(icao, a.end, a.type)) return `<tr>

@@ -105,6 +105,9 @@ code{font-family:var(--mono);font-size:12px}
 <footer id="pied"></footer>
 
 <script src="airfield-seed.js"></script>
+<!-- La liste des manœuvres, partagée avec la fiche terrain de Minima Lens :
+     cette page doit compter exactement les lignes que la fiche propose. -->
+<script src="manoeuvres.js"></script>
 <script>
 "use strict";
 
@@ -114,12 +117,11 @@ var LABEL = {
   CAT_III:"ILS CAT III", CAT_II:"ILS CAT II", CAT_I:"ILS / GLS / MLS CAT I",
   LPV:"RNP — LPV", LNAV_VNAV:"RNP — LNAV/VNAV", LNAV:"RNP — LNAV", LP:"RNP — LP",
   LOC:"LOC", VOR_DME:"VOR / DME", VOR:"VOR", NDB_DME:"NDB / DME", NDB:"NDB",
-  RNP_AR:"RNP AR — RNP 0.30", CIRCLING:"Circling",
-  CIRCLING_P_TRK:"Circling — prescribed tracks",
-  /* Repli seul : une ligne de sidestep porte son propre libellé, piste
-     d'atterrissage comprise. Ce nom-ci ne sert qu'aux graines qui ne
-     nomment pas la cible. */
-  SIDESTEP:"Sidestep"
+  RNP_AR:"RNP AR — RNP 0.30"
+  /* Les MANŒUVRES ne sont pas ici : leur nom vient de manoeuvres.js, avec le
+     reste de ce qu'il faut savoir d'elles — et il porte la piste où l'on se
+     pose quand elle diffère. Les recopier ici ferait deux tables à tenir, ce
+     qui est exactement ce qui a laissé le sidestep sans nom et sans compte. */
 };
 var STATS_KEY = "wl-airfield-minima-stats";
 /* ---- d'où viennent les chiffres ----
@@ -246,43 +248,38 @@ function calcul(){
     for (var i = 0; i < par[cc].length; i++){
       var t = par[cc][i];
       var a = SEED[t.icao].a, nc = SEED[t.icao].n, lignes = [], ok = 0, att = 0;
-      /* Les extrémités de la graine, PLUS « - » quand une carte de circling
-         pur y a livré ses minima — « RNP A », « LOC A », un NDB dont le titre
-         ne nomme aucune piste. Ces cartes publient pour le terrain entier ;
-         Minima Lens leur donne la ligne « Circling — aerodrome », et le suivi
-         doit la compter comme les autres, sans quoi elle reste du travail à
-         faire que cette page ne sait pas montrer. */
+      /* Les extrémités de la graine, PLUS « - » quand une carte sans piste y a
+         livré ses minima — « RNP A », « LOC A », un NDB dont le titre ne nomme
+         aucune piste. Ces cartes publient pour le terrain entier ; Minima Lens
+         leur donne une ligne, et le suivi doit la compter comme les autres,
+         sans quoi elle reste du travail à faire que cette page ne sait pas
+         montrer. N'IMPORTE LAQUELLE des manœuvres ouvre cette extrémité : la
+         nommer une par une, c'est en oublier une. */
       var bouts = Object.keys(a);
-      if (nc && nc["-"] && (nc["-"].CIRCLING || nc["-"].CIRCLING_P_TRK)) bouts.push("-");
+      if (nc && nc[AD_END_AD] && AD_MANOEUVRES.some(function(m){ return !!nc[AD_END_AD][m.id]; }))
+        bouts.push(AD_END_AD);
       for (var bi = 0; bi < bouts.length; bi++){
         var end = bouts[bi];
         var types = (a[end] || []).slice();
-        /* Le circling n'est pas dans la liste des approches — c'est une
-           manœuvre — mais il se relève et se valide comme elles, sous la
-           piste de sa carte. Il ne compte que là où une carte l'a livré :
-           l'ajouter partout gonflerait le reste à faire d'une ligne
-           qu'aucune carte ne réclame. */
-        if (nc && nc[end] && nc[end].CIRCLING) types.push("CIRCLING");
-        /* Le sidestep est une manœuvre lui aussi, sous la piste de SA carte,
-           et il se relève exactement comme le circling. L'oublier ici le
-           rendait invalidable de fait : le panneau de l'application le
-           proposait, cette page ne le comptait ni fait ni à faire, et un
-           terrain se lisait complet avec une ligne en attente. */
-        if (nc && nc[end] && nc[end].SIDESTEP) types.push("SIDESTEP");
-        /* Le circling à trace prescrite est une ligne À PART du circling
-           ordinaire — sa carte impose la trajectoire et chiffre ses propres
-           minima. Il se compte donc pour lui-même, sous sa piste comme sous
-           le terrain entier. */
-        if (nc && nc[end] && nc[end].CIRCLING_P_TRK) types.push("CIRCLING_P_TRK");
+        /* Les manœuvres ne sont pas dans la liste des approches — on ne
+           choisit pas une manœuvre pour une piste — mais elles se relèvent et
+           se valident comme elles, sous la piste de leur carte. Chacune compte
+           pour elle-même : deux manœuvres publiées sur la même piste sont deux
+           lignes, aux minima différents. Elles ne comptent que là où une carte
+           les a livrées : les ajouter partout gonflerait le reste à faire de
+           lignes qu'aucune carte ne réclame.
+           LA LISTE EST CELLE DE LA FICHE (manoeuvres.js) : cette page comptait
+           les manœuvres qu'elle connaissait, la fiche affichait celles qu'elle
+           connaissait, et les deux ont divergé deux fois en deux jours. */
+        for (var mi = 0; mi < AD_MANOEUVRES.length; mi++)
+          if (nc && nc[end] && nc[end][AD_MANOEUVRES[mi].id]) types.push(AD_MANOEUVRES[mi].id);
         for (var j = 0; j < types.length; j++){
           var type = types[j];
-          /* Le sidestep se pose sur l'AUTRE extrémité : « Sidestep 21L » et
-             non « Sidestep », sinon la ligne tait l'essentiel. La cible est
-             dans `s` de la graine, lue comme dans la fiche de l'application ;
-             sans elle, le mot nu plutôt que rien. */
-          var cible = type === "SIDESTEP"
-            ? ((SEED[t.icao] || {}).s || {})[end] : null;
-          var lbl = type === "SIDESTEP" ? (cible ? "Sidestep " + cible : "Sidestep") : null;
+          /* Le libellé d'une manœuvre sort de la MÊME fabrique que dans la
+             fiche : « Sidestep 21L » et non « Sidestep », sinon la ligne tait
+             où l'on se pose. Une approche, elle, garde le nom de LABEL. */
+          var lbl = adEstManoeuvre(type)
+            ? adManoeuvreLabel(type, t.icao, end, end === AD_END_AD) : null;
           /* Interdite par la carte : elle sort du décompte. La compter
              comme « à faire » gonflerait indéfiniment un reste à faire
              que rien ne pourra jamais solder. */
