@@ -5372,6 +5372,50 @@ body.light .stat.on {
       color: var(--amber)
     }
 
+    /* LE CURSEUR CERTIFIÉ / NON CERTIFIÉ. Pour l'exploitant seul — il
+       n'entre dans la page qu'avec le certificat, comme les deux notes
+       d'atelier qu'il commande. En position « non-certified », l'accueil
+       devient celui d'un appareil anonyme : notes éteintes, requêtes
+       certifiées tues. Le curseur, lui, reste visible — c'est l'outil de
+       la simulation, pas une pièce de l'affichage simulé. */
+    .cert-sim {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    .cert-sim-seg {
+      display: inline-flex;
+      border: 1px solid var(--line2);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg2)
+    }
+
+    /* 34 px : la même cible au pouce que les puces de terrains. */
+    .cert-sim-seg button {
+      min-height: 34px;
+      padding: 0 12px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer
+    }
+
+    .cert-sim-seg button+button {
+      border-left: 1px solid var(--line2)
+    }
+
+    .cert-sim-seg button.on {
+      background: var(--line);
+      color: var(--text);
+      font-weight: 600
+    }
+
     /* Sans cadre depuis le 19 aout 2026 : plus de fond, de liseré ni d'ombre
        autour de la case. L'image porte la cible du doigt, le texte la nomme —
        le cadre ne disait rien de plus. La cible de clic garde sa taille, seul
@@ -6639,6 +6683,18 @@ body .stat .k{
           <span class="hc-name">Minima</span>
           <span class="hc-sub">DA/DH · RVR</span>
         </button>
+      </div>
+
+      <!-- Le curseur de simulation — appareils certifiés seulement, comme
+           les deux notes qu'il commande. Reste `hidden` sans certificat :
+           l'anonyme ne voit ni le curseur, ni ce qu'il éteint. -->
+      <div class="cert-sim" id="certSim" hidden>
+        <span>Device view</span>
+        <div class="cert-sim-seg" role="group"
+          aria-label="Preview the home screen as a certified or non-certified device">
+          <button type="button" id="certSimOn" class="on" aria-pressed="true">Certified</button>
+          <button type="button" id="certSimOff" aria-pressed="false">Non-certified</button>
+        </div>
       </div>
 
       <!-- Fiches d'approche en attente — appareils certifiés seulement.
@@ -21546,6 +21602,42 @@ window.addEventListener("scroll", hidePop, true);
     $("#homeMinimaCard").onclick = () => openMinima(homeRouteCodes());
 
     /* ============================================================
+       LE CURSEUR CERTIFIÉ / NON CERTIFIÉ — la simulation de l'accueil
+       anonyme, pour l'exploitant.
+
+       UNE SEULE PORTE VERS LE CERTIFICAT : les deux notes d'atelier lisent
+       la clé à travers certAtelier(), jamais directement. En position
+       « non-certified », la fonction répond comme si la clé n'existait
+       pas — les notes s'éteignent ET les requêtes certifiées se taisent,
+       car l'accueil anonyme, c'est les deux : ni la ligne, ni la requête
+       qui l'aurait remplie.
+
+       EN MÉMOIRE SEULEMENT, à dessein : un rechargement rend l'accueil
+       certifié. La simulation est un coup d'œil, pas un état — la retenir
+       ferait ouvrir l'app un matin sur un atelier muet sans dire pourquoi.
+       ============================================================ */
+    let certSimAnon = false;
+    function certAtelier() {
+      if (certSimAnon) return "";
+      try { return localStorage.getItem("wl-terrains-cert") || ""; } catch { return ""; }
+    }
+    (function initCertSim() {
+      const box = $("#certSim");
+      if (!box || !certAtelier()) return; /* anonyme : le curseur n'existe pas */
+      box.hidden = false;
+      const on = $("#certSimOn"), off = $("#certSimOff");
+      function applique(anon) {
+        certSimAnon = anon;
+        on.classList.toggle("on", !anon); on.setAttribute("aria-pressed", String(!anon));
+        off.classList.toggle("on", anon); off.setAttribute("aria-pressed", String(anon));
+        if (anon) { $("#fichesNote").hidden = true; $("#verifNote").hidden = true; }
+        else majAtelier(); /* retour : les comptes ont pu bouger, on redemande */
+      }
+      on.onclick = () => applique(false);
+      off.onclick = () => applique(true);
+    })();
+
+    /* ============================================================
        Les fiches d'approche qui attendent d'être lues.
 
        POUR L'EXPLOITANT SEUL. La clé du certificat est celle de Minima
@@ -21564,8 +21656,7 @@ window.addEventListener("scroll", hidePop, true);
     async function majFichesEnAttente() {
       const el = $("#fichesNote");
       if (!el) return;
-      let cert = "";
-      try { cert = localStorage.getItem("wl-terrains-cert") || ""; } catch { return; }
+      const cert = certAtelier();
       if (!cert) return;
       try {
         const r = await fetch(BACKEND_URL + "/api/terrains/fiches-etat",
@@ -21629,8 +21720,7 @@ window.addEventListener("scroll", hidePop, true);
     async function majTerrainsAValider() {
       const el = $("#verifNote");
       if (!el) return;
-      let cert = "";
-      try { cert = localStorage.getItem("wl-terrains-cert") || ""; } catch { return; }
+      const cert = certAtelier();
       if (!cert) return;
 
       let stats = null;
