@@ -1837,6 +1837,43 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
   font:700 11.5px/1.25 var(--sans);letter-spacing:.03em;text-transform:uppercase;
 }
 .m-phase .pdata{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;justify-content:center}
+
+/* ---------- carte empilée : destination et dégagement à destination ----------
+   Les deux phases où l'on ATTERRIRA pour de bon. Leur carte cesse d'être une
+   ligne : le nom de la phase en tête, centré, puis le cadre de l'approche
+   retenue, puis les trois comparaisons — vis / RVR, plafond, vent — l'une sous
+   l'autre, dans l'ordre où on les lit. L'approche passe devant les chiffres
+   parce que c'est elle qui les produit : la lire après eux, repliée dans la
+   fiche, revenait à lire des minima sans savoir d'où ils sortaient.
+   Le verdict et le chevron quittent la ligne pour le coin haut droit — le nom
+   reste alors centré sur la carte, et non sur ce qu'il en reste. */
+.m-phase-row.m-col{display:block;position:relative;padding:10px 11px 12px}
+.m-phase.stacked .m-col .pname{
+  display:block;flex:none;text-align:center;
+  font-size:13px;letter-spacing:.09em;margin:0 0 9px;
+  /* Le même retrait des deux côtés : le nom reste centré sur la carte tout en
+     ne pouvant pas passer sous le pouce du coin, si long soit-il. */
+  padding:0 52px;
+  /* Le nom se lit dans l'encre du texte, pas dans la couleur du verdict : le
+     pouce du coin dit déjà celui-ci, et un titre teinté le redirait une
+     deuxième fois au prix de sa lisibilité. */
+  color:var(--text);
+}
+.m-phase.stacked .m-col .pdata{display:flex;flex-direction:column;gap:6px}
+/* Le cadre de l'approche est celui de la fiche (.m-req), monté sur la carte :
+   il n'y garde ni la marge basse ni l'écart au titre qu'il avait dans un
+   formulaire — c'est la grille de la pile qui espace, désormais. */
+.m-phase.stacked .m-col .m-req{margin:0}
+.m-phase.stacked .m-col .m-req>span{margin-bottom:4px}
+.m-phase.stacked .m-col .m-req select{padding:7px 8px}
+/* Le coin du verdict : pouce et chevron sortis du flux, pour que le nom reste
+   au milieu de la carte. Le pouce y perd deux pixels — il n'a plus la hauteur
+   d'une ligne entière à tenir. */
+.m-phase.stacked .m-col .pthumb{
+  position:absolute;top:8px;right:9px;padding:0;gap:5px;
+}
+.m-phase.stacked .m-col .pthumb .ico{width:22px;height:22px}
+.m-phase.stacked .m-col .m-chev{position:absolute;top:14px;right:37px}
 /* Les deux comparaisons de la ligne de phase sont les cases vis / RVR et vent de
    la version tablette, en réduction : elles portent donc le même liseré de
    verdict, cerclé de la couleur de leur propre pouce. Sans verdict, le cadre
@@ -1856,6 +1893,9 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
 /* L'unité collée à son chiffre : plus petite et grise, pour que la ligne se
    lise comme une suite de chiffres et non comme quatre mots. */
 .m-cmp .val small{font-size:9px;font-weight:400;color:var(--muted);margin-left:1px}
+/* « no criterion » : la phase ne compare rien, et le dit. Gris et sans italique
+   appuyée — c'est une note sur la case, pas une valeur de plus. */
+.m-cmp .val i.none{font-style:normal;font-size:9.5px;font-weight:400;color:var(--muted2);margin-left:5px}
 /* Le vent porte deux couples — traversier et arrière. Chacun son unité, donc
    chacun sa ligne : côte à côte ils débordaient de la largeur du téléphone, et
    l'ellipse mangeait justement les unités de la fin. */
@@ -9605,11 +9645,21 @@ function mWindInfo(r){
    porte la prévision face à l'exigence de planification. `null` quand la phase
    n'exige aucun plafond — un décollage, ou une approche qui n'en publie pas :
    il n'y a alors rien à comparer, et une case vide se lirait comme un critère
-   manquant. */
-function mCeilInfo(r){
+   manquant.
+   `always` : la fiche empilée de la destination et de son dégagement porte ses
+   quatre blocs quoi qu'il arrive. Le plafond y garde donc sa case même sans
+   exigence — elle dit alors la prévision et « no criterion », ce que la case
+   plafond de la version tablette écrit déjà en toutes lettres : son absence
+   donnerait à croire qu'aucun plafond n'est jamais en jeu sur la phase. */
+function mCeilInfo(r, always){
   const v2 = (r.verdicts||[]).find(v=>v.question==="Q2_DISPATCH");
   const row = v2 && (v2.rows||[]).find(y=>/Ceiling/i.test(y.param));
-  if (!row || row.required==null) return null;
+  if (!row || row.required==null){
+    if (!always) return null;
+    const lim = (r.taf && r.taf.limiting) || null;
+    return {obs: lim ? lim.ceiling_ft : null, req:null, unit:"ft", st:"unknown",
+            noCeiling: !!(lim && (lim.cavok || lim.noCeiling))};
+  }
   return {obs:row.observed, req:row.required, unit:row.unit||"ft",
           st:cls(rowVerdict(row).result), noCeiling:!!row.noCeiling};
 }
@@ -9630,6 +9680,16 @@ const maxCompSt = (obs, lim)=> obs==null || lim==null ? "unknown"
    worstOf() quand un verdict a été recomposé à l'affichage. */
 const M_RANK = {go:"GO", marginal:"MARGINAL", nogo:"NO_GO", unknown:"UNKNOWN"};
 
+/* Les deux phases dont la carte s'empile au lieu de tenir sur une ligne : le
+   nom en tête, centré, puis l'approche retenue, la vis/RVR, le plafond et le
+   vent, chacun sous le précédent. Ce sont les phases d'ATTERRISSAGE PLANIFIÉ —
+   celles où le choix de l'approche commande tout le reste, et où le lire après
+   coup, replié dans la fiche, revenait à lire les minima sans savoir de quelle
+   approche ils sortent. Les trois autres gardent la ligne compacte : leur
+   approche ne se choisit pas ici (décollage) ou ne gouverne qu'un dégagement
+   qu'on ne vole pas encore. */
+const M_STACKED = ["DESTINATION", "DESTINATION_ALTERNATE"];
+
 /* ---------- les cases de comparaison du téléphone ----------
    Une seule écriture pour les deux endroits qui les portent : la ligne de phase
    de la fiche terrain et la carte du bilan de vol. Elles s'étaient écrites deux
@@ -9645,11 +9705,14 @@ function mVisRow(vis){
 }
 /* Sans exigence de plafond, pas de case : voir mCeilInfo. Un ciel sans base
    nuageuse se dit en toutes lettres plutôt que par un tiret, qui se lirait
-   comme une prévision manquante. */
+   comme une prévision manquante. La case forcée (mCeilInfo(r, true)) porte la
+   prévision et dit qu'aucun critère ne s'y applique — le mot, pas un tiret,
+   sans quoi elle se lirait comme un plafond qu'on n'a pas su calculer. */
 function mCeilRow(c){
   if (!c) return "";
   const obs = c.obs!=null ? mUnitVal(c.obs,"ft") : (c.noCeiling ? "no cloud base" : "—");
-  const cmp = c.obs==null || c.req==null ? "" : (c.obs < c.req ? "&lt;" : "≥");
+  if (c.req==null) return mCmpRow("CEIL", "unknown", `${obs} <i class="none">no criterion</i>`);
+  const cmp = c.obs==null ? "" : (c.obs < c.req ? "&lt;" : "≥");
   return mCmpRow("CEIL", c.st,
     `<span class="o${oCls(c.st)}">${obs}</span> ${cmp} ${mUnitVal(c.req,"ft")}`);
 }
@@ -9732,9 +9795,15 @@ function mPhaseAppHtml(tb){
   const opts = all.filter(t=>!nfApproachOut(icao, end, t));
   const outs = all.filter(t=>nfApproachOut(icao, end, t));
   const selType = phaseApproachType(tb.role, icao, end);
+  /* Le rôle porté par le champ, et non un identifiant unique : depuis que la
+     destination et son dégagement affichent leur cadre sur la carte repliée, il
+     peut y avoir DEUX sélecteurs d'approche à l'écran — celui d'une carte et
+     celui de la fiche dépliée d'une autre phase. `data-role` dit à chacun sous
+     quel rôle ranger le choix ; un id l'aurait fait ranger sous la phase
+     ouverte, qui n'est pas forcément la sienne. */
   return `<div class="m-req">
     <span>Approach — airfield database, RWY ${end}</span>
-    <select id="mPhaseAppSel" aria-label="Approach used for this phase">
+    <select class="mPhaseApp" data-role="${tb.role}" aria-label="Approach used for this phase">
       ${opts.map(t=>`<option value="${t}" ${t===selType?"selected":""}>${adTypeLabel(t)}</option>`).join("")}
       ${outs.map(t=>`<option value="${t}" disabled>${adTypeLabel(t)} — U/S (NOTAM)</option>`).join("")}
       <option value="SETUP" ${selType==null?"selected":""}>Operation setup</option>
@@ -9832,7 +9901,9 @@ function mDetailHtml(tb, r){
     </div>`;
   })();
   return `<div class="m-detail">
-    ${tb.role==="DEPARTURE" ? mReqSelectHtml(r) : mPhaseAppHtml(tb)}
+    ${tb.role==="DEPARTURE" ? mReqSelectHtml(r)
+      : M_STACKED.includes(tb.role) ? "" /* déjà en tête de la carte empilée */
+      : mPhaseAppHtml(tb)}
     ${mVisFields}
     ${mDhField}
     ${isDep ? "" : mCeilInputHtml("mPhaseCeilInput",
@@ -10172,11 +10243,28 @@ function bindMobile(host){
     renderMobile();
   });
 
-  /* Une seule phase dépliée à la fois : rouvrir celle qui l'est la referme. */
-  host.querySelectorAll(".m-phase-row").forEach(b=>b.onclick = ()=>{
+  /* Une seule phase dépliée à la fois : rouvrir celle qui l'est la referme.
+     Sur la carte empilée, le sélecteur d'approche vit DANS la zone cliquable :
+     un clic sur une commande de formulaire ne déplie donc rien — sans quoi
+     ouvrir la liste des approches replierait la carte sous le doigt. */
+  const mToggle = b => ()=>{
     const i = +b.dataset.i;
     mState.open = (mState.open===i) ? null : i;
     renderMobile();
+  };
+  host.querySelectorAll(".m-phase-row").forEach(b=>{
+    const toggle = mToggle(b);
+    /* `!==b` : la ligne compacte EST un `<button>`, et le garde l'aurait prise
+       pour la commande qu'il doit laisser passer — plus une seule phase ne se
+       dépliait. Ce qui l'arrête, c'est une commande DANS la ligne. */
+    const onCtl = e=>{ const c = e.target.closest("select,input,button,label,option"); return !!c && c!==b; };
+    b.onclick = e=>{ if (onCtl(e)) return; toggle(); };
+    /* Le `div` qui joue le bouton doit répondre au clavier comme lui. */
+    if (b.getAttribute("role")==="button") b.onkeydown = e=>{
+      if (e.key!=="Enter" && e.key!==" ") return;
+      if (onCtl(e)) return;
+      e.preventDefault(); toggle();
+    };
   });
   /* Le livre de la fiche : même drapeau que la tablette, même bascule sur
      place — rien à recalculer pour lire un règlement. */
@@ -10230,12 +10318,10 @@ function bindMobile(host){
     state.reqOverride = (/^\d+$/.test(rq.value) && takeoffReqOptions()[+rq.value]) || null;
     render();
   };
-  const mpa = host.querySelector("#mPhaseAppSel");
-  if (mpa) mpa.onchange = ()=>{
-    const tb = TABS[mState.open];
-    if (tb) state.phaseApp[tb.role] = mpa.value;
+  host.querySelectorAll(".mPhaseApp").forEach(s=>s.onchange = ()=>{
+    state.phaseApp[s.dataset.role] = s.value;
     render();
-  };
+  });
   /* Interrupteurs NOTAM — même contrat que sur tablette : décocher un drapeau
      auto retient le refus, cocher à la main survit aux refetch. */
   host.querySelectorAll(".mNfIls").forEach(c=>c.onchange = ()=>{
@@ -10330,21 +10416,31 @@ function mobileResultsHtml(){
        son champ saisissable mais rien en regard : un chiffre sans comparaison
        n'est pas un verdict. Le décollage n'en a pas, ses minima sont en
        visibilité ou RVR seule. */
-    const ceil = tb.role==="DEPARTURE" ? null : mCeilInfo(r);
+    const stack = M_STACKED.includes(tb.role);
+    const ceil = tb.role==="DEPARTURE" ? null : mCeilInfo(r, stack);
     const st = phaseState(tb, r);
     const open = mState.open===i;
-    return `<div class="m-phase v-${st}">
-      <button class="m-phase-row" data-i="${i}" aria-expanded="${open}"
-              title="${tb.t} — ${STATE_LABEL[st]} · tap for the detail">
-        <span class="pname">${tb.t}</span>
+    const inner = `<span class="pname">${tb.t}</span>
         <span class="pdata">
+          ${stack ? mPhaseAppHtml(tb) : ""}
           ${mVisRow(vis)}
           ${mCeilRow(ceil)}
           ${mWindRow(wind)}
         </span>
         <span class="pthumb"><span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span></span>
-        <span class="m-chev" aria-hidden="true">▾</span>
-      </button>
+        <span class="m-chev" aria-hidden="true">▾</span>`;
+    const title = `${tb.t} — ${STATE_LABEL[st]} · tap for the detail`;
+    /* La carte empilée porte un `<select>` : elle ne peut plus être un
+       `<button>`, qui n'a pas le droit d'en contenir un. Même solution que les
+       cartes du bilan de vol — un `div` qui joue le bouton, et le clic sur une
+       commande de formulaire qui ne déplie rien (voir bindMobile). */
+    const row = stack
+      ? `<div class="m-phase-row m-col" data-i="${i}" role="button" tabindex="0"
+              aria-expanded="${open}" title="${title}">${inner}</div>`
+      : `<button class="m-phase-row" data-i="${i}" aria-expanded="${open}"
+              title="${title}">${inner}</button>`;
+    return `<div class="m-phase v-${st}${stack?" stacked":""}">
+      ${row}
       ${open ? mDetailHtml(tb, r) : ""}
     </div>`;
   }).join("");
