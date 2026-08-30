@@ -2807,6 +2807,8 @@
       margin-right: 2px
     }
 
+    /* La puce vit ENTRE l'amorce et la phrase, jamais en fin de ligne : en
+       queue, une phrase longue la décrochait seule sur la ligne suivante. */
     .ssum .ai {
       display: inline-block;
       font: 600 8.5px/1 var(--sans);
@@ -2815,7 +2817,7 @@
       border: 1px solid var(--line2);
       border-radius: 4px;
       padding: 2px 4px;
-      margin-left: 7px;
+      margin: 0 6px 0 5px;
       vertical-align: 1px;
       letter-spacing: .08em
     }
@@ -16296,7 +16298,7 @@ function renderInfo(icao) {
           <span class="qc gl" role="button" tabindex="0" data-q="${esc(n.qcode || "")}" data-t="${esc(n.traffic || "")}" data-p="${esc(n.purpose || "")}" data-s="${esc(n.scope || "")}">${esc(n.qcode || "—")}</span>
           <div class="tags">${tags}</div>
         </div>
-        ${n.summary ? `<div class="ssum"><span class="wq">What?</span> ${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
+        ${n.summary ? `<div class="ssum"><span class="wq">What?</span><span class="ai">AI</span> ${esc(n.summary)}</div>` : ""}
         <div class="etext">${annotate(n.e || n.raw)}</div>
         <div class="meta">
           <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
@@ -25505,7 +25507,7 @@ window.addEventListener("scroll", hidePop, true);
             <span class="qc">${esc(n.qcode || "—")}</span>
             ${tag ? `<div class="tags"><span class="tag sol">${esc(tag)}</span></div>` : ""}
           </div>
-          ${n.summary ? `<div class="ssum"><span class="wq">What?</span> ${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
+          ${n.summary ? `<div class="ssum"><span class="wq">What?</span><span class="ai">AI</span> ${esc(n.summary)}</div>` : ""}
           <div class="etext">${esc(n.e || n.raw)}</div>
           <div class="meta">
             <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
