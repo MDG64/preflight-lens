@@ -3065,7 +3065,17 @@ const AD_APP_TYPES = [
   {id:"LNAV",      label:"RNP — LNAV", fac:"GNSS_LNAV", np:true},
   {id:"LP",        label:"RNP — LP", fac:"GNSS_SBAS_LP", np:true},
   {id:"LOC",       label:"LOC", fac:"LOC", np:true},
+  /* AVEC ET SANS DME SONT DEUX INSTALLATIONS, PAS UN DÉTAIL DE TITRE. La
+     Table 4 leur donne des minimums système différents — VOR/DME 250 ft
+     contre 300 pour un VOR seul, NDB/DME 300 contre 350 — parce que la
+     distance continue change ce que l'approche permet. Les cartes le
+     disent dans l'en-tête de leur colonne (« VOR DME », « NDB DME ») ;
+     replier ces lignes sur VOR et NDB, comme on l'a fait un temps pour
+     GCFV, jetait la moitié de ce que la carte publiait. Le LOC, lui,
+     n'est pas dédoublé : la Table 4 lui donne 250 ft avec ou sans DME. */
+  {id:"VOR_DME",   label:"VOR / DME", fac:"VOR_DME", np:true},
   {id:"VOR",       label:"VOR", fac:"VOR", np:true},
+  {id:"NDB_DME",   label:"NDB / DME", fac:"NDB_DME", np:true},
   {id:"NDB",       label:"NDB", fac:"NDB", np:true},
   /* Le circling suit la piste de SA carte — la manœuvre se commence au terme
      de l'approche de cette piste, et c'est cette carte-là qui publie ses
@@ -3977,9 +3987,22 @@ function adEffMinima(icao, end, type){
   return {dh:pick("dh"), rvr:pick("rvr")};
 }
 
+/* Cette ligne existe-t-elle pour cette extrémité ? Soit la carte la publie
+   (graine), soit quelqu'un l'a saisie. Sert au repli ci-dessous, et à rien
+   d'autre : ce n'est pas une autorisation, seulement l'existence d'une
+   valeur à lire. */
+function adLignePubliee(icao, end, type){
+  const n = ((window.AD_SEED || {})[icao] || {}).n;
+  if (n && n[end] && n[end][type]) return true;
+  const s = adStatList(icao, end, type);
+  return !!(s && (s.verified
+    || (s.verifiedBy && Object.keys(s.verifiedBy).length)
+    || (s.dh && s.dh.length) || (s.rvr && s.rvr.length)));
+}
+
 /* Type de la fiche correspondant à l'opération réglée dans le setup — c'est
    la passerelle entre le consensus statistique et le moteur. */
-function adTypeFromCfg(cfg){
+function adTypeFromCfg(cfg, icao, end){
   if (cfg.framework==="FAA"){
     const id = cfg.faaOperation || "";
     if (id.indexOf("CAT_III")===0) return "CAT_III";
@@ -3998,8 +4021,27 @@ function adTypeFromCfg(cfg){
   }
   const m = {ILS:"CAT_I", MLS:"CAT_I", GLS:"CAT_I", PAR:"CAT_I",
              GNSS_SBAS_LPV:"LPV", GNSS_SBAS_LP:"LP", GNSS_LNAV:"LNAV", GNSS_BARO_VNAV:"LNAV_VNAV",
-             LOC:"LOC", LOC_DME:"LOC", VOR:"VOR", VOR_DME:"VOR", NDB:"NDB", NDB_DME:"NDB"};
-  return m[cfg.facility] || null;
+             /* Le LOC ne se dédouble pas : 250 ft en Table 4 avec ou sans DME. */
+             LOC:"LOC", LOC_DME:"LOC",
+             VOR:"VOR", VOR_DME:"VOR_DME", NDB:"NDB", NDB_DME:"NDB_DME"};
+  const id = m[cfg.facility] || null;
+  /* REPLI VERS LA LIGNE SANS DME, ET DANS CE SENS SEULEMENT. Un terrain
+     dont la carte n'a été relevée que sous « VOR » perdrait sa valeur
+     publiée le jour où le setup déclare un VOR/DME, et le moteur
+     retomberait sur le standard — 250 ft au lieu des 300 de la carte,
+     c'est-à-dire PLUS BAS que ce que le terrain autorise. On lit donc la
+     ligne sans DME quand celle avec DME n'existe pas : elle est toujours
+     la plus exigeante des deux. L'inverse ne se fait pas — une valeur
+     relevée avec DME ne vaut pas pour une approche qui n'en a pas.
+     Le repli exige que la ligne sans DME soit PUBLIÉE : quand aucune des
+     deux ne l'est, on garde l'installation déclarée et son standard à
+     elle. Retomber sur VOR faute de tout relevé imposerait 300 ft à un
+     VOR/DME qui en vaut 250 — plus exigeant que la règle, donc faux dans
+     l'autre sens, et cet outil ne durcit pas plus qu'il n'allège. */
+  const repli = {VOR_DME:"VOR", NDB_DME:"NDB"}[id];
+  if (repli && icao && end
+      && !adLignePubliee(icao, end, id) && adLignePubliee(icao, end, repli)) return repli;
+  return id;
 }
 
 /* ---------- approche par phase, depuis la base terrains ----------
@@ -4040,7 +4082,9 @@ const AD_TYPE_CFG = {
   LNAV:      {opCategory:"NPA", facility:"GNSS_LNAV",    guidance:"2D", runwayType:"NON_PRECISION"},
   LP:        {opCategory:"NPA", facility:"GNSS_SBAS_LP", guidance:"2D", runwayType:"NON_PRECISION"},
   LOC:       {opCategory:"NPA", facility:"LOC", guidance:"2D", runwayType:"NON_PRECISION"},
+  VOR_DME:   {opCategory:"NPA", facility:"VOR_DME", guidance:"2D", runwayType:"NON_PRECISION"},
   VOR:       {opCategory:"NPA", facility:"VOR", guidance:"2D", runwayType:"NON_PRECISION"},
+  NDB_DME:   {opCategory:"NPA", facility:"NDB_DME", guidance:"2D", runwayType:"NON_PRECISION"},
   NDB:       {opCategory:"NPA", facility:"NDB", guidance:"2D", runwayType:"NON_PRECISION"}
 };
 /* Copie de cfg avec surcharges. Le spread ne copie pas le getter lvo (non
@@ -5535,10 +5579,12 @@ function assess(role, ctx){
      La base stocke la DH en pieds et la RVR en mètres ; sous cadre FAA la
      RVR est convertie en pieds (centaine la plus proche du produit). */
   const adIcao = (metar && metar.station) || currentIcao();
-  const adType = adTypeFromCfg(cfg);
   /* Le circling se lit sous la piste de sa carte, comme les autres lignes :
      la manœuvre se commence au terme de l'approche du QFU sélectionné. */
   const adEnd = ctx.rwyDesignator;
+  /* Terrain et QFU passés au pont : ils lui servent à choisir entre la
+     ligne avec DME et celle sans, selon ce que la fiche publie. */
+  const adType = adTypeFromCfg(cfg, adIcao, adEnd);
   /* LA CARTE INTERDIT CETTE OPÉRATION. On ne corrige pas un minimum, on
      refuse l'opération : la table réglementaire donnerait un chiffre pour
      quelque chose que la carte ne permet pas. */
@@ -10508,17 +10554,37 @@ function adExportDownload(){
 }
 
 let adShownIcao = null;
-/* Reconstruit la fiche. Sans `force`, ne fait rien si le terrain n'a pas
-   changé — render() l'appelle à chaque frappe dans les relevés, et il ne faut
-   pas voler le focus des champs de la fiche pendant une édition. */
+let adShownKey = null;
+/* CE QUE LA FICHE SUIT — pas seulement le terrain. Chacune de ses lignes se lit
+   SOUS LES RÉGLAGES DU SETUP : la proposition de la carte est celle de la
+   catégorie d'aéronef (adChartMinima), la pastille dit « verified ✓ D », la
+   ligne d'une opération que la carte interdit dans CETTE catégorie dit « no
+   minima published », et les approches RNP AR n'apparaissent que sous
+   l'approbation de l'exploitant.
+   Une garde posée sur le seul ICAO les figeait au réglage du jour où le
+   terrain a été ouvert : passer de C à D laissait la fiche entière en C. Le
+   pire n'était pas l'affichage — « Record all » rejoue Record sur les lignes
+   que le RENDU a marquées, avec les valeurs que les champs portent, et
+   adRecordMinima signe sous la catégorie COURANTE : le bouton validait donc
+   les chiffres de la catégorie C sous la catégorie D. */
+function adPanelKey(){
+  return [adPanelIcao(), (cfg && cfg.acCategory) || "-",
+          (cfg && cfg.rnpArApproved) ? "ar" : "-"].join("|");
+}
+/* Reconstruit la fiche. Sans `force`, ne fait rien tant que ni le terrain ni
+   les réglages qu'elle lit n'ont bougé — render() l'appelle à chaque frappe
+   dans les relevés, et il ne faut pas voler le focus des champs de la fiche
+   pendant une édition. */
 function refreshAdPanel(force){
   const body = document.getElementById("adBody");
   const hint = document.getElementById("adHint");
   if (!body) return;
   const icao = adPanelIcao();
-  if (!force && icao === adShownIcao) return;
+  const key = adPanelKey();
+  if (!force && key === adShownKey) return;
   if (icao !== adShownIcao) adToolsMsg = null; // le compte rendu d'un import ne suit pas d'un terrain à l'autre
   adShownIcao = icao;
+  adShownKey = key;
   const rec = adGet(icao);
   if (!icao || !rec){
     if (hint) hint.textContent = icao ? `${icao} — no record` : "enter an ICAO code";
