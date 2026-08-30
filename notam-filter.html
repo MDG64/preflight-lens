@@ -2783,6 +2783,31 @@
       padding-left: 12px
     }
 
+    /* Phrase de résumé une-ligne (générée par LLM côté proxy — NOTAM longs et
+       non verts seulement). En --sans et en italique, pas en mono : c'est une
+       aide de lecture, pas le message. La puce AI dit sa provenance — le NOTAM
+       au-dessous reste la seule référence. */
+    .ssum {
+      font: italic 500 12.5px/1.5 var(--sans);
+      color: var(--muted2);
+      margin: 0 0 7px;
+      padding-left: 12px;
+      word-break: break-word
+    }
+
+    .ssum .ai {
+      display: inline-block;
+      font: 600 8.5px/1 var(--sans);
+      font-style: normal;
+      color: var(--muted);
+      border: 1px solid var(--line2);
+      border-radius: 4px;
+      padding: 2px 4px;
+      margin-left: 7px;
+      vertical-align: 1px;
+      letter-spacing: .08em
+    }
+
     .meta {
       display: flex;
       gap: 18px;
@@ -15051,6 +15076,21 @@ E) ${e}`;
       el.textContent = "Preflight Lens v" + APP_VERSION + " · build " + build;
     })();
 
+    /* Résumés une-ligne, générés par le proxy (Haiku via OpenRouter) pour les
+       seuls NOTAM longs et non verts. Le champ `summaries` des réponses est
+       ALIGNÉ sur `notams` ; on range les phrases par TEXTE BRUT — la clé qui
+       survit à tous les chemins (parseur, copie locale, lot de route) — et
+       saveOffline() les emporte dans la copie hors-ligne. Null = pas de
+       phrase : NOTAM court, vert, ou résumé pas encore généré côté proxy
+       (sa file de fond tourne, la phrase sera là à la consultation suivante —
+       personne n'attend jamais le LLM). */
+    const summaryByRaw = new Map();
+    function noteSummaries(notams, sums) {
+      if (!Array.isArray(notams) || !Array.isArray(sums)) return;
+      for (let i = 0; i < notams.length; i++)
+        if (typeof sums[i] === "string" && sums[i]) summaryByRaw.set(notams[i], sums[i]);
+    }
+
     // Récupère les NOTAM bruts (tableau de chaînes ICAO) pour un code OACI.
     // - démo  : lit le jeu local (DB)
     // - live  : interroge votre proxy, qui renvoie { icao, notams: [ "texte brut", ... ] }
@@ -15061,6 +15101,7 @@ E) ${e}`;
       const r = await fetch(`${BACKEND_URL}/api/notams/${encodeURIComponent(icao)}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
+      noteSummaries(data.notams, data.summaries);
       return Array.isArray(data.notams) ? data.notams : null;
     }
 
@@ -15105,6 +15146,7 @@ E) ${e}`;
           const map = (data && data.results) ? data.results : data;
           bloc.forEach(icao => {
             const entry = map[icao];
+            if (entry) noteSummaries(entry.notams, entry.summaries);
             result[icao] = (entry && Array.isArray(entry.notams)) ? entry.notams : null;
           });
           servis++;
@@ -15397,7 +15439,10 @@ E) ${e}`;
     function rebuildSavedSet() { try { savedSet = new Set(offlineIdx()); } catch (_) { savedSet = new Set(); } }
     function saveOffline(icao, raw) {
       try {
-        localStorage.setItem("notam_data:" + icao, JSON.stringify({ ts: Date.now(), raw }));
+        // `sums` aligné sur `raw` : les phrases de résumé suivent la copie
+        // hors-ligne — en vol, la carte les affiche comme en ligne.
+        localStorage.setItem("notam_data:" + icao, JSON.stringify({ ts: Date.now(), raw,
+          sums: raw.map(r => summaryByRaw.get(r) || null) }));
         let idx = offlineIdx().filter(c => c !== icao); idx.unshift(icao);
         // la rotation n'éjecte JAMAIS un terrain de la route active (voir Bloc 6)
         const prot = routeProtected();
@@ -15417,7 +15462,12 @@ E) ${e}`;
       }
     }
     function loadOffline(icao) {
-      try { const s = localStorage.getItem("notam_data:" + icao); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+      try {
+        const s = localStorage.getItem("notam_data:" + icao);
+        const o = s ? JSON.parse(s) : null;
+        if (o) noteSummaries(o.raw, o.sums);   // les phrases remontent avec la copie
+        return o;
+      } catch (e) { return null; }
     }
 
     /* ---- PLANS hors-ligne : même cycle de vie que les NOTAM ----
@@ -16079,7 +16129,9 @@ function renderInfo(icao) {
     }
 
     function renderFromRaw(raw) {
-      current = (raw || []).map(r => { const n = parseNotam(r); return { ...n, ...classifyNotam(n.qcode, n.e, n.cnl), schedule: parseSchedule(n.d) }; });
+      // `summary` se lit sur la chaîne d'ORIGINE (r), pas sur n.raw : le
+      // parseur nettoie le texte, la clé du Map ne le connaît pas nettoyé.
+      current = (raw || []).map(r => { const n = parseNotam(r); return { ...n, ...classifyNotam(n.qcode, n.e, n.cnl), schedule: parseSchedule(n.d), summary: summaryByRaw.get(r) || null }; });
       activeCats.clear();
       activeSev = null;
       render();
@@ -16232,6 +16284,7 @@ function renderInfo(icao) {
           <span class="qc gl" role="button" tabindex="0" data-q="${esc(n.qcode || "")}" data-t="${esc(n.traffic || "")}" data-p="${esc(n.purpose || "")}" data-s="${esc(n.scope || "")}">${esc(n.qcode || "—")}</span>
           <div class="tags">${tags}</div>
         </div>
+        ${n.summary ? `<div class="ssum">${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
         <div class="etext">${annotate(n.e || n.raw)}</div>
         <div class="meta">
           <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
@@ -25440,6 +25493,7 @@ window.addEventListener("scroll", hidePop, true);
             <span class="qc">${esc(n.qcode || "—")}</span>
             ${tag ? `<div class="tags"><span class="tag sol">${esc(tag)}</span></div>` : ""}
           </div>
+          ${n.summary ? `<div class="ssum">${esc(n.summary)}<span class="ai">AI</span></div>` : ""}
           <div class="etext">${esc(n.e || n.raw)}</div>
           <div class="meta">
             <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
