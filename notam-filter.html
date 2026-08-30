@@ -99,6 +99,11 @@
          Les cibles EFB étant des iPad, c'est bien SF Pro qui s'affiche en vol. */
       --num: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
              system-ui, 'Segoe UI', Roboto, sans-serif;
+      /* Cadre de la phrase de résumé. Son propre jeton, et pas --line2 : le
+         contraste demandé n'est pas le même dans les deux thèmes — gris léger
+         la nuit, NOIR le jour (voir body.light). Un jeton partagé aurait fait
+         suivre le cadre à chaque retouche des lignes de l'interface. */
+      --ssum-edge: #5e656c;
     }
 
     /* ---------- thème clair (mode jour) ---------- */
@@ -127,6 +132,7 @@
       --grey-bg: #eef2f5;
       --elev: 0 1px 2px rgba(20, 40, 60, .05), 0 6px 16px -6px rgba(20, 40, 60, .16);
       --elev-hi: 0 2px 4px rgba(20, 40, 60, .07), 0 12px 26px -8px rgba(20, 40, 60, .2);
+      --ssum-edge: #000000;
     }
 
     body.light {
@@ -2796,11 +2802,19 @@
        palette dans les DEUX thèmes (#9aa6b0 sur fond clair, #5e656c sur fond
        sombre), la phrase s'effaçait. Elle porte la couleur pleine du texte ;
        l'italique et la police sans suffisent à la distinguer du NOTAM. */
+    /* Le cadre (2026-08-30) : la phrase devient un bloc à part au lieu de
+       flotter au-dessus du NOTAM. 1px suffit — c'est un liseré, pas un
+       encadré ; l'épaisseur du trait laisse la couleur faire le travail.
+       Le retrait de 12px reprend celui de .etext (bordure 2px + 12px de
+       padding), pour que le texte du résumé et celui du NOTAM tombent sur la
+       même verticale malgré leurs cadres différents. */
     .ssum {
       font: italic 500 15px/1.5 var(--sans);
       color: var(--text);
       margin: 0 0 9px;
-      padding-left: 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--ssum-edge);
+      border-radius: 6px;
       word-break: break-word
     }
 
