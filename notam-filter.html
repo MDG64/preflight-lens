@@ -5303,6 +5303,31 @@ body.light .stat.on {
       gap: 14px
     }
 
+    /* Les fiches d'approche qui attendent d'être lues. VISIBLE DU SEUL
+       EXPLOITANT : la ligne n'existe dans le document que si l'appareil porte
+       un certificat, et elle reste `hidden` tant que le compte est nul — pas
+       de place réservée, pas de trace pour les autres. Ambre et non rouge :
+       c'est un rappel de travail en attente, pas une alerte de vol. */
+    .fiches-note {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--amber);
+      border-radius: 10px;
+      background: var(--bg2);
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--muted)
+    }
+
+    .fiches-note b {
+      color: var(--amber);
+      font-weight: 600
+    }
+
     /* Sans cadre depuis le 19 aout 2026 : plus de fond, de liseré ni d'ombre
        autour de la case. L'image porte la cible du doigt, le texte la nomme —
        le cadre ne disait rien de plus. La cible de clic garde sa taille, seul
@@ -6571,6 +6596,11 @@ body .stat .k{
           <span class="hc-sub">DA/DH · RVR</span>
         </button>
       </div>
+
+      <!-- Fiches d'approche en attente — appareils certifiés seulement.
+           Reste `hidden` par défaut : un appareil sans certificat ne
+           l'affiche jamais, et le compte à zéro non plus. -->
+      <p class="fiches-note" id="fichesNote" hidden></p>
     </div>
   </div>
 
@@ -21404,6 +21434,54 @@ window.addEventListener("scroll", hidePop, true);
       window.location.href = "./minima.html" + (qs ? "?" + qs : "");
     }
     $("#homeMinimaCard").onclick = () => openMinima(homeRouteCodes());
+
+    /* ============================================================
+       Les fiches d'approche qui attendent d'être lues.
+
+       POUR L'EXPLOITANT SEUL. La clé du certificat est celle de Minima
+       (`wl-terrains-cert`, même origine) : sans elle on ne demande rien au
+       proxy et la ligne n'apparaît jamais. Un appareil non certifié ne voit
+       donc ni la ligne, ni la requête qui l'aurait remplie.
+
+       LE COMPTE VIENT DU PROXY, ET C'EST UNE SOMME : ce que le PC a tiré
+       dans OneDrive sans l'avoir lu, plus ce que le relais détient encore.
+       Ni l'une ni l'autre moitié ne suffit — voir /api/terrains/fiches-etat.
+
+       Muet en cas d'échec, toujours : un certificat révoqué, un proxy
+       injoignable ou un compte nul laissent l'accueil exactement tel qu'il
+       serait sans cette fonction.
+       ============================================================ */
+    async function majFichesEnAttente() {
+      const el = $("#fichesNote");
+      if (!el) return;
+      let cert = "";
+      try { cert = localStorage.getItem("wl-terrains-cert") || ""; } catch { return; }
+      if (!cert) return;
+      try {
+        const r = await fetch(BACKEND_URL + "/api/terrains/fiches-etat",
+          { headers: { "X-Terrains-Cert": cert } });
+        if (!r.ok) return;
+        const d = await r.json();
+        const n = Number(d && d.total) || 0;
+        if (!n) { el.hidden = true; return; }
+        /* Le détail dit POURQUOI le compte est ce qu'il est : des cartes déjà
+           sur le PC et pas encore lues, ou des cartes encore en transit parce
+           que le PC dort. Les deux appellent des gestes différents. */
+        const part = [];
+        if (d.nonLues) part.push(d.nonLues + " on the PC, unread");
+        if (d.surRelais) part.push(d.surRelais + " still on the relay");
+        el.innerHTML = "<b>" + n + "</b><span>approach chart" + (n > 1 ? "s" : "")
+          + " waiting to be read" + (part.length ? " — " + part.join(", ") : "") + ".</span>";
+        el.hidden = false;
+      } catch { /* hors ligne, certificat révoqué : on se tait */ }
+    }
+    majFichesEnAttente();
+    /* Le compte bouge pendant que l'app est au second plan — on photographie,
+       le PC tire, on traite. Le retour à l'écran est le bon moment pour
+       redemander, et le seul qui ne coûte rien quand personne ne regarde. */
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) majFichesEnAttente();
+    });
 
     /* Retour du module Minimas : LE MÊME contrat, dans l'autre sens. La page
        minima.html vit dans un autre document — sa barre ne peut donc pas
