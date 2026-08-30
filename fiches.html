@@ -170,6 +170,10 @@
     <button class="camera" id="btn-camera"><span>📷</span>Photographier une fiche</button>
     <button class="discret" id="btn-fichier">📄 Choisir un fichier (image ou PDF)</button>
     <p class="note" id="attente-note" hidden></p>
+    <!-- Le vidage se déclenchait au réveil de l'app et au retour du réseau,
+         deux événements qu'on ne provoque pas à volonté. Quand on vient de
+         changer de réseau, on veut réessayer MAINTENANT. -->
+    <button class="discret" id="btn-reessayer" hidden>↻ Réessayer l'envoi maintenant</button>
     <div class="champ-terrain">
       <label for="icao">Terrain (OACI ou IATA, facultatif — nomme le fichier)</label>
       <input type="text" id="icao" class="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false">
@@ -250,7 +254,7 @@ function erreur(id, msg) {
 
 /* ---------- démarrage ---------- */
 function demarrer() {
-  $('pied').textContent = 'v3.2 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'non certifié')
+  $('pied').textContent = 'v3.3 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'non certifié')
     + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   // Le serveur par défaut se montre dès la première ouverture : un champ
   // vide faisait croire qu'il y avait quelque chose à trouver soi-même.
@@ -306,18 +310,31 @@ async function fileRetirer(id) {
     tx.oncomplete = ok; tx.onerror = () => ko(tx.error);
   });
 }
-/* La file bloquée par un certificat refusé n'est PAS une file qui attend le
-   réseau, et lui promettre le contraire fait attendre pour rien : le vidage
-   retiendra la raison de son dernier échec pour que la note la dise. */
-let fileBloquee = false;
+/* La file bloquée n'est PAS forcément une file qui attend le réseau, et lui
+   promettre le contraire fait attendre pour rien : le vidage retient la
+   raison de son dernier échec pour que la note la dise. */
+let fileMotif = '';
+function motifDe(e) {
+  if (e && e.statut === 403)
+    return 'elles ne partent pas : le serveur refuse le certificat de cet appareil.'
+      + ' Recertifie-le dans ⚙, elles partiront seules ensuite.';
+  if (e && e.statut)
+    return 'elles ne partent pas : le serveur répond HTTP ' + e.statut + '.';
+  /* Ni réponse ni code : la requête n'a pas abouti. Sur un appareil géré
+     (iPad d'entreprise, VPN, filtrage), c'est le cas le plus fréquent — et
+     le seul que « attends le réseau » n'aidait jamais à résoudre. */
+  return 'elles ne partent pas : le relais est injoignable depuis cet appareil —'
+    + ' réseau coupé, ou VPN/filtrage d\'entreprise. Réessaie, ou passe sur un'
+    + ' autre réseau (partage de connexion).';
+}
 async function majAttente() {
   let n = 0;
   try { n = (await fileLire()).length; } catch (e) { /* pas d'IndexedDB : tant pis */ }
   const el = $('attente-note');
   el.hidden = !n;
-  el.textContent = n + ' fiche(s) en attente — ' + (fileBloquee
-    ? 'elles ne partent pas : le serveur refuse le certificat de cet appareil. Recertifie-le dans ⚙, elles partiront seules ensuite.'
-    : 'elles partiront dès le retour du réseau.');
+  $('btn-reessayer').hidden = !n;
+  el.textContent = n + ' fiche(s) en attente — '
+    + (fileMotif || 'elles partiront dès le retour du réseau.');
 }
 
 /* L'envoi nu, sans barre de progression : c'est celui de la file. */
@@ -335,26 +352,39 @@ async function envoyer(blob, nom) {
 }
 
 let vidageEnCours = false;
+/* ON N'INTERROGE PLUS navigator.onLine. Il dit « hors ligne » sur des
+   appareils parfaitement connectés — iPad géré derrière un VPN ou un
+   filtrage d'entreprise, réseau exotique — et cette porte fermée signifiait
+   que la file n'ESSAYAIT jamais : rien ne partait, et la note promettait un
+   « retour du réseau » qui n'avait jamais eu lieu. Seule une requête
+   réellement tentée sait si elle passe. */
 async function viderFile() {
-  if (vidageEnCours || !navigator.onLine || !CFG.cert) return;
+  if (vidageEnCours || !CFG.cert) return;
   vidageEnCours = true;
   try {
     for (const rec of await fileLire()) {
       try {
         const final = await envoyer(rec.blob, rec.nom);
-        fileBloquee = false;
+        fileMotif = '';
         await fileRetirer(rec.id);
         $('journal').insertAdjacentHTML('afterbegin', '<li>' + final + ' · différée</li>');
       } catch (e) {
         /* On s'arrête au PREMIER échec plutôt que d'insister : si le réseau
            est retombé ou le certificat révoqué, marteler n'aide personne. La
            file reste entière et repartira au prochain réveil. */
-        fileBloquee = e.statut === 403;
+        fileMotif = motifDe(e);
         break;
       }
     }
   } finally { vidageEnCours = false; majAttente(); }
 }
+$('btn-reessayer').onclick = async () => {
+  const b = $('btn-reessayer');
+  b.disabled = true; b.textContent = '↻ Envoi en cours…';
+  fileMotif = '';
+  await viderFile();
+  b.disabled = false; b.textContent = '↻ Réessayer l\'envoi maintenant';
+};
 window.addEventListener('online', viderFile);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) viderFile(); });
 
@@ -434,7 +464,7 @@ function etatCertificat() {
     etat.textContent = 'Le serveur le reconnaît sous le nom « ' + ((moi && moi.nom) || nomLocal)
       + ' » — rien à faire ici. ' + (o.appareils || []).length + ' appareil(s) certifié(s) sur '
       + o.plafond + '.';
-    $('pied').textContent = 'v3.2 · ' + (CFG.nom || 'appareil certifié')
+    $('pied').textContent = 'v3.3 · ' + (CFG.nom || 'appareil certifié')
       + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   }).catch(() => {
     /* Injoignable n'est pas révoqué : on ne fait pas peur pour un Wi-Fi
@@ -559,32 +589,25 @@ $('btn-envoyer').onclick = async () => {
       const f = lot[i], nom = nomDeFichier(f);
       $('envoi-detail').textContent = 'Envoi ' + (i + 1) + ' / ' + lot.length + '…';
       $('progression').style.width = Math.round(100 * i / lot.length) + '%';
-      if (!navigator.onLine) { restants.push({ f, nom }); continue; }
       try {
         const final = await envoyer(f, nom);
+        fileMotif = '';
         $('journal').insertAdjacentHTML('afterbegin', '<li>' + final + '</li>');
-      } catch (e) { restants.push({ f, nom }); }
+      } catch (e) { fileMotif = motifDe(e); restants.push({ f, nom }); }
     }
     for (const r of restants) { try { await fileAjouter({ nom: r.nom, blob: r.f, at: Date.now() }); } catch (e) { /* rien à faire de mieux */ } }
     await majAttente();
     lot = null; $('icao').value = '';
     $('fait-detail').textContent = restants.length
-      ? restants.length + ' fiche(s) mise(s) en attente — elles partiront au retour du réseau.'
+      ? restants.length + ' fiche(s) mise(s) en attente — ' + (fileMotif || 'elles partiront au retour du réseau.')
       : 'Le PC les rangera dans OneDrive/Documents/Fiches approche d\'ici une dizaine de minutes.';
     montrer('ecran-fait');
     return;
   }
   if (!photo) return;
   const nom = nomDeFichier(photo);
-  if (!navigator.onLine) {
-    try {
-      await fileAjouter({ nom: nom, blob: photo, at: Date.now() });
-      photo = null; $('icao').value = ''; await majAttente();
-      $('fait-detail').textContent = 'Pas de réseau — mise en attente. Elle partira toute seule au retour de la connexion.';
-      montrer('ecran-fait');
-    } catch (e) { erreur('err-apercu', 'Pas de réseau, et la mise en attente a échoué — garde l\'écran ouvert.'); }
-    return;
-  }
+  /* Ici non plus on ne demande pas son avis à navigator.onLine : on tente,
+     et c'est l'échec réel qui met en attente (xhr.onerror plus bas). */
   montrer('ecran-envoi');
   $('envoi-detail').textContent = `Envoi de ${nom}…`;
   $('progression').style.width = '0%';
@@ -601,8 +624,8 @@ $('btn-envoyer').onclick = async () => {
   xhr.upload.onprogress = e => {
     if (e.lengthComputable) $('progression').style.width = Math.round(100 * e.loaded / e.total) + '%';
   };
-  xhr.onerror = () => rate('Le serveur relais est injoignable — réseau coupé ou serveur arrêté.');
-  xhr.ontimeout = () => rate('L\'envoi a pris trop de temps — réseau trop faible, réessaie.');
+  xhr.onerror = () => differer('Le relais est injoignable — réseau coupé, VPN ou filtrage.');
+  xhr.ontimeout = () => differer('L\'envoi a pris trop de temps — réseau trop faible.');
   xhr.timeout = 120000;
   xhr.onload = () => {
     if (xhr.status === 201) {
@@ -626,6 +649,21 @@ $('btn-envoyer').onclick = async () => {
   function rate(msg) {
     montrer('ecran-apercu');
     erreur('err-apercu', 'Échec de l\'envoi : ' + msg + ' La photo est toujours là.');
+  }
+
+  /* Transport en échec — aucune réponse du serveur : la photo va à la FILE
+     plutôt que de rester en mémoire sur un écran d'erreur, où fermer l'app
+     la perdait. C'est ce que faisait l'ancien test navigator.onLine, mais
+     sur un fait constaté au lieu d'un pronostic. Un serveur qui RÉPOND (403,
+     507…) garde l'ancien traitement : réessayer n'y changerait rien. */
+  async function differer(msg) {
+    try {
+      await fileAjouter({ nom: nom, blob: photo, at: Date.now() });
+      fileMotif = motifDe({});
+      photo = null; $('icao').value = ''; await majAttente();
+      $('fait-detail').textContent = msg + ' Mise en attente — elle repartira au prochain essai.';
+      montrer('ecran-fait');
+    } catch (e) { rate(msg + ' Et la mise en attente a échoué — garde l\'écran ouvert.'); }
   }
 };
 
