@@ -3104,6 +3104,16 @@ const AD_APP_TYPES = [
      minima. Mais ce n'est pas une approche : `noRwy` l'écarte des listes où
      l'on choisit une approche POUR une piste, où il serait un contresens. */
   {id:"CIRCLING",  label:"Circling", noRwy:true},
+  /* Le sidestep est une manœuvre lui aussi, et il suit la même règle que le
+     circling : il reste sous la piste de SA carte. On se pose sur l'autre
+     extrémité, mais c'est l'approche publiée ici qui autorise la manœuvre et
+     qui en chiffre les minima. `noRwy` l'écarte donc des mêmes listes.
+     Aucune table réglementaire ne lui donne de standard — adStdMinima le
+     laisse tomber faute de `fac`, et c'est voulu : seule la carte chiffre.
+     La piste d'atterrissage n'est pas dans l'identifiant mais dans `s` de la
+     graine, parce qu'elle change d'une carte à l'autre ; la ligne l'affiche
+     à côté du libellé, sans quoi « Sidestep » ne dirait pas où l'on se pose. */
+  {id:"SIDESTEP",  label:"Sidestep", noRwy:true},
   /* RNP AR — autorisation requise. Précision de navigation portée à
      0,30 NM, trajectoires courbes au plus près du relief : c'est ce qui
      rend praticables des terrains encaissés comme Nice 22 ou Marseille 31.
@@ -10751,6 +10761,15 @@ function refreshAdPanel(force){
        une valeur a déjà été validée, sans quoi la retirer serait impossible. */
     if (adChartMinima(icao, end, "CIRCLING") || (adStatList(icao, end, "CIRCLING")||{}).verified)
       appRows.push({end, type:"CIRCLING", i:"c", circ:true});
+    /* Le sidestep ferme les lignes de sa piste au même titre, et pour la même
+       raison. Son libellé porte la piste où l'on se pose, lue dans `s` de la
+       graine : « Sidestep » seul ne dirait pas l'essentiel. Faute de cible
+       publiée, on garde le mot nu plutôt que de taire la ligne. */
+    if (adChartMinima(icao, end, "SIDESTEP") || (adStatList(icao, end, "SIDESTEP")||{}).verified){
+      const vers = (((window.AD_SEED || {})[icao] || {}).s || {})[end];
+      appRows.push({end, type:"SIDESTEP", i:"s", circ:true,
+                    lbl: vers ? `Sidestep ${vers}` : "Sidestep"});
+    }
   });
   /* Puis LE CIRCLING DU TERRAIN, s'il y en a un — voir AD_END_AD. Il vient en
      dernier parce qu'il est le repli : le circling d'une piste donnée reste la
@@ -10786,13 +10805,22 @@ function refreshAdPanel(force){
       ? `<span class="ad-badge verified" title="Value entered by you${vcat?` for aircraft category ${vcat}`:" for every aircraft category"} — trusted as verified and applied immediately">verified ✓${vcat?" "+vcat:""}</span>`
       : srcs.includes("consensus")
       ? `<span class="ad-badge consensus" title="At least 3 identical user entries — this value is now the application default">user ✓</span>`
+      /* PAS DE STANDARD N'EST PAS UN STANDARD. Une manœuvre — sidestep, et le
+         circling d'une catégorie que la table ne couvre pas — n'a aucun
+         minimum réglementaire : adStdMinima rend null, les deux cases sont
+         vides, et le badge « std » revenait à dire qu'un repère existe. Il
+         n'en existe pas : seule la carte chiffre, et tant qu'on ne l'a pas
+         validée la ligne n'a pas de valeur du tout. Le dire est la moitié du
+         travail d'un outil de minimums. */
+      : (eff.dh.v == null && eff.rvr.v == null)
+      ? `<span class="ad-badge" title="No regulatory standard exists for this operation — a manoeuvre has no table minima. Only the chart publishes a value: record the proposal to make it yours.">no standard</span>`
       : `<span class="ad-badge" title="Standard minima of the approach type — no user value yet">std</span>`;
     /* La ligne du terrain ne porte pas de numéro de piste : elle n'en a pas.
        « AD » plutôt qu'un tiret nu, qui se lirait comme une case vide. */
     const endLbl = a.ad
       ? `<span title="Published by a circling-only chart — its title names no runway. These minima govern the manoeuvre whatever runway you land on, unless the chart of the selected runway publishes a circling line of its own.">AD</span>`
       : a.end;
-    const circLbl = a.ad ? "Circling — aerodrome" : a.circ ? "Circling" : null;
+    const circLbl = a.lbl || (a.ad ? "Circling — aerodrome" : a.circ ? "Circling" : null);
     /* Une opération que la carte interdit ne se propose pas, ne se valide
        pas et n'affiche aucun standard : la ligne dit non, et c'est tout. */
     if (adChartInterdit(icao, a.end, a.type)) return `<tr>
