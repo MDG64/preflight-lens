@@ -2043,11 +2043,32 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
    sa hauteur. En pleine largeur il reste au contraire en place, vide compris :
    c'est lui qui pousse les boutons au bord droit, comme dans la barre de la
    carte. */
-#rtOv .wxmap-bar{flex-wrap:wrap;gap:8px}
+#rtOv .wxmap-bar{flex-wrap:wrap;gap:8px;position:relative}
+/* Le titre nomme l'écran : il se pose au milieu de LA PAGE et à une taille qui
+   se lit, plutôt que dans le coin à la taille d'une étiquette. Hors du flux,
+   sinon il se centrerait sur la place que lui laissent l'état à gauche et les
+   cinq boutons à droite — c'est-à-dire nulle part au milieu. Sans prise au
+   pointeur : il passe au-dessus des boutons, il ne doit pas leur voler le clic. */
+#rtOv .wxmap-title{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:22px;letter-spacing:.2em;pointer-events:none;
+}
+/* L'état, lui, est resté dans le flux et part du bord gauche : sans borne, une
+   phrase d'erreur un peu longue passerait sous le titre. Elle s'arrête donc
+   avant le milieu et se termine en points de suspension. */
+#rtOv .wxmap-state{max-width:calc(50% - 100px);margin-right:auto}
 @media (max-width:560px){
-  #rtOv .wxmap-bar{gap:5px;padding:9px 8px}
-  #rtOv .wxmap-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:12px;letter-spacing:.06em}
-  #rtOv .wxmap-state{flex-basis:100%;order:9}
+  /* Le titre ayant quitté la ligne des boutons, plus rien ne les poussait au
+     bord droit : ils se rangent sous lui, au milieu comme lui. */
+  #rtOv .wxmap-bar{gap:5px;padding:9px 8px;justify-content:center}
+  /* Trop étroit pour un titre au milieu ET six cadres sur la même ligne : la
+     barre s'enroule déjà, le titre prend donc sa propre ligne — toujours au
+     milieu, toujours en grand, mais au-dessus de la navigation. */
+  #rtOv .wxmap-title{
+    position:static;transform:none;order:-1;flex:0 0 100%;
+    text-align:center;font-size:19px;letter-spacing:.14em;pointer-events:auto;
+  }
+  #rtOv .wxmap-state{flex-basis:100%;max-width:none;order:9}
   #rtOv .wxmap-state:empty{display:none}
   #rtOv .m-gear,#rtOv .m-back{width:34px}
   #rtOv .m-link{padding:0 5px;font-size:11.5px}
