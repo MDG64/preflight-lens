@@ -354,7 +354,51 @@ function rendre(){
       return sep + ligne(p.ok === p.tot, esc(p.nom), p.cc, p.ok + " / " + p.tot,
         p.ok === p.tot ? "vert" : ((p.ok || p.entames) ? "partiel" : ""),
         'data-pays="' + p.cc + '"'); }).join("");
-    h = lp.length ? "<ul>" + h + "</ul>" : '<div class="vide">Aucun pays ne correspond.</div>';
+
+    /* Ce qui attend un clic passe DEVANT la carte du monde. Le compteur du
+       titre annonçait un travail qu'il fallait ensuite retrouver en
+       descendant pays par pays : le chiffre disait où on en est, il ne
+       disait pas où aller. Ces lignes-là mènent droit à la fiche du terrain,
+       et la liste se vide d'elle-même à mesure qu'on valide. */
+    var nomPays = {};
+    for (var ip = 0; ip < D.pays.length; ip++) nomPays[D.pays[ip].cc] = D.pays[ip].nom;
+    var att = [];
+    for (var cc3 in D.terrains){
+      var lt3 = D.terrains[cc3];
+      for (var k3 = 0; k3 < lt3.length; k3++){
+        var t3 = lt3[k3];
+        if (!t3.attente) continue;
+        /* Le filtre porte aussi sur le pays : « Espagne » doit garder ses
+           terrains en attente, pas seulement sa ligne de pays. */
+        if (f && t3.icao.toLowerCase().indexOf(f) < 0
+              && t3.nom.toLowerCase().indexOf(f) < 0
+              && (!t3.iata || t3.iata.toLowerCase().indexOf(f) < 0)
+              && (!t3.ville || t3.ville.toLowerCase().indexOf(f) < 0)
+              && (nomPays[cc3] || "").toLowerCase().indexOf(f) < 0) continue;
+        att.push({ cc: cc3, t: t3 });
+      }
+    }
+    att.sort(function(x, y){
+      return y.t.attente - x.t.attente || (x.t.icao < y.t.icao ? -1 : 1); });
+    var hAtt = "";
+    if (att.length){
+      var nCases = 0;
+      for (var ia = 0; ia < att.length; ia++) nCases += att[ia].t.attente;
+      hAtt = '<li class="sep">En attente de validation · ' + nCases + " sur " +
+        att.length + " terrain" + (att.length > 1 ? "s" : "") + "</li>" +
+        att.map(function(o){
+          var det = esc(o.t.nom) + (o.t.ville ? " · " + esc(o.t.ville) : "") +
+            (nomPays[o.cc] ? " · " + esc(nomPays[o.cc]) : "");
+          /* Les deux attributs : la ligne ouvre la fiche du terrain ET pose
+             le pays, sans quoi le fil d'Ariane n'aurait pas de quoi remonter. */
+          return ligne(false, o.t.icao, det, o.t.attente + " à valider", "attente",
+            'data-pays="' + o.cc + '" data-icao="' + o.t.icao + '"'); }).join("");
+    }
+    var corps = hAtt + (hAtt && lp.length
+      ? '<li class="sep">Pays · ' + lp.length + "</li>" : "") + h;
+    /* « Aucun pays » ne serait plus vrai : le filtre porte aussi sur les
+       terrains en attente, et c'est souvent un code OACI qu'on tape ici. */
+    h = corps ? "<ul>" + corps + "</ul>" : '<div class="vide">Rien ne correspond.</div>';
 
   } else if (!terrain){
     var np = (D.pays.filter(function(p){ return p.cc === pays; })[0] || { nom: pays }).nom;
@@ -402,8 +446,12 @@ document.addEventListener("click", function(e){
   }
   var li = e.target.closest("li.act");
   if (!li) return;
-  if (li.getAttribute("data-pays")){ pays = li.getAttribute("data-pays"); terrain = null; }
-  else if (li.getAttribute("data-icao")) terrain = li.getAttribute("data-icao");
+  /* Une ligne de la liste d'attente porte LES DEUX : elle ouvre le terrain et
+     pose son pays d'un coup. L'ordre compte — tester le pays d'abord la ferait
+     s'arrêter au pays, un cran trop haut. */
+  var cp = li.getAttribute("data-pays"), ci = li.getAttribute("data-icao");
+  if (ci){ if (cp) pays = cp; terrain = ci; }
+  else if (cp){ pays = cp; terrain = null; }
   q.value = ""; rendre(); window.scrollTo(0, 0);
 });
 q.addEventListener("input", rendre);
