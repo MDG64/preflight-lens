@@ -5966,6 +5966,14 @@ function assess(role, ctx){
     const visUnit = visDispUnit(visUnitCalc);
     let inc, visReq, ceilReq, planRef, planText;
     let ceilFromOeiFloor = false;
+    /* Provenance du plafond exigé. Aucune carte ne publie un « plafond
+       minimum » qu'on pourrait relever : le chiffre vaut ce que vaut la
+       DH / MDH dont il sort, et il porte donc le pilote de CELLE-CI. Il ne le
+       porte que tant qu'il en est la copie exacte — dès qu'un incrément de
+       planification, un plancher OEI ou une valeur absolue de barème s'y
+       ajoute, plus rien ne peut être dit de sa provenance et le cadre tombe
+       (null). Voir provAttrs, côté rendu. */
+    let ceilDriver = null;
 
     const appUse = app;
 
@@ -5979,6 +5987,7 @@ function assess(role, ctx){
            lorsqu'il est une composante des minima publiés — le circling. Une
            straight-in, même NPA, se juge sur la seule visibilité. */
         ceilReq = appUse.circling ? appUse.ceilingRequired : null;
+        ceilDriver = ceilReq!=null ? (appUse.dhDriver||null) : null;
         planRef = "14 CFR 121.613 / 135.219";
         planText = "At destination the forecast must be at or above the applicable landing minima within ETA ±1 h.";
       } else {
@@ -6006,6 +6015,9 @@ function assess(role, ctx){
       visReq = appUse.rvr;
       const typeA = isTypeAOrCircling(cfg, appUse);
       ceilReq = typeA ? (appUse.circling ? appUse.ceilingRequired : appUse.dh) : null;
+      /* Minima opérationnels RÉELS, sans incrément : le plafond EST la DH,
+         il en garde la provenance. */
+      ceilDriver = ceilReq!=null ? (appUse.dhDriver||null) : null;
       planRef = `${DS.easa.takeoffAlternate.ref} · ${DS.easa.takeoffAlternate.minimaRef}`;
       planText = `Take-off alternate: the forecast must be at or above the ACTUAL aerodrome operating minima within ETA ±1 h — AMC5 CAT.OP.MPA.182 refers straight back to CAT.OP.MPA.110. The AMC6 Table 2 planning increments do NOT apply here (they are for destination alternates, fuel ERA and isolated aerodromes). ${typeA?DS.easa.takeoffAlternate.ceilingRule:"Type B approach — no ceiling requirement."} Distance: ${toAltDistanceRule(cfg)}. Crosswind must be assessed against the runway state, and OEI limitations taken into account.`;
     } else {
@@ -6029,6 +6041,13 @@ function assess(role, ctx){
         ? (appUse.circling ? appUse.ceilingRequired
            : destTypeA ? (appUse.dh || null) : null)
         : ceilBase + (inc.ceil||0);
+      /* À destination le plafond exigé est la MDH/DH elle-même : il en porte la
+         provenance, y compris le vert de la base terrains vérifiée. Ailleurs un
+         incrément de planification s'y ajoute et le chiffre n'est plus celui
+         d'aucune carte — sauf incrément nul, où il l'est encore. */
+      ceilDriver = ceilReq==null ? null
+        : isDest ? (appUse.dhDriver||null)
+        : (inc.ceil ? null : (manDh!=null ? "PILOT_ENTERED" : (appUse.dhDriver||null)));
       /* Type A sans DH dérivable : le critère existe, le chiffre manque. Le
          taire laisserait la phase se juger sur la seule visibilité sans que
          rien ne le dise — la case plafond est saisissable, encore faut-il
@@ -6097,6 +6116,7 @@ function assess(role, ctx){
         const wasC = ceilReq;
         ceilReq = ceilFloor;
         ceilFromOeiFloor = true;
+        ceilDriver = null;
         push({severity:"CAUTION", code:"OEI_CAPABILITY_LIMITED",
           message:`Take-off alternate ceiling raised to the OEI floor: ${ceilFloor} ft${wasC==null?" — the approach itself required no ceiling":` instead of the ${wasC} ft otherwise required`}.`});
         planText += ` A ceiling floor of ${ceilFloor} ft is applied (pilot default)${wasC==null?" — the approach type requires none on its own":""}.`;
@@ -6131,6 +6151,7 @@ function assess(role, ctx){
         const wasC = ceilReq;
         ceilReq = (Number.isFinite(manCeil) && manCeil > 0) ? manCeil : null;
         ceilFromOeiFloor = false;
+        ceilDriver = ceilReq!=null ? "PILOT_ENTERED" : null;
         push({severity:"CAUTION", code:"CEIL_REQ_MANUAL",
           message: ceilReq==null
             ? `Ceiling requirement cleared by hand${wasC==null?"":` — the ${wasC} ft otherwise required is no longer applied`}. No ceiling criterion is used for this phase; check that the chart in force really carries none.`
@@ -6158,7 +6179,7 @@ function assess(role, ctx){
     const t = tafForRole(taf, role, w0, w1,
       {visReq: visReq==null ? null : Math.round(visToM(visReq, visUnit)), ceilReq});
     res.taf = t;
-    res.planning = {inc, visReq, ceilReq, unit:visUnit, scheme:planningSchemeOf(cfg)};
+    res.planning = {inc, visReq, ceilReq, ceilDriver, unit:visUnit, scheme:planningSchemeOf(cfg)};
 
     const lim = t.limiting || {};
     const rows = [];
@@ -7909,7 +7930,7 @@ function takeoffVisCells(r, obs){
     : (req.label||"").split(" — ")[1] || "";
 
   return [
-    `<div class="cell obs-req-cell req-cell edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":""}">
+    `<div class="cell obs-req-cell req-cell edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":st==="go"?" ok":""}">
        <span class="k">Visi / RVR</span>
        <span class="v-row combined has-req-lab">
          <span class="req-stack">
@@ -7932,6 +7953,31 @@ function takeoffVisCells(r, obs){
   ];
 }
 
+/* Cadre de PROVENANCE, partagé par la case vis / RVR et la case plafond : d'où
+   vient la valeur EXIGÉE. Deux provenances valent le cadre vert — "VERIFIED",
+   le relevé de la carte d'approche enregistré dans la base terrains, et
+   "COMPANY", le minimum approuvé de l'exploitant ; "UNVERIFIED" prend l'ambre.
+   `null` ne cercle rien : la case ne porte alors pas un minimum dont on puisse
+   dire la provenance — l'exigence finale d'un dégagement au décollage, ou un
+   plafond auquel un incrément de planification s'est ajouté —, le chiffre reste
+   nu. Un champ vide ne se cercle pas non plus : il n'y a pas de chiffre dont on
+   pourrait dire la provenance.
+   Voir provOf(), qui traduit le pilote de la valeur en l'un des trois. */
+const PROV_TIP = {
+  VERIFIED:"Verified minimum — recorded on this device from the approach chart. Applied as it stands.",
+  COMPANY:"Approved company minimum — the floor from your OM-B, entered in Operation setup. It is the lowest value you may use: it governs here only because the table, chart or airfield-database value sat below it.",
+  UNVERIFIED:"Minimum not verified — standard table, user consensus or hand-entered value. Check it against the official approach chart."};
+/* Le plafond exigé ne se relève jamais tel quel sur une carte d'approche : il
+   vaut ce que vaut la DH / MDH dont il sort, et l'infobulle doit le dire —
+   sans quoi le cadre vert promettrait un plafond publié qui n'existe pas. */
+const CEIL_PROV_TIP = {
+  VERIFIED:"Ceiling requirement taken from the verified DH / MDH recorded on this device from the approach chart. Applied as it stands.",
+  COMPANY:"Ceiling requirement taken from the approved company DH / MDH entered in Operation setup. It is the lowest value you may use.",
+  UNVERIFIED:"Ceiling requirement not verified — standard table, user consensus or hand-entered value. Check it against the official approach chart."};
+const provAttrs = (p, v, tips) => (p==null || v==null) ? {cls:"", tip:""} : {
+  cls: p==="UNVERIFIED" ? " min-unver" : " min-ver",
+  tip: ` title="${(tips||PROV_TIP)[p]}"`};
+
 /* Case plafond saisissable. Le décollage n'en a pas — ses minima sont en
    visibilité ou RVR seule ; toutes les phases d'atterrissage en portent une,
    dégagement au décollage compris. Elle est toujours rendue, y compris vide :
@@ -7941,9 +7987,12 @@ function takeoffVisCells(r, obs){
    n'est comparé à rien se lisait comme le critère lui-même. Ce que la case
    affiche est ce qui gouverne : l'exigence dérivée tant que le pilote ne l'a pas
    retouchée, la sienne ensuite, et rien du tout s'il la vide. */
-function ceilingCell({id, req, obs, filled, aria, label, noCeiling}){
+function ceilingCell({id, req, obs, filled, aria, label, noCeiling, prov}){
   const st = req==null ? null
            : (obs==null ? (noCeiling ? "go" : "unknown") : cls(verdictOf(obs, req, "ftAAL").result));
+  /* Le plafond se cercle comme la vis / RVR d'à côté : un minimum vérifié se
+     dit vérifié, qu'il porte sur une distance ou sur une hauteur. */
+  const pc = provAttrs(prov, req, CEIL_PROV_TIP);
   return `<div class="cell obs-req-cell to-ceil-cell${st==="nogo"?" bad":st==="marginal"?" warn":st==="go"?" ok":""}">
        <span class="k">${label||"Ceiling"}</span>
        <span class="v-row combined has-req-lab">
@@ -7952,7 +8001,7 @@ function ceilingCell({id, req, obs, filled, aria, label, noCeiling}){
            <span class="v">${obs!=null?`${obs}<small>ft</small>`:(noCeiling?"none":"—")}</span>
          </span>
          <span class="cmp">${st==="nogo"?"<":"≥"}</span>`:""}
-         <span class="req-stack">
+         <span class="req-stack${pc.cls}"${pc.tip}>
            <span class="req-lab" aria-hidden="true">Required</span>
            <input id="${id}" class="to-ceil-in" type="number" min="0" step="50" inputmode="numeric"
                   placeholder="—" value="${req!=null?req:""}" aria-label="${aria}">
@@ -7988,22 +8037,9 @@ function phaseChartGa(tabRole){
 
 function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
   const cmpOn = obs !== undefined;
-  /* `prov` : d'où vient la valeur EXIGÉE. Deux provenances valent le cadre vert
-     — "VERIFIED", le relevé de la carte d'approche enregistré dans la base
-     terrains, et "COMPANY", le minimum approuvé de l'exploitant ; "UNVERIFIED"
-     prend l'ambre. `null` ne cercle rien : la case ne porte alors pas un
-     minimum dont on puisse dire la provenance (l'exigence finale d'un
-     dégagement au décollage, par exemple), le chiffre reste nu. Un champ vide
-     ne se cercle pas non plus : il n'y a pas de chiffre dont on pourrait dire
-     la provenance. La DH des dégagements porte le sien, dans `dh.prov`.
-     Voir provOf(), qui traduit le pilote de la valeur en l'un des trois. */
-  const PROV_TIP = {
-    VERIFIED:"Verified minimum — recorded on this device from the approach chart. Applied as it stands.",
-    COMPANY:"Approved company minimum — the floor from your OM-B, entered in Operation setup. It is the lowest value you may use: it governs here only because the table, chart or airfield-database value sat below it.",
-    UNVERIFIED:"Minimum not verified — standard table, user consensus or hand-entered value. Check it against the official approach chart."};
-  const provAttrs = (p, v) => (p==null || v==null) ? {cls:"", tip:""} : {
-    cls: p==="UNVERIFIED" ? " min-unver" : " min-ver",
-    tip: ` title="${PROV_TIP[p]}"`};
+  /* `prov` : d'où vient la valeur EXIGÉE — voir provAttrs et PROV_TIP plus
+     haut, partagés avec la case plafond. La DH des dégagements porte le sien,
+     dans `dh.prov`. */
   const pv = provAttrs(prov, req);
   const pd = dh ? provAttrs(dh.prov, dh.v) : {cls:"", tip:""};
   const st = (!cmpOn || req==null) ? null : visVerdict(obs, req, unit);
@@ -8043,7 +8079,7 @@ function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
      trop tard. */
   const gaWarn = warn == null ? "" :
     `<span class="ga-warn" title="The approach chart publishes this minimum for several missed-approach gradients. The database keeps the ${warn}% column — the one every aircraft can hold. Lower minima are published for steeper gradients.">GA ${warn}% — check go-around performance</span>`;
-  return `<div class="cell obs-req-cell to-ceil-cell${st==="nogo"?" bad":st==="marginal"?" warn":""}">
+  return `<div class="cell obs-req-cell to-ceil-cell${st==="nogo"?" bad":st==="marginal"?" warn":st==="go"?" ok":""}">
        <span class="k">${label||"Visi / RVR"}</span>
        ${gaWarn}
        <span class="v-row combined has-req-lab">
@@ -8203,6 +8239,13 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
     : driver==="COMPANY_APPROVAL"      ? "COMPANY"
     : driver==="AIRFIELD_DB_VERIFIED"  ? "VERIFIED"
     : "UNVERIFIED";
+  /* Le plafond n'a pas de pilote à lui : le moteur lui a passé celui de la
+     DH / MDH dont il sort, et l'a mis à null dès que le chiffre a cessé d'être
+     cette hauteur-là. Pas de pilote, pas de cadre. */
+  const ceilProvOf = res => {
+    const p = res && res.planning;
+    return (p && p.ceilReq!=null && p.ceilDriver) ? provOf(p.ceilDriver, false) : null;
+  };
   const dhDisp = dhReqFor(role)!=null ? dhReqFor(role)
                : (a.circling ? (a.ceilingRequired!=null?a.ceilingRequired:a.dh)
                              : (a.noDh ? null : a.dh));
@@ -8272,7 +8315,12 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
       noCeiling: !!(r.taf && r.taf.limiting && (r.taf.limiting.cavok || r.taf.limiting.noCeiling)),
       filled: isAltn ? (state.ceilReq[role]!==undefined ? "your value, kept" : incCeilTxt)
             : state.ceilReq[role]!==undefined ? "required, in ft — your value, kept"
+            : ceilProvOf(r)==="VERIFIED" ? "required, in ft — airfield db verified, type over it"
             : "required, in ft — derived, type over it",
+      /* Le plafond exigé se cercle comme la vis / RVR : vérifié en base, il est
+         vert ; issu d'une table ou tapé à la main, ambre ; incrémenté ou sorti
+         d'un plancher, nu — il n'est plus le chiffre d'aucune carte. */
+      prov: ceilProvOf(r),
       aria:"Ceiling required for this phase — leave empty to ignore"
     });
   if (isAltn){
