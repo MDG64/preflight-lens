@@ -8336,7 +8336,7 @@ function tafBlock(t){
   const chg = [...t.considered, ...t.disregarded].sort((a,b)=>a.from-b.from).map(g=>
     `<tr><td>${g.kind}</td><td>${hhmm(g.from)}–${hhmm(g.to)}</td><td>${tvis(g.cond.vis_m)} / ${g.cond.ceiling_ft??"no ceiling"}${g.cond.ceiling_ft?" ft":""}</td>
      <td>${g.applied?'<b class="applied">APPLIED</b>':"disregarded"} — ${g.why}</td></tr>`).join("");
-  return `<details class="taf" open>
+  return `<details class="taf">
     <summary>TAF application — ${t.role.replace(/_/g," ")} · window ${t.rule.window}</summary>
     <table class="taf-t">
       <tr class="grp"><td colspan="4">PREVAILING</td></tr>
@@ -8358,11 +8358,12 @@ function warnBlock(ws, cls){
   const n = s => uniq.filter(w=>w.severity===s).length;
   const tally = [["CRITICAL","critical"],["CAUTION","caution"],["INFO","info"]]
     .map(([s,lbl])=>n(s)?`${n(s)} ${lbl}`:null).filter(Boolean).join(", ");
-  /* Un CRITICAL ouvre le panneau d'office : le reste attend qu'on le déplie. */
-  /* La sévérité la plus haute est portée par le volet lui-même : replié, c'est
-     le seul indice qu'il en reste un de ce rang à l'intérieur. */
+  /* Le volet reste replié à l'ouverture, CRITICAL compris : le bas de fiche
+     ne se déplie qu'à la demande. La sévérité la plus haute est portée par
+     le volet lui-même : replié, c'est le seul indice qu'il en reste un de ce
+     rang à l'intérieur. */
   const worst = uniq[0].severity;
-  return `<details class="warns worst-${worst}${cls?" "+cls:""}"${n("CRITICAL")?" open":""}>
+  return `<details class="warns worst-${worst}${cls?" "+cls:""}">
     <summary>Warnings — ${tally}</summary>
     <div class="warn-body">
     ${uniq.map(w=>`<div class="warn-row"><span class="sev ${w.severity}">${w.severity}</span>
