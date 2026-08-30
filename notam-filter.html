@@ -2787,12 +2787,19 @@
        non verts seulement). En --sans et en italique, pas en mono : c'est une
        aide de lecture, pas le message. La puce AI dit sa provenance — le NOTAM
        au-dessous reste la seule référence. */
+    /* La phrase se lit AVANT le NOTAM, pas en note de bas de page (retour
+       propriétaire du 2026-08-30, deux fois).
+       15px et non 13px comme .etext : à corps ÉGAL, le sans paraît plus petit
+       que le mono — deux crans au-dessus pour qu'elle pèse au moins autant que
+       le texte qu'elle résume.
+       --text et non --muted2 : celui-ci était le plus faible contraste de la
+       palette dans les DEUX thèmes (#9aa6b0 sur fond clair, #5e656c sur fond
+       sombre), la phrase s'effaçait. Elle porte la couleur pleine du texte ;
+       l'italique et la police sans suffisent à la distinguer du NOTAM. */
     .ssum {
-      /* Même corps que .etext (13px) : la phrase se lit AVANT le NOTAM, pas
-         en note de bas de page — retour propriétaire du 2026-08-30. */
-      font: italic 500 13px/1.55 var(--sans);
-      color: var(--muted2);
-      margin: 0 0 7px;
+      font: italic 500 15px/1.5 var(--sans);
+      color: var(--text);
+      margin: 0 0 9px;
       padding-left: 12px;
       word-break: break-word
     }
@@ -2811,7 +2818,7 @@
        queue, une phrase longue la décrochait seule sur la ligne suivante. */
     .ssum .ai {
       display: inline-block;
-      font: 600 8.5px/1 var(--sans);
+      font: 600 9.5px/1 var(--sans);
       font-style: normal;
       color: var(--muted);
       border: 1px solid var(--line2);
