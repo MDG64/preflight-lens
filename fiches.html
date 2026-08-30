@@ -254,7 +254,7 @@ function erreur(id, msg) {
 
 /* ---------- démarrage ---------- */
 function demarrer() {
-  $('pied').textContent = 'v3.3 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'non certifié')
+  $('pied').textContent = 'v3.4 · ' + (CFG.cert ? (CFG.nom || 'appareil certifié') : 'non certifié')
     + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   // Le serveur par défaut se montre dès la première ouverture : un champ
   // vide faisait croire qu'il y avait quelque chose à trouver soi-même.
@@ -287,6 +287,16 @@ function idb() {
     r.onerror = () => ko(r.error);
   });
 }
+/* ON RANGE LES OCTETS, PAS LE FICHIER. Un objet File choisi dans un input
+   n'est qu'une RÉFÉRENCE à l'original (photothèque, iCloud, dossier). iOS
+   invalide cette référence dès que l'app est fermée : l'objet survit dans
+   IndexedDB, il annonce même sa taille, mais le lire ne rend plus rien — et
+   le serveur répond 400 « corps vide » sur une photo qu'on croyait en
+   sécurité. Copier tout de suite coûte une lecture ; ne pas le faire coûte
+   la photo. */
+async function copier(f) {
+  return new Blob([await f.arrayBuffer()], { type: f.type || 'application/octet-stream' });
+}
 async function fileAjouter(rec) {
   const d = await idb();
   return new Promise((ok, ko) => {
@@ -318,6 +328,9 @@ function motifDe(e) {
   if (e && e.statut === 403)
     return 'elles ne partent pas : le serveur refuse le certificat de cet appareil.'
       + ' Recertifie-le dans ⚙, elles partiront seules ensuite.';
+  if (e && e.statut === 400)
+    return 'elles ne partent pas : le serveur a refusé le contenu — envoi vide, ou'
+      + ' format inattendu. Reprends la photo depuis la photothèque.';
   if (e && e.statut)
     return 'elles ne partent pas : le serveur répond HTTP ' + e.statut + '.';
   /* Ni réponse ni code : la requête n'a pas abouti. Sur un appareil géré
@@ -361,10 +374,23 @@ let vidageEnCours = false;
 async function viderFile() {
   if (vidageEnCours || !CFG.cert) return;
   vidageEnCours = true;
+  let perdues = 0;
   try {
     for (const rec of await fileLire()) {
       try {
-        const final = await envoyer(rec.blob, rec.nom);
+        /* Une fiche mise en file par une version antérieure ne contient
+           peut-être qu'une référence morte : on la RELIT avant d'envoyer.
+           Zéro octet, c'est zéro octet — l'envoyer ne rapporterait qu'un
+           400, et la garder ferait attendre une photo qui n'existe plus.
+           On la retire en le disant : elle est à reprendre. */
+        let corps = null;
+        try { corps = await rec.blob.arrayBuffer(); } catch (e2) { corps = null; }
+        if (!corps || !corps.byteLength) {
+          await fileRetirer(rec.id);
+          perdues++;
+          continue;
+        }
+        const final = await envoyer(new Blob([corps], { type: rec.blob.type }), rec.nom);
         fileMotif = '';
         await fileRetirer(rec.id);
         $('journal').insertAdjacentHTML('afterbegin', '<li>' + final + ' · différée</li>');
@@ -376,7 +402,16 @@ async function viderFile() {
         break;
       }
     }
-  } finally { vidageEnCours = false; majAttente(); }
+  } finally {
+    vidageEnCours = false;
+    if (perdues) {
+      erreur('err-principal', perdues + ' fiche(s) en attente étaient vides : iOS avait'
+        + ' perdu l\'accès aux fichiers d\'origine (elles avaient été mises en attente'
+        + ' sans être copiées). Elles ont été retirées de la file — reprends-les depuis'
+        + ' la photothèque, celles-là partiront.');
+    }
+    majAttente();
+  }
 }
 $('btn-reessayer').onclick = async () => {
   const b = $('btn-reessayer');
@@ -464,7 +499,7 @@ function etatCertificat() {
     etat.textContent = 'Le serveur le reconnaît sous le nom « ' + ((moi && moi.nom) || nomLocal)
       + ' » — rien à faire ici. ' + (o.appareils || []).length + ' appareil(s) certifié(s) sur '
       + o.plafond + '.';
-    $('pied').textContent = 'v3.3 · ' + (CFG.nom || 'appareil certifié')
+    $('pied').textContent = 'v3.4 · ' + (CFG.nom || 'appareil certifié')
       + ' · relais ' + CFG.serveur.replace(/^https?:\/\//, '');
   }).catch(() => {
     /* Injoignable n'est pas révoqué : on ne fait pas peur pour un Wi-Fi
@@ -595,7 +630,7 @@ $('btn-envoyer').onclick = async () => {
         $('journal').insertAdjacentHTML('afterbegin', '<li>' + final + '</li>');
       } catch (e) { fileMotif = motifDe(e); restants.push({ f, nom }); }
     }
-    for (const r of restants) { try { await fileAjouter({ nom: r.nom, blob: r.f, at: Date.now() }); } catch (e) { /* rien à faire de mieux */ } }
+    for (const r of restants) { try { await fileAjouter({ nom: r.nom, blob: await copier(r.f), at: Date.now() }); } catch (e) { /* rien à faire de mieux */ } }
     await majAttente();
     lot = null; $('icao').value = '';
     $('fait-detail').textContent = restants.length
@@ -658,7 +693,7 @@ $('btn-envoyer').onclick = async () => {
      507…) garde l'ancien traitement : réessayer n'y changerait rien. */
   async function differer(msg) {
     try {
-      await fileAjouter({ nom: nom, blob: photo, at: Date.now() });
+      await fileAjouter({ nom: nom, blob: await copier(photo), at: Date.now() });
       fileMotif = motifDe({});
       photo = null; $('icao').value = ''; await majAttente();
       $('fait-detail').textContent = msg + ' Mise en attente — elle repartira au prochain essai.';
