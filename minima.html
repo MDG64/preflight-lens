@@ -3834,6 +3834,21 @@ function adRecordMinima(icao, end, type, dh, rvr){
            ...(acat ? {acat} : {}),
            verified:true});
 }
+
+/* Une ligne du tableau des approches → une saisie. Le geste est pris DANS LES
+   CHAMPS, pas dans la graine : ce qui est validé est ce qui est affiché, y
+   compris une valeur corrigée à la main ou un champ vidé exprès. C'est ce qui
+   permet au bouton de terrain de rejouer Record sans rien décider de plus que
+   le clic qu'il remplace. Rend true si quelque chose a été enregistré. */
+function adRecordFromRow(icao, btn){
+  const dhEl  = document.getElementById(`adDh_${btn.dataset.end}_${btn.dataset.i}`);
+  const rvrEl = document.getElementById(`adRvr_${btn.dataset.end}_${btn.dataset.i}`);
+  const dh  = dhEl  && dhEl.value!==""  ? +dhEl.value  : NaN;
+  const rvr = rvrEl && rvrEl.value!=="" ? +rvrEl.value : NaN;
+  if (!Number.isFinite(dh) && !Number.isFinite(rvr)) return false;
+  adRecordMinima(icao, btn.dataset.end, btn.dataset.type, dh, rvr);
+  return true;
+}
 /* Valeurs vérifiées du propriétaire — prioritaires sur tout consensus.
    DEUX RANGEMENTS, et l'ordre compte : `verifiedBy[catégorie]` porte la valeur
    validée POUR CETTE CATÉGORIE d'aéronef, `verified` celle qui n'en nomme
@@ -10584,6 +10599,10 @@ function refreshAdPanel(force){
   /* La colonne « Entries » n'existe que pour le propriétaire (voir adOwner) :
      ses en-têtes, ses cellules et les colspan qui la comptent suivent. */
   const own = adOwner();
+  /* Lignes ambre du terrain : la carte propose, rien n'est encore validé pour
+     la catégorie réglée. C'est ce que compte le bouton « Record all » plus
+     bas — et ce que la page de suivi appelle « en attente de validation ». */
+  let nPend = 0;
   const appHtml = appRows.map(a=>{
     const eff = adEffMinima(icao, a.end, a.type);
     const s = adStatList(icao, a.end, a.type) || {dh:[], rvr:[]};
@@ -10606,6 +10625,13 @@ function refreshAdPanel(force){
     /* Proposition de la carte : pré-remplie dans les deux champs, jamais
        appliquée — c'est le clic sur Record qui la valide. */
     const ch = adChartMinima(icao, a.end, a.type);
+    /* `pend` marque le bouton Record de cette ligne : c'est la liste que le
+       bouton de terrain rejouera, prise à la source qui l'affiche — impossible
+       qu'elle dise autre chose que ce que l'écran montre. Une ligne déjà
+       vérifiée POUR LA CATÉGORIE RÉGLÉE n'y est plus : revalider ne ferait que
+       réécrire la même valeur avec une date neuve. */
+    const pend = !!ch && !srcs.includes("verified") && (ch.dh!=null || ch.rvr!=null);
+    if (pend) nPend++;
     const chTip = ch
       ? `From the approach chart${chSrc}: ${ch.dh==null?"no DH":"DH "+ch.dh+" ft"} · ${ch.rvr==null?"no RVR":"RVR "+ch.rvr+" m"}`
         + ` — aircraft category ${ch.acat}${ch.exact?"":" (yours is not published on this chart; the most demanding line is proposed)"}.`
@@ -10622,8 +10648,8 @@ function refreshAdPanel(force){
                  value="${ch && ch.dh!=null ? ch.dh : ""}" aria-label="Report a DA/DH (ft)"></td>
       <td><input class="ad-num" type="number" min="0" step="25" id="adRvr_${a.end}_${a.i}" placeholder="RVR m"
                  value="${ch && ch.rvr!=null ? ch.rvr : ""}" aria-label="Report an RVR / visibility (m)"></td>
-      <td><button class="btn sm" data-ad="record" data-end="${a.end}" data-type="${a.type}" data-i="${a.i}">Record</button></td>
-      ${own ? `<td class="ad-stats">${ch ? `<span class="ad-badge chart" title="${chTip}">chart ${ch.acat}</span> ` : ""}${ch && ch.ga!=null ? `<span class="ad-badge ga" title="The chart publishes this line for several missed-approach gradients. The ${ch.ga}% column is proposed because every aircraft can hold it; steeper gradients are published lower.">GA ${ch.ga}% — check go-around performance</span> ` : ""}${s.verified ? `verified <button class="ad-x" data-ad="clearVerified" data-end="${a.end}" data-type="${a.type}" title="Forget the verified value — fall back to consensus or standard minima">×</button> · ` : ""}${(s.dh.length||s.rvr.length) ? `DH ${cnt(s.dh)||"—"} · RVR ${cnt(s.rvr)||"—"}` : "no entry yet"}</td>` : ""}
+      <td><button class="btn sm" data-ad="record" data-end="${a.end}" data-type="${a.type}" data-i="${a.i}"${pend?' data-chart="1"':""}>Record</button></td>
+      ${own ? `<td class="ad-stats">${ch ? `<span class="ad-badge chart" title="${chTip}">chart ${ch.acat}</span> ` : ""}${ch && ch.ga!=null ? `<span class="ad-badge ga" title="The chart publishes this line for several missed-approach gradients. The ${ch.ga}% column is proposed because every aircraft can hold it; steeper gradients are published lower.">GA ${ch.ga}% — check go-around performance</span> ` : ""}${(vcat || s.verified) ? `verified${vcat?" "+vcat:""} <button class="ad-x" data-ad="clearVerified" data-end="${a.end}" data-type="${a.type}" title="Forget the verified value${vcat?` of aircraft category ${vcat}`:""} — fall back to consensus or standard minima">×</button> · ` : ""}${(s.dh.length||s.rvr.length) ? `DH ${cnt(s.dh)||"—"} · RVR ${cnt(s.rvr)||"—"}` : "no entry yet"}</td>` : ""}
       <td>${a.circ ? "" : `<button class="ad-x" data-ad="delApp" data-end="${a.end}" data-i="${a.i}" title="Remove this approach">×</button>`}</td>
     </tr>`;
   }).join("")
@@ -10704,6 +10730,16 @@ function refreshAdPanel(force){
         <select id="adNewType" aria-label="Approach type">${typeOpts("CAT_I")}</select>
         <button class="btn sm" data-ad="addApp" ${ends.length?"":"disabled"}>Add approach</button>
       </div>
+      ${own && nPend ? `<div class="ad-add">
+        <button class="btn sm" data-ad="recordAllChart">Record all ${nPend} chart value${nPend===1?"":"s"}</button>
+        <span class="note">Presses <b>Record</b> on every amber line of this airfield — the same gesture,
+        ${nPend} time${nPend===1?"":"s"}, with whatever the fields currently hold. It signs under aircraft category
+        <b>${(cfg && cfg.acCategory) || "— none set —"}</b>${(cfg && cfg.acCategory)
+          ? `: the other categories these charts publish stay unvalidated, and the tracking page will nonetheless
+             count these lines as done.`
+          : `, that is, as the value common to every aircraft category.`} It validates a reading, it does not check
+        one: what enters the computation is what the seed read on a photographed chart.</span>
+      </div>` : ""}
       <p class="note" style="margin-top:10px">Values read from an <b>approach chart</b> arrive pre-filled in the
       report fields, with an amber <b>chart</b> badge naming the aircraft category they were published for. They are
       <b>proposals, not defaults</b> — nothing enters the computation until you press <b>Record</b>, which validates
@@ -10816,12 +10852,32 @@ function bindAdPanel(){
     /* Saisie d'un minima constaté : alimente les statistiques, jamais la
        fiche elle-même — c'est le consensus qui promeut une valeur. */
     if (act==="record"){
-      const dhEl  = document.getElementById(`adDh_${btn.dataset.end}_${btn.dataset.i}`);
-      const rvrEl = document.getElementById(`adRvr_${btn.dataset.end}_${btn.dataset.i}`);
-      const dh  = dhEl  && dhEl.value!==""  ? +dhEl.value  : NaN;
-      const rvr = rvrEl && rvrEl.value!=="" ? +rvrEl.value : NaN;
-      if (!Number.isFinite(dh) && !Number.isFinite(rvr)) return;
-      adRecordMinima(icao, btn.dataset.end, btn.dataset.type, dh, rvr);
+      if (adRecordFromRow(icao, btn)){ refreshAdPanel(true); render(); }
+      return;
+    }
+
+    /* Le terrain d'un coup. Rien de neuf n'est décidé ici : on rejoue Record
+       sur les seules lignes que le rendu a marquées `data-chart` — la carte
+       propose, aucune valeur vérifiée ne gouverne encore. Prendre la liste
+       dans le DOM plutôt que la recalculer garantit qu'elle ne peut pas dire
+       autre chose que l'écran. Cinquante-trois clics au lieu de cent
+       quarante-huit : c'est la seule chose que ce bouton change. */
+    if (act==="recordAllChart"){
+      const rows = Array.prototype.slice.call(
+        body.querySelectorAll('button[data-ad="record"][data-chart="1"]'));
+      if (!rows.length) return;
+      const cat = (cfg && cfg.acCategory) || null;
+      /* La catégorie est dite AVANT, pas après : une validation en C laisse la
+         D intacte, et la page de suivi comptera la ligne faite quand même. */
+      if (!confirm(`Validate the ${rows.length} value${rows.length===1?"":"s"} the charts propose for ${icao}?\n\n`
+        + `Each is recorded exactly as if you had pressed Record on its line, signed by this device`
+        + (cat ? `, for aircraft category ${cat} only — the other categories these charts publish stay unvalidated.`
+               : `, as the value common to every aircraft category.`)
+        + `\n\nThey become the application default immediately. Read the charts first.`)) return;
+      let n = 0;
+      for (const b of rows) if (adRecordFromRow(icao, b)) n++;
+      adToolsMsg = {ok:true, text:`${n} chart value${n===1?"":"s"} recorded for ${icao}`
+        + (cat ? ` — category ${cat}` : "")};
       refreshAdPanel(true); render();
       return;
     }
