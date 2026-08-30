@@ -18166,7 +18166,7 @@ function renderInfo(icao) {
           { id: "road-minor", type: "line", source: "o", "source-layer": "transportation", minzoom: 8,
             filter: ["in", ["get", "class"], ["literal", ["primary", "secondary", "tertiary"]]],
             paint: { "line-color": road, "line-opacity": FB * FR, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .6, 14, 2] } },
-          // Le terrain en cinq couches au lieu d'une. La version d'origine
+          // Le terrain en six couches au lieu de deux. La version d'origine
           // peignait TOUTE la couche aeroway avec un `fill` a 45 % et un
           // `line` de 1,2 px, sans regarder la classe ; deux defauts s'y
           // cumulaient des qu'on zoomait.
