@@ -1860,6 +1860,49 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
   color:var(--text);
 }
 .m-phase.stacked .m-col .pdata{display:flex;flex-direction:column;gap:6px}
+/* Les cases de la carte empilée respirent : elles ne sont plus le résumé d'une
+   ligne repliée mais la fiche elle-même, et on y SAISIT. Une cible de doigt ne
+   se loge pas dans 2 px de rembourrage. */
+.m-phase.stacked .m-cmp{
+  flex-wrap:wrap;row-gap:7px;gap:8px;padding:9px 11px;border-radius:7px;
+}
+.m-phase.stacked .m-cmp .k{font-size:10px;letter-spacing:.1em;width:52px}
+.m-phase.stacked .m-cmp .val{font-size:15px;line-height:1.3}
+.m-phase.stacked .m-cmp .val small{font-size:10.5px}
+.m-phase.stacked .m-cmp .val .wl+.wl{margin-top:5px}
+.m-phase.stacked .m-cmp .ico{width:19px;height:19px}
+/* Le champ posé à la place du chiffre exigé : même trait pointillé que les
+   cases saisissables de la version tablette, à la taille du chiffre qu'il
+   remplace. Il ne prend pas la teinte du verdict — c'est le relevé qui franchit
+   la limite, l'exigence ne fait que rester où elle est. */
+.m-cmp .to-ceil-in.in-box{
+  width:58px;font:600 15px/1.3 var(--num);font-variant-numeric:tabular-nums;
+  padding:0 2px;margin-right:1px;
+}
+.m-cmp .to-ceil-in.in-box:focus{border-bottom-color:var(--cyan)}
+/* La seconde ligne de la case : le minimum d'où sort l'exigence comparée, et
+   l'incrément de planification qui l'en sépare. Elle n'existe que là où les
+   deux chiffres diffèrent — sinon c'est l'exigence elle-même qu'on saisit. */
+.m-cmp .sub{
+  flex:0 0 100%;display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+  padding-top:6px;border-top:1px solid var(--line);
+}
+.m-cmp .sub .k2{
+  font:500 8.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);width:52px;flex:none;
+}
+.m-cmp .sub small{font-size:10.5px;font-weight:400;color:var(--muted);margin-left:1px}
+.m-cmp .sub .plus{font:500 10.5px/1 var(--mono);color:var(--muted);letter-spacing:.03em}
+/* Le doublon en milles vient sous le minimum qu'il redit, jamais à côté : deux
+   écritures du même chiffre sur une ligne se lisent comme deux exigences. */
+.m-cmp .sub .sub2{flex:0 0 100%;display:flex;align-items:center;gap:5px;margin-top:5px}
+/* La note de la case sans exigence occupe la seconde ligne à elle seule : sur la
+   première, à côté du relevé et du champ, elle faisait passer la case à la
+   ligne au milieu de ses propres chiffres. */
+.m-cmp .sub i.none{
+  flex:1 1 100%;font-style:normal;font:400 10px/1.45 var(--mono);
+  color:var(--muted2);letter-spacing:.03em;
+}
 /* Le cadre de l'approche est celui de la fiche (.m-req), monté sur la carte :
    il n'y garde ni la marge basse ni l'écart au titre qu'il avait dans un
    formulaire — c'est la grille de la pile qui espace, désormais. */
@@ -9695,9 +9738,14 @@ const M_STACKED = ["DESTINATION", "DESTINATION_ALTERNATE"];
    de la fiche terrain et la carte du bilan de vol. Elles s'étaient écrites deux
    fois, et le plafond n'avait atterri que dans la seconde — d'où une fiche qui
    comparait la visibilité et taisait le plafond. */
-const mCmpRow = (k, st, val)=>`<span class="m-cmp edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":""}">
+/* `sub` : une seconde ligne dans la case, sous la comparaison. Elle porte le
+   minimum saisissable quand celui-ci n'est PAS le chiffre comparé — sur un
+   dégagement, l'exigence comparée est le minimum plus l'incrément de
+   planification, et écrire l'un à la place de l'autre ferait taper 900 pour
+   obtenir 1700. */
+const mCmpRow = (k, st, val, sub)=>`<span class="m-cmp edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":""}">
     <span class="k">${k}</span><span class="val">${val}</span>
-    <span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span></span>`;
+    <span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>${sub?`<span class="sub">${sub}</span>`:""}</span>`;
 function mVisRow(vis){
   const cmp = vis.obs==null || vis.req==null ? "" : (vis.obs < vis.req ? "&lt;" : "≥");
   return mCmpRow("VIS/RVR", vis.st,
@@ -9716,6 +9764,92 @@ function mCeilRow(c){
   return mCmpRow("CEIL", c.st,
     `<span class="o${oCls(c.st)}">${obs}</span> ${cmp} ${mUnitVal(c.req,"ft")}`);
 }
+/* ---------- les cases saisissables de la carte empilée ----------
+   Le minimum se corrige DANS la case qui le compare : c'est là qu'on le lit,
+   c'est donc là qu'on le reprend. Les champs du bas de fiche, qui répétaient ces
+   mêmes chiffres sous un intitulé de formulaire, disparaissent d'autant.
+   Même contrat qu'eux, et que la version tablette : vider rend la main à la
+   valeur dérivée, et 0 dans le plafond écarte le critère. */
+
+/* Le minimum d'atterrissage — celui de la carte d'approche — dans l'unité du
+   relevé, et séparément son doublon en milles quand la FAA en publie un
+   (91.175(h)). Séparément, parce que le doublon ne doit pas décider de la mise
+   en page de la case : il apparaît dès qu'une valeur est saisie à la main, et
+   la case sauterait alors d'une ligne à deux sous le doigt. */
+function mMinimaFields(role, a){
+  const aUnit = a.unit || "m";
+  const aDisp = visDispUnit(aUnit);
+  const aReq = a.rvr==null ? null
+             : aDisp===aUnit ? a.rvr
+             : (aDisp==="sm" && a.visSm!=null ? a.visSm : reqInUnit(a.rvr, aUnit, aDisp));
+  const sm = a.visSm!=null && aDisp!=="sm";
+  return {aDisp, aReq, sm,
+    html: mVisFieldHtml(role, aReq, aDisp, aDisp==="ft" ? "RVR" : "Vis / RVR", "in-box")
+        + `<small>${unitLab(aDisp)}</small>`,
+    smHtml: !sm ? "" : `<span class="k2">Visi</span>`
+        + mVisFieldHtml(role, a.visSm, "sm", "Visibility", "in-box") + `<small>SM</small>`};
+}
+
+function mEditVisRow(tb, r, vis){
+  const role = roleFor(tb);
+  const a = (r.computed && r.computed.approach) || {};
+  const f = mMinimaFields(role, a);
+  const inc = (r.planning && r.planning.inc && r.planning.inc.vis) || 0;
+  const pUnit = (r.planning && r.planning.unit) || f.aDisp;
+  /* Le champ tient la place du chiffre exigé quand les deux sont le même
+     nombre : à la destination l'incrément de planification est nul, l'exigence
+     EST le minimum. Sinon la comparaison reste en haut et le minimum passe
+     dessous, avec l'incrément écrit — l'addition doit rester vérifiable. */
+  const obs = `<span class="o${oCls(vis.st)}">${vis.obs!=null?mUnitVal(vis.obs,vis.unit):"—"}</span>`;
+  const cmp = vis.obs==null || vis.req==null ? "" : (vis.obs < vis.req ? "&lt;" : "≥");
+  if (!inc && f.aDisp===vis.unit)
+    return mCmpRow("VIS/RVR", vis.st, `${obs} ${cmp} ${f.html}`, f.smHtml);
+  return mCmpRow("VIS/RVR", vis.st,
+    `${obs} ${cmp} ${vis.req!=null?mUnitVal(vis.req,vis.unit):"—"}`,
+    `<span class="k2">Minima</span>${f.html}`
+      + (inc ? `<span class="plus">+ ${visText(inc, pUnit)}${pUnit==="sm"?" SM":" m"}</span>` : "")
+      + (f.smHtml ? `<span class="sub2">${f.smHtml}</span>` : ""));
+}
+
+/* Le plafond, lui, se saisit toujours à la place du chiffre comparé : ce que la
+   case du plafond enregistre EST l'exigence finale de la phase, incrément
+   compris (voir le moteur, CEIL_REQ_MANUAL). La DH dont il dérive se corrige
+   sur la seconde ligne, là où un incrément s'y ajoute. */
+function mEditCeilRow(tb, r, c){
+  const role = roleFor(tb);
+  const a = (r.computed && r.computed.approach) || {};
+  const none = state.ceilReq[role]===null;
+  const aria = "Ceiling required for this phase, in ft — leave empty to use the derived value, 0 to apply no ceiling criterion";
+  const field = mCeilFieldHtml(role, c && c.req!=null ? c.req : null, aria, none, "in-box") + `<small>ft</small>`;
+  const obs = !c ? "—" : (c.obs!=null ? mUnitVal(c.obs,"ft") : (c.noCeiling ? "no cloud base" : "—"));
+  const incC = (r.planning && r.planning.inc && r.planning.inc.ceil) || 0;
+  /* La DH ne se corrige ici que là où un incrément s'y ajoute : ailleurs, c'est
+     le plafond lui-même qu'on tape, et deux champs pour un seul chiffre se
+     contrediraient. */
+  const dhSub = !incC ? "" : (()=>{
+    const dv = dhReqFor(role);
+    const der = a.circling ? (a.ceilingRequired!=null?a.ceilingRequired:a.dh) : (a.noDh ? null : a.dh);
+    const v = dv!=null ? dv : (der!=null ? der : null);
+    const lab = a.circling ? "MDH" : "DH";
+    return `<span class="k2">${lab}</span>`
+      + `<input class="mDhReq to-ceil-in in-box" data-role="${role}" type="number" min="0" step="10" inputmode="numeric"
+               placeholder="—" value="${v!=null?v:""}"
+               aria-label="${lab} used for planning, in ft — empty to use the derived value"><small>ft</small>`
+      + `<span class="plus">+ ${incC} ft</span>`;
+  })();
+  /* Aucune exigence : ni comparateur ni pouce, rien que le relevé et la case
+     — un plafond observé qui n'est comparé à rien se lirait comme le critère
+     lui-même. C'est le mot de la case plafond de la version tablette. */
+  if (!c || c.req==null)
+    return mCmpRow("CEIL", "unknown", `<span class="o">${obs}</span> ${field}`,
+      `<i class="none">${none
+        ? "0 — criterion removed by hand; clear the box for the derived value"
+        : "empty — nothing derived, no ceiling criterion applied"}</i>${dhSub}`);
+  const cmp = c.obs==null ? "" : (c.obs < c.req ? "&lt;" : "≥");
+  return mCmpRow("CEIL", c.st,
+    `<span class="o${oCls(c.st)}">${obs}</span> ${cmp} ${field}`, dhSub);
+}
+
 function mWindRow(w){
   if (!w) return mCmpRow("WIND", "unknown", "—");
   return mCmpRow("WIND", w.st,
@@ -9750,32 +9884,45 @@ function mReqSelectHtml(r){
       <option value="MANUAL" ${req.manual?"selected":""}>Entered by hand</option>
     </select>
   </div>`
-  + mVisInputHtml("mToVisInput", reqDisp, dispU);
+  + mVisInputHtml("DEPARTURE", reqDisp, dispU);
 }
 
 /* Même champ plafond que sur tablette, en ligne de formulaire. Rendu quelle que
    soit la valeur : vide est un état à voir, pas une case à cacher. */
 /* Même contrat que la case de tablette : vidée, la valeur dérivée revient ;
    0 écarte le critère et reste écrit dans le champ. */
-function mCeilInputHtml(id, req, aria, none){
+/* Les champs se rangent par RÔLE, plus par identifiant : depuis que la
+   destination et son dégagement portent leurs minima dans les cases de leur
+   carte repliée, plusieurs champs de même nature coexistent à l'écran. Un id
+   les aurait fait écrire tous sous la phase ouverte, qui n'est pas la leur. */
+function mCeilInputHtml(role, req, aria, none){
   return `<div class="m-req">
     <span>Ceiling required (ft) — empty for the derived value, 0 for none</span>
-    <input id="${id}" class="to-ceil-in" type="number" min="0" step="50" inputmode="numeric"
-           placeholder="—" value="${req!=null?req:(none?0:"")}" aria-label="${aria}">
+    ${mCeilFieldHtml(role, req, aria, none)}
   </div>`;
+}
+/* Le champ nu, sans son habillage de formulaire : c'est lui que la case de la
+   carte empilée pose à la place du chiffre exigé. */
+function mCeilFieldHtml(role, req, aria, none, cls){
+  return `<input class="mCeilReq to-ceil-in${cls?" "+cls:""}" data-role="${role}"
+           type="number" min="0" step="50" inputmode="numeric"
+           placeholder="—" value="${req!=null?req:(none?0:"")}" aria-label="${aria}">`;
 }
 
 /* Même champ vis / RVR que sur tablette. Vide, il ne dit pas « pas de critère »
    comme le plafond, mais « celui du moteur » : l'exigence, elle, existe
    toujours. */
-function mVisInputHtml(id, req, unit, label, warn){
+function mVisInputHtml(role, req, unit, label, warn){
   return `<div class="m-req">
     <span>${label||"Vis / RVR"} required (${unitLab(unit)}) — empty to use the derived value</span>
     ${warn==null?"":`<span class="ga-warn">GA ${warn}% — check go-around performance</span>`}
-    <input id="${id}" class="to-ceil-in" ${visFieldAttrs(unit)}
-           placeholder="—" value="${visFieldValue(req,unit)}" data-unit="${unit}"
-           aria-label="${label||"Visibility or RVR"} required for this phase, in ${unitLab(unit)}">
+    ${mVisFieldHtml(role, req, unit, label)}
   </div>`;
+}
+function mVisFieldHtml(role, req, unit, label, cls){
+  return `<input class="mVisReq to-ceil-in${cls?" "+cls:""}" data-role="${role}" ${visFieldAttrs(unit)}
+           placeholder="—" value="${visFieldValue(req,unit)}" data-unit="${unit}"
+           aria-label="${label||"Visibility or RVR"} required for this phase, in ${unitLab(unit)}">`;
 }
 
 function mMarginTxt(rv, unit){
@@ -9828,6 +9975,10 @@ function mDetailHtml(tb, r){
      réglementaire est déjà nommée par le sélecteur juste au-dessus, et les
      références réglementaires se lisent dans le setup. */
   const isDep = tb.role==="DEPARTURE";
+  /* Carte empilée : ses cases portent déjà les minima saisissables et la
+     comparaison du vent. Ne reste sous elles que ce qu'aucune case ne dit —
+     le règlement, les références, les avertissements. */
+  const inCard = M_STACKED.includes(tb.role);
   /* Q2 quitte la table de la fiche comme elle quitte celle de la
      tablette : ses lignes doublaient la vis/RVR déjà comparée en tête de
      phase. Son texte et sa référence partent au panneau des règles. */
@@ -9880,14 +10031,15 @@ function mDetailHtml(tb, r){
   const mAReq = a.rvr==null ? null
               : mADisp===mAUnit ? a.rvr
               : (mADisp==="sm" && a.visSm!=null ? a.visSm : reqInUnit(a.rvr, mAUnit, mADisp));
+  const mRole = roleFor(tb);
   const mVisFields = isDep ? "" : (tb.role==="TAKEOFF_ALTERNATE"
-      ? mVisInputHtml("mToAltVisInput",
+      ? mVisInputHtml(mRole,
                       (r.planning && r.planning.visReq!=null) ? r.planning.visReq : null,
                       (r.planning && r.planning.unit) || (cfg.framework==="FAA" ? "sm" : "m"),
                       null, mGa)
-      : mVisInputHtml("mAppVisReqInput", mAReq, mADisp,
+      : mVisInputHtml(mRole, mAReq, mADisp,
                       mADisp==="ft" ? "RVR" : "Vis / RVR", mGa)
-        + (a.visSm!=null && mADisp!=="sm" ? mVisInputHtml("mAppVisSmReqInput", a.visSm, "sm", "Visibility") : ""));
+        + (a.visSm!=null && mADisp!=="sm" ? mVisInputHtml(mRole, a.visSm, "sm", "Visibility") : ""));
   /* Sur les dégagements, la DH / MDH de planification se saisit aussi ici —
      même contrat que sur tablette : vide, la valeur dérivée revient. */
   const mDhField = !["ERA","DESTINATION_ALTERNATE"].includes(tb.role) ? "" : (()=>{
@@ -9895,7 +10047,7 @@ function mDetailHtml(tb, r){
     const der = a.circling ? (a.ceilingRequired!=null?a.ceilingRequired:a.dh) : (a.noDh ? null : a.dh);
     return `<div class="m-req">
       <span>${a.circling?"MDH":"DH"} for planning (ft) — empty to use the derived value</span>
-      <input id="mPhaseDhInput" class="to-ceil-in" type="number" min="0" step="10" inputmode="numeric"
+      <input class="mDhReq to-ceil-in" data-role="${roleFor(tb)}" type="number" min="0" step="10" inputmode="numeric"
              placeholder="—" value="${dv!=null?dv:(der!=null?der:"")}"
              aria-label="${a.circling?"MDH":"DH"} used for planning, in ft — empty to use the derived value">
     </div>`;
@@ -9904,13 +10056,13 @@ function mDetailHtml(tb, r){
     ${tb.role==="DEPARTURE" ? mReqSelectHtml(r)
       : M_STACKED.includes(tb.role) ? "" /* déjà en tête de la carte empilée */
       : mPhaseAppHtml(tb)}
-    ${mVisFields}
-    ${mDhField}
-    ${isDep ? "" : mCeilInputHtml("mPhaseCeilInput",
+    ${inCard ? "" : mVisFields}
+    ${inCard ? "" : mDhField}
+    ${isDep || inCard ? "" : mCeilInputHtml(roleFor(tb),
                       (r.planning && r.planning.ceilReq!=null) ? r.planning.ceilReq : null,
                       "Ceiling required for this phase, in ft — leave empty to use the derived value, 0 to apply no ceiling criterion",
                       state.ceilReq[roleFor(tb)]===null)}
-    ${rows.length ? `<table class="m-dtable">
+    ${inCard ? "" : rows.length ? `<table class="m-dtable">
       <thead><tr><th>Parameter</th><th>Obs.</th><th>Req.</th><th>Margin</th><th></th></tr></thead>
       <tbody>${rows.join("")}</tbody>
     </table>` : `<p class="m-drat" style="margin:0">Nothing to compare — no report loaded.</p>`}
@@ -10287,24 +10439,25 @@ function bindMobile(host){
     const n = parseNumField(el.value);
     return (n==null || n<=0) ? null : n;
   };
-  /* La phase dépliée donne le rôle auquel les saisies s'appliquent : les champs
-     ne sont rendus que sous elle. */
-  /* Même règle que sur tablette : les saisies se rangent sous le rôle évalué —
-     sur l'onglet en route, le genre de dégagement choisi et non « ERA ». */
-  const mRole = TABS[mState.open] ? roleFor(TABS[mState.open]) : null;
-  const mtac = host.querySelector("#mPhaseCeilInput");
-  if (mtac && mRole) mtac.onchange = ()=>{ setCeilReqFor(mRole, mReadCeilReq(mtac)); render(); };
-  const mtdh = host.querySelector("#mPhaseDhInput");
-  if (mtdh && mRole) mtdh.onchange = ()=>{ setDhReqFor(mRole, mReadCeil(mtdh)); render(); };
-  [["#mToVisInput", cfg.framework==="FAA"?"ft":"m"],
-   ["#mToAltVisInput", cfg.framework==="FAA"?"sm":"m"],
-   ["#mAppVisReqInput", cfg.framework==="FAA"?"ft":"m"],
-   ["#mAppVisSmReqInput", "sm"]].forEach(([sel, unit])=>{
-    const el = host.querySelector(sel);
-    /* `data-unit` l'emporte : la case du décollage se rend dans l'unité du
-       relevé (milles terrestres sous FAA sans RVR), et ce qu'on y écrit doit
-       être enregistré dans l'unité qu'elle affiche, pas dans celle du cadre. */
-    if (el && mRole) el.onchange = ()=>{ setVisReqFor(mRole, mReadCeil(el), el.dataset.unit || unit); render(); };
+  /* Chaque champ porte SON rôle : les minima de la destination et de son
+     dégagement se corrigent désormais dans les cases de leur carte repliée, et
+     plusieurs champs de même nature coexistent à l'écran. Les ranger sous la
+     phase ouverte — ce que faisait la lecture par id — les aurait écrits sous
+     la mauvaise. `roleFor` a déjà tranché à l'écriture du champ : sur l'onglet
+     en route, c'est le genre de dégagement choisi et non « ERA ». */
+  host.querySelectorAll(".mCeilReq").forEach(el=>el.onchange = ()=>{
+    setCeilReqFor(el.dataset.role, mReadCeilReq(el)); render();
+  });
+  host.querySelectorAll(".mDhReq").forEach(el=>el.onchange = ()=>{
+    setDhReqFor(el.dataset.role, mReadCeil(el)); render();
+  });
+  /* `data-unit` gouverne : le champ se rend dans l'unité du relevé (milles
+     terrestres sous FAA sans RVR), et ce qu'on y écrit doit être enregistré
+     dans l'unité qu'il affiche, pas dans celle du cadre. */
+  host.querySelectorAll(".mVisReq").forEach(el=>el.onchange = ()=>{
+    setVisReqFor(el.dataset.role, mReadCeil(el),
+                 el.dataset.unit || (cfg.framework==="FAA" ? "ft" : "m"));
+    render();
   });
   const rq = host.querySelector("#mReqSel");
   if (rq) rq.onchange = ()=>{
@@ -10314,7 +10467,7 @@ function bindMobile(host){
        être lue comme l'index 0. Choisir une ligne réglementaire efface la
        saisie. */
     if (rq.value==="MANUAL"){ render(); return; }
-    if (mRole) setVisReqFor(mRole, null);
+    setVisReqFor("DEPARTURE", null);
     state.reqOverride = (/^\d+$/.test(rq.value) && takeoffReqOptions()[+rq.value]) || null;
     render();
   };
@@ -10423,8 +10576,8 @@ function mobileResultsHtml(){
     const inner = `<span class="pname">${tb.t}</span>
         <span class="pdata">
           ${stack ? mPhaseAppHtml(tb) : ""}
-          ${mVisRow(vis)}
-          ${mCeilRow(ceil)}
+          ${stack ? mEditVisRow(tb, r, vis) : mVisRow(vis)}
+          ${stack ? mEditCeilRow(tb, r, ceil) : mCeilRow(ceil)}
           ${mWindRow(wind)}
         </span>
         <span class="pthumb"><span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span></span>
