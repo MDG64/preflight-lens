@@ -5170,10 +5170,16 @@ function computeTakeoffMinima(cfg){
     }
     let visSm = std.visSm ?? faaRvrToVisSm(req);
     if (Number.isFinite(cfg.companyToRvrM) && cfg.companyToRvrM > 0){
-      const was = req;
-      req = visFromM(cfg.companyToRvrM, "ft"); visSm = faaRvrToVisSm(req); driver = "COMPANY_APPROVAL";
-      warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
-        message:`Take-off minimum from your company approval applied: ${cfg.companyToRvrM} m = ${req} ft, instead of the ${was} ft otherwise derived. It replaces the regulatory value in both directions — an approval may sit above or below the table. Check it against the OM-B.`});
+      const co = visFromM(cfg.companyToRvrM, "ft");
+      if (req == null || req < co){
+        const was = req;
+        req = co; visSm = faaRvrToVisSm(req); driver = "COMPANY_APPROVAL";
+        warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+          message:`Take-off minimum raised to the floor of your company approval: ${cfg.companyToRvrM} m = ${req} ft${was==null?" — nothing else could be derived":`, instead of the ${was} ft otherwise derived, which sat below it`}. An approved minimum is the LOWEST value you may use, never the value to apply: it only ever raises the derived requirement. Check it against the OM-B.`});
+      } else {
+        warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+          message:`Take-off minimum ${req} ft governs — it is at or above the ${co} ft (${cfg.companyToRvrM} m) of your company approval, which is a floor and not a substitute. Check it against the OM-B.`});
+      }
     }
     return {required:req, unit:"ft", visSm, driver, warnings};
   }
@@ -5227,13 +5233,22 @@ function computeTakeoffMinima(cfg){
     }
     if (required < 75){ required = 75; driver = "LVTO_ABSOLUTE_FLOOR"; }
   }
-  /* Le minimum approuvé a le dernier mot sur la dérivation réglementaire, y
-     compris sur le plancher LVTO : c'est l'approbation qui fixe le chiffre. */
+  /* Le minimum approuvé est un PLANCHER, pas un chiffre de remplacement : il
+     dit jusqu'où l'exploitant est autorisé à descendre, et n'a donc de prise
+     que sur une dérivation qui passerait EN DESSOUS de lui — la table, le
+     plancher LVTO ou l'infrastructure gardent la main dès qu'ils exigent
+     davantage. Une approbation à 125 m n'autorise pas un décollage à 125 m
+     sur une piste dont le balisage en impose 400. */
   if (Number.isFinite(cfg.companyToRvrM) && cfg.companyToRvrM > 0){
-    const was = required;
-    required = cfg.companyToRvrM; driver = "COMPANY_APPROVAL";
-    warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
-      message:`Take-off minimum from your company approval applied: ${required} m${was?`, instead of the ${was} m otherwise derived`:""}. It replaces the regulatory value in both directions — an approval may sit above or below the table. Check it against the OM-B.`});
+    if (required == null || required < cfg.companyToRvrM){
+      const was = required;
+      required = cfg.companyToRvrM; driver = "COMPANY_APPROVAL";
+      warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+        message:`Take-off minimum raised to the floor of your company approval: ${required} m${was?`, instead of the ${was} m otherwise derived, which sat below it`:""}. An approved minimum is the LOWEST value you may use, never the value to apply: it only ever raises the derived requirement. Check it against the OM-B.`});
+    } else {
+      warnings.push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+        message:`Take-off minimum ${required} m governs — it is at or above the ${cfg.companyToRvrM} m of your company approval, which is a floor and not a substitute. Check it against the OM-B.`});
+    }
   }
   return {required, unit:"m", driver, t1, t2, warnings};
 }
@@ -5724,28 +5739,42 @@ function assess(role, ctx){
 
   /* ---------------- minima approuvés de l'exploitant ----------------
      Après la base terrains, avant la saisie de la phase. Un minimum approuvé
-     n'est pas un plancher de plus : c'est le chiffre que l'équipage vole, et
-     il remplace donc ce que la table, la carte ou le consensus ont posé.
+     est un PLANCHER : la valeur la plus BASSE sous laquelle l'exploitation ne
+     descend pas, pas le chiffre à appliquer. Ce qui gouverne reste donc la
+     ligne de la base terrains, de la carte ou de la table — l'approbation ne
+     fait que l'empêcher de passer dessous. Elle REMPLAÇAIT tout jusqu'au
+     2026-08-30, et une approbation à 100 m faisait juger un VOR sur 100 m
+     quand sa ligne en publie 750 : le sélecteur d'approche paraissait mort.
+     DEUX CAS OÙ ELLE RESTE LE SEUL CHIFFRE : rien n'a pu être dérivé, ou
+     l'opération n'a pas de DH du tout (CAT III sans DH) — une approbation qui
+     s'arrête à une hauteur ne couvre pas une descente qui n'en a aucune.
      UNE OPÉRATION QUE LA CARTE INTERDIT RESTE INTERDITE : aucune approbation
      ne rend des minima à une opération qui n'en publie pas. */
   if (!app.notAuthorized){
-    const coRvr = Number.isFinite(cfg.companyLdgRvrM) && cfg.companyLdgRvrM>0 ? cfg.companyLdgRvrM : null;
-    const coDh  = Number.isFinite(cfg.companyLdgDhFt) && cfg.companyLdgDhFt>0 ? cfg.companyLdgDhFt : null;
-    const coParts = [];
-    if (coRvr!=null){
-      if (cfg.framework==="FAA"){ app.rvr = visFromM(coRvr,"ft"); app.visSm = faaRvrToVisSm(app.rvr); }
-      else app.rvr = coRvr;
-      app.rvrDriver = "COMPANY_APPROVAL";
-      coParts.push(`RVR ${app.rvr} ${app.unit}`);
+    const coRvrM = Number.isFinite(cfg.companyLdgRvrM) && cfg.companyLdgRvrM>0 ? cfg.companyLdgRvrM : null;
+    const coDh   = Number.isFinite(cfg.companyLdgDhFt) && cfg.companyLdgDhFt>0 ? cfg.companyLdgDhFt : null;
+    const raised = [], kept = [];
+    if (coRvrM!=null){
+      const coRvr = cfg.framework==="FAA" ? visFromM(coRvrM,"ft") : coRvrM;
+      if (app.rvr==null || app.rvr < coRvr){
+        const was = app.rvr;
+        app.rvr = coRvr;
+        if (cfg.framework==="FAA") app.visSm = faaRvrToVisSm(app.rvr);
+        app.rvrDriver = "COMPANY_APPROVAL";
+        raised.push(`RVR / visibility raised to ${app.rvr} ${app.unit}${was==null?" — nothing else could be derived":`, the ${was} ${app.unit} derived sitting below the approval`}`);
+      } else kept.push(`RVR / visibility ${app.rvr} ${app.unit} (approval floor ${coRvr} ${app.unit})`);
     }
     if (coDh!=null){
-      app.dh = coDh; app.noDh = false; app.dhDriver = "COMPANY_APPROVAL";
-      /* En circling la MDH EST le plafond exigé — même raison qu'au-dessus. */
-      if (app.circling) app.ceilingRequired = coDh;
-      coParts.push(`DH ${coDh} ft`);
+      if (app.noDh || app.dh==null || app.dh < coDh){
+        const was = app.noDh ? null : app.dh;
+        app.dh = coDh; app.noDh = false; app.dhDriver = "COMPANY_APPROVAL";
+        /* En circling la MDH EST le plafond exigé — même raison qu'au-dessus. */
+        if (app.circling) app.ceilingRequired = coDh;
+        raised.push(`DH raised to ${coDh} ft${was==null?" — the operation carried none":`, the ${was} ft derived sitting below the approval`}`);
+      } else kept.push(`DH ${app.dh} ft (approval floor ${coDh} ft)`);
     }
-    if (coParts.length) push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
-      message:`Landing minima from your company approval applied: ${coParts.join(" · ")}. They replace the regulatory, chart and airfield-database values. It is your responsibility to check them against the OM-B.`});
+    if (raised.length || kept.length) push({severity:"INFO", code:"COMPANY_MINIMA_APPLIED",
+      message:`Company approved minima are a FLOOR — the lowest values you may use, not the values to apply. ${raised.length?`Raised to the approval: ${raised.join(" · ")}.`:""}${kept.length?`${raised.length?" ":""}Governed by the table, chart or airfield database, at or above the approval: ${kept.join(" · ")}.`:""} It is your responsibility to check them against the OM-B.`});
   }
 
   /* ---------------- minimum d'atterrissage saisi à la main ----------------
@@ -6275,11 +6304,12 @@ const cfg = {
   rnpArApproved:false,
   afmDhFt:null, afmRvrM:null, melDegraded:false,
   /* Minima APPROUVÉS de l'exploitant (OM-B). Vides = aucun, le moteur garde sa
-     dérivation réglementaire. Renseignés, ils REMPLACENT la valeur dérivée —
-     table, base terrains et minima publiés compris : un minimum approuvé est
-     le chiffre que l'équipage vole, pas un plancher de plus, et le clamper
-     afficherait un minimum que personne n'applique. Seule la saisie de la
-     phase passe devant : elle décrit le vol du jour, eux l'exploitation.
+     dérivation réglementaire. Renseignés, ils sont un PLANCHER : la valeur la
+     plus BASSE que l'exploitation autorise, pas le chiffre à appliquer. La
+     dérivation — table, base terrains, minima publiés — garde donc la main, et
+     l'approbation ne fait que la relever quand elle passerait dessous. Seule
+     la saisie de la phase passe devant, dans les deux sens : elle décrit le
+     vol du jour, eux l'exploitation.
      Les trois se saisissent dans l'unité de leur intitulé ; sous cadre FAA les
      mètres sont convertis en pieds, centaine la plus proche, comme toute autre
      vis/RVR de l'application. */
@@ -6631,13 +6661,14 @@ const SETUP = [
     {k:"crewRestrictDhFt", l:"Crew restriction — DH add (ft)", type:"number"}
   ]},
   /* Les minima approuvés de l'exploitant ont leur groupe : ils ne sont ni de
-     l'équipement, ni de la planification — ils remplacent le résultat du
-     moteur. La case « OM-B/OM-C minima loaded » du groupe suivant dit qu'on
-     les a lus ; celles-ci disent ce qu'ils valent. */
-  {t:"Company approved minima (OM-B)", f:[
-    {k:"companyToRvrM", l:"Take-off minimum by company approval (m)", type:"number"},
-    {k:"companyLdgRvrM", l:"Landing minimum by company approval — RVR / visibility (m)", type:"number"},
-    {k:"companyLdgDhFt", l:"Landing minimum by company approval — DH / MDH (ft)", type:"number"}
+     l'équipement, ni de la planification — ils PLANCHENT le résultat du
+     moteur, sans jamais le remplacer. La case « OM-B/OM-C minima loaded » du
+     groupe suivant dit qu'on les a lus ; celles-ci disent jusqu'où ils
+     descendent. */
+  {t:"Company approved minima (OM-B) — floor, never a substitute", f:[
+    {k:"companyToRvrM", l:"Take-off — lowest RVR approved (m)", type:"number"},
+    {k:"companyLdgRvrM", l:"Landing — lowest RVR / visibility approved (m)", type:"number"},
+    {k:"companyLdgDhFt", l:"Landing — lowest DH / MDH approved (ft)", type:"number"}
   ]},
   {t:"Planning & met", f:[
     /* La case commande le sélecteur : les Tables 3 et 4 abaissent l'exigence et
@@ -6953,7 +6984,7 @@ function phaseRuleCards(role, r){
     add("Ceiling — which cases require one", isToAlt ? `CAT.OP.MPA.110 · ${DS.easa.takeoffAlternate.ref}` : "CAT.OP.MPA.110 · AMC1 CAT.OP.MPA.182",
       rulesList([
         {t:"Type B approach (DH below 250 ft — CAT I, II, III, and the LPV 200 that stands with them: published FAS data block with VAL 35 m or less): RVR alone. NO ceiling requirement for a straight-in approach.", on:!typeA},
-        {t:"Type A approach (everything the Type B list does not name — 2D/NPA, LNAV/VNAV, LPV without a published FAS data block, and a CAT I raised to 250 ft or more by its OCH): straight-in minima are DH/MDH + RVR; the ceiling is not a criterion of the approach itself either. A DH lowered by a company approval or typed by hand does not turn it into a Type B.", on:typeA && !app.circling},
+        {t:"Type A approach (everything the Type B list does not name — 2D/NPA, LNAV/VNAV, LPV without a published FAS data block, and a CAT I raised to 250 ft or more by its OCH): straight-in minima are DH/MDH + RVR; the ceiling is not a criterion of the approach itself either. A DH typed by hand does not turn it into a Type B — and a company approval never lowers one: it is a floor.", on:typeA && !app.circling},
         {t:"Circling: the MDH IS the ceiling required — the manoeuvre is flown in sight of the aerodrome.", on:!!app.circling},
         isToAlt
           ? {t:"Here, on the take-off alternate: ceiling at or above MDH when the approach is Type A or a circling manoeuvre; a Type B approach requires none.", on:true}
@@ -7968,7 +7999,7 @@ function visReqCell({id, req, obs, unit, manual, label, note, dh, warn, prov}){
      Voir provOf(), qui traduit le pilote de la valeur en l'un des trois. */
   const PROV_TIP = {
     VERIFIED:"Verified minimum — recorded on this device from the approach chart. Applied as it stands.",
-    COMPANY:"Approved company minimum — the value from your OM-B, entered in Operation setup. It replaces the table, chart and airfield-database values, and it is the one that governs.",
+    COMPANY:"Approved company minimum — the floor from your OM-B, entered in Operation setup. It is the lowest value you may use: it governs here only because the table, chart or airfield-database value sat below it.",
     UNVERIFIED:"Minimum not verified — standard table, user consensus or hand-entered value. Check it against the official approach chart."};
   const provAttrs = (p, v) => (p==null || v==null) ? {cls:"", tip:""} : {
     cls: p==="UNVERIFIED" ? " min-unver" : " min-ver",
@@ -8158,10 +8189,9 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
      DEUX provenances répondent du chiffre. La base terrains comme valeur
      VÉRIFIÉE — relevée sur la carte d'approche puis enregistrée ici. Et le
      minimum APPROUVÉ de l'exploitant, saisi dans Operation setup : c'est le
-     chiffre opposable, celui que l'équipage vole ; il est appliqué après la
-     base terrains et la remplace, si bien qu'un terrain dont les minima sont
-     vérifiés se lisait en ambre dès qu'une approbation les relevait — le cadre
-     disait « non vérifié » de la seule valeur qui gouvernait.
+     chiffre opposable, celui que l'équipage vole ; il PLANCHE la base terrains
+     et n'apparaît donc ici que là où il l'a relevée — partout ailleurs c'est
+     la provenance de la base qui se lit, comme il se doit.
      La DH et la vis / RVR ne se vérifient pas ensemble — une carte de CAT III
      ne publie pas de DH, et la vis / RVR relevée sur elle n'a pas à porter
      l'ambre de la hauteur que la table réglementaire a fournie à côté ; une
