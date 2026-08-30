@@ -15294,10 +15294,41 @@ E) ${e}`;
        (sa file de fond tourne, la phrase sera là à la consultation suivante —
        personne n'attend jamais le LLM). */
     const summaryByRaw = new Map();
+    /* Le serveur FAIT AUTORITÉ, y compris quand il ne renvoie rien : un `null`
+       EFFACE la phrase qu'on avait, il ne la laisse pas en place.
+       La version précédente ne faisait que poser les chaînes non vides, jamais
+       retirer. Conséquence vue le 2026-08-30 : au passage de la consigne en
+       version 3 le proxy a répondu `null` partout le temps que son cache se
+       régénère, la phrase périmée est restée dans le cache mémoire, et
+       saveOffline() l'a réécrite sur le disque à chaque revalidation. Le
+       « FLW » corrigé côté serveur se réinstallait donc tout seul à l'écran.
+       Une phrase que le serveur ne connaît plus vient forcément d'une consigne
+       dépassée : ne pas l'afficher vaut mieux que l'afficher. */
     function noteSummaries(notams, sums) {
       if (!Array.isArray(notams) || !Array.isArray(sums)) return;
-      for (let i = 0; i < notams.length; i++)
-        if (typeof sums[i] === "string" && sums[i]) summaryByRaw.set(notams[i], sums[i]);
+      for (let i = 0; i < notams.length; i++) {
+        const v = sums[i];
+        if (typeof v === "string" && v) summaryByRaw.set(notams[i], v);
+        else summaryByRaw.delete(notams[i]);
+      }
+    }
+    /* Comparer les PHRASES, pas seulement les textes. Une retouche de la
+       consigne de résumé régénère tout le cache du proxy sans qu'un seul NOTAM
+       soit réémis : memeListe() ne voit alors aucun changement et l'écran reste
+       sur l'ancienne phrase jusqu'au prochain rechargement complet. */
+    function phrasesStockees(copie) {
+      const m = new Map();
+      if (copie && Array.isArray(copie.raw)) {
+        const s = Array.isArray(copie.sums) ? copie.sums : [];
+        copie.raw.forEach((r, i) => m.set(r, s[i] || null));
+      }
+      return m;
+    }
+    function phrasesActuelles(raws) {
+      return new Map((raws || []).map(r => [r, summaryByRaw.get(r) || null]));
+    }
+    function phrasesInchangees(raws, avant) {
+      return (raws || []).every(r => (avant.get(r) || null) === (summaryByRaw.get(r) || null));
     }
 
     // Récupère les NOTAM bruts (tableau de chaînes ICAO) pour un code OACI.
@@ -15670,11 +15701,18 @@ E) ${e}`;
         rebuildSavedSet();
       }
     }
-    function loadOffline(icao) {
+    /* `publier` : reverser les phrases STOCKÉES dans le cache mémoire. Faux par
+       défaut, et ce défaut est tout l'enjeu — une revalidation appelle
+       loadOffline() APRÈS avoir reçu la réponse du serveur, seulement pour
+       comparer. Publier à ce moment-là écrasait les phrases FRAÎCHES par celles
+       du disque, et saveOffline() les y réécrivait juste après : la copie
+       périmée se réinstallait d'elle-même à chaque passage. Seul l'affichage
+       d'une copie hors-ligne a besoin de publier. */
+    function loadOffline(icao, { publier = false } = {}) {
       try {
         const s = localStorage.getItem("notam_data:" + icao);
         const o = s ? JSON.parse(s) : null;
-        if (o) noteSummaries(o.raw, o.sums);   // les phrases remontent avec la copie
+        if (o && publier) noteSummaries(o.raw, o.sums);
         return o;
       } catch (e) { return null; }
     }
@@ -15887,10 +15925,23 @@ E) ${e}`;
     // qu'améliorer l'écran, jamais le dégrader. Un reseau absent ou un proxy en
     // panne laisse simplement la copie affichée telle quelle.
     async function revalider(icao, monJeton, ancien) {
+      // Photographier AVANT l'appel : fetchNotams() met à jour summaryByRaw au
+      // passage, donc après il est trop tard pour savoir ce qu'on affichait.
+      const phrasesAvant = phrasesActuelles(ancien);
       let frais;
       try { frais = await fetchNotams(icao); }
       catch (e) { return; }
       if (monJeton !== loadToken) return;      // l'utilisateur a changé de terrain entre-temps
+      // Texte identique mais phrase changée : on repeint SANS bandeau. Le
+      // bandeau annonce « Newer NOTAMs received », ce qui serait faux — aucun
+      // NOTAM n'a bougé, seule son aide de lecture a été refaite. Et on ne
+      // dérange pas un lecteur engagé pour ça : la copie disque est à jour, il
+      // verra la nouvelle phrase à sa prochaine ouverture.
+      if (frais !== null && memeListe(ancien, frais) && !phrasesInchangees(frais, phrasesAvant)) {
+        saveOffline(icao, frais);
+        if (!lecteurEngage()) renderFromRaw(frais);
+        return;
+      }
       if (frais === null || memeListe(ancien, frais)) {
         // Rien de neuf : on ré-horodate quand même, sinon le bandeau hors-ligne
         // annoncerait plus tard une date plus vieille que la dernière
@@ -15917,11 +15968,17 @@ E) ${e}`;
       catch (e) { return; }
       for (const [icao, frais] of Object.entries(lots)) {
         if (!Array.isArray(frais)) continue;          // null = terrain sans donnée, on garde ce qu'on a
+        // Lu SANS republier : le lot vient d'installer les phrases fraîches
+        // dans summaryByRaw, on ne relit le disque que pour comparer.
         const avant = loadOffline(icao);
-        const change = !(avant && memeListe(avant.raw, frais));
+        const changeTexte = !(avant && memeListe(avant.raw, frais));
+        const changePhrase = !phrasesInchangees(frais, phrasesStockees(avant));
         saveOffline(icao, frais);                     // ré-horodate même sans changement
-        if (!change || icao !== icaoAffiche) continue;
+        if ((!changeTexte && !changePhrase) || icao !== icaoAffiche) continue;
         if (monJeton !== loadToken) continue;         // l'utilisateur est parti ailleurs
+        // Phrase seule modifiée : repeinte discrète, jamais le bandeau — il
+        // annoncerait des NOTAM plus récents alors qu'aucun n'a bougé.
+        if (!changeTexte) { if (!lecteurEngage()) renderFromRaw(frais); continue; }
         if (lecteurEngage()) showUpdated(() => { if (monJeton === loadToken) renderFromRaw(frais); });
         else renderFromRaw(frais);
       }
@@ -16297,7 +16354,7 @@ function renderInfo(icao) {
       //    l'écran en ligne et seule la pastille distingue les deux. Un pilote
       //    doit savoir qu'il regarde une copie et qu'aucune mise à jour ne peut
       //    plus arriver — c'est la date affichée qui le lui dit.
-      const copie = loadOffline(icao);
+      const copie = loadOffline(icao, { publier: true });   // on va AFFICHER cette copie
       if (copie && Array.isArray(copie.raw)) {
         const up = netOnline();
         setBeacon(up);
@@ -16315,7 +16372,7 @@ function renderInfo(icao) {
       } catch (e) {
         if (my !== loadToken) return;
         // pas de réseau : on tente les dernières données enregistrées
-        const cached = loadOffline(icao);
+        const cached = loadOffline(icao, { publier: true });
         if (cached && Array.isArray(cached.raw)) {
           renderFromRaw(cached.raw);
           showOffline(cached.ts);
@@ -17038,12 +17095,16 @@ function renderInfo(icao) {
         const st = r.status || {};
         for (const [icao, frais] of Object.entries(lots)) {
           if (!Array.isArray(frais)) continue;        // null = pas de donnée, on garde ce qu'on a
+          // Même règle qu'en revaliderRoute : lecture sans republication, et
+          // une phrase changée compte comme un changement.
           const avant = loadOffline(icao);
-          const change = !(avant && memeListe(avant.raw, frais));
+          const changeTexte = !(avant && memeListe(avant.raw, frais));
+          const changePhrase = !phrasesInchangees(frais, phrasesStockees(avant));
           saveOffline(icao, frais);                   // ré-horodate même sans changement
           if (st[icao] !== "ok") { st[icao] = "ok"; }
           markApCard(icao, "ok");
-          if (!change || icao !== currentIcao) continue;
+          if ((!changeTexte && !changePhrase) || icao !== currentIcao) continue;
+          if (!changeTexte) { if (!lecteurEngage()) renderFromRaw(frais); continue; }
           if (lecteurEngage()) showUpdated(() => renderFromRaw(frais));
           else renderFromRaw(frais);
         }
