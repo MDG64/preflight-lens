@@ -10381,9 +10381,9 @@ function adToolsHtml(){
         : `<button class="btn sm" data-ad="certifier" title="Certify this device with the enrolment code, so your entries are written to the shared journal as verified">Certify this device…</button>`) : ""}
     ${mjLiensHtml()}
     ${devHtml}
-    <span class="note">Held in this browser for this address, and written to the shared encrypted
+    <span class="note">${adNotesTech() ? `Held in this browser for this address, and written to the shared encrypted
     journal — one journal for all your devices. Each entry is stamped with the date and the anonymous device identifier
-    above, which says nothing about you. ${state}${msg}</span>
+    above, which says nothing about you. ` : ""}${state}${msg}</span>
     ${mjNote()}
     ${mjRegistreHtml()}
   </div>`;
@@ -10455,6 +10455,11 @@ function mjNote(){
          device…” above and enter the enrolment code to certify it again`
       : `device NOT certified — entries stay community; press “Certify this device…”
          above and enter the enrolment code to write verified minima`);
+  /* Le compte-rendu vert regarde celui qui tient la base : lignes du journal,
+     identifiant de clé, état du certificat. Les deux branches rouges au-dessus
+     restent dites à tout le monde — elles annoncent une saisie qui n'est pas
+     partie, ce qui n'est pas de la documentation mais un fait à connaître. */
+  if (!adNotesTech()) return "";
   return `<span class="note ok">Encrypted journal — ${bits.join(" · ") || "ready"}.
     Append-only, signed, shared by all your devices; the keys never travel with it.</span>`;
 }
@@ -10771,20 +10776,7 @@ function refreshAdPanel(force){
         <thead><tr><th>RWY</th><th>Published</th><th>Approach lighting class</th><th>Runway edge lighting</th></tr></thead>
         <tbody>${lgtRows || `<tr><td colspan="4" style="color:var(--muted)">No runway end declared.</td></tr>`}</tbody>
       </table></div>
-      <p class="note" style="margin-top:10px">The <b>class</b> is what the minima computation uses — Table 9 of
-      AMC1 CAT.OP.MPA.110 crosses DH with it, and one column is worth 100 to 200 m of RVR. It is derived from the
-      <b>published length</b> of the approach lighting system (≥ 720 m FALS, 420–719 IALS, 210–419 BALS), or from the
-      reference length of the American system code (MALSR, ALSF-2…). The minima computation <b>follows the selected
-      runway end by itself</b>: pick a QFU and its class is applied. Correcting the class is done here — the edited
-      record takes precedence over the seed, and the computation follows it.${window.AD_SEED_META && window.AD_SEED_META.lighting
-        ? `<br>Seed lighting compiled ${window.AD_SEED_META.date} — ${window.AD_SEED_META.lighting.ends} runway ends on
-           ${window.AD_SEED_META.lighting.airfields} airfields, ${window.AD_SEED_META.lighting.classified} with a
-           derivable class. Sources: FAA NASR (US, public domain, 28-day cycle) · SIA eAIP France and NATS UK AIP,
-           section AD 2.14 · apt.dat, X-Plane Scenery Gateway (GPL lineage, worldwide — community-maintained from
-           the charts, therefore ranked below the AIPs; where it approximates, it does so towards the shorter
-           system, hence the more demanding class) · NOTAM mining (worldwide, biased towards what breaks) ·
-           OurAirports (lit / not lit only). An empty cell is not proof of absence: read the chart.`
-        : ""}</p>
+      ${adLightNote()}
     </div>
     <div class="ad-sec">
       <div class="fs-t">Approaches & minima</div>
@@ -10807,7 +10799,46 @@ function refreshAdPanel(force){
           : `, that is, as the value common to every aircraft category.`} It validates a reading, it does not check
         one: what enters the computation is what the seed read on a photographed chart.</span>
       </div>` : ""}
-      <p class="note" style="margin-top:10px">Values read from an <b>approach chart</b> arrive pre-filled in the
+      ${adMinimaNote()}
+    </div>`;
+}
+
+/* ---------- les notes de provenance : lecture réservée aux certifiés ----------
+   Ces deux paragraphes ne s'adressent pas au pilote. Ils disent d'où vient la
+   graine, comment une valeur devient défaut, ce que vaut une colonne de la
+   table 9 — c'est la documentation de celui qui TIENT la base, pas de celui
+   qui la consulte avant un vol. Un appareil certifié est justement celui-là :
+   la certification est la seule frontière vraie de l'app (le mode
+   propriétaire, lui, n'est qu'un code tapé au clavier). Non certifié, la
+   fiche garde ses tables et ses badges, et se tait sur le reste. */
+function adNotesTech(){ return mjCertifie(); }
+
+function adLightNote(){
+  if (!adNotesTech()) return "";
+  return `<p class="note" style="margin-top:10px">The <b>class</b> is what the minima computation uses — Table 9 of
+      AMC1 CAT.OP.MPA.110 crosses DH with it, and one column is worth 100 to 200 m of RVR. It is derived from the
+      <b>published length</b> of the approach lighting system (≥ 720 m FALS, 420–719 IALS, 210–419 BALS), or from the
+      reference length of the American system code (MALSR, ALSF-2…). The minima computation <b>follows the selected
+      runway end by itself</b>: pick a QFU and its class is applied. Correcting the class is done here — the edited
+      record takes precedence over the seed, and the computation follows it.${window.AD_SEED_META && window.AD_SEED_META.lighting
+        ? `<br>Seed lighting compiled ${window.AD_SEED_META.date} — ${window.AD_SEED_META.lighting.ends} runway ends on
+           ${window.AD_SEED_META.lighting.airfields} airfields, ${window.AD_SEED_META.lighting.classified} with a
+           derivable class. Sources: FAA NASR (US, public domain, 28-day cycle) · SIA eAIP France and NATS UK AIP,
+           section AD 2.14 · apt.dat, X-Plane Scenery Gateway (GPL lineage, worldwide — community-maintained from
+           the charts, therefore ranked below the AIPs; where it approximates, it does so towards the shorter
+           system, hence the more demanding class) · NOTAM mining (worldwide, biased towards what breaks) ·
+           OurAirports (lit / not lit only). An empty cell is not proof of absence: read the chart.`
+        : ""}</p>`;
+}
+
+function adMinimaNote(){
+  if (!adNotesTech()) return "";
+  /* Mêmes sources que la fiche : la date de la carte et le mode propriétaire
+     se relisent ici, la note n'a pas besoin qu'on les lui passe. */
+  const own = adOwner();
+  const chDate = ((window.AD_SEED_META||{}).minima||{}).sources || {};
+  const chSrc = chDate.photo ? ` read ${chDate.photo}` : "";
+  return `<p class="note" style="margin-top:10px">Values read from an <b>approach chart</b> arrive pre-filled in the
       report fields, with an amber <b>chart</b> badge naming the aircraft category they were published for. They are
       <b>proposals, not defaults</b> — nothing enters the computation until you press <b>Record</b>, which validates
       them exactly like a value you typed. Where the chart does not publish your category, the most demanding line
@@ -10828,8 +10859,7 @@ function refreshAdPanel(force){
       the same runway, approach and aerodrome to become the default (badge <b>user ✓</b>).
       DA/DH in ft, RVR/visibility in metres.${window.AD_SEED_META
         ? `<br>Seed data compiled ${window.AD_SEED_META.date} from OurAirports (runways, true headings) · FAA CIFP · FAA NASR (lighting, published magnetic variation) · NOTAM mining · nav.dat · SIA eAIP France and NATS UK AIP (updated ${(window.AD_SEED_META.sources||{})["eaip-fr"]||"—"}) — ${window.AD_SEED_META.airports} airfields, ${window.AD_SEED_META.withApproaches} with approaches. QFU headings are computed, never stored: true bearing minus magnetic variation. Both terms come from the <b>publication</b> where there is one — true bearings to the hundredth of a degree from AD 2.12 of the French and UK AIPs (OurAirports rounds to the whole degree elsewhere), magnetic variation from FAA NASR and the AIPs, falling back to the WMM model (NOAA/BGS) at compile date. The published variation is often older than the model, and that is why it wins: it is the one the printed QFU was rounded with. NOTAM-biased coverage, never an inventory: an approach missing here is no proof it does not exist.`
-        : ""}</p>
-    </div>`;
+        : ""}</p>`;
 }
 
 /* Écouteurs délégués posés une fois sur le conteneur : la fiche est
