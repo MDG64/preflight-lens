@@ -764,10 +764,11 @@ select.inline{width:auto;padding:5px 8px;font-size:11px}
 }
 /* La piste retenue pour le calcul porte une étoile dans son cadre, en plus du
    liseré de verdict qui ne dit lui que si elle passerait — l'étoile dit
-   laquelle est effectivement en jeu. Même or que le favori de l'en-tête. */
+   laquelle est effectivement en jeu. Même or que le favori de l'en-tête,
+   centrée sur la hauteur du cadre plutôt que calée en haut. */
 .qfu[aria-pressed="true"]::after{
-  content:"★";position:absolute;top:6px;right:8px;line-height:1;
-  font-size:12px;color:var(--gold);text-shadow:0 0 8px rgba(246,201,69,.5);
+  content:"★";position:absolute;top:50%;right:8px;transform:translateY(-50%);
+  line-height:1;font-size:18px;color:var(--gold);text-shadow:0 0 8px rgba(246,201,69,.5);
 }
 .qfu:hover{border-color:var(--line2);box-shadow:var(--elev-hi)}
 .qfu[aria-pressed="true"]{
@@ -1466,28 +1467,15 @@ body.light .help-modal{box-shadow:0 24px 60px rgba(22,29,36,.28)}
    Liseré de verdict — le contour de la carte reprend la couleur du pouce.
    Bloc placé en dernier : à spécificité égale avec les règles de sélection
    (`.tab[aria-selected]`, et leurs variantes `body.light`), c'est l'ordre
-   qui tranche. La sélection reste lisible par le fond teinté, l'anneau
-   prenant lui aussi la couleur du verdict.
-   =================================================================== */
+   qui tranche. La sélection reste lisible par le fond teinté ; l'anneau,
+   lui, garde la même épaisseur que la carte soit sélectionnée ou non —
+   seule sa couleur dit le verdict. */
 .tab.v-go,.qfu.v-go,
-body.light .tab.v-go,body.light .qfu.v-go{border-color:var(--green)}
+body.light .tab.v-go,body.light .qfu.v-go{border-color:var(--green);box-shadow:0 0 0 1px var(--green),var(--elev)}
 .tab.v-marginal,.qfu.v-marginal,
-body.light .tab.v-marginal,body.light .qfu.v-marginal{border-color:var(--amber)}
+body.light .tab.v-marginal,body.light .qfu.v-marginal{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber),var(--elev)}
 .tab.v-nogo,.qfu.v-nogo,
-body.light .tab.v-nogo,body.light .qfu.v-nogo{border-color:var(--red)}
-
-.tab[aria-selected="true"].v-go,.qfu[aria-pressed="true"].v-go,
-body.light .tab[aria-selected="true"].v-go,body.light .qfu[aria-pressed="true"].v-go{
-  box-shadow:0 0 0 1px var(--green),var(--elev)
-}
-.tab[aria-selected="true"].v-marginal,.qfu[aria-pressed="true"].v-marginal,
-body.light .tab[aria-selected="true"].v-marginal,body.light .qfu[aria-pressed="true"].v-marginal{
-  box-shadow:0 0 0 1px var(--amber),var(--elev)
-}
-.tab[aria-selected="true"].v-nogo,.qfu[aria-pressed="true"].v-nogo,
-body.light .tab[aria-selected="true"].v-nogo,body.light .qfu[aria-pressed="true"].v-nogo{
-  box-shadow:0 0 0 1px var(--red),var(--elev)
-}
+body.light .tab.v-nogo,body.light .qfu.v-nogo{border-color:var(--red);box-shadow:0 0 0 1px var(--red),var(--elev)}
 
 /* ===================================================================
    VERSION MOBILE — sous 600 px, la classe .mobile posée sur <body>
@@ -1903,20 +1891,23 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
   background:var(--panel);border:1px solid var(--line);
   border-radius:6px;box-shadow:var(--elev);font:inherit;
 }
+/* Sélection : fond teinté et anneau — cyan par défaut, mais le contour de
+   verdict (placé après, à spécificité égale) reprend la main dès qu'il y en
+   a un, avec la même épaisseur d'anneau que la carte soit sélectionnée ou
+   non : seule sa couleur dit le verdict. */
+.m-qfu[aria-pressed="true"]{
+  background:color-mix(in srgb,var(--cyan) 14%,var(--panel));
+  box-shadow:0 0 0 1px var(--cyan),var(--elev);
+}
 .m-qfu.v-go{border-color:var(--green);box-shadow:0 0 0 1px var(--green),var(--elev)}
 .m-qfu.v-marginal{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber),var(--elev)}
 .m-qfu.v-nogo{border-color:var(--red);box-shadow:0 0 0 1px var(--red),var(--elev)}
-/* Sélection : fond teinté et anneau cyan, mais le contour garde sa couleur de
-   verdict — le QFU retenu doit continuer à dire s'il passe. */
-.m-qfu[aria-pressed="true"]{
-  background:color-mix(in srgb,var(--cyan) 14%,var(--panel));
-  box-shadow:0 0 0 2px var(--cyan),var(--elev);
-}
 /* Même étoile que la carte QFU du bureau : la piste utilisée pour le calcul,
-   pas seulement celle qui passerait. */
+   pas seulement celle qui passerait — grosse et centrée sur la hauteur de
+   la pastille plutôt que calée en haut. */
 .m-qfu[aria-pressed="true"]::after{
-  content:"★";position:absolute;top:3px;right:4px;line-height:1;
-  font-size:10px;color:var(--gold);text-shadow:0 0 6px rgba(246,201,69,.5);
+  content:"★";position:absolute;top:50%;right:5px;transform:translateY(-50%);
+  line-height:1;font-size:14px;color:var(--gold);text-shadow:0 0 6px rgba(246,201,69,.5);
 }
 .m-qfu .ico{width:13px;height:13px;flex:none}
 .m-qfu .ico svg{display:block;width:100%;height:100%}
