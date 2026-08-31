@@ -22142,6 +22142,35 @@ window.addEventListener("scroll", hidePop, true);
     const qlvCache = new Map();
     const qlvPending = new Map();
     let qlvSeed = 0;                  // 0 rien, 1 en vol, 2 arrivée ou perdue
+    /* ---- cache PARTAGÉ avec la page Minima ----
+       Les deux pages sont deux documents : leurs contextes JS ne se voient
+       pas, et passer de l'une à l'autre redemandait la même observation. Le
+       disque de l'origine les réunit — MÊME CLÉ, MÊME FORMAT que
+       minima.html (QLV_STORE_KEY) : une requête sert les deux pages pendant
+       toute sa fraîcheur. Seuls les succès sont écrits ; un échec appartient
+       au moment et au réseau de la page qui l'a rencontré. */
+    const QLV_STORE_KEY = "wl-qfu-live";
+    const QLV_STORE_MAX = 12;
+    function qlvStoreRead() {
+      try {
+        const o = JSON.parse(localStorage.getItem(QLV_STORE_KEY) || "{}");
+        return o && typeof o === "object" ? o : {};
+      } catch (e) { return {}; }
+    }
+    function qlvStoreWrite(icao, data) {
+      try {
+        const o = qlvStoreRead();
+        o[icao] = { at: Date.now(), data };
+        const keys = Object.keys(o).sort((a, b) => (o[b].at || 0) - (o[a].at || 0));
+        for (const k of keys.slice(QLV_STORE_MAX)) delete o[k];
+        localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
+      } catch (e) { }
+    }
+    function qlvAdopt(icao) {
+      if (qlvCache.has(icao)) return;
+      const hit = qlvStoreRead()[icao];
+      if (hit && hit.data && Number(hit.at)) qlvCache.set(icao, { at: Number(hit.at), data: hit.data });
+    }
 
     /* La graine porte les caps VRAIS, la déclinaison et — pour les terrains à
        pistes parallèles — les seuils. RUNWAYS[] ne donne que le désignateur,
@@ -22203,6 +22232,9 @@ window.addEventListener("scroll", hidePop, true);
     }
     function qlvLoad(icao) {
       if (!/^[A-Z]{4}$/.test(icao || "")) return;
+      // Ce que Minima a peut-être déjà obtenu : une observation fraîche venue
+      // du disque évite l'aller-retour entier.
+      qlvAdopt(icao);
       const hit = qlvCache.get(icao);
       const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS : QLV_FRESH_MS;
       if (hit && Date.now() - hit.at < ttl) return;
@@ -22211,7 +22243,9 @@ window.addEventListener("scroll", hidePop, true);
         try {
           const r = await fetch(`${BACKEND_URL}/api/qfu?icao=${icao}`);
           if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { status: r.status });
-          qlvCache.set(icao, { at: Date.now(), data: await r.json() });
+          const data = await r.json();
+          qlvCache.set(icao, { at: Date.now(), data });
+          qlvStoreWrite(icao, data);      // l'autre page s'en servira telle quelle
         } catch (err) {
           /* Un échec SE DIT : une bande absente se confond avec « pas de
              trafic ». Seul le 404 (terrain sans station) reste muet. */

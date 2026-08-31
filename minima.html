@@ -5107,8 +5107,45 @@ const QLV_RETRY_MS = 20e3;
 const QLV_MATCH_DEG = 25;       // au-delà, la route observée ne désigne plus l'extrémité
 const qlvCache = new Map();     // icao -> {at, data} | {at, err:true, silent?, why}
 const qlvPending = new Map();
+/* ---------- cache PARTAGÉ entre les pages ----------
+   Minima et la page Weather sont deux pages HTML : leurs contextes JS ne se
+   voient pas, et passer de l'une à l'autre redemandait la même observation.
+   Le disque de l'origine les réunit — même clé, même format des deux côtés —
+   si bien qu'UNE requête sert les deux pages pendant toute sa fraîcheur.
+   Seuls les succès sont écrits : un échec est propre au moment et au réseau
+   de la page qui l'a rencontré, le rejouer ailleurs n'apprendrait rien.
+   Même motif que la bande du jour (DWX_STORE_KEY), bornage compris. */
+const QLV_STORE_KEY = "wl-qfu-live";
+const QLV_STORE_MAX = 12;
+function qlvStoreRead(){
+  try{
+    const o = JSON.parse(localStorage.getItem(QLV_STORE_KEY) || "{}");
+    return o && typeof o === "object" ? o : {};
+  } catch(e){ return {}; }
+}
+function qlvStoreWrite(icao, data){
+  try{
+    const o = qlvStoreRead();
+    o[icao] = {at: Date.now(), data};
+    const keys = Object.keys(o).sort((a,b)=>(o[b].at||0)-(o[a].at||0));
+    for (const k of keys.slice(QLV_STORE_MAX)) delete o[k];
+    localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
+  } catch(e){}
+}
+/* La copie du disque prise pour ce qu'elle est : une réponse déjà obtenue,
+   avec SON âge. Au-delà de la fraîcheur elle n'est pas jetée pour autant —
+   elle sert d'amorce le temps que la requête revienne, et l'heure affichée
+   reste celle de la mesure, jamais celle de la lecture. */
+function qlvAdopt(icao){
+  if (qlvCache.has(icao)) return;
+  const hit = qlvStoreRead()[icao];
+  if (hit && hit.data && Number(hit.at)) qlvCache.set(icao, {at: Number(hit.at), data: hit.data});
+}
 function qlvLoad(icao){
   if (!/^[A-Z]{4}$/.test(icao || "")) return;
+  /* Ce que l'autre page a peut-être déjà obtenu : une observation fraîche
+     venue du disque évite l'aller-retour entier. */
+  qlvAdopt(icao);
   const hit = qlvCache.get(icao);
   const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS : QLV_FRESH_MS;
   if (hit && Date.now() - hit.at < ttl) return qlvPending.get(icao);
@@ -5119,7 +5156,9 @@ function qlvLoad(icao){
       let r = await fetch(`${WX_API}/api/qfu?icao=${icao}`);
       if (!r.ok && WX_API !== NFA_FALLBACK_API) r = await fetch(`${NFA_FALLBACK_API}/api/qfu?icao=${icao}`);
       if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), {status: r.status});
-      qlvCache.set(icao, {at: Date.now(), data: await r.json()});
+      const data = await r.json();
+      qlvCache.set(icao, {at: Date.now(), data});
+      qlvStoreWrite(icao, data);          // l'autre page s'en servira telle quelle
       /* Une observation NEUVE peut déplacer le QFU des calculs, plus seulement
          la bande : autoQfuForTab lit l'estimation. Mêmes chemins gardés que
          nfaNotify — re-rendu seulement si les données ont changé ET que le
