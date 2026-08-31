@@ -1969,6 +1969,18 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
 /* Choix de la ligne réglementaire retenue — même liste que la case
    « Vis / RVR required » de la version tablette, et même état partagé. */
 .m-req{margin-bottom:11px}
+/* Le cadre de provenance sur la fiche du téléphone : mêmes couleurs et même
+   promesse que sur la tablette (voir .req-stack.min-ver), mais posé autour du
+   champ et de son unité — la fiche n'a pas la pile étiquette/chiffre du
+   bandeau. Vert = valeur vérifiée de la base terrains ; ambre = table
+   réglementaire, consensus ou valeur tapée. */
+.m-req-box{
+  display:inline-flex;align-items:baseline;gap:2px;
+  padding:2px 7px 3px;border:1px solid;border-radius:6px;
+}
+.m-req-box.min-ver{border-color:var(--green)}
+.m-req-box.min-unver{border-color:var(--amber)}
+.m-req-box .req-u{font:500 9.5px/1 var(--mono);color:var(--muted)}
 .m-req>span{
   font:500 9px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
   color:var(--muted);display:block;margin-bottom:6px;
@@ -6063,6 +6075,15 @@ function assess(role, ctx){
     const visUnit = visDispUnit(visUnitCalc);
     let inc, visReq, ceilReq, planRef, planText;
     let ceilFromOeiFloor = false;
+    /* Provenance de la vis / RVR exigée, exactement comme celle du plafond
+       juste dessous : elle ne vaut que tant que le chiffre affiché EST encore
+       le minimum d'atterrissage de l'approche. Un incrément de planification,
+       un plancher OEI ou une valeur absolue de barème lui succède, et plus
+       rien ne peut être dit de sa provenance — le pilote tombe alors à null et
+       le cadre disparaît. C'est ce qui permet au cadre VERT de ne promettre
+       qu'une chose : ce nombre-là est la valeur vérifiée de la base terrains,
+       relevée sur la carte. Voir provAttrs, côté rendu. */
+    let visDriver = null;
     /* Provenance du plafond exigé. Aucune carte ne publie un « plafond
        minimum » qu'on pourrait relever : le chiffre vaut ce que vaut la
        DH / MDH dont il sort, et il porte donc le pilote de CELLE-CI. Il ne le
@@ -6110,6 +6131,10 @@ function assess(role, ctx){
          FUEL ERA et les terrains isolés — jamais celui-ci. */
       inc = {ceil:0, vis:0, label:"Actual aerodrome operating minima — no planning increment"};
       visReq = appUse.rvr;
+      /* Aucun incrément ici : le chiffre EST le minimum d'atterrissage de
+         l'approche, il en garde donc la provenance — vérifié en base, il se
+         cerclera de vert. */
+      visDriver = visReq!=null ? (appUse.rvrDriver||null) : null;
       const typeA = isTypeAOrCircling(cfg, appUse);
       ceilReq = typeA ? (appUse.circling ? appUse.ceilingRequired : appUse.dh) : null;
       /* Minima opérationnels RÉELS, sans incrément : le plafond EST la DH,
@@ -6197,6 +6222,9 @@ function assess(role, ctx){
         if (visReq == null || visReq < floor){
           const was = visReq;
           visReq = floor;
+          /* Le plancher OEI a pris la main : ce n'est plus le chiffre de la
+             carte, et le cadre vert mentirait. */
+          visDriver = null;
           const fv = v => visText(v, visUnitCalc);
           push({severity:"CAUTION", code:"OEI_CAPABILITY_LIMITED",
             message:`Take-off alternate raised to the OEI capability floor: ${floorM} m${was==null?"":` instead of the ${fv(was)} ${visUnitCalc} otherwise derived`}. ${DS.easa.takeoffAlternate.oei}`});
@@ -6231,6 +6259,9 @@ function assess(role, ctx){
       if (manVis != null){
         const was = visReq;
         visReq = manVis;
+        /* Le pilote a peut-être lu ce chiffre sur la carte, mais rien ne l'a
+           enregistré comme vérifié : ambre, comme partout ailleurs. */
+        visDriver = "PILOT_ENTERED";
         push({severity:"CAUTION", code:"TOALT_VIS_MANUAL",
           message:`Take-off alternate visibility / RVR entered by hand: ${manVis} ${visUnitCalc}${was==null?"":` instead of the ${was} ${visUnitCalc} otherwise derived`}. Your value governs — it is kept from one flight to the next until you change or clear it, and it is your responsibility to check it against the OM-B and the aerodrome chart.`});
         planText += ` Visibility / RVR requirement set by hand — ${manVis} ${visUnitCalc}${was==null?"":` in place of the ${was} ${visUnitCalc} derived above`}.`;
@@ -6279,7 +6310,7 @@ function assess(role, ctx){
     const t = tafForRole(taf, role, w0, w1,
       {visReq: visReq==null ? null : Math.round(visToM(visReq, visUnit)), ceilReq});
     res.taf = t;
-    res.planning = {inc, visReq, ceilReq, ceilDriver, unit:visUnit, scheme:planningSchemeOf(cfg)};
+    res.planning = {inc, visReq, ceilReq, visDriver, ceilDriver, unit:visUnit, scheme:planningSchemeOf(cfg)};
 
     const lim = t.limiting || {};
     const rows = [];
@@ -8092,6 +8123,42 @@ const provAttrs = (p, v, tips) => (p==null || v==null) ? {cls:"", tip:""} : {
   cls: p==="UNVERIFIED" ? " min-unver" : " min-ver",
   tip: ` title="${(tips||PROV_TIP)[p]}"`};
 
+/* Le pilote d'une valeur, traduit en l'une des trois provenances que le cadre
+   sait dire. Au niveau du fichier, et non dans la fonction qui dessine le
+   bandeau : la fiche du téléphone cercle les mêmes chiffres, et deux copies de
+   cette règle finiraient par diverger — un minimum vert d'un côté, ambre de
+   l'autre, serait pire que pas de cadre du tout.
+   DEUX provenances répondent du chiffre. La base terrains comme valeur
+   VÉRIFIÉE — relevée sur la carte d'approche puis enregistrée ici. Et le
+   minimum APPROUVÉ de l'exploitant, saisi dans Operation setup : c'est le
+   chiffre opposable, celui que l'équipage vole ; il PLANCHE la base terrains et
+   n'apparaît donc que là où il l'a relevée.
+   Une valeur tapée dans la case de la phase n'est vérifiée par rien : le pilote
+   l'a peut-être lue sur la carte, mais rien ne l'a enregistrée comme telle, et
+   elle passe donc après l'approbation comme après la base. */
+const provOf = (driver, manual) => manual ? "UNVERIFIED"
+  : driver==="COMPANY_APPROVAL"      ? "COMPANY"
+  : driver==="AIRFIELD_DB_VERIFIED"  ? "VERIFIED"
+  : "UNVERIFIED";
+/* Le plafond n'a pas de pilote à lui : le moteur lui a passé celui de la
+   DH / MDH dont il sort, et l'a mis à null dès que le chiffre a cessé d'être
+   cette hauteur-là. Pas de pilote, pas de cadre. */
+const ceilProvOf = res => {
+  const p = res && res.planning;
+  return (p && p.ceilReq!=null && p.ceilDriver) ? provOf(p.ceilDriver, false) : null;
+};
+/* Même règle pour la vis / RVR exigée d'une phase planifiée — c'est par elle
+   que la case du dégagement au décollage se cercle : vert quand le chiffre
+   affiché est encore la valeur VÉRIFIÉE relevée sur la carte et rangée dans la
+   base terrains, ambre quand il vient d'une table réglementaire, d'un consensus
+   ou du champ, nu quand un incrément ou un plancher l'a remplacé. Voir
+   visDriver, côté moteur. */
+const visProvOf = res => {
+  const p = res && res.planning;
+  return (p && p.visReq!=null && p.visDriver)
+    ? provOf(p.visDriver, p.visDriver==="PILOT_ENTERED") : null;
+};
+
 /* Case plafond saisissable. Le décollage n'en a pas — ses minima sont en
    visibilité ou RVR seule ; toutes les phases d'atterrissage en portent une,
    dégagement au décollage compris. Elle est toujours rendue, y compris vide :
@@ -8337,31 +8404,12 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
     return m==null ? null : visFromM(m, u, -1);
   };
   /* Vérifié ou pas, CHIFFRE PAR CHIFFRE : chaque minimum se cercle de vert
-     quand sa provenance répond de lui, d'ambre sinon.
-     DEUX provenances répondent du chiffre. La base terrains comme valeur
-     VÉRIFIÉE — relevée sur la carte d'approche puis enregistrée ici. Et le
-     minimum APPROUVÉ de l'exploitant, saisi dans Operation setup : c'est le
-     chiffre opposable, celui que l'équipage vole ; il PLANCHE la base terrains
-     et n'apparaît donc ici que là où il l'a relevée — partout ailleurs c'est
-     la provenance de la base qui se lit, comme il se doit.
+     quand sa provenance répond de lui, d'ambre sinon — provOf / ceilProvOf /
+     visProvOf sont au niveau du fichier, partagés avec la fiche mobile.
      La DH et la vis / RVR ne se vérifient pas ensemble — une carte de CAT III
      ne publie pas de DH, et la vis / RVR relevée sur elle n'a pas à porter
      l'ambre de la hauteur que la table réglementaire a fournie à côté ; une
-     approbation qui ne porte que sur l'une laisse l'autre à sa provenance.
-     Une valeur tapée dans la case de la phase n'est vérifiée par rien : le
-     pilote l'a peut-être lue sur la carte, mais rien ne l'a enregistrée comme
-     telle, et elle passe donc après l'approbation comme après la base. */
-  const provOf = (driver, manual) => manual ? "UNVERIFIED"
-    : driver==="COMPANY_APPROVAL"      ? "COMPANY"
-    : driver==="AIRFIELD_DB_VERIFIED"  ? "VERIFIED"
-    : "UNVERIFIED";
-  /* Le plafond n'a pas de pilote à lui : le moteur lui a passé celui de la
-     DH / MDH dont il sort, et l'a mis à null dès que le chiffre a cessé d'être
-     cette hauteur-là. Pas de pilote, pas de cadre. */
-  const ceilProvOf = res => {
-    const p = res && res.planning;
-    return (p && p.ceilReq!=null && p.ceilDriver) ? provOf(p.ceilDriver, false) : null;
-  };
+     approbation qui ne porte que sur l'une laisse l'autre à sa provenance. */
   const dhDisp = dhReqFor(role)!=null ? dhReqFor(role)
                : (a.circling ? (a.ceilingRequired!=null?a.ceilingRequired:a.dh)
                              : (a.noDh ? null : a.dh));
@@ -8475,7 +8523,14 @@ function minimaStrip(r, framework, isDeparture, obs, tabRole){
       manual: visReqFor(role, vUnit)!=null,
       /* Le dégagement au décollage est un terrain où l'on ATTERRIRA : sa pente
          de remise de gaz se dit comme aux autres phases d'atterrissage. */
-      warn: phaseChartGa(tabRole)
+      warn: phaseChartGa(tabRole),
+      /* Et il se cercle comme elles : la base terrains est scannée pour ce
+         terrain et cette extrémité, une valeur vérifiée gouverne et se dit
+         verte ; à défaut, c'est la valeur réglementaire, en ambre. */
+      prov: visProvOf(r),
+      /* La ligne grise doit dire la même chose que le cadre : « derived » sous
+         un liseré vert laissait croire à une valeur de table. */
+      note: visProvOf(r)==="VERIFIED" ? "airfield db verified" : null
     }));
   }
   /* Le plafond exigé se saisit sur toutes les phases d'atterrissage, avec la
@@ -9936,11 +9991,17 @@ function mCeilFieldHtml(role, req, aria, none, cls){
 /* Même champ vis / RVR que sur tablette. Vide, il ne dit pas « pas de critère »
    comme le plafond, mais « celui du moteur » : l'exigence, elle, existe
    toujours. */
-function mVisInputHtml(role, req, unit, label, warn){
+/* `prov` : la provenance du chiffre, quand elle est connue — le champ se cercle
+   alors comme la case de la tablette, vert pour une valeur vérifiée de la base
+   terrains, ambre pour une valeur réglementaire ou tapée. Le cadre n'enferme
+   que le chiffre et son unité : l'intitulé reste dehors. */
+function mVisInputHtml(role, req, unit, label, warn, prov){
+  const p = provAttrs(prov, req);
+  const field = mVisFieldHtml(role, req, unit, label);
   return `<div class="m-req">
     <span>${label||"Vis / RVR"} required (${unitLab(unit)}) — empty to use the derived value</span>
     ${warn==null?"":`<span class="ga-warn">GA ${warn}% — check go-around performance</span>`}
-    ${mVisFieldHtml(role, req, unit, label)}
+    ${p.cls ? `<span class="m-req-box${p.cls}"${p.tip}>${field}<small class="req-u">${unitLab(unit)}</small></span>` : field}
   </div>`;
 }
 function mVisFieldHtml(role, req, unit, label, cls){
@@ -10060,7 +10121,7 @@ function mDetailHtml(tb, r){
       ? mVisInputHtml(mRole,
                       (r.planning && r.planning.visReq!=null) ? r.planning.visReq : null,
                       (r.planning && r.planning.unit) || (cfg.framework==="FAA" ? "sm" : "m"),
-                      null, mGa)
+                      null, mGa, visProvOf(r))
       : mVisInputHtml(mRole, mAReq, mADisp,
                       mADisp==="ft" ? "RVR" : "Vis / RVR", mGa)
         + (a.visSm!=null && mADisp!=="sm" ? mVisInputHtml(mRole, a.visSm, "sm", "Visibility") : ""));
