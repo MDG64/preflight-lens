@@ -5074,7 +5074,14 @@ function nfAlerts(icao){
    Même contrat que les drapeaux NOTAM : chargement anti-rafale, repli
    Railway, et à l'arrivée une retouche DOM ciblée — jamais un re-rendu, qui
    replierait les panneaux sous les doigts. */
-const QLV_FRESH_MS = 90e3;      // sous la minuterie des relevés : elle est gratuite
+/* Cadence du client. On ne suit pas des vols, on cherche le QFU en service —
+   une configuration de piste tient des heures et ne change qu'au gré du vent :
+   cinq minutes ne coûtent aucune information, là où les 90 s du début
+   coûtaient quarante requêtes par heure et par page ouverte. Le serveur garde
+   sa réponse dix minutes de son côté : l'essentiel des appels ne sort donc
+   même pas de chez nous. L'heure affichée est celle de la MESURE, pas de la
+   lecture — une bande de cinq minutes le dit d'elle-même. */
+const QLV_FRESH_MS = 5 * 60e3;
 /* Un échec se retente bien plus vite qu'un succès ne se rafraîchit : les
    échecs qu'on rencontre vraiment sont passagers — serveur qui redémarre et
    dont l'annuaire est encore froid, plafond de requêtes momentané. Les garder
