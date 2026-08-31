@@ -2046,23 +2046,6 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
   border-radius:7px;outline:0;
 }
 .m-req select:focus{border-color:var(--cyan)}
-.m-dtable{width:100%;border-collapse:collapse;font-size:11.5px}
-.m-dtable th{
-  font:500 8.5px/1.2 var(--mono);letter-spacing:.13em;text-transform:uppercase;
-  color:var(--muted);text-align:left;padding:0 6px 6px 0;border-bottom:1px solid var(--line);
-}
-.m-dtable td{padding:7px 6px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
-.m-dtable tr:last-child td{border-bottom:0}
-.m-dtable td.p{font-weight:600}
-.m-dtable td.p .s{
-  display:block;font:400 9px/1.4 var(--mono);color:var(--muted);margin-top:2px;letter-spacing:.03em;
-}
-.m-dtable td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
-.m-dtable td.n.neg{color:var(--red);font-weight:600}
-.m-dtable td.n.pos{color:var(--green);font-weight:600}
-.m-dtable td.v{width:22px}
-.m-dtable td.v .ico{display:block;width:17px;height:17px}
-.m-dtable td.v .ico svg{display:block;width:100%;height:100%}
 .m-drat{font:400 11px/1.55 var(--sans);color:var(--muted);margin:10px 0 0}
 .m-dref{
   font:500 9px/1.5 var(--mono);letter-spacing:.08em;color:var(--muted2);margin:7px 0 0;
@@ -10364,11 +10347,6 @@ function mVisFieldHtml(role, req, unit, label, cls){
            aria-label="${label||"Visibility or RVR"} required for this phase, in ${unitLab(unit)}">`;
 }
 
-function mMarginTxt(rv, unit){
-  if (rv.margin==null) return "—";
-  return `${rv.margin>=0?"+":""}${unit==="sm"?smText(rv.margin):Math.round(rv.margin)} ${unitLab(unit)}`;
-}
-
 /* Même sélecteur d'approche que la case « Approach » de la tablette, en ligne
    de formulaire. Rendu seulement quand la base connaît des approches pour le
    QFU : sans elles, il n'y a rien à choisir. */
@@ -10398,29 +10376,26 @@ function mPhaseAppHtml(tb){
 }
 
 function mDetailHtml(tb, r){
-  const rows = [];
   const refs = [];
   const rats = [];
-  /* Au décollage, la ligne réglementaire retenue par le sélecteur prime sur le
-     minimum brut du moteur — sinon la table contredirait et le résumé de la
-     phase et le sélecteur juste au-dessus d'elle. C'est la même substitution
-     que fait la case « Vis / RVR » de la version tablette. */
-  const visOv = tb.role==="DEPARTURE" ? mVisInfo(tb, r) : null;
-  /* Vis/RVR d'abord, vent ensuite : c'est l'ordre de lecture, pas celui dans
-     lequel le moteur empile ses verdicts. */
+  /* Aucune phase ne porte plus de table sous son dépliant : ses lignes —
+     visibilité, plafond, vent de travers, vent arrière — répétaient mot pour
+     mot la comparaison déjà posée en tête de phase, à deux doigts au-dessus.
+     Ne reste ici que ce qu'aucune case ne dit : les minima saisissables, le
+     règlement, les références, les avertissements. */
+  /* Vis/RVR d'abord, vent ensuite : c'est l'ordre de lecture des phrases, pas
+     celui dans lequel le moteur empile ses verdicts. */
   const ordered = (r.verdicts||[]).slice()
     .sort((a,b)=>(a.question==="WIND"?1:0)-(b.question==="WIND"?1:0));
-  /* Le décollage ne porte ni table, ni phrase, ni référence : la ligne
-     réglementaire est déjà nommée par le sélecteur juste au-dessus, les
-     références se lisent dans le setup, et ses trois lignes — visibilité,
-     vent de travers, vent arrière — répétaient mot pour mot la comparaison
-     déjà posée en tête de phase, à deux doigts au-dessus du dépliant. */
+  /* Le décollage ne porte ni phrase ni référence : la ligne réglementaire est
+     déjà nommée par le sélecteur juste au-dessus, et les références
+     réglementaires se lisent dans le setup. */
   const isDep = tb.role==="DEPARTURE";
   /* Carte empilée : ses cases portent déjà les minima saisissables et la
      comparaison du vent. Ne reste sous elles que ce qu'aucune case ne dit —
      le règlement, les références, les avertissements. */
   const inCard = M_STACKED.includes(tb.role);
-  /* Q2 quitte la table de la fiche comme elle quitte celle de la
+  /* Q2 quitte le dépliant de la fiche comme elle quitte la table de la
      tablette : ses lignes doublaient la vis/RVR déjà comparée en tête de
      phase. Son texte et sa référence partent au panneau des règles. */
   const rules = [];
@@ -10429,29 +10404,10 @@ function mDetailHtml(tb, r){
       if (showsRuleRationale(v, tb.role)) rules.push(v);
       return;
     }
-    const isQ1 = !!visOv && v.question==="Q1_TAKEOFF";
     if (!isDep && v.reference && !refs.includes(v.reference)) refs.push(v.reference);
-    if (!isQ1 && v.rationale) rats.push(v.rationale);
-    (v.rows||[]).forEach(row=>{
-      /* Q1 ne porte plus qu'une ligne, la vis/RVR : la substitution vaut donc
-         pour toute la table du décollage. */
-      const useOv = isQ1;
-      const unit = useOv ? visOv.unit : row.unit;
-      const req  = useOv ? visOv.req  : row.required;
-      const obs  = useOv ? visOv.obs  : row.observed;
-      const rv = useOv
-        ? {result:(visOv.st==="nogo"?"NO_GO":visOv.st.toUpperCase()),
-           margin:(obs==null||req==null)?null:obs-req}
-        : rowVerdict(row);
-      const st = cls(rv.result);
-      rows.push(`<tr>
-        <td class="p">${row.param}<span class="s">${row.src||""}</span></td>
-        <td class="n">${(obs==null && row.noCeiling) ? "none" : fmtNum(obs, unit)}</td>
-        <td class="n">${fmtNum(req, unit)}</td>
-        <td class="n ${rv.margin==null?"":(rv.margin<0?"neg":"pos")}">${mMarginTxt(rv, unit)}</td>
-        <td class="v"><span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span></td>
-      </tr>`);
-    });
+    /* Au décollage, la phrase de Q1 redisait le sélecteur de ligne
+       réglementaire posé juste au-dessus d'elle. */
+    if (!(isDep && v.question==="Q1_TAKEOFF") && v.rationale) rats.push(v.rationale);
   });
   /* Mêmes champs saisissables que sur tablette : la vis / RVR exigée et le
      plafond exigé de la phase. Au dégagement au décollage la case porte
@@ -10504,10 +10460,6 @@ function mDetailHtml(tb, r){
                       (r.planning && r.planning.ceilReq!=null) ? r.planning.ceilReq : null,
                       "Ceiling required for this phase, in ft — leave empty to use the derived value, 0 to apply no ceiling criterion",
                       state.ceilReq[roleFor(tb)]===null)}
-    ${inCard || isDep ? "" : rows.length ? `<table class="m-dtable">
-      <thead><tr><th>Parameter</th><th>Obs.</th><th>Req.</th><th>Margin</th><th></th></tr></thead>
-      <tbody>${rows.join("")}</tbody>
-    </table>` : `<p class="m-drat" style="margin:0">Nothing to compare — no report loaded.</p>`}
     ${rats.length ? `<p class="m-drat">${rats.join(" ")}</p>` : ""}
     ${(rules.length || mRuleCards.length) ? `<div class="rules-block m-rules-block">
         <button class="rules-toggle" id="mRulesBtn" aria-expanded="${state.rulesOpen}" aria-controls="mRulesPanel">
