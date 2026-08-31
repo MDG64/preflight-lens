@@ -5284,14 +5284,25 @@ function visDispUnit(calcUnit){
   return "sm";
 }
 
+/* La RVR qui porte sur L'EXTRÉMITÉ demandée, et sur elle seule. Une seule
+   fonction, parce que deux lectures du même relevé finissent par diverger :
+   c'est arrivé — le décollage lisait la RVR de la 29 sur un QFU 11 pendant que
+   la phase d'atterrissage, elle, l'écartait, et la même page portait deux
+   chiffres contradictoires.
+   Aucun repli sur une AUTRE piste : une RVR mesurée en 29 ne dit rien de la 11.
+   Sans RVR pour l'extrémité jugée, c'est la visibilité qui parle.
+   La comparaison ignore le suffixe L/C/R des DEUX côtés : « R29L/0600 » sur un
+   seuil que la base nomme « 29 » est bien la RVR de ce seuil. */
+const rwyBare = s => String(s||"").replace(/[LCR]$/,"");
+function rvrForEnd(metar, rwy){
+  const all = (metar && metar.rvr) || [];
+  if (!rwy) return all.slice();
+  return all.filter(r => r.runway===rwy || rwyBare(r.runway)===rwyBare(rwy));
+}
 function controllingVis(metar, cfg, purpose, rwy){
   if (!metar) return {value:null, unit:"m", source:null, note:"No METAR."};
   const unit = cfg.framework==="FAA" ? "ft" : "m";
-  let rvrs = (metar.rvr||[]).slice();
-  if (rwy) {
-    const match = rvrs.filter(r=>r.runway===rwy || r.runway===rwy.replace(/[LCR]$/,""));
-    if (match.length) rvrs = match;
-  }
+  const rvrs = rvrForEnd(metar, rwy);
   if (rvrs.length){
     // Take-off: every relevant point is controlling -> lowest.
     // Landing: TDZ governs; without TDZ, MID takes over. METAR does not encode the
@@ -5712,18 +5723,30 @@ function tafForRole(taf, role, w0, w1, minima){
 function metarLimiting(metar, rwy){
   if (!metar) return null;
   const out = {vis_m:null, ceiling_ft:null, wind:null, cavok:!!metar.cavok, visIsRvr:false};
-  let rvrs = (metar.rvr || []).slice();
-  if (rwy){
-    const m = rvrs.filter(r=>r.runway===rwy || r.runway===String(rwy).replace(/[LCR]$/,""));
-    if (m.length) rvrs = m; else rvrs = [];
-  }
+  const rvrs = rvrForEnd(metar, rwy);
+  /* RVR mesurée de l'extrémité jugée ET visibilité du relevé : la PLUS BASSE
+     des deux gouverne. La règle d'exploitation ordinaire veut que la RVR prime
+     quand elle est publiée pour la piste en service — mais elle prime en tant
+     que valeur DE RÉFÉRENCE, pas en tant que valeur la plus favorable. À
+     Brive, « 1900 1200 R29/2000U » donne une RVR de 2000 m au-dessus d'une
+     visibilité minimale de 1200 : retenir 2000 revenait à effacer du relevé le
+     chiffre le plus bas qu'il porte, sur un outil dont toute la règle est de
+     garder le plus restrictif. Chacune garde son étiquette, pour que la ligne
+     dise laquelle des deux a été lue. */
+  let rvrM = null, rvrEnd = null;
   if (rvrs.length){
     const chosen = rvrs.reduce((a,b)=>(b.value<a.value?b:a));
-    out.vis_m = chosen.unit==="ft" ? Math.round(chosen.value*0.3048) : chosen.value;
-    out.visIsRvr = true;
-    out.rvrRunway = chosen.runway;
-  } else if (metar.visibility_m != null){
-    out.vis_m = metar.visibility_m;
+    rvrM = chosen.unit==="ft" ? Math.round(chosen.value*0.3048) : chosen.value;
+    rvrEnd = chosen.runway;
+  }
+  const visM = metar.visibility_m != null ? metar.visibility_m : null;
+  if (rvrM != null && (visM == null || rvrM <= visM)){
+    out.vis_m = rvrM; out.visIsRvr = true; out.rvrRunway = rvrEnd;
+  } else if (visM != null){
+    out.vis_m = visM;
+    /* Une RVR plus haute existe et a été écartée : la ligne doit pouvoir le
+       dire, sans quoi le pilote cherchera pourquoi son 2000 n'apparaît pas. */
+    if (rvrM != null){ out.rvrIgnored = rvrM; out.rvrRunway = rvrEnd; }
   }
   out.ceiling_ft = metar.ceiling_ft != null ? metar.ceiling_ft : null;
   /* Même lecture que pour le TAF : un ciel annoncé sans BKN/OVC n'est pas un
@@ -5753,6 +5776,7 @@ function worstOfReports(tafLim, metLim){
     out.visFrom = metLim.visIsRvr ? `measured RVR${metLim.rvrRunway?" RWY "+metLim.rvrRunway:""}` : "observed";
     out.visRaw = null;              /* le surlignage repart sur le METAR */
     out.visIsRvr = metLim.visIsRvr; out.visRvrRunway = metLim.rvrRunway;
+    out.visRvrIgnored = metLim.rvrIgnored;
   }
   /* Plafond : idem. Un CAVOK ou un ciel sans BKN/OVC n'abaisse rien — il ne
      porte pas de plafond, il ne peut donc pas être le plus restrictif. */
@@ -6173,10 +6197,27 @@ function assess(role, ctx){
        Elle ne peut que RESSERRER : les minima de décollage se jugent sur la
        RVR / visibilité du moment, et ce plancher ne relâche jamais rien. */
     const obs = (()=>{
-      if (!fcLim || fcLim.vis_m==null) return obsRaw;
-      const fv = visFromM(fcLim.vis_m, obsRaw.unit || (cfg.framework==="FAA"?"ft":"m"), -1);
-      if (obsRaw.value != null && !(fv < obsRaw.value)) return obsRaw;
-      return {value:fv, unit:obsRaw.unit || (cfg.framework==="FAA"?"ft":"m"),
+      const u = obsRaw.unit || (cfg.framework==="FAA"?"ft":"m");
+      let best = obsRaw;
+      /* Une RVR mesurée ne doit pas masquer une visibilité plus basse du même
+         relevé — même règle qu'aux phases d'atterrissage (metarLimiting). */
+      if (obsRaw.source==="RVR_MEASURED" && metar && metar.visibility_m!=null){
+        const mv = visFromM(metar.visibility_m, u, -1);
+        /* La RVR n'est citée que si elle porte sur L'EXTRÉMITÉ JUGÉE : sans ce
+           garde, un décollage en 11 s'expliquait par la RVR de la 29 — vraie
+           dans le relevé, hors sujet sur cette piste. */
+        const sameEnd = !!obsRaw.runway && !!ctx.rwyDesignator
+          && (obsRaw.runway===ctx.rwyDesignator
+              || obsRaw.runway===String(ctx.rwyDesignator).replace(/[LCR]$/,""));
+        if (best.value==null || mv < best.value)
+          best = {value:mv, unit:u, source:"MET_VISIBILITY",
+                  ...(sameEnd ? {rvrIgnored:obsRaw.value, rvrRunway:obsRaw.runway} : {}),
+                  note:"Reported visibility is below the measured RVR — the more restrictive of the two governs."};
+      }
+      if (!fcLim || fcLim.vis_m==null) return best;
+      const fv = visFromM(fcLim.vis_m, u, -1);
+      if (best.value != null && !(fv < best.value)) return best;
+      return {value:fv, unit:u,
               source:"FORECAST", fromTaf:true, groupRaw:fcLim.visRaw,
               note:"Forecast visibility in the take-off window is lower than the observation — it governs."};
     })();
@@ -6225,7 +6266,9 @@ function assess(role, ctx){
     const q1rows = [{param: obs.source==="RVR_MEASURED"?"RVR (controlling)":"Visibility",
              src: obs.source==="FORECAST" ? "Forecast in the take-off window — the more restrictive"
                 : obs.source==="RVR_MEASURED"?`Measured RVR${obs.runway?" RWY "+obs.runway:""} — every relevant point is controlling`
-                : "Met visibility (CMV prohibited for take-off)",
+                : obs.rvrIgnored!=null
+                  ? `Met visibility — more restrictive than the ${obs.rvrIgnored} m RVR reported${obs.rvrRunway?" on RWY "+obs.rvrRunway:""}`
+                  : "Met visibility (CMV prohibited for take-off)",
              observed:obs.value, required:req, unit, cmp:"min",
              report: obs.source==="FORECAST" ? "TAF" : "METAR",
              tafKind:"VIS", groupRaw: obs.groupRaw,
@@ -6542,6 +6585,8 @@ function assess(role, ctx){
     rows.push({param:"Visibility / RVR",
                src: lim.visSrc==="METAR"
                  ? `Observed ${lim.visIsRvr?`RVR${lim.visRvrRunway?" RWY "+lim.visRvrRunway:""}`:"visibility"} — more restrictive than the forecast`
+                   + (lim.visRvrIgnored!=null
+                      ? ` (below the ${lim.visRvrIgnored} m RVR reported${lim.visRvrRunway?" on RWY "+lim.visRvrRunway:""})` : "")
                  : `Forecast, ${lim.visFrom||"prevailing"} — ${winTxt}`,
                observed:vObs, required:visReq, unit:visUnit, cmp:"min",
                report:lim.visSrc, tafKind:"VIS",
