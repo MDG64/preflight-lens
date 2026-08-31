@@ -7871,6 +7871,10 @@ body .stat .k{
       // porte un sujet R… (zone réglementée/dangereuse), pas WU/WZ — elle
       // garde donc son régime commun.
       if (subj === "WU" || subj === "WZ") return "info";
+      // Manche à air (code Q « MW » wind direction indicator) -> toujours Information,
+      // même U/S : elle ne conditionne ni fermeture ni restriction, le QFU se détermine
+      // par d'autres moyens (METAR/TAF, ADS-B, préférentielles).
+      if (subj === "MW") return "info";
       // Signal de fermeture/interdiction ACTIVE : mot de fermeture (CRITICAL_TEXT)
       // OU "PROHIBITED" sans condition de type/envergure (hasRestrictCond, plus bas)
       // — une interdiction TOTALE, pas une simple restriction partielle. Calculé
