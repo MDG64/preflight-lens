@@ -5429,8 +5429,10 @@ function qlvEstimate(icao){
     if (looseIds.length && !geoDispo) return {ids: looseIds.slice(0,4), obs:true, trk: looseTrk};
     return null;
   };
+  /* Même écriture que le titre de la bande : deux formats pour la même heure
+     se relisent deux fois. */
   const hhmmZ = t => { const x = new Date(t); return isNaN(x) ? "" :
-    String(x.getUTCHours()).padStart(2,"0")+String(x.getUTCMinutes()).padStart(2,"0")+"Z"; };
+    String(x.getUTCHours()).padStart(2,"0")+":"+String(x.getUTCMinutes()).padStart(2,"0")+"Z"; };
   const pick = kind => {
     /* Le trafic de l'échantillon d'abord : TOUS les flux du même sens qui
        désignent une candidate — à CDG face à l'ouest, les arrivées font DEUX
@@ -5438,8 +5440,13 @@ function qlvEstimate(icao){
     const now = fromClusters(d ? (kind==="to" ? d.dep : d.arr) : null, d && d.ref);
     if (now){
       /* Résolu : c'est CE souvenir-là qui vaut d'être gardé. */
-      qlvMemWrite(icao, kind, now.ids, Date.parse(d.at || "") || Date.now());
-      return Object.assign(now, {how:"observed", fresh:true});
+      const at = Date.parse(d.at || "") || Date.now();
+      qlvMemWrite(icao, kind, now.ids, at);
+      /* L'heure accompagne TOUTE observation, même en cours : un instantané
+         de dix minutes n'est pas l'instant présent, et sur une carte de route
+         — qui n'a pas de titre de bande — c'est la seule façon de savoir de
+         quand parle ce qu'on lit. */
+      return Object.assign(now, {how:`observed ${hhmmZ(at)}`, fresh:true});
     }
     /* Rien dans ce sens à l'instant : le DERNIER réellement observé, avec son
        heure. C'est ce qui évite d'aligner le décollage sur les arrivées à

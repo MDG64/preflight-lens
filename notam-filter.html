@@ -22394,14 +22394,18 @@ window.addEventListener("scroll", hidePop, true);
         if (loose.length && !geoDispo) return { ids: loose.slice(0, 4), obs: true, trk: looseTrk };
         return null;
       };
+      // Même écriture que le titre de la bande.
       const hhmmZ = t => { const x = new Date(t); return isNaN(x) ? "" :
-        String(x.getUTCHours()).padStart(2, "0") + String(x.getUTCMinutes()).padStart(2, "0") + "Z"; };
+        String(x.getUTCHours()).padStart(2, "0") + ":" + String(x.getUTCMinutes()).padStart(2, "0") + "Z"; };
       const pick = kind => {
         const now = fromClusters(d ? (kind === "to" ? d.dep : d.arr) : null, d && d.ref);
         if (now) {
-          // Résolu : c'est CE souvenir-là qui vaut d'être gardé.
-          qlvMemWrite(icao, kind, now.ids, Date.parse(d.at || "") || Date.now());
-          return Object.assign(now, { how: "observed", fresh: true });
+          // Résolu : c'est CE souvenir-là qui vaut d'être gardé. Et l'heure
+          // accompagne TOUTE observation, même en cours : un instantané de
+          // dix minutes n'est pas l'instant présent.
+          const at = Date.parse(d.at || "") || Date.now();
+          qlvMemWrite(icao, kind, now.ids, at);
+          return Object.assign(now, { how: `observed ${hhmmZ(at)}`, fresh: true });
         }
         /* Rien dans ce sens à l'instant : le DERNIER réellement observé, avec
            son heure — c'est ce qui évite d'aligner le décollage sur les
