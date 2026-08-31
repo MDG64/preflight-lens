@@ -3,6 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- CSP (2026-08-31). Les pages sœurs en avaient une depuis leur publication,
+     pas celle-ci : un module de Preflight Lens n'a pas de raison d'être moins
+     tenu que la page d'à côté.
+     Ce qu'elle laisse passer, et pourquoi :
+       · `script-src`/`style-src 'unsafe-inline'` : tout le code et tout le
+         style de cette page sont EN LIGNE dans le fichier, et les pictos météo
+         portent un `onerror=` de repli. Les sortir serait une refonte, pas un
+         durcissement — même arbitrage que notam-filter.html.
+       · `connect-src` : le backend commun sur Railway (relevés, NOTAM, QFU,
+         journal des minimas), plus les DEUX portes du développement local que
+         `window.WL_API_BASE` et `window.WL_MJ_BASE` savent viser — le proxy
+         local (127.0.0.1:8787, celui que la page NOTAM choisit toute seule en
+         http: sur localhost) et le serveur Weather Lens (localhost:8742).
+         Sans elles la CSP casserait le développement sans rien protéger de
+         plus en ligne, où ces deux adresses ne répondent à personne.
+       · `manifest-src` : le manifeste, lié depuis aujourd'hui.
+       · `worker-src ... blob:` : l'enregistrement du service worker.
+       · `form-action 'none'` : cette page n'a aucun <form>.
+     PAS de tiles.openfreemap.org, contrairement à la page NOTAM : Minima n'a
+     pas de carte à elle, son bouton Map renvoie sur celle de l'hôte. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app http://127.0.0.1:8787 http://localhost:8742; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <!-- Détecteurs de données d'iOS. Un relevé est plein de suites de chiffres
      qu'ils prennent pour des heures, des dates ou des numéros de téléphone —
      « 291330Z », « 2912/3018 », « Q1013 » — et qu'ils soulignent alors dans
