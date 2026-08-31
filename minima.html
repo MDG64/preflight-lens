@@ -5031,13 +5031,20 @@ function nfAlerts(icao){
    Railway, et à l'arrivée une retouche DOM ciblée — jamais un re-rendu, qui
    replierait les panneaux sous les doigts. */
 const QLV_FRESH_MS = 90e3;      // sous la minuterie des relevés : elle est gratuite
+/* Un échec se retente bien plus vite qu'un succès ne se rafraîchit : les
+   échecs qu'on rencontre vraiment sont passagers — serveur qui redémarre et
+   dont l'annuaire est encore froid, plafond de requêtes momentané. Les garder
+   90 s laisserait « Check unavailable » à l'écran une minute et demie après
+   que tout est rentré dans l'ordre. */
+const QLV_RETRY_MS = 20e3;
 const QLV_MATCH_DEG = 25;       // au-delà, la route observée ne désigne plus l'extrémité
-const qlvCache = new Map();     // icao -> {at, data} | {at, err:true}
+const qlvCache = new Map();     // icao -> {at, data} | {at, err:true, silent?, why}
 const qlvPending = new Map();
 function qlvLoad(icao){
   if (!/^[A-Z]{4}$/.test(icao || "")) return;
   const hit = qlvCache.get(icao);
-  if (hit && Date.now() - hit.at < QLV_FRESH_MS) return qlvPending.get(icao);
+  const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS : QLV_FRESH_MS;
+  if (hit && Date.now() - hit.at < ttl) return qlvPending.get(icao);
   if (qlvPending.has(icao)) return qlvPending.get(icao);
   const p = (async () => {
     try {
