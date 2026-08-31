@@ -22184,25 +22184,40 @@ window.addEventListener("scroll", hidePop, true);
        BRUTS qui sont gardés (route, écart, référence), réappariés au rappel à
        l'état du moment : une configuration basculée se disqualifie d'elle-même
        par le filtre du vent arrière. */
+    /* ON NE MÉMORISE QUE CE QUI A ABOUTI À UNE PISTE — les extrémités
+       résolues, pas les flux bruts. La première version gardait les flux : à
+       Orly, un avion en VENT ARRIÈRE (en descente, à vitesse d'approche, mais
+       à 5,3 NM de tout axe) était classé « arrivée », n'était apparié à rien,
+       et écrasait le souvenir de la vraie finale. Un flux qui ne désigne
+       aucune piste n'apprend rien : il ne doit rien effacer. */
     const QLV_MEM_MS = 1 * 3600e3;
     function qlvStoreWrite(icao, data) {
       try {
         const o = qlvStoreRead();
         const prev = o[icao] || {};
-        const mem = Object.assign({}, prev.mem);
-        const t = Date.parse(data && data.at || "") || Date.now();
-        if (data && Array.isArray(data.dep) && data.dep.length) mem.dep = { cl: data.dep, at: t, ref: data.ref || null };
-        if (data && Array.isArray(data.arr) && data.arr.length) mem.arr = { cl: data.arr, at: t, ref: data.ref || null };
-        o[icao] = { at: Date.now(), data, mem };
+        o[icao] = { at: Date.now(), data, mem: prev.mem };
         const keys = Object.keys(o).sort((a, b) => (o[b].at || 0) - (o[a].at || 0));
         for (const k of keys.slice(QLV_STORE_MAX)) delete o[k];
+        localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
+      } catch (e) { }
+    }
+    const qlvMemLast = new Map();
+    function qlvMemWrite(icao, kind, ids, at) {
+      const key = icao + "|" + kind, sig = ids.join(",") + "@" + at;
+      if (qlvMemLast.get(key) === sig) return;
+      qlvMemLast.set(key, sig);
+      try {
+        const o = qlvStoreRead();
+        const rec = o[icao] || (o[icao] = { at: Date.now() });
+        rec.mem = rec.mem || {};
+        rec.mem[kind === "to" ? "dep" : "arr"] = { ids, at };
         localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
       } catch (e) { }
     }
     function qlvMem(icao, kind) {
       const m = (qlvStoreRead()[icao] || {}).mem;
       const e = m && m[kind === "to" ? "dep" : "arr"];
-      if (!e || !Array.isArray(e.cl) || !e.cl.length || !Number(e.at)) return null;
+      if (!e || !Array.isArray(e.ids) || !e.ids.length || !Number(e.at)) return null;
       return Date.now() - e.at <= QLV_MEM_MS ? e : null;
     }
     function qlvAdopt(icao) {
@@ -22383,14 +22398,20 @@ window.addEventListener("scroll", hidePop, true);
         String(x.getUTCHours()).padStart(2, "0") + String(x.getUTCMinutes()).padStart(2, "0") + "Z"; };
       const pick = kind => {
         const now = fromClusters(d ? (kind === "to" ? d.dep : d.arr) : null, d && d.ref);
-        if (now) return Object.assign(now, { how: "observed", fresh: true });
+        if (now) {
+          // Résolu : c'est CE souvenir-là qui vaut d'être gardé.
+          qlvMemWrite(icao, kind, now.ids, Date.parse(d.at || "") || Date.now());
+          return Object.assign(now, { how: "observed", fresh: true });
+        }
         /* Rien dans ce sens à l'instant : le DERNIER réellement observé, avec
            son heure — c'est ce qui évite d'aligner le décollage sur les
            arrivées à Orly. Réapparié à l'état du moment. */
         const mem = qlvMem(icao, kind);
         if (mem) {
-          const old = fromClusters(mem.cl, mem.ref);
-          if (old) return Object.assign(old, { how: `observed ${hhmmZ(mem.at)}` });
+          // Revalidation contre l'état du moment : une extrémité fermée
+          // depuis, ou passée sous le vent arrière, n'est plus candidate.
+          const still = mem.ids.filter(id => cand.some(q => q.id === id));
+          if (still.length) return { ids: still.slice(0, 4), how: `observed ${hhmmZ(mem.at)}`, obs: true };
         }
         const pref = prefSet(kind);
         const pc = cand.filter(q => pref.has(q.id)).sort(byHead);

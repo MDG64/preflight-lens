@@ -5193,22 +5193,42 @@ function qlvStoreRead(){
    distinctes du MÊME axe. La mémoire répond à ça : le dernier décollage
    réellement observé est gardé avec SON heure, et il reprend la main avant
    tout alignement. Symétrique pour les arrivées, où le piège est le même à
-   l'envers. On garde les FLUX BRUTS (route, écart, point de référence), pas
-   des noms de piste : au rappel, ils sont réappariés à l'état du moment —
-   NOTAM du jour, vent du jour. Une configuration qui a basculé se disqualifie
-   donc toute seule, par le filtre du vent arrière. */
+   l'envers.
+   ON NE MÉMORISE QUE CE QUI A ABOUTI À UNE PISTE — les extrémités résolues,
+   pas les flux bruts. La première version gardait les flux : à Orly, un avion
+   en VENT ARRIÈRE (en descente, à vitesse d'approche, mais à 5,3 NM de tout
+   axe) était classé « arrivée », n'était apparié à rien, et écrasait au
+   passage le souvenir de la vraie finale — l'atterrissage retombait alors sur
+   la préférentielle alors qu'on se posait sans discontinuer. Un flux qui ne
+   désigne aucune piste n'apprend rien : il ne doit rien effacer.
+   Au rappel, les extrémités retenues sont revalidées contre l'état du
+   moment : une piste fermée depuis, ou passée sous le vent arrière, ne
+   ressort pas. */
 const QLV_MEM_MS = 1 * 3600e3;   // au-delà, une configuration n'engage plus rien
 function qlvStoreWrite(icao, data){
   try{
     const o = qlvStoreRead();
     const prev = o[icao] || {};
-    const mem = Object.assign({}, prev.mem);
-    const t = Date.parse(data && data.at || "") || Date.now();
-    if (data && Array.isArray(data.dep) && data.dep.length) mem.dep = {cl: data.dep, at: t, ref: data.ref || null};
-    if (data && Array.isArray(data.arr) && data.arr.length) mem.arr = {cl: data.arr, at: t, ref: data.ref || null};
-    o[icao] = {at: Date.now(), data, mem};
+    o[icao] = {at: Date.now(), data, mem: prev.mem};
     const keys = Object.keys(o).sort((a,b)=>(o[b].at||0)-(o[a].at||0));
     for (const k of keys.slice(QLV_STORE_MAX)) delete o[k];
+    localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
+  } catch(e){}
+}
+/* L'écriture vient de qlvEstimate, seul endroit qui sache apparier un flux à
+   une piste. Garde-fou anti-écriture : l'estimation est rejouée à chaque
+   rendu et à chaque sondage du moteur, la mémoire ne doit pas repartir au
+   disque à chaque fois. */
+const qlvMemLast = new Map();
+function qlvMemWrite(icao, kind, ids, at){
+  const key = icao + "|" + kind, sig = ids.join(",") + "@" + at;
+  if (qlvMemLast.get(key) === sig) return;
+  qlvMemLast.set(key, sig);
+  try{
+    const o = qlvStoreRead();
+    const rec = o[icao] || (o[icao] = {at: Date.now()});
+    rec.mem = rec.mem || {};
+    rec.mem[kind === "to" ? "dep" : "arr"] = {ids, at};
     localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
   } catch(e){}
 }
@@ -5216,7 +5236,7 @@ function qlvStoreWrite(icao, data){
 function qlvMem(icao, kind){
   const m = (qlvStoreRead()[icao] || {}).mem;
   const e = m && m[kind === "to" ? "dep" : "arr"];
-  if (!e || !Array.isArray(e.cl) || !e.cl.length || !Number(e.at)) return null;
+  if (!e || !Array.isArray(e.ids) || !e.ids.length || !Number(e.at)) return null;
   return Date.now() - e.at <= QLV_MEM_MS ? e : null;
 }
 /* La copie du disque prise pour ce qu'elle est : une réponse déjà obtenue,
@@ -5416,7 +5436,11 @@ function qlvEstimate(icao){
        désignent une candidate — à CDG face à l'ouest, les arrivées font DEUX
        flux (26L et 27R), et les deux pistes sont en service. */
     const now = fromClusters(d ? (kind==="to" ? d.dep : d.arr) : null, d && d.ref);
-    if (now) return Object.assign(now, {how:"observed", fresh:true});
+    if (now){
+      /* Résolu : c'est CE souvenir-là qui vaut d'être gardé. */
+      qlvMemWrite(icao, kind, now.ids, Date.parse(d.at || "") || Date.now());
+      return Object.assign(now, {how:"observed", fresh:true});
+    }
     /* Rien dans ce sens à l'instant : le DERNIER réellement observé, avec son
        heure. C'est ce qui évite d'aligner le décollage sur les arrivées à
        Orly, où l'on décolle en 24 et se pose en 25 — deux pistes du même axe,
@@ -5425,8 +5449,10 @@ function qlvEstimate(icao){
        pas. */
     const mem = qlvMem(icao, kind);
     if (mem){
-      const old = fromClusters(mem.cl, mem.ref);
-      if (old) return Object.assign(old, {how:`observed ${hhmmZ(mem.at)}`});
+      /* Revalidation contre l'état du moment : une extrémité fermée depuis, ou
+         passée sous le vent arrière, n'est plus candidate. */
+      const still = mem.ids.filter(id => cand.some(q => q.id === id));
+      if (still.length) return {ids: still.slice(0,4), how:`observed ${hhmmZ(mem.at)}`, obs:true};
     }
     const pref = adPrefSet(rec, kind);
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
