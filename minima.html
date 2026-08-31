@@ -3945,8 +3945,13 @@ function adGet(icao){
         if (l) lights[end] = l;
       }
       rec = {magvar,
-             runways: s.r.map(([pair,len,hdgT])=>({pair, len:len==null?null:len,
-                      hdgT: Number.isFinite(hdgT)?hdgT:null, qfu:{}})),
+             /* `thr` : seuil de la PREMIÈRE extrémité [lat, lon], émis par la
+                graine pour les seuls terrains à pistes parallèles — avec le
+                cap vrai il définit l'axe, et c'est l'axe qui départage 26L de
+                26R quand le trafic observé porte un écart latéral. */
+             runways: s.r.map(([pair,len,hdgT,tla,tlo])=>({pair, len:len==null?null:len,
+                      hdgT: Number.isFinite(hdgT)?hdgT:null,
+                      thr: Number.isFinite(tla)&&Number.isFinite(tlo)?[tla,tlo]:null, qfu:{}})),
              approaches: s.a ? JSON.parse(JSON.stringify(s.a)) : {},
              lights};
     } else if (b){
@@ -5089,6 +5094,10 @@ const QLV_FRESH_MS = 20 * 60e3;
    charges — au-dessus des 5 kt que l'OACI donne aux pistes préférentielles,
    pour ne pas écarter un QFU sur un souffle. */
 const QLV_MAX_TAIL_KT = 8;
+/* L'appariement latéral d'un flux à SON axe : 0,12 NM (~220 m). En dessous de
+   la moitié de l'écartement des doublets les plus serrés (~380 m à CDG), très
+   au-dessus du bruit ADS-B (~30 m) et de la dispersion sur le LOC (±50 m). */
+const QLV_LAT_NM = 0.12;
 /* Un échec se retente bien plus vite qu'un succès ne se rafraîchit : les
    échecs qu'on rencontre vraiment sont passagers — serveur qui redémarre et
    dont l'annuaire est encore froid, plafond de requêtes momentané. Les garder
@@ -5180,8 +5189,23 @@ function qlvEstimate(icao){
   const obsDown = hit && hit.err && !hit.silent ? (hit.why || "error") : null;
 
   const open = [], closed = [];
-  for (const p of runwayList(icao))
-    for (const q of qfusOf(p)) (nfRwyClosed(icao, p) ? closed : open).push({id:q.id, deg:q.deg});
+  /* L'axe de la paire — seuil de la première extrémité, présent pour les
+     seuls terrains à parallèles — suit chaque extrémité : la ligne est la
+     même dans les deux sens. La GRAINE reste consultée en repli : une fiche
+     éditée par l'utilisateur remplace le record entier, et les fiches
+     sauvées avant les seuils (ou sans eux) perdraient la géométrie — LFPG
+     édité pour ses préférentielles ne doit pas redevenir indiscernable. */
+  const seedR = ((window.AD_SEED || {})[icao] || {}).r || [];
+  const thrOf = p => {
+    const rw = rec && rec.runways && rec.runways.find(r => r.pair === p);
+    if (rw && rw.thr) return rw.thr;
+    const sr = seedR.find(r => r[0] === p);
+    return sr && Number.isFinite(sr[3]) && Number.isFinite(sr[4]) ? [sr[3], sr[4]] : null;
+  };
+  for (const p of runwayList(icao)){
+    const thr = thrOf(p);
+    for (const q of qfusOf(p)) (nfRwyClosed(icao, p) ? closed : open).push({id:q.id, deg:q.deg, thr});
+  }
   if (!open.length) return { allClosed: true };
 
   const wind = state.metar && state.metar.wind;
@@ -5200,19 +5224,40 @@ function qlvEstimate(icao){
   const uniq = a => [...new Set(a)];
   const byHead = (a,b) => (comp(b)?comp(b).head:0) - (comp(a)?comp(a).head:0);
 
+  /* L'appariement LATÉRAL d'un flux à son axe : l'écart `off` du flux (mesuré
+     par le serveur depuis son point de référence `ref`) se compare à l'écart
+     de chaque axe candidat, projeté du MÊME point le long de la même route.
+     À moins de QLV_LAT_NM, l'axe est désigné : c'est lui qui sépare 26L de
+     26R, indiscernables au cap. Sans géométrie — pas de seuil dans la graine
+     (terrain sans parallèles), pas d'`off` du serveur (vieille réponse) — le
+     cap seul continue de grouper, comme avant. */
+  const refine = (m, c) => {
+    if (!d || !Array.isArray(d.ref) || !Number.isFinite(c.off)) return m;
+    const [rla, rlo] = d.ref;
+    const cosLa = Math.cos(rla * Math.PI/180);
+    const T = c.trk * Math.PI/180;
+    const scored = m.map(e => {
+      if (!e.q.thr) return null;
+      const dx = (e.q.thr[1]-rlo)*60*cosLa, dy = (e.q.thr[0]-rla)*60;
+      return {e, off: Math.abs(dx*Math.cos(T) - dy*Math.sin(T) - c.off)};
+    }).filter(s => s && s.off <= QLV_LAT_NM).sort((a,b)=>a.off-b.off);
+    return scored.length ? scored.map(s=>s.e) : m;
+  };
   const pick = kind => {
-    /* Le trafic d'abord : le groupe le plus fourni qui désigne une candidate.
-       Départs → décollage, arrivées → atterrissage. Plusieurs extrémités
-       parallèles au même cap restent indécidables sans géométrie latérale :
-       elles s'affichent ensemble. */
+    /* Le trafic d'abord : TOUS les flux du même sens qui désignent une
+       candidate — à CDG en configuration face à l'ouest, les arrivées font
+       DEUX flux (26L et 27R), et les deux pistes sont en service. Un flux
+       d'un autre sens (bascule en cours) ne se mélange pas au premier. */
     const clusters = (d ? (kind==="to" ? d.dep : d.arr) || [] : []).slice().sort((a,b)=>b.n-a.n);
+    let ids = [], mainTrk = null;
     for (const c of clusters){
-      const m = hitsOf(c, cand);
-      /* Sans l'effectif : le nombre d'avions pesait la preuve, mais il
-         encombrait la ligne — l'heure de l'observation, dans le titre, suffit
-         à dire de quand elle parle. */
-      if (m.length) return {ids: uniq(m.map(e=>e.q.id)).slice(0,4), how:"observed", obs:true, trk:c.trk};
+      if (mainTrk != null && cdiff(c.trk, mainTrk) > QLV_MATCH_DEG) continue;
+      const m = refine(hitsOf(c, cand), c);
+      if (!m.length) continue;
+      if (mainTrk == null) mainTrk = c.trk;
+      for (const e of m) if (!ids.includes(e.q.id)) ids.push(e.q.id);
     }
+    if (ids.length) return {ids: ids.slice(0,4), how:"observed", obs:true, trk: mainTrk};
     const pref = adPrefSet(rec, kind);
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
     if (pc.length) return {ids: uniq(pc.map(q=>q.id)).slice(0,4), how:"preferential"};
