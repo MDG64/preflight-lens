@@ -2241,15 +2241,17 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
    observation et prévision confondues. */
 .daywx-main{margin-top:10px}
 
-/* Bande du trafic observé, entre les relevés et les onglets de phase : ce que
-   les avions font À L'INSTANT autour du terrain, lu sur leurs routes sol
-   ADS-B. Même gabarit que la bande du jour, et pour la même raison — c'est un
-   état du terrain, qui se lit avant de choisir une phase, pas un critère de
-   phase. Le point vert pulse tant que l'instantané est vivant ; gris quand
-   rien ne vole. L'extrémité est le seul mot qu'on vient chercher : elle est
-   en gros, tout le reste la pèse. Crédit ODbL d'ADSB.lol dans Data sources,
-   page « ? » — un seul porteur par licence, comme MET Norway. */
-.qlv-main{margin-top:10px}
+/* Bande du trafic observé, entre la fiche terrain et les relevés : ce que les
+   avions font À L'INSTANT autour du terrain, lu sur leurs routes sol ADS-B.
+   Sa place suit son sujet — la fiche terrain juste au-dessus décrit les
+   pistes, la bande dit laquelle sert, et les relevés qui suivent donnent le
+   vent qui la juge. Même gabarit que la bande du jour, parce que c'est la
+   même nature d'information : un état du terrain, pas un critère de phase.
+   Le point vert pulse tant que l'instantané est vivant ; gris quand rien ne
+   vole. L'extrémité est le seul mot qu'on vient chercher : elle est en gros,
+   tout le reste la pèse. Crédit ODbL d'ADSB.lol dans Data sources, page
+   « ? » — un seul porteur par licence, comme MET Norway. */
+.qlv-main{margin-top:12px}
 .qlv{
   display:flex;align-items:center;gap:16px;flex-wrap:wrap;
   background:var(--field);border:1px solid var(--line);border-radius:6px;
@@ -2572,6 +2574,14 @@ body.light .rt-role{color:var(--text)}
        fichier doit survivre aux reconstructions de la fiche. -->
   <input type="file" id="adImportFile" accept="application/json,.json" hidden>
 
+  <!-- Bande du trafic observé, remplie par mountQfuLive() à chaque rendu : le
+       QFU que les avions utilisent À L'INSTANT. Au-dessus des relevés, contre
+       la fiche terrain : les deux parlent de la PISTE, et on veut savoir
+       laquelle est en service avant de lire le vent qui la juge. Absente tant
+       qu'aucun terrain n'est chargé ; elle dit son échec plutôt que de
+       disparaître quand la source ne répond pas. -->
+  <div class="qlv-main" id="qfuLiveMain" hidden></div>
+
   <!-- Pas de titre au-dessus des cadres : le relevé se nomme lui-même sur sa
        première ligne (voir withKindLine).
        Les quatre attributs qui suivent `spellcheck` coupent les services de
@@ -2608,12 +2618,6 @@ body.light .rt-role{color:var(--text)}
        après chaque interrogation, absente quand on colle un relevé à la main
        (pas de terrain connu) ou quand la source ne répond pas. -->
   <div class="daywx-main" id="dayWxMain" hidden></div>
-
-  <!-- Bande du trafic observé, remplie par mountQfuLive() à chaque rendu :
-       le QFU que les avions utilisent À L'INSTANT, avant tout choix de phase.
-       Absente tant qu'aucun terrain n'est chargé, que rien ne vole, ou que la
-       source ne répond pas. -->
-  <div class="qlv-main" id="qfuLiveMain" hidden></div>
 
   <div class="tabs" id="tabs" role="tablist"></div>
   <div class="tab-times" id="tabTimes" role="group" aria-label="Phase times (UTC)"></div>
@@ -11386,12 +11390,12 @@ function mobileResultsHtml(){
         <button class="btn sm" id="mRefresh">Refresh</button>
       </div>
       <div class="m-status" id="mStatus">${status}</div>
+      ${qfuLiveHtml(icao)}
       <div class="m-report">
         <span class="m-age ${mAge?mAge.cls:""}" id="mMetarAge">${mAge?mAge.text:""}</span>
         <div class="m-raw">${metarTxt?mMarkedHtml(metarTxt, hlRes?mReportSpans(hlRes, metarTxt, "METAR", hlOv):[]):"<i>—</i>"}</div>
       </div>
       <div class="m-report"><div class="m-raw">${tafTxt?mMarkedHtml(tafTxt, hlRes?mReportSpans(hlRes, tafTxt, "TAF", hlOv):[]):"<i>—</i>"}</div></div>
-      ${qfuLiveHtml(icao)}
       <div class="m-ptabs" role="group" aria-label="Flight phase">${ptabs}</div>
       <div class="m-report"><span class="label">QFU</span><div class="m-qfus">${mQfuChips(icao, results, sel)}</div></div>
       ${mDayWxHtml(icao)}
