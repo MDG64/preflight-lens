@@ -920,6 +920,29 @@ select.inline{width:auto;padding:5px 8px;font-size:11px}
 .mini.takeoff .req-cell .req-arrow{font-size:8px}
 .mini.takeoff .obs-cell .ico{width:15px;height:15px}
 
+/* Le dégagement au décollage, en tête de la phase Take off : une case ICAO
+   comme celles du bilan, avec sa liste de propositions. Elle vit dans la scène,
+   qui se reconstruit à chaque rendu — d'où le positionnement relatif porté par
+   le conteneur et non par un identifiant global. */
+.toalt-pick{
+  margin:0 0 14px;padding:10px 12px 9px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+}
+.toalt-pick>label{
+  display:block;margin-bottom:6px;
+  font:500 9px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+}
+.toalt-field{position:relative;display:flex;align-items:center;gap:8px}
+.toalt-field input{
+  width:150px;padding:5px 9px;
+  background:var(--field);border:1px solid var(--line2);border-radius:6px;color:var(--text);
+  font:600 14px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+}
+.toalt-field input:focus{outline:none;border-color:var(--cyan)}
+.toalt-field input::placeholder{color:var(--muted2);letter-spacing:.06em}
+.toalt-field .ac{top:calc(100% + 4px);left:0;min-width:260px}
+.toalt-pick .note{margin:7px 0 0;font:400 10.5px/1.45 var(--sans);color:var(--muted)}
+.toalt-pick .note b{color:var(--text);font-weight:600}
 /* Onglet TAKE OFF : toutes les tuiles réduites, les 8 QFU tiennent sur une
    seule ligne. Scopé à ce panneau — les autres phases gardent la taille
    normale des cartes QFU et de la carte vent, qui sont du markup partagé. */
@@ -2298,7 +2321,24 @@ body.mobile #rtOv:not([hidden]){display:flex}
    le terrain de départ jugé comme son propre T/O alternate — peut-on revenir
    s'y poser ? Quand il ne le permet plus, la ligne du dessous PROPOSE le
    terrain accessible le plus proche de la graine, avec sa distance. */
+/* Le type d'approche retenu pour le calcul, sous le nom du terrain : il
+   explique le chiffre exigé juste dessous. Cyan, comme tout ce qui vient de la
+   base terrains ; une ligne, jamais deux. */
+.rt-app{
+  font:600 10px/1.35 var(--mono);letter-spacing:.03em;color:var(--cyan);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+}
 .rt-toa{display:flex;flex-direction:column;gap:5px}
+/* Ligne T/O alternate cliquable : elle ouvre le terrain choisi sur SA phase,
+   ou adopte la proposition. Le survol la souligne — sans quoi rien ne dirait
+   qu'elle répond au doigt. */
+.rt-toa-line.act{cursor:pointer;border-radius:5px}
+.rt-toa-line.act:hover .cod{text-decoration:underline;text-underline-offset:2px}
+.rt-toa-line.act:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.rt-toa-app{
+  font:600 10px/1.35 var(--mono);letter-spacing:.03em;color:var(--cyan);
+  flex-basis:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
 .rt-toa-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font:500 12.5px/1.4 var(--sans);color:var(--muted)}
 .rt-toa-line .ico{width:16px;height:16px;flex:none}
 .rt-toa-line .ico svg{display:block;width:100%;height:100%}
@@ -6575,10 +6615,16 @@ const state = {
      (RTV.retarget) ; seul Home (mobile) ramène les cinq onglets. */
   routeFocus:null
 };
-/* Les onglets qu'offre la page focalisée par le bilan, `null` hors bilan. */
+/* Les onglets qu'offre la page focalisée par le bilan, `null` hors bilan.
+   Le terrain de départ joue DEUX rôles — Take off et son propre dégagement au
+   décollage — et montre donc les onglets 01 et 02. Sauf si le pilote a désigné
+   un AUTRE terrain comme dégagement : l'onglet 02 parlerait alors d'un terrain
+   dont le METAR n'est pas à l'écran. Il quitte cette page, et la ligne T/O
+   alternate de la carte mène au bon terrain. */
 function focusTabs(){
   if (!TABS[state.routeFocus]) return null;
-  return state.routeFocus===0 ? [0, 1] : [state.routeFocus];
+  if (state.routeFocus!==0) return [state.routeFocus];
+  return (window.RTV && RTV.toAltElsewhere()) ? [0] : [0, 1];
 }
 /* Valeur effective d'un plafond : la saisie de la page si elle existe, sinon
    celle du setup, sinon aucune exigence. Une valeur nulle ou négative vaut
@@ -9023,6 +9069,74 @@ function bindClock(inner, tab){
   });
 }
 
+/* ---------- le dégagement au décollage, sur la phase Take off ----------
+   Le terrain vers lequel on se déroutera si le retour au départ n'est plus
+   possible. Vide, c'est le DÉPART lui-même — le cas ordinaire, et c'est ce que
+   la case affiche en filigrane plutôt qu'un champ nu qui laisserait croire
+   qu'aucun dégagement n'est retenu. Un autre code désigne un autre terrain :
+   il est alors jugé avec sa propre météo, la ligne T/O alternate de la carte
+   du bilan mène à lui, et l'onglet 02 quitte cette page (voir focusTabs).
+   La liste de propositions est celle des autres cases ICAO (rôle « TOALT »). */
+function toAltPickerHtml(){
+  if (!window.RTV) return "";
+  const dep = RTV.dep() || currentIcao() || "";
+  const chosen = RTV.toAltRaw();
+  const eff = chosen || dep;
+  return `<div class="toalt-pick">
+    <label for="toAltIcaoInput">Take-off alternate</label>
+    <div class="toalt-field">
+      <input id="toAltIcaoInput" maxlength="40" spellcheck="false" autocomplete="off"
+             role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="toAltAcPop"
+             placeholder="${escapeHtmlText(dep || "ICAO")}" value="${escapeHtmlText(chosen)}"
+             aria-label="Take-off alternate aerodrome — ICAO or IATA code; empty means the departure itself">
+      <div class="ac" id="toAltAcPop" hidden role="listbox" aria-label="Aerodrome suggestions"></div>
+      ${chosen ? `<button type="button" class="btn sm" id="toAltClear"
+                    title="Back to the departure aerodrome as its own take-off alternate">Use ${escapeHtmlText(dep||"departure")}</button>` : ""}
+    </div>
+    <p class="note">${chosen
+      ? `Judged on tab 02 of <b>${escapeHtmlText(eff)}</b> — open it from the T/O alternate line of the flight card.`
+      : `Empty — the departure <b>${escapeHtmlText(dep||"—")}</b> is its own take-off alternate. Type an ICAO or IATA code to choose another.`}</p>
+  </div>`;
+}
+
+/* Les écouteurs de la case, posés à chaque rendu — la scène comme la fiche du
+   téléphone sont reconstruites, et les deux portent le MÊME champ. Une seule
+   fonction pour les deux : deux copies auraient fini par ne plus résoudre les
+   codes de la même façon. */
+function bindToAltPicker(root){
+  const ta = root.querySelector("#toAltIcaoInput");
+  if (ta){
+    const pop = root.querySelector("#toAltAcPop");
+    if (pop) acBindPop(pop, "TOALT");
+    acSelectAllOnFocus(ta);
+    ta.addEventListener("input", ()=>{
+      const v = dirKey(ta.value).trim();
+      /* Un code OACI complet et connu prend le rôle sans passer par la liste,
+         comme dans les cases du bilan. */
+      if (/^[A-Z]{4}$/.test(v) && (adGet(v) || dirGet(v))){ acClose(); RTV.setToAlt(v); return; }
+      acRefresh("TOALT");
+    });
+    ta.addEventListener("keydown", e=>{
+      if (e.key==="Enter" && !ta.value.trim()){ e.preventDefault(); acClose(); RTV.setToAlt(""); return; }
+      acKeydown(e, "TOALT");
+    });
+    ta.addEventListener("blur", ()=>{
+      if (AC.role==="TOALT") acClose();
+      const raw = dirKey(ta.value).trim();
+      /* Vidée, la case rend le rôle au départ. Un code bien formé le prend.
+         Un nom entamé sans choix revient à ce qui était retenu : on ne désigne
+         pas un dégagement par une saisie floue. */
+      if (!raw){ RTV.setToAlt(""); return; }
+      if (raw===RTV.toAltRaw()){ ta.value = raw; return; }
+      if (/^[A-Z]{4}$/.test(raw)){ RTV.setToAlt(raw); return; }
+      if (/^[A-Z]{3}$/.test(raw)){ dirRows(); const h = dirByIata[raw]; if (h){ RTV.setToAlt(h.icao); return; } }
+      ta.value = RTV.toAltRaw();
+    });
+  }
+  const clr = root.querySelector("#toAltClear");
+  if (clr) clr.onclick = ()=>RTV.setToAlt("");
+}
+
 function renderStage(tab, r){
   const wind = state.metar && state.metar.wind;
   /* Le QFU de CETTE phase : choisi à la main il vaut pour les cinq, sinon
@@ -9125,6 +9239,7 @@ function renderStage(tab, r){
     </div>
 
     <div class="${tab.role==="DEPARTURE"?"takeoff-panel":""}">
+      ${tab.role==="DEPARTURE" ? toAltPickerHtml() : ""}
       <div class="qfu-grid">${qfuCards}</div>
       <p class="note" style="margin:9px 0 14px">${cmpNote}</p>
 
@@ -9256,6 +9371,8 @@ function renderStage(tab, r){
        être enregistré dans l'unité qu'elle affiche, pas dans celle du cadre. */
     if (el) el.onchange = ()=>{ setVisReqFor(roleFor(tab), readCeil(el), el.dataset.unit || unit); render(); };
   });
+
+  bindToAltPicker(inner);
 
   const rq = inner.querySelector("#reqSel");
   if (rq){
@@ -10157,6 +10274,7 @@ function mDetailHtml(tb, r){
     </div>`;
   })();
   return `<div class="m-detail">
+    ${tb.role==="DEPARTURE" ? toAltPickerHtml() : ""}
     ${tb.role==="DEPARTURE" ? mReqSelectHtml(r)
       : M_STACKED.includes(tb.role) ? "" /* déjà en tête de la carte empilée */
       : mPhaseAppHtml(tb)}
@@ -10393,6 +10511,9 @@ function paintMobileTheme(){
 }
 
 function bindMobile(host){
+  /* La fiche du téléphone porte la même case de dégagement au décollage que la
+     scène large — mêmes écouteurs, même résolution des codes. */
+  bindToAltPicker(host);
   const gear = host.querySelector("#mGear");
   if (gear) gear.onclick = openMobileSettings;
   const hlp = host.querySelector("#mHelp");
@@ -11753,16 +11874,23 @@ function acRowsHtml(items, sel, q){
     </button>`).join("");
 }
 
-/* Trois familles de cases partagent la machinerie : le bandeau (« icao »),
-   la barre mobile (« MOBILE ») et les créneaux du bilan de vol (« RT0 » à
-   « RT2 », cases rtIcao0-2). Le rôle porte l'aiguillage. */
+/* Quatre familles de cases partagent la machinerie : le bandeau (« icao »),
+   la barre mobile (« MOBILE »), les créneaux du bilan de vol (« RT0 » à
+   « RT2 », cases rtIcao0-2) et le dégagement au décollage saisi sur la phase
+   Take off (« TOALT »). Le rôle porte l'aiguillage.
+   La case TOALT vit DANS la scène, qui se reconstruit à chaque render() : ce
+   n'est pas un problème pour la liste, qui ne s'ouvre qu'à la frappe et qu'un
+   rendu ne traverse pas — mais ses écouteurs se reposent à chaque rendu, comme
+   ceux des autres champs de la scène. */
 function acInput(role){
   return document.getElementById(role==="MOBILE" ? "mIcao"
+       : role==="TOALT" ? "toAltIcaoInput"
        : role && role.startsWith("RT") ? "rtIcao"+role.slice(2)
        : "icao");
 }
 function acPop(){
   return document.getElementById(AC.role==="MOBILE" ? "mAcPop"
+       : AC.role==="TOALT" ? "toAltAcPop"
        : AC.role && AC.role.startsWith("RT") ? "rtAcPop"+AC.role.slice(2)
        : "acPop");
 }
@@ -11811,8 +11939,12 @@ function acSelect(icao){
   /* Une case du bilan de vol prend le terrain pour ELLE : le choix remplit
      son créneau de route, il n'ouvre pas la fiche. */
   const rtSlot = AC.role && AC.role.startsWith("RT") ? +AC.role.slice(2) : null;
+  const toAlt = AC.role==="TOALT";
   acClose();
   if (rtSlot!=null){ if (window.RTV) window.RTV.pick(rtSlot, icao); return; }
+  /* Le dégagement au décollage se choisit sans quitter la phase Take off : le
+     terrain désigné va au bilan, il n'ouvre pas sa fiche. */
+  if (toAlt){ if (window.RTV) window.RTV.setToAlt(icao); return; }
   /* Une page focalisée le reste : le terrain écrit ici prend le créneau de la
      route (retarget, via reparse). On ne sort du module que par Home
      (mobile). */
@@ -12578,14 +12710,48 @@ window.RTV = (()=>{
      seulement), `null` quand les trois cartes sont refermées. */
   /* `toa` : la proposition de dégagement au décollage — {key, phase, icao,
      nm, st, t, n}, ou null tant que la carte Take off n'en a pas eu besoin. */
-  const RT = {icaos:["","",""], wx:{}, seq:0, timer:null, open:null, toa:null};
+  /* `toAlt` : le dégagement au décollage CHOISI par le pilote sur la phase Take
+     off. Vide = le terrain de départ lui-même, qui est le cas ordinaire — on
+     décolle et on revient s'y poser. Ce n'est pas un créneau de SLOTS : il n'a
+     pas de carte à lui, il vit dans la ligne T/O alternate de la carte Take
+     off, et c'est de là qu'on l'ouvre. */
+  const RT = {icaos:["","",""], toAlt:"", wx:{}, seq:0, timer:null, open:null, toa:null};
 
-  function save(){ try { localStorage.setItem(KEY, JSON.stringify(RT.icaos)); } catch(e){} }
+  /* Quatrième case du tableau enregistré, à la suite des trois créneaux : une
+     sauvegarde d'avant (longueur 3) se relit sans rien casser, le dégagement
+     revient simplement vide. */
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(RT.icaos.concat([RT.toAlt]))); } catch(e){} }
   function load(){
     try {
       const a = JSON.parse(localStorage.getItem(KEY));
-      if (Array.isArray(a)) RT.icaos = SLOTS.map((s,i)=>/^[A-Z]{4}$/.test(a[i]||"") ? a[i] : "");
+      if (Array.isArray(a)){
+        RT.icaos = SLOTS.map((s,i)=>/^[A-Z]{4}$/.test(a[i]||"") ? a[i] : "");
+        RT.toAlt = /^[A-Z]{4}$/.test(a[SLOTS.length]||"") ? a[SLOTS.length] : "";
+      }
     } catch(e){}
+  }
+  /* Le terrain de départ, et le dégagement au décollage EFFECTIF : celui que le
+     pilote a choisi, à défaut le départ. Les deux sont lus par la page (la
+     phase Take off, focusTabs) autant que par le bilan. */
+  function depIcao(){ return RT.icaos[0] || ""; }
+  function toAltIcao(){ return RT.toAlt || depIcao(); }
+  /* Le dégagement est-il un AUTRE terrain que le départ ? C'est ce qui décide
+     que l'onglet 02 quitte la page du départ : il parlerait d'un terrain dont
+     le METAR n'est pas à l'écran. */
+  function toAltElsewhere(){ return !!RT.toAlt && RT.toAlt !== depIcao(); }
+  function setToAlt(icao){
+    const v = /^[A-Z]{4}$/.test(icao||"") ? icao : "";
+    if (v === RT.toAlt) return;
+    RT.toAlt = v;
+    /* Le choix change la phase que la page du départ a le droit de montrer :
+       si l'onglet 02 disparaît, il ne doit pas rester l'onglet actif. */
+    if (state.routeFocus===1 && !toAltElsewhere()) state.routeFocus = 0;
+    save();
+    /* fetchWx repeint les cartes du bilan (et va chercher le relevé du terrain
+       choisi) ; la PAGE, elle, porte le champ et les onglets — `window.render`
+       parce que `render` désigne ici celui du module. */
+    fetchWx();
+    if (window.render) window.render();
   }
 
   function sayState(msg, err){
@@ -12663,6 +12829,12 @@ window.RTV = (()=>{
           : cls(r.overall);
       return {icao, name:mAdName(icao), st, vis, wind,
               ceil: tb.role==="DEPARTURE" ? null : mCeilInfo(r),
+              /* Le type d'approche RETENU PAR LE MOTEUR pour cette phase, et
+                 l'extrémité sur laquelle il l'a lu : c'est lui qui explique le
+                 chiffre exigé, et la carte doit le nommer. Le décollage n'en a
+                 pas — il ne vole aucune approche. */
+              app: tb.role==="DEPARTURE" ? null : (r.dbAppType || null),
+              end: q ? q.id : null,
               qfu:q, closed, closedPair:pair, alerts:nfAlerts(icao),
               eta:etaDate(tb.role),
               obsTime: wx && wx.obsTime!=null ? wx.obsTime : null,
@@ -12758,21 +12930,39 @@ window.RTV = (()=>{
   }
 
   function toaHtml(s){
-    const self = toaJudge(s.icao);
+    /* Le terrain jugé est celui que le pilote a CHOISI sur la phase Take off,
+       à défaut le départ lui-même. Le pouce se lit APRÈS le code : on nomme le
+       terrain, puis on dit ce qu'il vaut — comme l'en-tête des cartes. */
+    const icao = toAltIcao() || s.icao;
+    const ailleurs = toAltElsewhere();
+    const self = toaJudge(icao);
     if (!self) return "";
     const icon = st => `<span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>`;
-    const lines = [`<span class="rt-toa-line${self.st==="nogo"?" bad":""}"
-        title="The departure judged as its own take-off alternate — same engine as tab 02, landing minima over ETA ± 1 h. ${STATE_LABEL[self.st]}.">
-      ${icon(self.st)}<span>T/O alternate</span><span class="cod">${s.icao}</span></span>`];
+    /* Le type d'approche retenu POUR LE CALCUL, comme sous le nom des cartes
+       d'atterrissage : sans lui, deux chiffres différents sur le même terrain
+       n'ont pas d'explication visible. */
+    const app = self.app
+      ? `<span class="rt-toa-app">${escapeHtmlText(adTypeLabel(self.app))}${self.end?` · RWY ${escapeHtmlText(self.end)}`:""}</span>`
+      : "";
+    const tip = ailleurs
+      ? `${icao} judged as the take-off alternate — landing minima over ETA ± 1 h. ${STATE_LABEL[self.st]}. Tap to open it on that phase.`
+      : `The departure judged as its own take-off alternate — landing minima over ETA ± 1 h. ${STATE_LABEL[self.st]}. Choose another aerodrome on the Take off page.`;
+    const lines = [`<span class="rt-toa-line${self.st==="nogo"?" bad":""}${ailleurs?" act":""}"
+        ${ailleurs?`role="button" tabindex="0" data-toalt="${escapeHtmlText(icao)}"`:""}
+        title="${escapeHtmlText(tip)}">
+      <span>T/O alternate</span><span class="cod">${escapeHtmlText(icao)}</span>${icon(self.st)}${app}</span>`];
     if (self.st==="nogo"){
       toaEnsure(s.icao);
       const c = RT.toa && RT.toa.key===s.icao ? RT.toa : null;
       if (!c || c.phase==="search")
         lines.push(`<span class="rt-toa-line"><span>Possible T/O altn</span><span class="d">searching nearby aerodromes…</span></span>`);
       else if (c.phase==="found")
-        lines.push(`<span class="rt-toa-line"
-            title="Nearest seed aerodrome with an approach whose reports pass the take-off-alternate check (${STATE_LABEL[c.st]}). Its NOTAMs are NOT checked here — verify your briefing, and your own OEI radius.">
-          ${icon(c.st)}<span>Possible T/O altn</span><span class="cod">${c.icao}</span><span class="d">${Math.round(c.nm)} NM</span></span>`);
+        /* Proposer sans permettre de prendre serait s'arrêter au milieu : le
+           clic adopte le terrain comme dégagement au décollage, exactement
+           comme s'il avait été tapé sur la phase Take off. */
+        lines.push(`<span class="rt-toa-line act" role="button" tabindex="0" data-toaltpick="${escapeHtmlText(c.icao)}"
+            title="Nearest seed aerodrome with an approach whose reports pass the take-off-alternate check (${STATE_LABEL[c.st]}). Its NOTAMs are NOT checked here — verify your briefing, and your own OEI radius. Tap to take it as the take-off alternate.">
+          <span>Possible T/O altn</span><span class="cod">${escapeHtmlText(c.icao)}</span>${icon(c.st)}<span class="d">${Math.round(c.nm)} NM</span></span>`);
       else if (c.phase==="err")
         lines.push(`<span class="rt-toa-line"><span class="d">Could not fetch nearby reports to propose a T/O alternate.</span></span>`);
       else
@@ -12933,6 +13123,7 @@ window.RTV = (()=>{
         ${ageHtml(s.obsTime)}
         <span class="rt-chev" aria-hidden="true">▾</span></span>
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
+      ${s.app ? `<span class="rt-app" title="Approach the engine used to compute this phase's minima — change it on the aerodrome page.">${escapeHtmlText(adTypeLabel(s.app))}${s.end?` · RWY ${escapeHtmlText(s.end)}`:""}</span>` : ""}
       <span class="rt-rows">${mVisRow(s.vis)}${mCeilRow(s.ceil)}${mWindRow(s.wind)}</span>
       ${alertsHtml(s)}
       ${slot.key==="dep" ? toaHtml(s) : ""}
@@ -13047,6 +13238,20 @@ window.RTV = (()=>{
         e.preventDefault(); openDetail(+b.dataset.i);
       };
     });
+    /* Les deux gestes de la ligne T/O alternate, tous deux DANS la carte Take
+       off : ouvrir le dégagement choisi sur sa phase, ou adopter celui que la
+       recherche propose. Le clic ne remonte pas jusqu'à la carte — on ne
+       demandait pas le départ. */
+    document.querySelectorAll("#rtCards [data-toalt]").forEach(a=>{
+      const go = e=>{ e.stopPropagation(); openToAlt(a.dataset.toalt); };
+      a.onclick = go;
+      a.onkeydown = e=>{ if (e.key==="Enter" || e.key===" "){ e.preventDefault(); go(e); } };
+    });
+    document.querySelectorAll("#rtCards [data-toaltpick]").forEach(a=>{
+      const go = e=>{ e.stopPropagation(); setToAlt(a.dataset.toaltpick); };
+      a.onclick = go;
+      a.onkeydown = e=>{ if (e.key==="Enter" || e.key===" "){ e.preventDefault(); go(e); } };
+    });
     /* Le lien vers le NOTAM vit DANS la carte : son clic ne doit pas remonter
        jusqu'à elle — on vient lire un message, pas quitter le bilan. */
     document.querySelectorAll("#rtCards .rt-nlink").forEach(a=>{
@@ -13060,10 +13265,13 @@ window.RTV = (()=>{
      suite avec ce qu'on sait déjà, puis à l'arrivée des relevés. `seq` écarte
      les réponses doublées par un geste plus récent. */
   async function fetchWx(){
-    const ids = [...new Set(RT.icaos.filter(Boolean))];
+    /* Le dégagement au décollage entre dans la même requête quand c'est un
+       AUTRE terrain que le départ : sans son relevé, sa ligne ne pourrait pas
+       être jugée. Vide ou égal au départ, il n'ajoute rien. */
+    const ids = [...new Set(RT.icaos.concat(toAltElsewhere()?[RT.toAlt]:[]).filter(Boolean))];
     render();
     if (!ids.length){ sayState(""); return; }
-    /* Les drapeaux NOTAM des trois terrains partent avec les relevés — chaque
+    /* Les drapeaux NOTAM des terrains partent avec les relevés — chaque
        arrivée redessine les cartes (nfaNotify → RTV.refresh). */
     ids.forEach(id => nfaLoad(id));
     const my = ++RT.seq;
@@ -13132,11 +13340,35 @@ window.RTV = (()=>{
     fetchWeather();
   }
 
+  /* Le dégagement au décollage ouvert sur SA phase — l'onglet 02, seul. Il n'a
+     pas de créneau dans SLOTS, donc pas de carte à déplier : la page entière
+     dans les deux mises en page. Le bilan se referme, comme pour une carte. */
+  function openToAlt(icao){
+    if (!/^[A-Z]{4}$/.test(icao||"")) return;
+    close();
+    state.tab = TOA_TAB;
+    const el = document.getElementById("icao");
+    if (el) el.value = icao;
+    state.qfuIndex = null; state.qfuManual = false; state.qfuAuto = {};
+    state.routeFocus = TOA_TAB;
+    if (document.body.classList.contains("mobile")) mOpen(icao);
+    refreshAdPanel(); renderFavBar();
+    state.routeFocus = TOA_TAB;
+    fetchWeather();
+  }
+
   /* Terrain arrivé sur une page focalisée : le créneau de la route suit — la
      fiche d'une phase du bilan reste la fiche de CETTE phase quel que soit le
      terrain qu'on y met, et le bilan rouvert montre le même. Appelé par
      reparse(), au moment où la station chargée change. */
   function retarget(icao){
+    /* La phase 02 n'est pas un créneau : le terrain chargé sur elle DEVIENT le
+       dégagement au décollage, sans quoi changer de terrain sur cette page
+       aurait laissé le bilan parler de l'ancien. */
+    if (state.routeFocus===TOA_TAB){
+      if (/^[A-Z]{4}$/.test(icao||"") && toAltIcao()!==icao){ RT.toAlt = icao; save(); }
+      return;
+    }
     const i = SLOTS.findIndex(s=>s.tab===state.routeFocus);
     if (i<0 || !/^[A-Z]{4}$/.test(icao||"")) return;
     if (RT.icaos[i]!==icao){ RT.icaos[i] = icao; save(); }
@@ -13302,8 +13534,17 @@ window.RTV = (()=>{
                     p.get("dest") || p.get("arr") || route[1] || "",
                     p.get("altn") || p.get("alt") || route[2] || ""];
       if (want.some(Boolean)){
+        /* On relit d'abord ce qui était retenu : une route qui arrive par
+           l'adresse est le plus souvent LA MÊME rouverte, et le dégagement au
+           décollage choisi ne doit pas disparaître à chaque rechargement. */
+        load();
+        const avant = depIcao();
         RT.icaos = want.map(v=>{ const r = v ? dirResolve(v) : null; return r || ""; });
         fromUrl = RT.icaos.some(Boolean);
+        /* Mais un dégagement au décollage appartient à SON départ : si le
+           départ change, le choix tombe — le garder ferait juger un terrain
+           retenu pour un autre vol. */
+        if (fromUrl && depIcao() !== avant) RT.toAlt = "";
         if (fromUrl) save();
       }
     } catch(e){}
@@ -13318,7 +13559,12 @@ window.RTV = (()=>{
   /* inlineOpen / renderDetail / fold : la fiche mobile dépliée sous une carte.
      renderMobile les appelle — c'est lui qui sait quand tout se repeint. */
   return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render,
-          openNotam, closeNotam, goHost, inlineOpen, renderDetail, fold};
+          openNotam, closeNotam, goHost, inlineOpen, renderDetail, fold,
+          /* Le dégagement au décollage : la phase Take off le lit et l'écrit,
+             la carte l'ouvre. `toAltRaw` rend le CHOIX (vide = le départ),
+             `toAlt` le terrain effectivement jugé. */
+          toAlt: toAltIcao, toAltRaw: ()=>RT.toAlt, toAltElsewhere, setToAlt,
+          dep: depIcao, openToAlt};
 })();
 
 loadSample();
