@@ -2283,8 +2283,11 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 .qlv.idle .dot{background:var(--muted);opacity:.55;animation:none}
 .qlv .grp{display:flex;align-items:baseline;gap:7px;
   font:500 12px/1.35 var(--mono);color:var(--muted);letter-spacing:.02em}
-.qlv .grp .k{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted2)}
+.qlv .grp .k{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .qlv b{font:700 17px/1 var(--mono);letter-spacing:.04em;color:var(--text)}
+/* Le mot « QFU » devant le numéro : il nomme ce que le chiffre est, sans lui
+   voler sa taille. */
+.qlv b .u{font:600 11px/1 var(--mono);letter-spacing:.09em;color:var(--muted);margin-right:4px}
 .qlv .n{font:600 11px/1 var(--num);color:var(--muted2)}
 .qlv .src{font-size:11px;opacity:.85}
 @keyframes qlv-pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -5229,7 +5232,7 @@ function qlvState(icao){
   }
 
   const grp = (k, p) => p
-    ? `<span class="grp"><span class="k">${k}</span><b>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
+    ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
     : "";
   const down = obsDown
     ? `<span class="grp"><span class="n">traffic check unavailable (${escapeHtmlText(obsDown)})</span></span>` : "";
