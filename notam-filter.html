@@ -22371,7 +22371,12 @@ window.addEventListener("scroll", hidePop, true);
           else { if (looseTrk == null) looseTrk = c.trk; for (const e of m) if (!loose.includes(e.q.id)) loose.push(e.q.id); }
         }
         if (geo.length) return { ids: geo.slice(0, 4), obs: true, trk: geoTrk };
-        if (loose.length) return { ids: loose.slice(0, 4), obs: true, trk: looseTrk };
+        /* Le cap seul n'est recevable que faute de mieux. Quand TOUTES les
+           candidates ont leur axe et que le flux n'est sur AUCUN, il n'est sur
+           aucune piste : avion qui passe, ou départ déjà en virage — à Orly,
+           un départ de la 20 viré à l'ouest empruntait le cap de la 25. */
+        const geoDispo = cand.length && cand.every(q => q.thr) && refPt;
+        if (loose.length && !geoDispo) return { ids: loose.slice(0, 4), obs: true, trk: looseTrk };
         return null;
       };
       const hhmmZ = t => { const x = new Date(t); return isNaN(x) ? "" :
