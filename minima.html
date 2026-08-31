@@ -2289,7 +2289,12 @@ body.mobile #rtOv:not([hidden]){display:flex}
 .rt-card.v-nogo{border-color:var(--red);box-shadow:0 0 0 1px var(--red),var(--elev)}
 .rt-card.empty{color:var(--muted);border-style:dashed;box-shadow:none;justify-content:center}
 .rt-card.empty .rt-role{margin-bottom:2px}
-.rt-role{font:500 9.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+/* Le rôle du terrain — Take off, Destination, Dest. alternate — n'est pas une
+   étiquette de service : c'est ce qu'on lit en premier quand les trois cartes
+   se ressemblent. Plus gros que les autres libellés, et franchement noir en
+   mode jour, où le gris se diluait sur le fond blanc. */
+.rt-role{font:600 12.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+body.light .rt-role{color:var(--text)}
 .rt-head{display:flex;align-items:center;gap:9px;min-width:0}
 .rt-icao{font:700 21px/1 var(--mono);letter-spacing:.03em}
 .rt-head .ico{width:24px;height:24px;flex:none}
