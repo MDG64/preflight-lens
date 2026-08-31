@@ -1475,6 +1475,16 @@ body.mobile #mOverlay:not([hidden]){display:block}
 #mTheme{font:20px/1 var(--sans)}
 /* Même chose dans les barres des surcouches, où le « ? » voisine la croix. */
 .ov-help{font:600 20px/1 var(--sans);padding-bottom:0}
+/* MODE JOUR — la navigation du haut d'écran n'est pas un accent : sept cadres
+   bleus alignés ne désignaient plus rien. Ses entrées se lisent donc à l'encre
+   du texte, comme le titre à côté d'elles ; le bleu d'action reste au geste qui
+   envoie le terrain, juste en dessous, là où il désigne encore quelque chose.
+   La barre de la page Minima suit la même règle : c'est la même barre. */
+body.light .m-top .m-gear,
+body.light .m-top .m-link,
+body.light #rtOv .wxmap-bar .m-gear,
+body.light #rtOv .wxmap-bar .m-back,
+body.light #rtOv .wxmap-bar .m-link{color:var(--text)}
 /* Six entrées et un titre sur un écran étroit : plutôt que de rogner le titre,
    la barre se resserre — l'espacement, les mots et le pas des cadres, la hauteur
    restant celle du doigt. Le jour/nuit est la sixième : il a fallu reprendre
@@ -2193,8 +2203,10 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 #rtOv .wxmap-state{max-width:calc(50% - 100px);margin-right:auto}
 @media (max-width:560px){
   /* Le titre ayant quitté la ligne des boutons, plus rien ne les poussait au
-     bord droit : ils se rangent sous lui, au milieu comme lui. */
-  #rtOv .wxmap-bar{gap:5px;padding:9px 8px;justify-content:center}
+     bord droit : la ligne les y envoie elle-même, pour qu'ils se tiennent au
+     pouce du même côté qu'en pleine largeur — et que la barre ne change pas de
+     géométrie en franchissant le seuil. */
+  #rtOv .wxmap-bar{gap:5px;padding:9px 8px;justify-content:flex-end}
   /* Trop étroit pour un titre au milieu ET six cadres sur la même ligne : la
      barre s'enroule déjà, le titre prend donc sa propre ligne — toujours au
      milieu, toujours en grand, mais au-dessus de la navigation. */
@@ -10398,9 +10410,11 @@ function mDetailHtml(tb, r){
      lequel le moteur empile ses verdicts. */
   const ordered = (r.verdicts||[]).slice()
     .sort((a,b)=>(a.question==="WIND"?1:0)-(b.question==="WIND"?1:0));
-  /* Le décollage ne porte ni phrase ni référence sous sa table : la ligne
-     réglementaire est déjà nommée par le sélecteur juste au-dessus, et les
-     références réglementaires se lisent dans le setup. */
+  /* Le décollage ne porte ni table, ni phrase, ni référence : la ligne
+     réglementaire est déjà nommée par le sélecteur juste au-dessus, les
+     références se lisent dans le setup, et ses trois lignes — visibilité,
+     vent de travers, vent arrière — répétaient mot pour mot la comparaison
+     déjà posée en tête de phase, à deux doigts au-dessus du dépliant. */
   const isDep = tb.role==="DEPARTURE";
   /* Carte empilée : ses cases portent déjà les minima saisissables et la
      comparaison du vent. Ne reste sous elles que ce qu'aucune case ne dit —
@@ -10490,7 +10504,7 @@ function mDetailHtml(tb, r){
                       (r.planning && r.planning.ceilReq!=null) ? r.planning.ceilReq : null,
                       "Ceiling required for this phase, in ft — leave empty to use the derived value, 0 to apply no ceiling criterion",
                       state.ceilReq[roleFor(tb)]===null)}
-    ${inCard ? "" : rows.length ? `<table class="m-dtable">
+    ${inCard || isDep ? "" : rows.length ? `<table class="m-dtable">
       <thead><tr><th>Parameter</th><th>Obs.</th><th>Req.</th><th>Margin</th><th></th></tr></thead>
       <tbody>${rows.join("")}</tbody>
     </table>` : `<p class="m-drat" style="margin:0">Nothing to compare — no report loaded.</p>`}
