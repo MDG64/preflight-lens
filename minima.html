@@ -732,6 +732,19 @@ select.inline{width:auto;padding:5px 8px;font-size:11px}
    dispute pas au cap ni au pouce. */
 .qfu .lgt{font:600 9px/1.3 var(--mono);color:var(--muted);display:block;margin-top:4px;letter-spacing:.08em;opacity:.85}
 
+/* ---------- QFU observé : la ligne de trafic ADS-B sous la grille ----------
+   Une observation discrète, du même gris que les notes — elle informe le
+   choix du QFU, elle ne le dispute ni aux cartes ni au vent. Le point vert
+   pulse tant que l'instantané est vivant ; gris quand il n'a rien vu. */
+.qfu-live{display:flex;align-items:baseline;gap:8px;margin:10px 2px 0;
+  font:500 11.5px/1.6 var(--mono);color:var(--muted);letter-spacing:.02em}
+.qfu-live .dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+  flex:none;align-self:center;animation:qlv-pulse 2.4s ease-in-out infinite}
+.qfu-live.idle .dot{background:var(--muted);opacity:.5;animation:none}
+.qfu-live b{font-weight:700}
+.qfu-live .src{opacity:.65}
+@keyframes qlv-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
 /* ---------- placeholder ---------- */
 .ph{
   border:1px dashed var(--line2);border-radius:var(--radius);padding:30px 18px;
@@ -4976,6 +4989,100 @@ function nfAlerts(icao){
   for (const en of Object.keys(nf.ilsOut || {})) add("ils", en, `ILS ${en} unserviceable`, au.ils);
   for (const en of Object.keys(nf.lightsOut || {})) add("als", en, `Approach lights ${en} unserviceable`, au.als);
   return out;
+}
+
+/* ---------- QFU observé : le trafic ADS-B en direct ----------
+   La route sol d'un avion établi en finale EST le QFU en service — c'est la
+   seule source qui le dise en direct sans ATIS. Le serveur (/api/qfu, dans
+   les deux backends comme daywx) échantillonne adsb.lol dans 8 NM et rend des
+   groupes de routes sol {trk, n}, arrivées et départs, sans nommer de piste :
+   c'est ICI que les routes (vraies) se rapprochent des extrémités, avec le
+   cap que la graine sait déjà calculer — QFU magnétique + déclinaison.
+   Une OBSERVATION, jamais une consigne : la ligne nomme sa source, son heure
+   et ses effectifs, et le pilote pèse la preuve — un avion n'est pas un flux.
+   Même contrat que les drapeaux NOTAM : chargement anti-rafale, repli
+   Railway, et à l'arrivée une retouche DOM ciblée — jamais un re-rendu, qui
+   replierait les panneaux sous les doigts. */
+const QLV_FRESH_MS = 90e3;      // sous la minuterie des relevés : elle est gratuite
+const QLV_MATCH_DEG = 25;       // au-delà, la route observée ne désigne plus l'extrémité
+const qlvCache = new Map();     // icao -> {at, data} | {at, err:true}
+const qlvPending = new Map();
+function qlvLoad(icao){
+  if (!/^[A-Z]{4}$/.test(icao || "")) return;
+  const hit = qlvCache.get(icao);
+  if (hit && Date.now() - hit.at < QLV_FRESH_MS) return qlvPending.get(icao);
+  if (qlvPending.has(icao)) return qlvPending.get(icao);
+  const p = (async () => {
+    try {
+      let r = await fetch(`${WX_API}/api/qfu?icao=${icao}`);
+      if (!r.ok && WX_API !== NFA_FALLBACK_API) r = await fetch(`${NFA_FALLBACK_API}/api/qfu?icao=${icao}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      qlvCache.set(icao, {at: Date.now(), data: await r.json()});
+    } catch (_) {
+      /* Pas de réseau, pas de route, station inconnue : la ligne reste
+         absente. L'observation est un bonus — son échec ne vaut aucune
+         alarme, le panneau vit très bien sans elle. */
+      qlvCache.set(icao, {at: Date.now(), err: true});
+    }
+    qlvNotify(icao);
+  })();
+  p.catch(()=>{}).then(()=>{ if (qlvPending.get(icao) === p) qlvPending.delete(icao); });
+  qlvPending.set(icao, p);
+  return p;
+}
+/* Ce que la ligne a à dire, calculé depuis le cache — null tant qu'on ne sait
+   rien (jamais chargé, ou échec) : mieux vaut se taire que dire « rien vu »
+   sans être allé voir. */
+function qlvState(icao){
+  const hit = qlvCache.get(icao);
+  if (!hit || hit.err || !hit.data || !Array.isArray(hit.data.arr)) return null;
+  const d = hit.data;
+  const magvar = currentMagvar();
+  const norm = x => { const v = Math.round(x)%360; return v<=0 ? v+360 : v; };
+  const cdiff = (a,b) => { const x = Math.abs(a-b)%360; return x>180 ? 360-x : x; };
+  const ends = runwayList(icao).flatMap(p=>qfusOf(p));
+  /* Un groupe se nomme par les extrémités que sa route désigne — plusieurs
+     quand des pistes sont parallèles (26L/26R : même cap, même flux, injuger
+     sans la géométrie latérale), la plus proche en tête. */
+  const endsFor = c => ends
+    .map(q => ({id:q.id, d:cdiff(norm(q.deg + magvar), c.trk)}))
+    .filter(e => e.d <= QLV_MATCH_DEG)
+    .sort((a,b)=>a.d-b.d).map(e=>e.id).slice(0,4);
+  /* Un avion seul dont la route ne désigne rien (départ déjà en virage,
+     hélicoptère) est du bruit DÈS QU'un autre groupe a nommé une piste ;
+     quand rien n'a collé, les routes brutes sont la seule information et
+     elles restent. */
+  const anyMatch = (d.arr||[]).concat(d.dep||[]).some(c=>endsFor(c).length);
+  const keep = cs => (cs||[]).filter(c => endsFor(c).length || c.n > 1 || !anyMatch);
+  const name = c => {
+    const ids = endsFor(c);
+    return ids.length ? `<b>${ids.join("/")}</b>` : `trk ${String(c.trk).padStart(3,"0")}°`;
+  };
+  const part = (label, cs) => cs.length
+    ? `${label} ${cs.map(c=>`${name(c)}&thinsp;×${c.n}`).join(" · ")}` : "";
+  const bits = [part("arrivals", keep(d.arr)), part("departures", keep(d.dep))].filter(Boolean);
+  const t = /^\d{4}-/.test(d.at || "") ? d.at.slice(11,16)+"Z" : "";
+  if (!bits.length) return { idle: true,
+    html: `<span class="dot"></span><span>Live traffic${t?` ${t}`:""}: none low within 8 NM <span class="src">— ADS-B (adsb.lol)</span></span>` };
+  return { idle: false,
+    html: `<span class="dot"></span><span>Live traffic${t?` ${t}`:""}: ${bits.join(" — ")} <span class="src">ADS-B (adsb.lol)</span></span>` };
+}
+/* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
+   qlvNotify retrouve quand la réponse arrive après le rendu. */
+function qfuLiveHtml(icao){
+  if (!/^[A-Z]{4}$/.test(icao || "")) return "";
+  qlvLoad(icao);
+  const s = qlvState(icao);
+  return `<div class="qfu-live${s&&s.idle?" idle":""}" data-qlv="${icao}"${s?"":" hidden"}
+    title="Ground tracks of live ADS-B traffic (adsb.lol) within 8 NM, matched to runway headings. A one-minute observation — not the ATIS, not a clearance: the declared runway in use prevails.">${s?s.html:""}</div>`;
+}
+function qlvNotify(icao){
+  document.querySelectorAll(`.qfu-live[data-qlv="${icao}"]`).forEach(el=>{
+    const s = qlvState(icao);
+    el.hidden = !s;
+    el.classList.toggle("idle", !!(s && s.idle));
+    el.innerHTML = s ? s.html : "";
+  });
 }
 
 /* Terrain courant du point de vue du MOTEUR : la station du METAR chargé fait
@@ -9472,6 +9579,7 @@ function renderStage(tab, r){
     <div class="${tab.role==="DEPARTURE"?"takeoff-panel":""}">
       ${tab.role==="DEPARTURE" ? toAltPickerHtml() : ""}
       <div class="qfu-grid">${qfuCards}</div>
+      ${qfuLiveHtml(icao)}
       <p class="note" style="margin:9px 0 14px">${cmpNote}</p>
 
       ${icao ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ils:{}, als:{}, rwy:{}}; return `
@@ -9818,6 +9926,9 @@ async function fetchWeather(opts = {}){
     /* Même contrat pour les drapeaux NOTAM : l'anti-rafale de nfaLoad rend la
        minuterie gratuite, et un NOTAM tombé entre-temps finit par cocher. */
     nfaLoad(icao);
+    /* Et pour le trafic observé : la minuterie le tient frais, la retouche
+       DOM de qlvNotify le pose sans re-rendu. */
+    qlvLoad(icao);
     startAutoRefresh();
   } catch(err){
     if (silent){
@@ -11105,6 +11216,7 @@ function mobileResultsHtml(){
       <div class="m-report"><div class="m-raw">${tafTxt?mMarkedHtml(tafTxt, hlRes?mReportSpans(hlRes, tafTxt, "TAF", hlOv):[]):"<i>—</i>"}</div></div>
       <div class="m-ptabs" role="group" aria-label="Flight phase">${ptabs}</div>
       <div class="m-report"><span class="label">QFU</span><div class="m-qfus">${mQfuChips(icao, results, sel)}</div></div>
+      ${qfuLiveHtml(icao)}
       ${mDayWxHtml(icao)}
       ${/^[A-Z]{4}$/.test(icao) ? mNfStripHtml(icao) : ""}
       <div class="m-phases">${rows}</div>
