@@ -2283,6 +2283,10 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 .qlv.idle .dot{background:var(--muted);opacity:.55;animation:none}
 .qlv .grp{display:flex;align-items:baseline;gap:7px;
   font:500 12px/1.35 var(--mono);color:var(--muted);letter-spacing:.02em}
+/* Take off et Landing en colonnes : k/QFU/observed alignés verticalement
+   plutôt que réempilés en flux libre selon la largeur de chaque texte. */
+.qlv-rows{display:grid;grid-template-columns:auto auto 1fr;column-gap:7px;row-gap:5px;align-items:baseline}
+.qlv-rows>.grp{display:contents}
 .qlv .grp .k{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .qlv b{font:700 17px/1 var(--mono);letter-spacing:.04em;color:var(--text)}
 /* Le mot « QFU » devant le numéro : il nomme ce que le chiffre est, sans lui
@@ -5452,8 +5456,9 @@ function qlvState(icao){
     html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, no traffic observed</span>${down}</div>` };
   /* Point vert quand du trafic réel soutient l'estimation, gris quand elle ne
      tient qu'à la théorie — vent et déclarations. */
+  const rows = (to || ldg) ? `<div class="qlv-rows">${grp("Take off", to)}${grp("Landing", ldg)}</div>` : "";
   return { html: lbl
-    + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${grp("Take off", to)}${grp("Landing", ldg)}${conflict}${down}</div>` };
+    + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${rows}${conflict}${down}</div>` };
 }
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */
