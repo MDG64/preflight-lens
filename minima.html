@@ -492,9 +492,22 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
    case en voulant lire un NOTAM serait le pire des deux gestes. */
 .nf-item{display:flex;align-items:center;min-width:0}
 .qfu.nf-closed .deg{color:var(--red);font-weight:700;letter-spacing:.08em}
-/* Version mobile : mêmes cases, empilées dans leur carte relevé. */
+/* Version mobile : mêmes cases, empilées dans leur carte relevé. Le mot NOTAM
+   y est un bouton — il déplie les cases que le repli garde pour lui — et la
+   carte peut n'être que cette ligne-là, quand rien n'est levé. */
 .m-report.nf-strip{display:block;margin-bottom:10px}
 .nf-m{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:8px}
+.m-report.nf-strip .nf-note{display:block;margin-top:8px}
+.nf-head{
+  display:flex;align-items:center;gap:8px;width:100%;
+  background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;
+  text-align:left;cursor:pointer;
+}
+.nf-head .label{margin-bottom:0}
+.nf-head .m-chev{margin-left:auto}
+.nf-head[aria-expanded="true"] .m-chev{transform:rotate(180deg)}
+.nf-head:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.nf-strip.active .nf-head .label{color:var(--amber)}
 
 /* ---------- onglets de phase ---------- */
 .tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:14px}
@@ -9767,7 +9780,10 @@ const MQ_MOBILE = window.matchMedia("(max-width:600px)");
    « All » par défaut : les cinq lignes d'un coup, la lecture d'ensemble. Une
    phase isolée est seule à l'écran : son détail s'ouvre avec elle, d'où `open`
    accordé au filtre — un repli reste possible sur la ligne. */
-const mState = {icao:null, time:null, open:null, phase:null};
+/* `nfOpen` : le bandeau NOTAM déplié. Replié — l'état de départ — il ne montre
+   que les drapeaux en vigueur ; c'est l'appui sur le mot NOTAM qui sort la
+   liste entière des cases à cocher. */
+const mState = {icao:null, time:null, open:null, phase:null, nfOpen:false};
 
 function favList(){
   try { const a = JSON.parse(localStorage.getItem("wl-minima-favs")||"[]"); return Array.isArray(a)?a:[]; }
@@ -9860,6 +9876,9 @@ async function mOpen(icao){
      Home l'a déjà vidé si l'on vient de l'accueil. */
   mState.phase = null;
   mState.open = state.routeFocus!=null ? state.routeFocus : null;
+  /* Le bandeau NOTAM se replie aussi : les cases ouvertes étaient celles du
+     terrain précédent, et le nouveau n'a pas encore été contrôlé. */
+  mState.nfOpen = false;
   clockClose();
   document.getElementById("icao").value = icao;
   /* Repartir à blanc : en cas d'échec réseau, l'écran montre « inconnu »
@@ -10711,6 +10730,10 @@ function bindMobile(host){
   host.querySelectorAll(".mNfRwy").forEach(c=>c.onchange = ()=>{
     nfUserToggleRwy(currentIcao(), c.dataset.pair); render();
   });
+  /* Le mot NOTAM déplie la liste entière, un second appui la referme. Rien à
+     recalculer : seul l'affichage change, `renderMobile` suffit. */
+  const nfh = host.querySelector("#mNfHead");
+  if (nfh) nfh.onclick = ()=>{ mState.nfOpen = !mState.nfOpen; renderMobile(); };
   nfBindTags(host);
 }
 
@@ -10738,6 +10761,46 @@ function mQfuChips(icao, results, sel){
       <span class="lab"><span class="id">${q.id}</span><span class="deg">${String(q.deg).padStart(3,"0")}°</span></span>
     </button>`;
   })).join("");
+}
+
+/* Le bandeau NOTAM du petit écran. Sur tablette, les seize cases d'un grand
+   terrain se rangent sur une ligne ou deux ; au pouce, elles poussaient les
+   relevés hors de l'écran pour n'annoncer, la plupart du temps, que des cases
+   vides. Replié, le bandeau ne montre donc QUE les drapeaux en vigueur — et
+   rien du tout quand il n'y en a aucun. Le mot NOTAM reste et ouvre la liste
+   entière : c'est là qu'on coche à la main ce que le briefing a dit, et un
+   second appui referme.
+   Une exception au « rien du tout » : tant que le contrôle automatique n'a pas
+   abouti — en cours, ou en échec — sa ligne d'état reste visible repliée. Un
+   bandeau muet se lirait « aucun NOTAM », ce qu'on ne sait justement pas
+   encore.
+   Terrain sans aucune case possible (ni ILS, ni rampe, ni piste connue) : pas
+   de bandeau du tout, il n'ouvrirait sur rien. */
+function mNfStripHtml(icao){
+  const nf = nfGet(icao), au = nf.auto || {ils:{}, als:{}, rwy:{}};
+  const pairs = runwayList(icao).concat(runwayList(icao).includes(state.runway)?[]:[state.runway]);
+  const items = [].concat(
+    nfIlsEnds(icao).map(en=>({on:!!nf.ilsOut[en], h:
+      `<span class="nf-item"><label class="chk"><input type="checkbox" class="mNfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.ils||{})[en], "ILS "+en+" unserviceable")}</span>`})),
+    nfAlsEnds(icao).map(en=>({on:!!nf.lightsOut[en], h:
+      `<span class="nf-item"><label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="mNfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.als||{})[en], "Approach lights "+en+" unserviceable")}</span>`})),
+    pairs.map(p=>({on:!!nf.rwyClosed[p], h:
+      `<span class="nf-item"><label class="chk"><input type="checkbox" class="mNfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span></label>${nfAutoTag(icao, nf, (au.rwy||{})[p], "RWY "+p+" closed")}</span>`}))
+  );
+  if (!items.length) return "";
+  const open = !!mState.nfOpen;
+  const shown = open ? items : items.filter(it=>it.on);
+  const chk = nf.chk;
+  const note = (open || !chk || chk.err) ? `<span class="nf-note">${nfStateNote(icao)}</span>` : "";
+  return `<div class="m-report nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
+    <button type="button" class="nf-head" id="mNfHead" aria-expanded="${open}"
+            title="${open?"Hide the switches that are not raised":"Show every NOTAM switch"}">
+      <span class="label">NOTAM</span>
+      <span class="m-chev" aria-hidden="true">▾</span>
+    </button>
+    ${shown.length?`<div class="nf-m">${shown.map(it=>it.h).join("")}</div>`:""}
+    ${note}
+  </div>`;
 }
 
 function mobileResultsHtml(){
@@ -10854,17 +10917,7 @@ function mobileResultsHtml(){
       <div class="m-ptabs" role="group" aria-label="Flight phase">${ptabs}</div>
       <div class="m-report"><span class="label">QFU</span><div class="m-qfus">${mQfuChips(icao, results, sel)}</div></div>
       ${mDayWxHtml(icao)}
-      ${/^[A-Z]{4}$/.test(icao) ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ils:{}, als:{}, rwy:{}};
-        const pairs = runwayList(icao).concat(runwayList(icao).includes(state.runway)?[]:[state.runway]);
-        return `<div class="m-report nf-strip${nfAny(icao)?" active":""}" role="group" aria-label="NOTAM status — auto-filled switches, yours to override">
-        <span class="label">NOTAM</span>
-        <div class="nf-m">
-          ${nfIlsEnds(icao).map(en=>`<span class="nf-item"><label class="chk"><input type="checkbox" class="mNfIls" data-end="${en}" ${nf.ilsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ILS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.ils||{})[en], "ILS "+en+" unserviceable")}</span>`).join("")}
-          ${nfAlsEnds(icao).map(en=>`<span class="nf-item"><label class="chk" title="Approach lighting system, RWY ${en}"><input type="checkbox" class="mNfAls" data-end="${en}" ${nf.lightsOut[en]?"checked":""}><span class="bx">${TICK}</span><span>ALS ${en} U/S</span></label>${nfAutoTag(icao, nf, (au.als||{})[en], "Approach lights "+en+" unserviceable")}</span>`).join("")}
-          ${pairs.map(p=>`<span class="nf-item"><label class="chk"><input type="checkbox" class="mNfRwy" data-pair="${p}" ${nf.rwyClosed[p]?"checked":""}><span class="bx">${TICK}</span><span>RWY ${p} closed</span></label>${nfAutoTag(icao, nf, (au.rwy||{})[p], "RWY "+p+" closed")}</span>`).join("")}
-        </div>
-        <span class="nf-note">${nfStateNote(icao)}</span>
-      </div>`; })() : ""}
+      ${/^[A-Z]{4}$/.test(icao) ? mNfStripHtml(icao) : ""}
       <div class="m-phases">${rows}</div>
     </div>`;
 }
