@@ -2859,7 +2859,7 @@ body.light .rt-role{color:var(--text)}
           rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
           target="_blank" rel="noopener">CC BY 4.0</a>.</p>
       <p class="hd-p muted">The strip is a model forecast, not an aviation weather product.</p>
-      <p class="hd-p"><b>Live traffic</b> — <a href="https://www.adsb.lol/" target="_blank"
+      <p class="hd-p"><b>Traffic observations (runway in use)</b> — <a href="https://www.adsb.lol/" target="_blank"
           rel="noopener">ADSB.lol</a>, licensed <a href="https://opendatacommons.org/licenses/odbl/1-0/"
           target="_blank" rel="noopener">ODbL 1.0</a>.</p>
       <p class="hd-p muted">Community ADS-B coverage: what it shows is real, what it misses is not proof of absence.
@@ -5075,13 +5075,17 @@ function nfAlerts(icao){
    Railway, et à l'arrivée une retouche DOM ciblée — jamais un re-rendu, qui
    replierait les panneaux sous les doigts. */
 /* Cadence du client. On ne suit pas des vols, on cherche le QFU en service —
-   une configuration de piste tient des heures et ne change qu'au gré du vent :
-   cinq minutes ne coûtent aucune information, là où les 90 s du début
-   coûtaient quarante requêtes par heure et par page ouverte. Le serveur garde
-   sa réponse dix minutes de son côté : l'essentiel des appels ne sort donc
-   même pas de chez nous. L'heure affichée est celle de la MESURE, pas de la
-   lecture — une bande de cinq minutes le dit d'elle-même. */
-const QLV_FRESH_MS = 5 * 60e3;
+   une configuration de piste tient des heures et ne change qu'au gré du vent.
+   Vingt minutes (cahier des charges du 2026-08-31) : l'observation n'est plus
+   qu'une entrée de l'estimation, dont le vent et les préférentielles portent
+   l'essentiel entre deux échantillons — et le budget amont tombe à trois
+   appels par heure et par terrain. L'heure affichée est celle de la MESURE,
+   pas de la lecture — la bande la porte pour le dire. */
+const QLV_FRESH_MS = 20 * 60e3;
+/* Le seuil d'élimination au vent arrière MOYEN : 8 kt, celui du cahier des
+   charges — au-dessus des 5 kt que l'OACI donne aux pistes préférentielles,
+   pour ne pas écarter un QFU sur un souffle. */
+const QLV_MAX_TAIL_KT = 8;
 /* Un échec se retente bien plus vite qu'un succès ne se rafraîchit : les
    échecs qu'on rencontre vraiment sont passagers — serveur qui redémarre et
    dont l'annuaire est encore froid, plafond de requêtes momentané. Les garder
@@ -5125,68 +5129,121 @@ function qlvLoad(icao){
 }
 /* Ce que la bande a à dire, calculé depuis le cache — null tant qu'on ne sait
    rien : mieux vaut se taire que dire « rien vu » sans être allé voir. */
+/* L'estimation du QFU en service — un par usage, décollage et atterrissage.
+   La bande ne s'appelle plus « live traffic » : rafraîchie toutes les vingt
+   minutes, l'observation n'est plus du direct, et elle n'est qu'UNE des trois
+   entrées. La stratégie, dans l'ordre où elle trie :
+     0. une paire fermée par les drapeaux NOTAM ne concourt pas ;
+     1. le VENT élimine — plus de 8 kt dans le dos, un QFU n'est plus en
+        service. Le vent MOYEN, pas la rafale : on estime ce que l'ATC
+        choisit, pas ce que le moteur limite ;
+     2. les pistes PRÉFÉRENTIELLES déclarées sur la fiche terrain (adPrefSet),
+        par usage — ce que la plateforme publie vouloir faire ;
+     3. le trafic OBSERVÉ (ADS-B) — ce qui se fait vraiment.
+   L'observation, quand elle existe, l'emporte sur la préférentielle : les
+   avions sont la vérité terrain, une préférence publiée reste une intention.
+   Chaque QFU affiché porte sa justification (observed ×n / preferential /
+   wind) : l'estimation montre son raisonnement au lieu de le cacher. */
 function qlvState(icao){
-  const hit = qlvCache.get(icao);
-  if (!hit) return null;
-  if (hit.err) return hit.silent ? null : { idle: true,
-    html: `<div class="wxpop-lbl">Live traffic · ADS-B</div>`
-      + `<div class="qlv idle"><span class="dot"></span><span class="grp">`
-      + `Check unavailable (${escapeHtmlText(hit.why || "error")}) — no live traffic read for this aerodrome`
-      + `</span></div>` };
-  if (!hit.data || !Array.isArray(hit.data.arr)) return null;
-  const d = hit.data;
+  /* Pas de base piste fiable, pas d'estimation : runwayList() invente un
+     « 09/27 » pour un terrain inconnu, et estimer sur une piste inventée
+     serait pire que se taire. */
+  const rec = adGet(icao);
+  if (!((rec && rec.runways && rec.runways.length) || RWY_DB[icao])) return null;
+
   const magvar = currentMagvar();
   const norm = x => { const v = Math.round(x)%360; return v<=0 ? v+360 : v; };
   const cdiff = (a,b) => { const x = Math.abs(a-b)%360; return x>180 ? 360-x : x; };
-  const ends = runwayList(icao)
-    .flatMap(p=>qfusOf(p).map(q=>({id:q.id, deg:q.deg, closed:nfRwyClosed(icao,p)})));
-  const hits = c => ends
-    .map(q => ({id:q.id, closed:q.closed, d:cdiff(norm(q.deg + magvar), c.trk)}))
-    .filter(e => e.d <= QLV_MATCH_DEG)
-    .sort((a,b)=>a.d-b.d);
-  /* Un groupe se nomme par les extrémités que sa route désigne — plusieurs
-     quand des pistes sont parallèles (26L/26R : même cap, même flux, injuger
-     sans la géométrie latérale), la plus proche en tête. JAMAIS une piste que
-     les drapeaux NOTAM ferment : à Orly, une route au 245° désigne la 25, pas
-     la 24 fermée à dix degrés d'elle — les caps seuls ne les départagent pas,
-     l'état de la piste si. Les drapeaux arrivent après coup (nfaLoad) : leur
-     nfaNotify re-rend la page, la ligne se corrige à leur arrivée. */
-  const endsFor = c => hits(c).filter(e=>!e.closed).map(e=>e.id).slice(0,4);
-  /* Un avion seul dont la route ne désigne AUCUNE piste, ouverte ou fermée
-     (départ déjà en virage, hélicoptère), est du bruit DÈS QU'un autre groupe
-     a nommé une piste ; quand rien n'a collé, les routes brutes sont la seule
-     information et elles restent. Aligné sur une piste fermée, il n'est pas
-     du bruit : c'est la contradiction que la phrase de name() doit montrer. */
-  const anyMatch = (d.arr||[]).concat(d.dep||[]).some(c=>endsFor(c).length);
-  const keep = cs => (cs||[]).filter(c => hits(c).length || c.n > 1 || !anyMatch);
-  const name = c => {
-    const ids = endsFor(c);
-    if (ids.length) return `<b>${ids.join("/")}</b>`;
-    /* Du trafic aligné sur une piste QUE SEULS les drapeaux ferment mérite
-       mieux que le silence : soit la fermeture est levée et le NOTAM traîne,
-       soit l'observation ment — dans les deux cas le pilote doit le voir. */
-    const clsd = [...new Set(hits(c).filter(e=>e.closed).map(e=>e.id))].slice(0,2);
-    const trk = `trk ${String(c.trk).padStart(3,"0")}°`;
-    return clsd.length ? `${trk} <span class="src">(aligns with ${clsd.join("/")} — closed per NOTAM switches)</span>` : trk;
+
+  /* L'observation n'est qu'une entrée : son échec ne fait pas taire la bande,
+     il se signale en queue et l'estimation continue au vent et aux
+     préférentielles. Le 404 « station inconnue » reste muet — rien à lire. */
+  const hit = qlvCache.get(icao);
+  const d = hit && !hit.err && hit.data && Array.isArray(hit.data.arr) ? hit.data : null;
+  const obsDown = hit && hit.err && !hit.silent ? (hit.why || "error") : null;
+
+  const open = [], closed = [];
+  for (const p of runwayList(icao))
+    for (const q of qfusOf(p)) (nfRwyClosed(icao, p) ? closed : open).push({id:q.id, deg:q.deg});
+  if (!open.length) return { idle: true,
+    html: `<div class="wxpop-lbl">Runway in use · estimated</div>`
+      + `<div class="qlv idle"><span class="dot"></span><span class="grp">All runways closed per NOTAM switches</span></div>` };
+
+  const wind = state.metar && state.metar.wind;
+  const hasWind = !!(wind && wind.direction_deg != null && wind.speed_kt != null);
+  const comp = q => hasWind ? windComponents(q.deg, wind.direction_deg, wind.speed_kt) : null;
+  let cand = open.filter(q => { const c = comp(q); return !c || c.tail <= QLV_MAX_TAIL_KT; });
+  /* Les deux bouts d'une paire ne peuvent pas avoir tous deux 8 kt dans le
+     dos ; si tout part quand même (base étrange), on n'élimine rien plutôt
+     que de ne rien proposer. */
+  if (!cand.length) cand = open;
+  const cut = open.filter(q => !cand.includes(q));
+
+  const hitsOf = (c, pool) => pool
+    .map(q => ({q, d: cdiff(norm(q.deg + magvar), c.trk)}))
+    .filter(e => e.d <= QLV_MATCH_DEG).sort((a,b)=>a.d-b.d);
+  const uniq = a => [...new Set(a)];
+  const byHead = (a,b) => (comp(b)?comp(b).head:0) - (comp(a)?comp(a).head:0);
+
+  const pick = kind => {
+    /* Le trafic d'abord : le groupe le plus fourni qui désigne une candidate.
+       Départs → décollage, arrivées → atterrissage. Plusieurs extrémités
+       parallèles au même cap restent indécidables sans géométrie latérale :
+       elles s'affichent ensemble. */
+    const clusters = (d ? (kind==="to" ? d.dep : d.arr) || [] : []).slice().sort((a,b)=>b.n-a.n);
+    for (const c of clusters){
+      const m = hitsOf(c, cand);
+      if (m.length) return {ids: uniq(m.map(e=>e.q.id)).slice(0,4), how:`observed ×${c.n}`, obs:true};
+    }
+    const pref = adPrefSet(rec, kind);
+    const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
+    if (pc.length) return {ids: uniq(pc.map(q=>q.id)).slice(0,4), how:"preferential"};
+    if (hasWind && wind.speed_kt > 0){
+      const s = cand.slice().sort(byHead);
+      const ids = uniq(s.filter(q => cdiff(q.deg, s[0].deg) <= 1).map(q=>q.id)).slice(0,4);
+      return {ids, how:`wind ${comp(s[0]).head} kt head`};
+    }
+    return null;
   };
-  /* Un groupe par sens, l'extrémité en gros : c'est le seul mot que le pilote
-     vient chercher ici, l'effectif ne fait que la peser. */
-  const part = (k, cs) => cs.length
-    ? `<span class="grp"><span class="k">${k}</span>${cs.map(c=>`${name(c)}<span class="n">×${c.n}</span>`).join(`<span class="n">·</span>`)}</span>`
+  const to = pick("to"), ldg = pick("ldg");
+  const t = d && /^\d{4}-/.test(d.at || "") ? d.at.slice(11,16)+"Z" : "";
+  const obsUsed = !!((to && to.obs) || (ldg && ldg.obs));
+
+  /* La contradiction se montre : du trafic aligné sur une extrémité écartée —
+     fermée, ou vent dans le dos — vaut d'être vu. Soit l'écartement est
+     dépassé (NOTAM levé, vent tourné depuis le METAR), soit l'observation
+     ment ; dans les deux cas le pilote doit pouvoir trancher. */
+  let conflict = "";
+  if (d){
+    const excl = closed.concat(cut);
+    outer: for (const [cs, lab] of [[d.arr, "arrivals"], [d.dep, "departures"]])
+      for (const c of cs || []){
+        if (hitsOf(c, cand).length) continue;
+        const m = hitsOf(c, excl);
+        if (m.length){
+          const why = closed.includes(m[0].q) ? "closed per NOTAM switches" : `>${QLV_MAX_TAIL_KT} kt tailwind`;
+          conflict = `<span class="grp"><span class="n">⚠ ${lab} observed on ${m[0].q.id} — ${why}</span></span>`;
+          break outer;
+        }
+      }
+  }
+
+  const grp = (k, p) => p
+    ? `<span class="grp"><span class="k">${k}</span><b>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
     : "";
-  const bits = [part("Arrivals", keep(d.arr)), part("Departures", keep(d.dep))].filter(Boolean);
-  const t = /^\d{4}-/.test(d.at || "") ? d.at.slice(11,16)+"Z" : "";
-  /* Le titre de bande porte la nature de la donnée et son heure — même forme
-     que « Day weather · local time » au-dessus. Le crédit ODbL d'ADSB.lol,
-     lui, vit dans Data sources : un seul porteur par licence. */
-  const lbl = `<div class="wxpop-lbl">Live traffic · ADS-B${t?` · ${t}`:""}</div>`;
-  if (!bits.length) return { idle: true,
-    html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No low traffic within 8 NM</span></div>` };
-  return { idle: false, html: lbl + `<div class="qlv"><span class="dot"></span>${bits.join("")}</div>` };
+  const down = obsDown
+    ? `<span class="grp"><span class="n">traffic check unavailable (${escapeHtmlText(obsDown)})</span></span>` : "";
+  const lbl = `<div class="wxpop-lbl">Runway in use · estimated${obsUsed && t ? ` · traffic ${t}` : ""}</div>`;
+  if (!to && !ldg) return { idle: true,
+    html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, no traffic observed</span>${down}</div>` };
+  /* Point vert quand du trafic réel soutient l'estimation, gris quand elle ne
+     tient qu'à la théorie — vent et déclarations. */
+  return { html: lbl
+    + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${grp("Take off", to)}${grp("Landing", ldg)}${conflict}${down}</div>` };
 }
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */
-const QLV_TIP = "Ground tracks of live ADS-B traffic within 8 NM, matched to runway headings and to the NOTAM switches. A one-minute observation — not the ATIS, not a clearance: the declared runway in use prevails.";
+const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic observed within 8 NM (refreshed about every 20 min). An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
 function qfuLiveHtml(icao){
   if (!/^[A-Z]{4}$/.test(icao || "")) return "";
   qlvLoad(icao);
