@@ -5699,6 +5699,74 @@ function tafForRole(taf, role, w0, w1, minima){
   return out;
 }
 
+/* --------------------------- le relevé, en enveloppe ---------------------------
+   Le METAR ramené à la MÊME forme que l'enveloppe limitante d'un TAF
+   (`tafForRole().limiting`), pour que les deux puissent se comparer terme à
+   terme. Rien n'est converti au-delà de ce que le relevé porte déjà : la
+   visibilité en mètres, le plafond en pieds, le vent tel qu'il est écrit.
+
+   La visibilité retenue est celle qui GOUVERNE : une RVR mesurée sur
+   l'extrémité jugée prime sur la visibilité dominante — c'est déjà la règle de
+   controllingVis, et c'est la plus restrictive des deux lectures. Sans RVR pour
+   cette extrémité, la visibilité dominante. */
+function metarLimiting(metar, rwy){
+  if (!metar) return null;
+  const out = {vis_m:null, ceiling_ft:null, wind:null, cavok:!!metar.cavok, visIsRvr:false};
+  let rvrs = (metar.rvr || []).slice();
+  if (rwy){
+    const m = rvrs.filter(r=>r.runway===rwy || r.runway===String(rwy).replace(/[LCR]$/,""));
+    if (m.length) rvrs = m; else rvrs = [];
+  }
+  if (rvrs.length){
+    const chosen = rvrs.reduce((a,b)=>(b.value<a.value?b:a));
+    out.vis_m = chosen.unit==="ft" ? Math.round(chosen.value*0.3048) : chosen.value;
+    out.visIsRvr = true;
+    out.rvrRunway = chosen.runway;
+  } else if (metar.visibility_m != null){
+    out.vis_m = metar.visibility_m;
+  }
+  out.ceiling_ft = metar.ceiling_ft != null ? metar.ceiling_ft : null;
+  /* Même lecture que pour le TAF : un ciel annoncé sans BKN/OVC n'est pas un
+     plafond inconnu, c'est l'absence de plafond. */
+  out.noCeiling = out.ceiling_ft==null && (!!metar.cavok
+                  || (Array.isArray(metar.cloud_layers) && metar.cloud_layers.length>0)
+                  || metar.ceiling_source==="NONE");
+  out.wind = metar.wind || null;
+  return out;
+}
+
+/* La plus restrictive des deux lectures, champ par champ — le relevé de
+   MAINTENANT et la prévision retenue dans la fenêtre de la phase. Chaque champ
+   garde la SOURCE qui l'emporte : sans elle, un NO GO venu du METAR sur une
+   phase jugée « à l'arrivée » serait inexplicable, et c'est le genre de verdict
+   muet qu'un outil de minimas ne doit pas produire.
+   Le résultat garde la forme de l'enveloppe TAF : le reste du moteur la lit
+   sans savoir d'où chaque chiffre vient. */
+function worstOfReports(tafLim, metLim){
+  const out = Object.assign({}, tafLim || {});
+  out.visSrc = "TAF"; out.ceilSrc = "TAF";
+  if (!metLim) return out;
+  /* Visibilité : le plus petit gagne. Un champ absent d'un côté laisse l'autre
+     gouverner — on ne remplace jamais une valeur par une inconnue. */
+  if (metLim.vis_m != null && (out.vis_m == null || metLim.vis_m < out.vis_m)){
+    out.vis_m = metLim.vis_m; out.visSrc = "METAR";
+    out.visFrom = metLim.visIsRvr ? `measured RVR${metLim.rvrRunway?" RWY "+metLim.rvrRunway:""}` : "observed";
+    out.visRaw = null;              /* le surlignage repart sur le METAR */
+    out.visIsRvr = metLim.visIsRvr; out.visRvrRunway = metLim.rvrRunway;
+  }
+  /* Plafond : idem. Un CAVOK ou un ciel sans BKN/OVC n'abaisse rien — il ne
+     porte pas de plafond, il ne peut donc pas être le plus restrictif. */
+  if (metLim.ceiling_ft != null && (out.ceiling_ft == null || metLim.ceiling_ft < out.ceiling_ft)){
+    out.ceiling_ft = metLim.ceiling_ft; out.ceilSrc = "METAR";
+    out.ceilFrom = "observed";
+    out.ceilRaw = null;
+    /* Un plafond observé ANNULE le « pas de plafond » de la prévision : il y en
+       a un, et c'est lui qui gouverne. */
+    out.cavok = false; out.noCeiling = false;
+  }
+  return out;
+}
+
 /* --------------------------- planning minima --------------------------- */
 /* Schéma RÉELLEMENT appliqué. Les Tables 3 et 4 abaissent l'exigence — jusqu'à
    850 m au lieu de 1350 m sur un dégagement en CAT I — et cet abaissement est
@@ -5979,9 +6047,49 @@ function assess(role, ctx){
     }
   }
 
+  const now = ctx.now;
+  const eta = ctx.eta;
+
+  /* ---------------- fenêtre de prévision de la phase ----------------
+     La même que celle des minima de planification plus bas — elle est calculée
+     ICI parce que le VENT la lit aussi désormais : la phase se juge sur la plus
+     restrictive des deux lectures, le relevé de maintenant et la prévision
+     retenue dans la fenêtre. Le décollage garde la sienne (le premier segment
+     du TAF) : ce n'est pas un terrain où l'on arrive, c'est celui d'où l'on
+     part. L'appel est fait SANS minima : ils ne servent qu'à décider si un
+     TEMPO de visibilité peut être écarté, et une rafale, elle, s'applique
+     toujours (DS.easa.taf.windRule). */
+  let phW0 = null, phW1 = null;
+  if (taf){
+    if (role==="DEPARTURE"){
+      const tl0 = buildTimeline(taf);
+      phW0 = taf.valid_from_utc; phW1 = tl0.length>1 ? tl0[0].to : taf.valid_to_utc;
+    } else {
+      const atEtaW = cfg.framework==="FAA" && role==="TAKEOFF_ALTERNATE";
+      phW0 = atEtaW ? eta : new Date(eta.getTime()-HOUR);
+      phW1 = atEtaW ? new Date(eta.getTime()+60000) : new Date(eta.getTime()+HOUR);
+    }
+  }
+  const fcLim = taf ? (tafForRole(taf, role, phW0, phW1, {visReq:null, ceilReq:null}).limiting || null) : null;
+  /* Le relevé, mis en enveloppe pour être comparable à la prévision. */
+  const obsLim = metarLimiting(metar, ctx.rwyDesignator);
+
   /* ---------------- wind ---------------- */
-  if (qfu!=null && metar && metar.wind){
-    const w = metar.wind;
+  /* Le vent jugé est le PLUS FORT des deux lectures, composante par composante :
+     le vent observé, et le vent limitant de la prévision dans la fenêtre de la
+     phase (rafale d'un TEMPO/PROB comprise — elle s'applique toujours). Le
+     dégagement au décollage est un terrain où l'on arrivera dans l'heure : le
+     juger sur la seule observation laissait passer un traversier annoncé.
+     Chaque composante dit la source qui l'emporte. */
+  const windCands = [];
+  if (metar && metar.wind) windCands.push({w:metar.wind, src:"METAR"});
+  if (fcLim && fcLim.wind) windCands.push({w:fcLim.wind, src:"TAF"});
+  if (fcLim && fcLim.gustOverride) windCands.push({w:fcLim.gustOverride, src:"TAF"});
+  if (qfu!=null && windCands.length){
+    /* Le vent OBSERVÉ reste celui que dessine la rose et que lit la carte QFU :
+       `res.wind` ne change pas de sens. Seul le verdict s'ouvre à la prévision.
+       Sans vent observé, la prévision tient lieu de référence pour les deux. */
+    const w = (metar && metar.wind) ? metar.wind : windCands[0].w;
     /* La rafale annoncée gouverne TOUJOURS les composantes — une rafale
        au-dessus d'une limite est pleinement applicable (même règle que la
        fenêtre TAF, windRule) : ce n'est pas une option, il n'y a plus de
@@ -5992,20 +6100,40 @@ function assess(role, ctx){
     const meanComp = windComponents(qfu, w.direction_deg, w.speed_kt);
     const gustComp = w.gust_kt ? windComponents(qfu, w.direction_deg, w.gust_kt) : null;
     res.wind = {comp, meanComp, gustComp, useGust, variable:w.variable, speed, wind:w};
-    if (comp){
-      const tail = Math.max(0, comp.tail);
+    /* Chaque candidat est ramené à ses composantes sur le QFU jugé ; la plus
+       forte l'emporte, séparément en travers et en arrière — les deux ne
+       viennent pas forcément du même vent. */
+    const compsOf = c => {
+      const g = !!c.w.gust_kt, sp = g ? c.w.gust_kt : c.w.speed_kt;
+      const k = windComponents(qfu, c.w.direction_deg, sp);
+      return k ? {cross:k.cross, tail:Math.max(0,k.tail), gust:g, src:c.src} : null;
+    };
+    const cand = windCands.map(compsOf).filter(Boolean);
+    const pickMax = key => cand.reduce((a,b)=> (a==null || b[key]>a[key]) ? b : a, null);
+    const bx = pickMax("cross"), bt = pickMax("tail");
+    if (bx && bt){
+      const srcTxt = c => `${c.gust?"Gust value":"Mean wind"} · ${c.src==="TAF"?"forecast in the window — the more restrictive":"observed"}`;
+      /* Le vent affiché par la ligne de phase et par la carte du bilan suit le
+         verdict : montrer l'observation quand c'est la prévision qui gouverne
+         ferait lire un pouce rouge à côté de deux chiffres verts. */
+      res.wind.comp = {cross:bx.cross, tail:bt.tail};
+      res.wind.govSrc = (bx.src==="TAF" || bt.src==="TAF") ? "TAF" : "METAR";
       res.verdicts.push({
         question:"WIND", label:"Wind components",
-        result: worst(comp.cross>cfg.maxCrosswindKt?"NO_GO":(cfg.maxCrosswindKt-comp.cross<=2?"MARGINAL":"GO"),
-                      tail>cfg.maxTailwindKt?"NO_GO":(cfg.maxTailwindKt-tail<=1?"MARGINAL":"GO")),
+        result: worst(bx.cross>cfg.maxCrosswindKt?"NO_GO":(cfg.maxCrosswindKt-bx.cross<=2?"MARGINAL":"GO"),
+                      bt.tail>cfg.maxTailwindKt?"NO_GO":(cfg.maxTailwindKt-bt.tail<=1?"MARGINAL":"GO")),
         rows:[
-          {param:"Crosswind", src:useGust?"Gust value":"Mean wind", observed:comp.cross, required:cfg.maxCrosswindKt, unit:"kt", cmp:"max",
-           report:"METAR", metarKind:"WIND"},
-          {param:"Tailwind", src:useGust?"Gust value":"Mean wind", observed:tail, required:cfg.maxTailwindKt, unit:"kt", cmp:"max",
-           report:"METAR", metarKind:"WIND"}
+          {param:"Crosswind", src:srcTxt(bx), observed:bx.cross, required:cfg.maxCrosswindKt, unit:"kt", cmp:"max",
+           report:bx.src, metarKind:"WIND", tafKind:"WIND",
+           groupRaw: bx.src==="TAF" ? ((fcLim&&(fcLim.gustRaw||fcLim.windRaw))||null) : null},
+          {param:"Tailwind", src:srcTxt(bt), observed:bt.tail, required:cfg.maxTailwindKt, unit:"kt", cmp:"max",
+           report:bt.src, metarKind:"WIND", tafKind:"WIND",
+           groupRaw: bt.src==="TAF" ? ((fcLim&&(fcLim.gustRaw||fcLim.windRaw))||null) : null}
         ],
         reference:"AFM / OM-B limits",
-        rationale: null
+        rationale: (bx.src==="TAF" || bt.src==="TAF")
+          ? "The forecast in this phase's window is more restrictive than the observation — it governs. A gust announced inside a TEMPO or PROB is fully applicable."
+          : null
       });
     } else if (speed != null){
       /* Direction absente du report (VRB, ou ///) : les composantes ne se
@@ -6036,12 +6164,22 @@ function assess(role, ctx){
       message:"Variable wind direction reported (VRB) — component computation is not meaningful; assess the worst case manually."});
   }
 
-  const now = ctx.now;
-  const eta = ctx.eta;
-
   /* ---------------- Q1 — take-off (departure only) ---------------- */
   if (role==="DEPARTURE"){
-    const obs = controllingVis(metar, cfg, "TAKEOFF", ctx.rwyDesignator);
+    const obsRaw = controllingVis(metar, cfg, "TAKEOFF", ctx.rwyDesignator);
+    /* Même règle qu'aux autres phases : la plus restrictive des deux lectures.
+       La prévision du premier segment du TAF peut être plus basse que le relevé
+       — on ne décolle pas sur une observation qui a déjà cessé d'être vraie.
+       Elle ne peut que RESSERRER : les minima de décollage se jugent sur la
+       RVR / visibilité du moment, et ce plancher ne relâche jamais rien. */
+    const obs = (()=>{
+      if (!fcLim || fcLim.vis_m==null) return obsRaw;
+      const fv = visFromM(fcLim.vis_m, obsRaw.unit || (cfg.framework==="FAA"?"ft":"m"), -1);
+      if (obsRaw.value != null && !(fv < obsRaw.value)) return obsRaw;
+      return {value:fv, unit:obsRaw.unit || (cfg.framework==="FAA"?"ft":"m"),
+              source:"FORECAST", fromTaf:true, groupRaw:fcLim.visRaw,
+              note:"Forecast visibility in the take-off window is lower than the observation — it governs."};
+    })();
     const useSm = obs.unit==="sm";
     const unit = useSm ? "sm" : takeoff.unit;
     /* Le minimum dérivé, ramené à l'unité d'écriture. Sous FAA la colonne en
@@ -6085,9 +6223,13 @@ function assess(role, ctx){
     }
     const v = verdictOf(obs.value, req, unit);
     const q1rows = [{param: obs.source==="RVR_MEASURED"?"RVR (controlling)":"Visibility",
-             src: obs.source==="RVR_MEASURED"?`Measured RVR${obs.runway?" RWY "+obs.runway:""} — every relevant point is controlling`:"Met visibility (CMV prohibited for take-off)",
+             src: obs.source==="FORECAST" ? "Forecast in the take-off window — the more restrictive"
+                : obs.source==="RVR_MEASURED"?`Measured RVR${obs.runway?" RWY "+obs.runway:""} — every relevant point is controlling`
+                : "Met visibility (CMV prohibited for take-off)",
              observed:obs.value, required:req, unit, cmp:"min",
-             report:"METAR", metarKind: obs.source==="RVR_MEASURED"?"RVR":"VIS", runway: obs.runway}];
+             report: obs.source==="FORECAST" ? "TAF" : "METAR",
+             tafKind:"VIS", groupRaw: obs.groupRaw,
+             metarKind: obs.source==="RVR_MEASURED"?"RVR":"VIS", runway: obs.runway}];
     /* Pas de plafond au décollage : les minima de décollage sont en visibilité
        ou RVR seule. Le seul plafond de la phase est celui du DÉGAGEMENT au
        décollage, plancher OEI — il se saisit sur l'onglet correspondant. */
@@ -6100,9 +6242,12 @@ function assess(role, ctx){
       rationale: (obs.value==null ? "No RVR and no visibility available — take-off cannot be assessed."
         : `${obs.source==="RVR_MEASURED"?"RVR":"Visibility"} ${visText(obs.value,unit)} ${unit} vs ${visText(req,unit)} ${unit} required (${reqDriver}) → margin ${v.margin>=0?"+":""}${useSm?smText(v.margin):v.margin} ${unit}.`)
     });
-    if (obs.source!=="RVR_MEASURED" && obs.value!=null)
+    if (obs.source!=="RVR_MEASURED" && obs.source!=="FORECAST" && obs.value!=null)
       push({severity:"CAUTION", code:"CMV_PROHIBITED_FOR_TAKEOFF",
         message:"No RVR reported. Met visibility is used for take-off — CMV conversion is prohibited for take-off minima."});
+    if (obs.source==="FORECAST")
+      push({severity:"CAUTION", code:"FORECAST_MORE_RESTRICTIVE",
+        message:`Take-off judged on the FORECAST, not on the observation: the TAF announces ${visText(obs.value,unit)} ${unit} in the take-off window, lower than what the METAR reports. The more restrictive of the two governs. Check the actual RVR before lining up.`});
 
     /* Dégagement au décollage — premier déclencheur : la météo du départ est
        sous les minima d'ATTERRISSAGE, donc on ne pourrait pas y revenir. */
@@ -6384,19 +6529,34 @@ function assess(role, ctx){
     res.taf = t;
     res.planning = {inc, visReq, ceilReq, visDriver, ceilDriver, unit:visUnit, scheme:planningSchemeOf(cfg)};
 
-    const lim = t.limiting || {};
+    /* LA PLUS RESTRICTIVE DES DEUX LECTURES. La prévision retenue dans la
+       fenêtre, et le relevé de maintenant : le plus pénalisant des deux
+       gouverne, champ par champ. Le règlement ne juge cette phase que sur la
+       prévision ; ce plancher d'observation ne peut donc que RESSERRER, jamais
+       relâcher — il ne met pas l'outil en défaut, il le rend plus prudent. La
+       ligne dit laquelle des deux l'emporte, sans quoi un NO GO venu du METAR
+       sur un terrain où l'on arrive dans une heure serait inexplicable. */
+    const lim = worstOfReports(t.limiting || {}, obsLim);
     const rows = [];
     const vObs = lim.vis_m==null ? null : visFromM(lim.vis_m, visUnit, -1);
-    rows.push({param:"Visibility / RVR", src:`Forecast, ${lim.visFrom||"prevailing"} — ${winTxt}`,
+    rows.push({param:"Visibility / RVR",
+               src: lim.visSrc==="METAR"
+                 ? `Observed ${lim.visIsRvr?`RVR${lim.visRvrRunway?" RWY "+lim.visRvrRunway:""}`:"visibility"} — more restrictive than the forecast`
+                 : `Forecast, ${lim.visFrom||"prevailing"} — ${winTxt}`,
                observed:vObs, required:visReq, unit:visUnit, cmp:"min",
-               report:"TAF", tafKind:"VIS", groupRaw: lim.visRaw});
+               report:lim.visSrc, tafKind:"VIS",
+               metarKind: lim.visIsRvr ? "RVR" : "VIS", runway: lim.visRvrRunway,
+               groupRaw: lim.visRaw});
     if (ceilReq!=null){
       const ceilSrc = ceilFromOeiFloor ? " · OEI floor (pilot default)"
                     : (isToAlt && !isFAA ? " · MDH for a Type A approach or circling" : "");
-      rows.push({param:"Ceiling", src:`Forecast, ${lim.ceilFrom||"prevailing"} — first BKN/OVC layer${ceilSrc}`,
+      rows.push({param:"Ceiling",
+                 src: (lim.ceilSrc==="METAR"
+                   ? "Observed, first BKN/OVC layer — more restrictive than the forecast"
+                   : `Forecast, ${lim.ceilFrom||"prevailing"} — first BKN/OVC layer`) + ceilSrc,
                  observed: lim.ceiling_ft, required:ceilReq, unit:"ft", cmp:"min",
                  noCeiling: !!(lim.cavok || lim.noCeiling),
-                 report:"TAF", tafKind:"CEIL", groupRaw: lim.ceilRaw});
+                 report:lim.ceilSrc, tafKind:"CEIL", metarKind:"CEIL", groupRaw: lim.ceilRaw});
     }
     const vv = [];
     vv.push(vObs==null ? "UNKNOWN" : verdictOf(vObs, visReq, visUnit).result);
@@ -8878,6 +9038,11 @@ function findMetarSpan(liveText, kind, runway){
       if (runway && new RegExp("^R"+runway+"\\/").test(t.tok)) return {start:t.start, end:t.end};
     } else if (kind==="WIND"){
       if (WIND_RE.test(t.tok)) return {start:t.start, end:t.end};
+    } else if (kind==="CEIL"){
+      /* La première couche BKN/OVC/VV — celle qui FAIT le plafond. Sans ce cas,
+         un plafond observé qui gouverne la phase surlignait le groupe de
+         visibilité, à côté du chiffre dont on parlait. */
+      if (/^(BKN|OVC)\d{3}/.test(t.tok) || /^VV\d{3}$/.test(t.tok)) return {start:t.start, end:t.end};
     } else {
       if (/^\d{4}$/.test(t.tok) || /^\d{4}(N|NE|E|SE|S|SW|W|NW)$/.test(t.tok) || /SM$/.test(t.tok) || t.tok==="CAVOK")
         return visSpanAt(toks, i);
