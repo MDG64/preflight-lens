@@ -2466,6 +2466,11 @@ body.light .rt-role{color:var(--text)}
   .rt-field .ac{width:calc(100vw - 28px);max-width:calc(100vw - 28px)}
   .rt-field:nth-child(2) .ac{left:50%;transform:translateX(-50%)}
   .rt-field:nth-child(3) .ac{left:auto;right:0}
+  /* Le rôle en tête de carte — TAKE OFF, DESTINATION, DEST. ALTERNATE : centré
+     au téléphone, où la carte tient toute la largeur. Aligné à gauche il
+     flottait seul au bout d'une ligne vide, loin des cases de comparaison
+     qu'il coiffe. */
+  .rt-role{text-align:center}
   /* Le chevron de la carte : même signe que les lignes de phase de la fiche,
      pointé vers le bas quand le détail est replié, retourné quand il est
      déplié — c'est la carte qu'on ouvre, pas une page qu'on quitte. */
