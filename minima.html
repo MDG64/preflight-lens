@@ -2241,6 +2241,31 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
    observation et prévision confondues. */
 .daywx-main{margin-top:10px}
 
+/* Bande du trafic observé, entre les relevés et les onglets de phase : ce que
+   les avions font À L'INSTANT autour du terrain, lu sur leurs routes sol
+   ADS-B. Même gabarit que la bande du jour, et pour la même raison — c'est un
+   état du terrain, qui se lit avant de choisir une phase, pas un critère de
+   phase. Le point vert pulse tant que l'instantané est vivant ; gris quand
+   rien ne vole. L'extrémité est le seul mot qu'on vient chercher : elle est
+   en gros, tout le reste la pèse. Crédit ODbL d'ADSB.lol dans Data sources,
+   page « ? » — un seul porteur par licence, comme MET Norway. */
+.qlv-main{margin-top:10px}
+.qlv{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  background:var(--field);border:1px solid var(--line);border-radius:6px;
+  padding:9px 13px 10px;
+}
+.qlv .dot{width:8px;height:8px;border-radius:50%;background:var(--green);
+  flex:none;animation:qlv-pulse 2.4s ease-in-out infinite}
+.qlv.idle .dot{background:var(--muted);opacity:.55;animation:none}
+.qlv .grp{display:flex;align-items:baseline;gap:7px;
+  font:500 12px/1.35 var(--mono);color:var(--muted);letter-spacing:.02em}
+.qlv .grp .k{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted2)}
+.qlv b{font:700 17px/1 var(--mono);letter-spacing:.04em;color:var(--text)}
+.qlv .n{font:600 11px/1 var(--num);color:var(--muted2)}
+.qlv .src{font-size:11px;opacity:.85}
+@keyframes qlv-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
 /* ======================== Bilan de vol — Minima ========================
    L'autre présentation de Minima Lens : la route entière — départ,
    destination, dégagement destination — sur un seul écran, un terrain par
@@ -2584,6 +2609,12 @@ body.light .rt-role{color:var(--text)}
        (pas de terrain connu) ou quand la source ne répond pas. -->
   <div class="daywx-main" id="dayWxMain" hidden></div>
 
+  <!-- Bande du trafic observé, remplie par mountQfuLive() à chaque rendu :
+       le QFU que les avions utilisent À L'INSTANT, avant tout choix de phase.
+       Absente tant qu'aucun terrain n'est chargé, que rien ne vole, ou que la
+       source ne répond pas. -->
+  <div class="qlv-main" id="qfuLiveMain" hidden></div>
+
   <div class="tabs" id="tabs" role="tablist"></div>
   <div class="tab-times" id="tabTimes" role="group" aria-label="Phase times (UTC)"></div>
 
@@ -2782,14 +2813,18 @@ body.light .rt-role{color:var(--text)}
         same setup and the <b>?</b> this same page. The engine, the parser and the database are the same — only the
         layout changes.</p>
 
-      <!-- Crédits réduits au minimum que les licences exigent. Ne reste ici que
-           le CC BY de MET Norway (crédit + lien vers la licence), sans autre
-           abri depuis que la bande du jour et le volet des favoris n'affichent
-           plus leur ligne de source. Les autres crédits dus vivent déjà à
-           l'écran : le SIA et le NATS au pied du panneau terrain. L'ODbL
-           d'OpenStreetMap est parti avec la carte, qui est celle de Preflight
-           Lens désormais — c'est elle qui porte le crédit, au coin du fond
-           qu'elle affiche.
+      <!-- Crédits réduits au minimum que les licences exigent. Deux ici, parce
+           qu'ils n'ont pas d'autre abri : le CC BY de MET Norway (la bande du
+           jour et le volet des favoris n'affichent plus de ligne de source) et
+           l'ODbL d'ADSB.lol (la bande du trafic ne porte que la nature de la
+           donnée, « ADS-B », qui décrit sans créditer). Les deux licences
+           EXIGENT le crédit — ODbL 1.0 § 4.3 demande une notice attachée à
+           l'œuvre produite ; une page de crédits est l'abri d'usage, comme le
+           coin de la carte pour OpenStreetMap. Les autres crédits dus vivent
+           déjà à l'écran : le SIA et le NATS au pied du panneau terrain.
+           L'ODbL d'OpenStreetMap est parti avec la carte, qui est celle de
+           Preflight Lens désormais — c'est elle qui porte le crédit, au coin
+           du fond qu'elle affiche.
            Les pictos Yr (MIT) portent leur notice dans vendor/weather/LICENSE :
            rien à afficher. Le domaine public (NOAA, OurAirports, FAA) n'exige
            rien : parti. -->
@@ -2798,6 +2833,11 @@ body.light .rt-role{color:var(--text)}
           rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
           target="_blank" rel="noopener">CC BY 4.0</a>.</p>
       <p class="hd-p muted">The strip is a model forecast, not an aviation weather product.</p>
+      <p class="hd-p"><b>Live traffic</b> — <a href="https://www.adsb.lol/" target="_blank"
+          rel="noopener">ADSB.lol</a>, licensed <a href="https://opendatacommons.org/licenses/odbl/1-0/"
+          target="_blank" rel="noopener">ODbL 1.0</a>.</p>
+      <p class="hd-p muted">Community ADS-B coverage: what it shows is real, what it misses is not proof of absence.
+        An observation, never the runway in use declared by ATC.</p>
 
       <!-- Seule adresse de contact de l'app : la page « ? » est la porte
            d'entrée pour une question, une remarque ou un signalement. -->
@@ -5058,31 +5098,55 @@ function qlvState(icao){
     const trk = `trk ${String(c.trk).padStart(3,"0")}°`;
     return clsd.length ? `${trk} <span class="src">(aligns with ${clsd.join("/")} — closed per NOTAM switches)</span>` : trk;
   };
-  const part = (label, cs) => cs.length
-    ? `${label} ${cs.map(c=>`${name(c)}&thinsp;×${c.n}`).join(" · ")}` : "";
-  const bits = [part("arrivals", keep(d.arr)), part("departures", keep(d.dep))].filter(Boolean);
+  /* Un groupe par sens, l'extrémité en gros : c'est le seul mot que le pilote
+     vient chercher ici, l'effectif ne fait que la peser. */
+  const part = (k, cs) => cs.length
+    ? `<span class="grp"><span class="k">${k}</span>${cs.map(c=>`${name(c)}<span class="n">×${c.n}</span>`).join(`<span class="n">·</span>`)}</span>`
+    : "";
+  const bits = [part("Arrivals", keep(d.arr)), part("Departures", keep(d.dep))].filter(Boolean);
   const t = /^\d{4}-/.test(d.at || "") ? d.at.slice(11,16)+"Z" : "";
+  /* Le titre de bande porte la nature de la donnée et son heure — même forme
+     que « Day weather · local time » au-dessus. Le crédit ODbL d'ADSB.lol,
+     lui, vit dans Data sources : un seul porteur par licence. */
+  const lbl = `<div class="wxpop-lbl">Live traffic · ADS-B${t?` · ${t}`:""}</div>`;
   if (!bits.length) return { idle: true,
-    html: `<span class="dot"></span><span>Live traffic${t?` ${t}`:""}: none low within 8 NM <span class="src">— ADS-B (adsb.lol)</span></span>` };
-  return { idle: false,
-    html: `<span class="dot"></span><span>Live traffic${t?` ${t}`:""}: ${bits.join(" — ")} <span class="src">ADS-B (adsb.lol)</span></span>` };
+    html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No low traffic within 8 NM</span></div>` };
+  return { idle: false, html: lbl + `<div class="qlv"><span class="dot"></span>${bits.join("")}</div>` };
 }
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */
+const QLV_TIP = "Ground tracks of live ADS-B traffic within 8 NM, matched to runway headings and to the NOTAM switches. A one-minute observation — not the ATIS, not a clearance: the declared runway in use prevails.";
 function qfuLiveHtml(icao){
   if (!/^[A-Z]{4}$/.test(icao || "")) return "";
   qlvLoad(icao);
   const s = qlvState(icao);
-  return `<div class="qfu-live${s&&s.idle?" idle":""}" data-qlv="${icao}"${s?"":" hidden"}
-    title="Ground tracks of live ADS-B traffic (adsb.lol) within 8 NM, matched to runway headings. A one-minute observation — not the ATIS, not a clearance: the declared runway in use prevails.">${s?s.html:""}</div>`;
+  return `<div class="qlv-main" data-qlv="${icao}"${s?"":" hidden"} title="${QLV_TIP}">${s?s.html:""}</div>`;
 }
 function qlvNotify(icao){
-  document.querySelectorAll(`.qfu-live[data-qlv="${icao}"]`).forEach(el=>{
+  document.querySelectorAll(`[data-qlv="${icao}"]`).forEach(el=>{
     const s = qlvState(icao);
     el.hidden = !s;
-    el.classList.toggle("idle", !!(s && s.idle));
     el.innerHTML = s ? s.html : "";
   });
+}
+/* La bande large de la page principale : elle vit dans le squelette, entre les
+   relevés et les onglets de phase — pas dans le panneau de phase, qu'elle a
+   quitté le 2026-08-31. Deux raisons : l'observation ne change pas d'un onglet
+   à l'autre (c'est un état du terrain, pas un critère de phase), et elle se
+   lit là où le pilote regarde déjà l'état du terrain, sous les relevés.
+   Même règle que la bande du jour pour le bilan de vol : rien dans le module,
+   dont la fiche va à l'essentiel. */
+function mountQfuLive(){
+  const el = document.getElementById("qfuLiveMain");
+  if (!el) return;
+  const icao = currentIcao() || "";
+  if (state.routeFocus!=null || !/^[A-Z]{4}$/.test(icao)){
+    el.hidden = true; el.removeAttribute("data-qlv"); el.innerHTML = ""; return;
+  }
+  el.setAttribute("data-qlv", icao);
+  el.title = QLV_TIP;
+  qlvLoad(icao);
+  qlvNotify(icao);
 }
 
 /* Terrain courant du point de vue du MOTEUR : la station du METAR chargé fait
@@ -9395,6 +9459,11 @@ function render(){
 
   renderStage(TABS[state.tab], results[state.tab]);
 
+  /* La bande du trafic suit le terrain courant, au-dessus des onglets : elle
+     ne dépend d'aucune phase, mais les drapeaux NOTAM la corrigent — leur
+     nfaNotify passe par ici. */
+  mountQfuLive();
+
   /* Les cadres des relevés se recalent sur leur texte à chaque rendu — c'est
      le rendu qui suit toute arrivée ou retouche d'un relevé. */
   fitReports();
@@ -9619,7 +9688,6 @@ function renderStage(tab, r){
     <div class="${tab.role==="DEPARTURE"?"takeoff-panel":""}">
       ${tab.role==="DEPARTURE" ? toAltPickerHtml() : ""}
       <div class="qfu-grid">${qfuCards}</div>
-      ${qfuLiveHtml(icao)}
       <p class="note" style="margin:9px 0 14px">${cmpNote}</p>
 
       ${icao ? (()=>{ const nf = nfGet(icao); const au = nf.auto || {ils:{}, als:{}, rwy:{}}; return `
@@ -11254,9 +11322,9 @@ function mobileResultsHtml(){
         <div class="m-raw">${metarTxt?mMarkedHtml(metarTxt, hlRes?mReportSpans(hlRes, metarTxt, "METAR", hlOv):[]):"<i>—</i>"}</div>
       </div>
       <div class="m-report"><div class="m-raw">${tafTxt?mMarkedHtml(tafTxt, hlRes?mReportSpans(hlRes, tafTxt, "TAF", hlOv):[]):"<i>—</i>"}</div></div>
+      ${qfuLiveHtml(icao)}
       <div class="m-ptabs" role="group" aria-label="Flight phase">${ptabs}</div>
       <div class="m-report"><span class="label">QFU</span><div class="m-qfus">${mQfuChips(icao, results, sel)}</div></div>
-      ${qfuLiveHtml(icao)}
       ${mDayWxHtml(icao)}
       ${/^[A-Z]{4}$/.test(icao) ? mNfStripHtml(icao) : ""}
       <div class="m-phases">${rows}</div>
