@@ -2417,10 +2417,8 @@ body.mobile #rtOv:not([hidden]){display:flex}
   padding:11px 12px 14px;background:var(--panel);
   border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--elev);
 }
-.rt-detail-bar{display:flex;align-items:center;min-width:0}
-.rt-detail-bar .btn{margin-left:auto;flex:none}
-/* La fiche suit son propre trait de séparation : sous la barre du volet, le
-   sien ferait doublon. */
+/* La fiche ouvre le volet : son propre trait de séparation viendrait doubler
+   le bord du cadre, à deux pixels de lui. */
 .rt-detail .m-res{border-top:0;padding-top:9px}
 /* Le chevron n'existe qu'au téléphone : ailleurs, la carte ouvre toujours la
    page entière et il n'y a rien à déplier. */
@@ -13352,13 +13350,9 @@ window.RTV = (()=>{
      identifiants, et getElementById ne verrait plus la bonne case. */
   function detailHtml(){
     /* La carte juste au-dessus dit déjà le rôle et le terrain : le volet ne
-       les répète pas. Il n'a qu'une chose à porter que la carte n'a pas — la
-       sortie vers la page entière. */
+       les répète pas. Il ne porte donc que la fiche, et rien autour d'elle —
+       la sortie vers la page entière ouvrait la fiche qui est déjà là. */
     return `<div class="rt-detail" id="rtDetail">
-      <div class="rt-detail-bar">
-        <button type="button" class="btn sm" id="rtDetailFull"
-          title="Open this aerodrome on its own page — the start screen and its bar are there">Full page</button>
-      </div>
       ${mobileResultsHtml()}
     </div>`;
   }
@@ -13366,8 +13360,6 @@ window.RTV = (()=>{
     const el = document.getElementById("rtDetail");
     if (!el) return;
     bindMobile(el);
-    const full = el.querySelector("#rtDetailFull");
-    if (full) full.onclick = e=>{ e.stopPropagation(); goFull(); };
     renderMetarAge();
   }
   /* Repeint le volet SEUL — c'est par là que la fiche mobile (render →
@@ -13410,13 +13402,6 @@ window.RTV = (()=>{
     RT.open = null;
     render();
     if (document.body.classList.contains("mobile")) renderMobile();
-  }
-  /* La page entière : même terrain, même phase, hors du bilan. C'est la
-     sortie — la barre de la fiche porte l'accueil, les favoris et l'heure,
-     que celle du bilan n'a pas. */
-  function goFull(){
-    if (RT.open===null) return;
-    close();   /* referme le bilan ET rend la fiche à la page du dessous */
   }
 
   /* Pas de verdict de VOL au-dessus des cartes : rien n'est agrégé — chaque
