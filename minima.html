@@ -5136,14 +5136,38 @@ function qlvStoreRead(){
     return o && typeof o === "object" ? o : {};
   } catch(e){ return {}; }
 }
+/* ---------- mémoire du DERNIER sens observé ----------
+   Un échantillon de vingt minutes attrape souvent un seul sens : à Orly, une
+   série d'arrivées sans aucun départ. On alignait alors le décollage sur les
+   arrivées — FAUX là-bas, où l'on décolle en 24 et se pose en 25, deux pistes
+   distinctes du MÊME axe. La mémoire répond à ça : le dernier décollage
+   réellement observé est gardé avec SON heure, et il reprend la main avant
+   tout alignement. Symétrique pour les arrivées, où le piège est le même à
+   l'envers. On garde les FLUX BRUTS (route, écart, point de référence), pas
+   des noms de piste : au rappel, ils sont réappariés à l'état du moment —
+   NOTAM du jour, vent du jour. Une configuration qui a basculé se disqualifie
+   donc toute seule, par le filtre du vent arrière. */
+const QLV_MEM_MS = 3 * 3600e3;   // au-delà, une configuration n'engage plus rien
 function qlvStoreWrite(icao, data){
   try{
     const o = qlvStoreRead();
-    o[icao] = {at: Date.now(), data};
+    const prev = o[icao] || {};
+    const mem = Object.assign({}, prev.mem);
+    const t = Date.parse(data && data.at || "") || Date.now();
+    if (data && Array.isArray(data.dep) && data.dep.length) mem.dep = {cl: data.dep, at: t, ref: data.ref || null};
+    if (data && Array.isArray(data.arr) && data.arr.length) mem.arr = {cl: data.arr, at: t, ref: data.ref || null};
+    o[icao] = {at: Date.now(), data, mem};
     const keys = Object.keys(o).sort((a,b)=>(o[b].at||0)-(o[a].at||0));
     for (const k of keys.slice(QLV_STORE_MAX)) delete o[k];
     localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
   } catch(e){}
+}
+/* Le dernier sens observé encore recevable, ou null. */
+function qlvMem(icao, kind){
+  const m = (qlvStoreRead()[icao] || {}).mem;
+  const e = m && m[kind === "to" ? "dep" : "arr"];
+  if (!e || !Array.isArray(e.cl) || !e.cl.length || !Number(e.at)) return null;
+  return Date.now() - e.at <= QLV_MEM_MS ? e : null;
 }
 /* La copie du disque prise pour ce qu'elle est : une réponse déjà obtenue,
    avec SON âge. Au-delà de la fraîcheur elle n'est pas jetée pour autant —
@@ -5287,9 +5311,10 @@ function qlvEstimate(icao){
      26R, indiscernables au cap. Sans géométrie — pas de seuil dans la graine
      (terrain sans parallèles), pas d'`off` du serveur (vieille réponse) — le
      cap seul continue de grouper, comme avant. */
-  const refine = (m, c) => {
-    if (!d || !Array.isArray(d.ref) || !Number.isFinite(c.off)) return m;
-    const [rla, rlo] = d.ref;
+  const refine = (m, c, refPt) => {
+    const ref = refPt || (d && d.ref);
+    if (!Array.isArray(ref) || !Number.isFinite(c.off)) return m;
+    const [rla, rlo] = ref;
     const cosLa = Math.cos(rla * Math.PI/180);
     const T = c.trk * Math.PI/180;
     const scored = m.map(e => {
@@ -5299,12 +5324,9 @@ function qlvEstimate(icao){
     }).filter(s => s && s.off <= QLV_LAT_NM).sort((a,b)=>a.off-b.off);
     return scored.length ? scored.map(s=>s.e) : m;
   };
-  const pick = kind => {
-    /* Le trafic d'abord : TOUS les flux du même sens qui désignent une
-       candidate — à CDG en configuration face à l'ouest, les arrivées font
-       DEUX flux (26L et 27R), et les deux pistes sont en service. Un flux
-       d'un autre sens (bascule en cours) ne se mélange pas au premier. */
-    const clusters = (d ? (kind==="to" ? d.dep : d.arr) || [] : []).slice().sort((a,b)=>b.n-a.n);
+  /* Le tri d'un jeu de flux — ceux de l'échantillon, ou ceux de la mémoire. */
+  const fromClusters = (cs, refPt) => {
+    const clusters = (cs || []).slice().sort((a,b)=>b.n-a.n);
     /* Deux étages de preuve. Un flux APPARIÉ À UN AXE (l'écart latéral colle
        à moins de QLV_LAT_NM) désigne sa piste ; un flux au cap seul (départ
        déjà en virage, terrain sans géométrie) ne fait que grouper les
@@ -5317,7 +5339,7 @@ function qlvEstimate(icao){
       if (ref0 != null && cdiff(c.trk, ref0) > QLV_MATCH_DEG) continue;
       const m0 = hitsOf(c, cand);
       if (!m0.length) continue;
-      const m = refine(m0, c);
+      const m = refine(m0, c, refPt);
       if (m !== m0){
         if (geoTrk == null) geoTrk = c.trk;
         for (const e of m) if (!geoIds.includes(e.q.id)) geoIds.push(e.q.id);
@@ -5326,8 +5348,29 @@ function qlvEstimate(icao){
         for (const e of m) if (!looseIds.includes(e.q.id)) looseIds.push(e.q.id);
       }
     }
-    if (geoIds.length) return {ids: geoIds.slice(0,4), how:"observed", obs:true, trk: geoTrk};
-    if (looseIds.length) return {ids: looseIds.slice(0,4), how:"observed", obs:true, trk: looseTrk};
+    if (geoIds.length) return {ids: geoIds.slice(0,4), obs:true, trk: geoTrk};
+    if (looseIds.length) return {ids: looseIds.slice(0,4), obs:true, trk: looseTrk};
+    return null;
+  };
+  const hhmmZ = t => { const x = new Date(t); return isNaN(x) ? "" :
+    String(x.getUTCHours()).padStart(2,"0")+String(x.getUTCMinutes()).padStart(2,"0")+"Z"; };
+  const pick = kind => {
+    /* Le trafic de l'échantillon d'abord : TOUS les flux du même sens qui
+       désignent une candidate — à CDG face à l'ouest, les arrivées font DEUX
+       flux (26L et 27R), et les deux pistes sont en service. */
+    const now = fromClusters(d ? (kind==="to" ? d.dep : d.arr) : null, d && d.ref);
+    if (now) return Object.assign(now, {how:"observed", fresh:true});
+    /* Rien dans ce sens à l'instant : le DERNIER réellement observé, avec son
+       heure. C'est ce qui évite d'aligner le décollage sur les arrivées à
+       Orly, où l'on décolle en 24 et se pose en 25 — deux pistes du même axe,
+       qu'aucun alignement ne peut distinguer. Réapparié à l'état du moment :
+       une piste fermée depuis, ou passée sous le vent arrière, ne ressort
+       pas. */
+    const mem = qlvMem(icao, kind);
+    if (mem){
+      const old = fromClusters(mem.cl, mem.ref);
+      if (old) return Object.assign(old, {how:`observed ${hhmmZ(mem.at)}`});
+    }
     const pref = adPrefSet(rec, kind);
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
     if (pc.length) return {ids: uniq(pc.map(q=>q.id)).slice(0,4), how:"preferential"};
@@ -5355,10 +5398,17 @@ function qlvEstimate(icao){
     const chosen = pc.length ? pc : pool.slice().sort(byHead);
     return {ids: uniq(chosen.map(q=>q.id)).slice(0,4), how:`aligned on observed ${lab}`};
   };
-  if (to && to.obs && !(ldg && ldg.obs)) ldg = alignOn(to, "ldg", "departures") || ldg;
-  else if (ldg && ldg.obs && !(to && to.obs)) to = alignOn(ldg, "to", "arrivals") || to;
+  /* L'alignement ne joue plus que faute de TOUTE observation dans ce sens,
+     mémoire comprise : il devine un cap, il ne connaît pas la répartition des
+     pistes entre décollage et atterrissage. À Orly, c'est lui qui donnait un
+     décollage en 25 alors qu'on y décolle en 24. */
+  if (to && to.fresh && !(ldg && ldg.obs)) ldg = alignOn(to, "ldg", "departures") || ldg;
+  else if (ldg && ldg.fresh && !(to && to.obs)) to = alignOn(ldg, "to", "arrivals") || to;
   const t = d && /^\d{4}-/.test(d.at || "") ? d.at.slice(11,16)+"Z" : "";
-  const obsUsed = !!((to && to.obs) || (ldg && ldg.obs));
+  /* Le point vert ne salue que l'échantillon COURANT : une observation
+     mémorisée porte déjà son heure dans sa justification, et un rappel de
+     deux heures n'est pas du direct. */
+  const obsUsed = !!((to && to.fresh) || (ldg && ldg.fresh));
   return {d, obsDown, to, ldg, t, obsUsed, cand, closed, cut, hitsOf};
 }
 /* La bande : l'estimation mise en phrases. */
