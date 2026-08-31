@@ -2135,6 +2135,27 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 .ad-badge.ga{background:transparent;color:var(--amber);
   border-color:color-mix(in srgb,var(--amber) 55%,transparent);
   text-transform:none;letter-spacing:.04em;line-height:1.4;white-space:normal;display:inline-block}
+/* ---------- pistes préférentielles ----------
+   Deux lignes de pastilles, une par sens d'usage : décollage, atterrissage.
+   Une extrémité retenue passe au vert, les autres restent grises — c'est le
+   même code couleur que partout ailleurs dans l'app, où le vert dit « celle-ci
+   convient ». Toutes les extrémités sont montrées, y compris celles qu'on
+   n'a pas retenues : une liste préférentielle ne se lit qu'en regard de ce
+   qu'elle écarte. */
+.ad-pref-row{display:flex;align-items:flex-start;gap:12px;margin-top:8px;flex-wrap:wrap}
+.ad-pref-k{flex:0 0 78px;padding-top:7px;font:700 10px/1 var(--mono);
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.ad-pref-chips{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 200px;min-width:0}
+.ad-pref{
+  display:inline-flex;align-items:baseline;gap:6px;cursor:pointer;
+  padding:5px 9px;border-radius:6px;border:1px solid var(--line2);
+  background:var(--grey-bg);color:var(--muted);
+}
+.ad-pref .id{font:600 13px/1 var(--mono);letter-spacing:.06em}
+.ad-pref .deg{font:500 9.5px/1 var(--mono);letter-spacing:.06em;opacity:.8}
+.ad-pref:hover{box-shadow:var(--elev)}
+.ad-pref.on{background:var(--green-bg);color:var(--green);
+  border-color:color-mix(in srgb,var(--green) 45%,transparent)}
 .ad-stats{font:400 10px/1.5 var(--mono);color:var(--muted);letter-spacing:.04em;white-space:normal;max-width:180px}
 .ad-x{background:none;border:0;color:var(--muted);font:600 14px/1 var(--sans);cursor:pointer;padding:2px 7px;border-radius:4px}
 .ad-x:hover{color:var(--red);background:var(--red-bg)}
@@ -2734,7 +2755,8 @@ body.light .rt-role{color:var(--text)}
 
       <div class="hd-sec">Airfield database</div>
       <p class="hd-p">The panel follows the aerodrome in the search field and holds what the computation needs about
-        it: <b>runways and QFU</b>, magnetic variation, lengths, <b>approach and runway lighting</b>, then the
+        it: <b>runways and QFU</b>, magnetic variation, lengths, the <b>preferential runways</b> published for
+        take-off and for landing, <b>approach and runway lighting</b>, then the
         <b>approaches and their minima</b>. Picking a runway end applies its lighting class by itself — one column
         of Table 9 is worth 100 to 200 m of RVR.</p>
       <p class="hd-p">The runway end is <b>picked for you, phase by phase</b>, in that order: the <b>ILS</b>
@@ -3959,6 +3981,24 @@ function adEdit(icao){
   return adUserDb[icao];
 }
 function adEnds(rec){ return (rec ? rec.runways : []).flatMap(r=>r.pair.split("/").map(s=>s.trim())); }
+/* Extrémités déclarées préférentielles pour un usage — "to" au décollage,
+   "ldg" à l'atterrissage. `pref` n'existe sur la fiche que si quelque chose a
+   été coché : l'absence est la valeur normale, pas un manque à combler. */
+function adPrefSet(rec, kind){
+  const l = rec && rec.pref && Array.isArray(rec.pref[kind]) ? rec.pref[kind] : [];
+  return new Set(l);
+}
+/* Retire des listes préférentielles les extrémités que la fiche ne porte
+   plus, et la clé elle-même quand il ne reste rien. */
+function adPrefPrune(rec){
+  if (!rec || !rec.pref) return;
+  const live = new Set(adEnds(rec));
+  for (const k of Object.keys(rec.pref)){
+    const l = (rec.pref[k]||[]).filter(e=>live.has(e));
+    if (l.length) rec.pref[k] = l; else delete rec.pref[k];
+  }
+  if (!Object.keys(rec.pref).length) delete rec.pref;
+}
 
 /* ---------- annuaire des terrains : code IATA, nom, ville ----------
    window.AD_DIR est une seule chaîne compilée par aero-db, une ligne
@@ -11904,8 +11944,47 @@ function refreshAdPanel(force){
     </tr>`;
   }).join("");
 
-  /* ---- approches ---- */
+  /* ---- pistes préférentielles ----
+     Ce que la fiche retient ici, c'est la piste préférentielle PUBLIÉE :
+     l'AIP en désigne une par sens d'usage — moindre bruit, sens calme, tracé
+     imposé — et cette liste ne se déduit d'aucune autre donnée du terrain.
+     Décollage et atterrissage sont deux listes séparées parce qu'ils le sont
+     à la publication : Nice décolle en 04 et atterrit en 22, ce n'est pas la
+     même piste, encore moins la même extrémité. Rien n'est coché par défaut :
+     une case vide dit « aucune préférentielle déclarée », pas « aucune
+     utilisable ». */
   const ends = adEnds(rec);
+  /* Le cap magnétique porté par la pastille, dans l'ordre de qfusOf : la
+     valeur saisie, sinon le cap vrai de la graine corrigé de la déclinaison,
+     sinon le désignateur ×10. La pastille ne vaut que si on y lit le QFU. */
+  const endDeg = {};
+  rec.runways.forEach(r=>{
+    r.pair.split("/").map(s=>s.trim()).forEach((id,k)=>{
+      let d = (r.qfu && Number.isFinite(r.qfu[id])) ? r.qfu[id]
+            : (Number.isFinite(r.hdgT) && Number.isFinite(rec.magvar))
+              ? r.hdgT + (k===0?0:180) - rec.magvar
+              : parseInt(id.replace(/[LCR]/,""),10)*10;
+      d = Math.round(d)%360; if (d<=0) d += 360;
+      endDeg[id] = String(d).padStart(3,"0");
+    });
+  });
+  const prefRow = (kind, label) => {
+    const sel = adPrefSet(rec, kind);
+    const chips = ends.map(end=>{
+      const on = sel.has(end);
+      return `<button type="button" class="ad-pref${on?" on":""}" data-ad="pref"
+        data-kind="${kind}" data-end="${end}" aria-pressed="${on}"
+        title="${on ? `${end} is declared preferential for ${label.toLowerCase()} — press to withdraw it`
+                    : `Press to declare ${end} preferential for ${label.toLowerCase()}`}"
+        ><span class="id">${end}</span><span class="deg">${endDeg[end]||"—"}°</span></button>`;
+    }).join("");
+    return `<div class="ad-pref-row">
+      <span class="ad-pref-k">${label}</span>
+      <div class="ad-pref-chips">${chips || `<span class="note">No runway declared.</span>`}</div>
+    </div>`;
+  };
+
+  /* ---- approches ---- */
   const appRows = [];
   /* Une RNP AR ne s'affiche que si l'exploitant a déclaré l'approbation.
      La masquer par défaut est le bon sens du doute : montrer une approche
@@ -12079,6 +12158,16 @@ function refreshAdPanel(force){
         <input class="ad-num" type="number" id="adNewLen" min="0" step="10" placeholder="length m" aria-label="New runway length (m)">
         <button class="btn sm" data-ad="addRwy">Add runway</button>
       </div>
+    </div>
+    <div class="ad-sec">
+      <div class="fs-t">Preferential runways</div>
+      ${prefRow("to", "Take off")}
+      ${prefRow("ldg", "Landing")}
+      <p class="note" style="margin-top:10px">Press an end to declare it <b>preferential</b> for that use: it turns
+        green, the others stay grey. Take-off and landing are held separately — an aerodrome may publish one runway
+        for each. Nothing selected means <b>no preferential runway is declared</b>, not that none may be used.
+        This records what the AIP publishes; the runway end picked for each phase keeps following the wind, the
+        approaches and the NOTAMs.</p>
     </div>
     <div class="ad-sec">
       <div class="fs-t">Approach & runway lighting</div>
@@ -12324,6 +12413,22 @@ function bindAdPanel(){
       /* Les approches des extrémités supprimées partent avec la piste. */
       r.pair.split("/").forEach(end=>{ delete rec.approaches[end.trim()]; });
       rec.runways.splice(+btn.dataset.i, 1);
+      /* Et les préférences aussi : une extrémité qui n'existe plus ne peut
+         pas rester préférentielle, elle ne s'afficherait nulle part. */
+      adPrefPrune(rec);
+    } else if (act==="pref"){
+      /* Bascule d'une extrémité dans la liste préférentielle d'un usage. La
+         liste est réécrite dans l'ordre des extrémités de la fiche plutôt que
+         dans l'ordre des clics : c'est celui qu'on lit à l'écran. */
+      const kind = btn.dataset.kind === "ldg" ? "ldg" : "to";
+      const end = btn.dataset.end;
+      if (!end) return;
+      const set = adPrefSet(rec, kind);
+      if (set.has(end)) set.delete(end); else set.add(end);
+      rec.pref = rec.pref || {};
+      const list = adEnds(rec).filter(e=>set.has(e));
+      if (list.length) rec.pref[kind] = list; else delete rec.pref[kind];
+      if (!Object.keys(rec.pref).length) delete rec.pref;
     } else if (act==="addApp"){
       const endEl = document.getElementById("adNewEnd");
       const typeEl = document.getElementById("adNewType");
