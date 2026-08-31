@@ -2347,11 +2347,15 @@ body.light .rt-role{color:var(--text)}
    le terrain de départ jugé comme son propre T/O alternate — peut-on revenir
    s'y poser ? Quand il ne le permet plus, la ligne du dessous PROPOSE le
    terrain accessible le plus proche de la graine, avec sa distance. */
-/* Le type d'approche retenu pour le calcul, sous le nom du terrain : il
-   explique le chiffre exigé juste dessous. Cyan, comme tout ce qui vient de la
-   base terrains ; une ligne, jamais deux. */
+/* Le QFU retenu pour le calcul, sous le nom du terrain, et derrière lui le
+   type d'approche qu'il a fait lire quand la phase en vole une : ensemble ils
+   expliquent le chiffre exigé juste dessous. Le QFU passe devant parce que
+   c'est lui qu'on choisit — l'approche en découle — et parce qu'au décollage
+   il est seul. Assez gros pour se lire d'un coup d'œil : cette ligne n'est
+   pas une note de bas de carte, c'est l'hypothèse du calcul. Cyan, comme tout
+   ce qui vient de la base terrains ; une ligne, jamais deux. */
 .rt-app{
-  font:600 10px/1.35 var(--mono);letter-spacing:.03em;color:var(--cyan);
+  font:600 12.5px/1.35 var(--mono);letter-spacing:.03em;color:var(--cyan);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
 }
 .rt-toa{display:flex;flex-direction:column;gap:5px}
@@ -13176,11 +13180,12 @@ window.RTV = (()=>{
     const self = toaJudge(icao);
     if (!self) return "";
     const icon = st => `<span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>`;
-    /* Le type d'approche retenu POUR LE CALCUL, comme sous le nom des cartes
-       d'atterrissage : sans lui, deux chiffres différents sur le même terrain
-       n'ont pas d'explication visible. */
+    /* L'extrémité et le type d'approche retenus POUR LE CALCUL, dans l'ordre
+       où la carte les écrit déjà sous le nom du terrain — QFU d'abord : sans
+       eux, deux chiffres différents sur le même terrain n'ont pas
+       d'explication visible. */
     const app = self.app
-      ? `<span class="rt-toa-app">${escapeHtmlText(adTypeLabel(self.app))}${self.end?` · RWY ${escapeHtmlText(self.end)}`:""}</span>`
+      ? `<span class="rt-toa-app">${self.end?`RWY ${escapeHtmlText(self.end)} · `:""}${escapeHtmlText(adTypeLabel(self.app))}</span>`
       : "";
     const tip = ailleurs
       ? `${icao} judged as the take-off alternate — landing minima over ETA ± 1 h. ${STATE_LABEL[self.st]}. Tap to open it on that phase.`
@@ -13343,6 +13348,23 @@ window.RTV = (()=>{
     return `<span class="rt-alerts">${s.alerts.map(line).join("")}</span>`;
   }
 
+  /* Sous le nom du terrain : l'extrémité RETENUE par le moteur, puis le type
+     d'approche qu'il a lu sur elle. Le QFU vient en premier — c'est lui qu'on
+     choisit, l'approche en découle — et il est seul au décollage, qui ne vole
+     aucune approche mais dont les composantes de vent dépendent entièrement de
+     l'extrémité retenue : sans elle, deux vents de travers différents sur le
+     même terrain n'ont pas d'explication visible. */
+  function rtAppHtml(s){
+    const parts = [];
+    if (s.end) parts.push(`RWY ${escapeHtmlText(s.end)}`);
+    if (s.app) parts.push(escapeHtmlText(adTypeLabel(s.app)));
+    if (!parts.length) return "";
+    const tip = s.app
+      ? "Runway end and approach the engine used to compute this phase's minima — change them on the aerodrome page."
+      : "Runway end the engine used to compute this phase — change it on the aerodrome page.";
+    return `<span class="rt-app" title="${tip}">${parts.join(" · ")}</span>`;
+  }
+
   function cardHtml(slot, s, i){
     if (!s) return `<div class="rt-card empty">
         <span class="rt-role">${slot.lab}</span>
@@ -13361,7 +13383,7 @@ window.RTV = (()=>{
         ${ageHtml(s.obsTime)}
         <span class="rt-chev" aria-hidden="true">▾</span></span>
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
-      ${s.app ? `<span class="rt-app" title="Approach the engine used to compute this phase's minima — change it on the aerodrome page.">${escapeHtmlText(adTypeLabel(s.app))}${s.end?` · RWY ${escapeHtmlText(s.end)}`:""}</span>` : ""}
+      ${rtAppHtml(s)}
       <span class="rt-rows">${mVisRow(s.vis)}${mCeilRow(s.ceil)}${mWindRow(s.wind)}</span>
       ${alertsHtml(s)}
       ${slot.key==="dep" ? toaHtml(s) : ""}
