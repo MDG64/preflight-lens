@@ -2253,8 +2253,9 @@ body.mobile #rtOv:not([hidden]){display:flex}
    l'ordre du vol se lit de gauche à droite, et la carte ouvre de toute façon
    la seule phase concernée. */
 .rt-field>label{
-  display:block;font:700 13px/1.2 var(--sans);letter-spacing:.08em;
+  display:block;font:700 15px/1.2 var(--sans);letter-spacing:.05em;
   text-transform:uppercase;color:var(--text);text-align:center;margin-bottom:7px;
+  white-space:nowrap;
 }
 .rt-field input{
   width:100%;font:600 14px/1.2 var(--mono);letter-spacing:.04em;
@@ -2440,7 +2441,7 @@ body.light .rt-role{color:var(--text)}
 @media (max-width:600px){
   .rt-form{gap:7px}
   .rt-field>label{
-    font-size:9.5px;letter-spacing:.015em;margin-bottom:5px;
+    font-size:clamp(9.5px,2.9vw,11.5px);letter-spacing:.01em;margin-bottom:5px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
   .rt-field input{
