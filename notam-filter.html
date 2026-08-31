@@ -22134,7 +22134,7 @@ window.addEventListener("scroll", hidePop, true);
        la fiche terrain éditée (localStorage) pour les QFU corrigés et les
        pistes préférentielles, et les drapeaux NOTAM (sessionStorage) quand
        l'onglet est passé par Minima. Absents, l'estimation tourne sans eux. */
-    const QLV_FRESH_MS = 20 * 60e3;   // le QFU en service tient des heures
+    const QLV_FRESH_MS = 10 * 60e3;   // un instantané toutes les dix minutes
     const QLV_RETRY_MS = 20e3;        // un échec est passager : on retente vite
     const QLV_MATCH_DEG = 25;         // au-delà, la route ne désigne plus l'extrémité
     const QLV_MAX_TAIL_KT = 8;        // vent arrière moyen éliminatoire
@@ -22166,7 +22166,7 @@ window.addEventListener("scroll", hidePop, true);
        BRUTS qui sont gardés (route, écart, référence), réappariés au rappel à
        l'état du moment : une configuration basculée se disqualifie d'elle-même
        par le filtre du vent arrière. */
-    const QLV_MEM_MS = 3 * 3600e3;
+    const QLV_MEM_MS = 1 * 3600e3;
     function qlvStoreWrite(icao, data) {
       try {
         const o = qlvStoreRead();

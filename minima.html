@@ -5102,7 +5102,7 @@ function nfAlerts(icao){
    l'essentiel entre deux échantillons — et le budget amont tombe à trois
    appels par heure et par terrain. L'heure affichée est celle de la MESURE,
    pas de la lecture — la bande la porte pour le dire. */
-const QLV_FRESH_MS = 20 * 60e3;
+const QLV_FRESH_MS = 10 * 60e3;
 /* Le seuil d'élimination au vent arrière MOYEN : 8 kt, celui du cahier des
    charges — au-dessus des 5 kt que l'OACI donne aux pistes préférentielles,
    pour ne pas écarter un QFU sur un souffle. */
@@ -5147,7 +5147,7 @@ function qlvStoreRead(){
    des noms de piste : au rappel, ils sont réappariés à l'état du moment —
    NOTAM du jour, vent du jour. Une configuration qui a basculé se disqualifie
    donc toute seule, par le filtre du vent arrière. */
-const QLV_MEM_MS = 3 * 3600e3;   // au-delà, une configuration n'engage plus rien
+const QLV_MEM_MS = 1 * 3600e3;   // au-delà, une configuration n'engage plus rien
 function qlvStoreWrite(icao, data){
   try{
     const o = qlvStoreRead();
