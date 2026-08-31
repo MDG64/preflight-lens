@@ -4225,9 +4225,28 @@ function adTypeFromCfg(cfg, icao, end){
    dans l'autre : le pilote choisit la ligne sur laquelle il veut être jugé —
    c'est lui qui sait ce que son approbation, son avion et son équipage
    autorisent, et toutes les approches de la fiche restent sélectionnables. */
+/* Rang d'un type dans AD_APP_TYPES — l'ordre canonique de la liste, du plus
+   capable au moins capable. Un type inconnu passe en queue plutôt que de
+   remonter en tête par accident. */
+const adTypeRank = id => {
+  const i = AD_APP_TYPES.findIndex(a=>a.id===id);
+  return i<0 ? AD_APP_TYPES.length : i;
+};
+/* Les approches d'une extrémité, TOUJOURS DE LA PLUS CAPABLE À LA MOINS
+   CAPABLE. La graine sort déjà dans cet ordre, mais une approche ajoutée à la
+   main sur la fiche est POUSSÉE EN FIN DE LISTE (bouton « Add approach »), et
+   phaseApproachType retient `opts[0]` : une CAT III ajoutée sur une extrémité
+   que la graine ne connaissait qu'en CAT I se retrouvait derrière elle, et la
+   phase continuait d'être jugée sur la CAT I — à LFPO 25, 750 m au lieu des
+   minima de la CAT III. Le tri est fait ICI, à la lecture, et non à l'écriture :
+   il répare du même coup les fiches déjà éditées, sans migration du stockage.
+   Les index de la liste rangée ne sont PAS touchés — le panneau de la fiche
+   lit `rec.approaches[end]` en direct et ses boutons de suppression gardent
+   leurs positions d'origine. */
 function dbApproachesFor(icao, end){
   const rec = adGet(icao);
-  return (rec && end && rec.approaches && rec.approaches[end]) || [];
+  const list = (rec && end && rec.approaches && rec.approaches[end]) || [];
+  return list.slice().sort((a,b)=>adTypeRank(a)-adTypeRank(b));
 }
 function phaseApproachType(tabRole, icao, end){
   if (tabRole==="DEPARTURE") return null;
