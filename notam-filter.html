@@ -15558,23 +15558,40 @@ E) ${e}`;
     let timeMode = null;          // null | 'time' | 'today' | 'tomorrow'
     let currentIcao = "";         // code OACI chargé
     let tab = null;               // onglet déplié : "fav", "route", ou aucun
-    function loadFavs() { try { return JSON.parse(localStorage.getItem("notam_favs") || "[]"); } catch (e) { return []; } }
-    /* Les favoris que la CARTE grossit : ceux d'ici ET ceux du module Minimas
-       (clé `wl-minima-favs`, même origine). Depuis qu'il n'y a plus qu'une
-       carte pour les deux apps, c'est elle qui doit montrer les deux listes —
-       sinon un terrain mis en favori là-bas perdait son gros disque en
-       arrivant ici, alors que c'est le même pilote et le même vol. Les
-       étoiles, elles, restent séparées : ce sont deux gestes, dans deux
-       pages, sur deux objets différents. */
-    function mapFavSet() {
-      const out = new Set(favs);
+    /* UNE SEULE liste de favoris pour toute l'app (2026-08-31). Elle vivait en
+       deux clés — `notam_favs` ici, `wl-minima-favs` dans le module Minima —
+       et une étoile posée d'un côté n'existait pas de l'autre. La carte
+       rattrapait déjà le coup en grossissant l'union des deux listes ; c'était
+       soigner le symptôme. Minima est un MODULE, pas une application : les
+       deux étoiles sont le MÊME geste, sur le MÊME objet, pour le même pilote
+       et le même vol. `mapFavSet()` disparaît avec la seconde clé — la carte
+       lit `favs` comme tout le reste.
+       La reprise est faite UNE fois, et des deux côtés (même fonction dans
+       minima.html, appelée à l'initialisation) : union des deux listes, ordre
+       d'ici d'abord, puis retrait de l'ancienne clé. C'est ce retrait qui
+       fait qu'elle ne se rejoue pas — sans lui, une étoile enlevée après la
+       fusion reviendrait à l'ouverture suivante. */
+    const FAVS_KEY = "notam_favs";
+    const FAVS_KEY_LEGACY = "wl-minima-favs";
+    function favsMigrate() {
       try {
-        const a = JSON.parse(localStorage.getItem("wl-minima-favs") || "[]");
-        if (Array.isArray(a)) for (const c of a) if (typeof c === "string") out.add(c.toUpperCase());
+        const brut = localStorage.getItem(FAVS_KEY_LEGACY);
+        if (brut === null) return;
+        const vieux = JSON.parse(brut);
+        if (Array.isArray(vieux)) {
+          const a = JSON.parse(localStorage.getItem(FAVS_KEY) || "[]");
+          const out = Array.isArray(a) ? a.slice() : [];
+          for (const c of vieux) {
+            const u = String(c || "").toUpperCase();
+            if (/^[A-Z]{4}$/.test(u) && !out.includes(u)) out.push(u);
+          }
+          localStorage.setItem(FAVS_KEY, JSON.stringify(out));
+        }
+        localStorage.removeItem(FAVS_KEY_LEGACY);
       } catch (e) { }
-      return out;
     }
-    function saveFavs(a) { try { localStorage.setItem("notam_favs", JSON.stringify(a)); } catch (e) { } }
+    function loadFavs() { try { return JSON.parse(localStorage.getItem(FAVS_KEY) || "[]"); } catch (e) { return []; } }
+    function saveFavs(a) { try { localStorage.setItem(FAVS_KEY, JSON.stringify(a)); } catch (e) { } }
     /* Routes favorites : une liste de listes de codes, dans l'ordre
        départ -> destination -> dégagement. Rangées à part des terrains
        favoris — ce ne sont pas les mêmes objets, et la même route peut
@@ -16123,6 +16140,7 @@ E) ${e}`;
         else renderFromRaw(frais);
       }
     }
+    favsMigrate();                // union unique avec l'ancienne liste de Minima
     let favs = loadFavs();        // codes OACI favoris (persistés si possible)
     let favRoutes = loadFavRoutes();   // routes favorites : [[DEP, DEST, ALT], ...]
 
@@ -18736,7 +18754,7 @@ function renderInfo(icao) {
       // on lit moins de codes mais on les lit. En vue NOTAM rien ne change,
       // les codes sont ce qu'on cherche des yeux.
       // Une seule lecture des favoris par image, pour les deux couches.
-      const favSet = mapFavSet();
+      const favSet = new Set(favs);
       const showLabels = v.scale > (mapMode === "wx" ? 91 : 58);   // un cran de molette = ×1.18
       const labelsMayDrop = mapMode === "wx" && v.scale <= 58 * 1.18 ** 5;
       // Les QFU se posent SOUS la capsule du code, jamais ailleurs : une paire

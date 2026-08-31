@@ -10655,11 +10655,43 @@ const MQ_MOBILE = window.matchMedia("(max-width:600px)");
    liste entière des cases à cocher. */
 const mState = {icao:null, time:null, open:null, phase:null, nfOpen:false};
 
+/* UNE SEULE liste de favoris pour toute l'app (2026-08-31), celle de l'hôte :
+   `notam_favs`. Minima est un module, pas une application — l'étoile d'ici et
+   celle de la page NOTAM sont le même geste, sur le même objet. La reprise est
+   la fonction jumelle de celle de notam-filter.html : union des deux listes,
+   ordre de l'hôte d'abord, puis retrait de l'ancienne clé, qui est ce qui
+   empêche la fusion de se rejouer et de ressusciter une étoile enlevée depuis.
+   Elle tourne des DEUX côtés : on peut entrer dans l'app par l'une ou l'autre
+   page (l'adresse ?dep&dest&altn tombe ici).
+   Un point RESTE à faire le jour où la formule payante s'ouvrira : la borne du
+   plan gratuit (FREE_MAX_FAVS, maxFavs(), SALE_OPEN) vit dans
+   notam-filter.html ; favToggle ci-dessous ne la connaît pas. Tant que
+   SALE_OPEN est faux, maxFavs() vaut l'infini et il n'y a rien à faire. */
+const FAVS_KEY = "notam_favs";
+const FAVS_KEY_LEGACY = "wl-minima-favs";
+function favsMigrate(){
+  try {
+    const brut = localStorage.getItem(FAVS_KEY_LEGACY);
+    if (brut === null) return;
+    const vieux = JSON.parse(brut);
+    if (Array.isArray(vieux)){
+      const a = JSON.parse(localStorage.getItem(FAVS_KEY) || "[]");
+      const out = Array.isArray(a) ? a.slice() : [];
+      for (const c of vieux){
+        const u = String(c || "").toUpperCase();
+        if (/^[A-Z]{4}$/.test(u) && !out.includes(u)) out.push(u);
+      }
+      localStorage.setItem(FAVS_KEY, JSON.stringify(out));
+    }
+    localStorage.removeItem(FAVS_KEY_LEGACY);
+  } catch(e){}
+}
+favsMigrate();
 function favList(){
-  try { const a = JSON.parse(localStorage.getItem("wl-minima-favs")||"[]"); return Array.isArray(a)?a:[]; }
+  try { const a = JSON.parse(localStorage.getItem(FAVS_KEY)||"[]"); return Array.isArray(a)?a:[]; }
   catch(e){ return []; }
 }
-function favSave(a){ try { localStorage.setItem("wl-minima-favs", JSON.stringify(a)); } catch(e){} }
+function favSave(a){ try { localStorage.setItem(FAVS_KEY, JSON.stringify(a)); } catch(e){} }
 /* Un seul geste pour les deux étoiles — celle de l'accueil et celle de
    l'en-tête de fiche : elle ajoute, et elle retire si le terrain y est déjà. */
 function favToggle(icao){
