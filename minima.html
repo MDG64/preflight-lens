@@ -5196,7 +5196,10 @@ function qlvState(icao){
     const clusters = (d ? (kind==="to" ? d.dep : d.arr) || [] : []).slice().sort((a,b)=>b.n-a.n);
     for (const c of clusters){
       const m = hitsOf(c, cand);
-      if (m.length) return {ids: uniq(m.map(e=>e.q.id)).slice(0,4), how:`observed ×${c.n}`, obs:true, trk:c.trk};
+      /* Sans l'effectif : le nombre d'avions pesait la preuve, mais il
+         encombrait la ligne — l'heure de l'observation, dans le titre, suffit
+         à dire de quand elle parle. */
+      if (m.length) return {ids: uniq(m.map(e=>e.q.id)).slice(0,4), how:"observed", obs:true, trk:c.trk};
     }
     const pref = adPrefSet(rec, kind);
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
@@ -5254,7 +5257,10 @@ function qlvState(icao){
     : "";
   const down = obsDown
     ? `<span class="grp"><span class="n">traffic check unavailable (${escapeHtmlText(obsDown)})</span></span>` : "";
-  const lbl = `<div class="wxpop-lbl">Runway in use · estimated${obsUsed && t ? ` · traffic ${t}` : ""}</div>`;
+  /* L'heure est celle du DERNIER trafic observé (l'horodatage de la mesure,
+     que le serveur rend tel quel) : elle s'affiche dès que l'échantillon a vu
+     des avions, même si l'estimation retient une autre source. */
+  const lbl = `<div class="wxpop-lbl">Runway in use · estimated${d && d.sample > 0 && t ? ` · live traffic ${t}` : ""}</div>`;
   if (!to && !ldg) return { idle: true,
     html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, no traffic observed</span>${down}</div>` };
   /* Point vert quand du trafic réel soutient l'estimation, gris quand elle ne
