@@ -732,19 +732,6 @@ select.inline{width:auto;padding:5px 8px;font-size:11px}
    dispute pas au cap ni au pouce. */
 .qfu .lgt{font:600 9px/1.3 var(--mono);color:var(--muted);display:block;margin-top:4px;letter-spacing:.08em;opacity:.85}
 
-/* ---------- QFU observé : la ligne de trafic ADS-B sous la grille ----------
-   Une observation discrète, du même gris que les notes — elle informe le
-   choix du QFU, elle ne le dispute ni aux cartes ni au vent. Le point vert
-   pulse tant que l'instantané est vivant ; gris quand il n'a rien vu. */
-.qfu-live{display:flex;align-items:baseline;gap:8px;margin:10px 2px 0;
-  font:500 11.5px/1.6 var(--mono);color:var(--muted);letter-spacing:.02em}
-.qfu-live .dot{width:7px;height:7px;border-radius:50%;background:var(--green);
-  flex:none;align-self:center;animation:qlv-pulse 2.4s ease-in-out infinite}
-.qfu-live.idle .dot{background:var(--muted);opacity:.5;animation:none}
-.qfu-live b{font-weight:700}
-.qfu-live .src{opacity:.65}
-@keyframes qlv-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-
 /* ---------- placeholder ---------- */
 .ph{
   border:1px dashed var(--line2);border-radius:var(--radius);padding:30px 18px;
@@ -6253,6 +6240,12 @@ function assess(role, ctx){
   if (metar && metar.wind) windCands.push({w:metar.wind, src:"METAR"});
   if (fcLim && fcLim.wind) windCands.push({w:fcLim.wind, src:"TAF"});
   if (fcLim && fcLim.gustOverride) windCands.push({w:fcLim.gustOverride, src:"TAF"});
+  /* La même liste part sur le résultat de la phase : les pastilles QFU la
+     rejouent extrémité par extrémité. Elle ne dépend pas du QFU jugé — seules
+     ses composantes en dépendent — donc une seule liste vaut pour les deux, et
+     la pastille ne peut plus rester au relevé quand le verdict, lui, a suivi
+     la prévision. */
+  res.windCands = windCands;
   if (qfu!=null && windCands.length){
     /* Le vent OBSERVÉ reste celui que dessine la rose et que lit la carte QFU :
        `res.wind` ne change pas de sens. Seul le verdict s'ouvre à la prévision.
@@ -7794,15 +7787,41 @@ function qfusOf(pair){
 /* Verdict d'un QFU au regard du vent, règle du moteur pour la case « Wind
    components » : dépassement = no go, moins de 2 kt de marge en travers ou
    1 kt en arrière = marginal. C'est le critère vent que qfuAggState mêle aux
-   critères vis/RVR des phases — un seul barème pour tablette et mobile. */
-function qfuWindState(deg, wind){
-  const speed = wind ? (wind.gust_kt || wind.speed_kt) : null;   // la rafale gouverne toujours
-  const c = wind ? windComponents(deg, wind.direction_deg, speed) : null;
+   critères vis/RVR des phases — un seul barème pour tablette et mobile.
+
+   Le vent jugé n'est plus le seul relevé : la fonction prend la LISTE des vents
+   de la phase (l'observation, et le vent limitant de la prévision dans sa
+   fenêtre, rafale d'un TEMPO/PROB comprise) et garde la composante la plus
+   forte, en travers et en arrière séparément — les deux ne viennent pas
+   forcément du même vent. C'est le pickMax du moteur rejoué extrémité par
+   extrémité : sans lui, une carte restait orange à côté d'une case « Wind »
+   rouge, la première ne lisant que le METAR. Un vent seul reste accepté, pour
+   l'appel du surlignage TAF. */
+function qfuWindState(deg, winds){
+  const list = (Array.isArray(winds) ? winds : [winds]).filter(Boolean);
+  let cross = null, tail = null;
+  for (const w of list){
+    const speed = w.gust_kt || w.speed_kt;   // la rafale gouverne toujours
+    const k = windComponents(deg, w.direction_deg, speed);
+    if (!k) continue;                        // VRB, direction absente : pas de composantes
+    if (cross==null || k.cross>cross) cross = k.cross;
+    const t = Math.max(0, k.tail);
+    if (tail==null || t>tail) tail = t;
+  }
+  const c = cross==null ? null : {cross, tail, head:-tail};
   const st = !c ? "unknown"
-    : (c.cross>cfg.maxCrosswindKt || (-c.head)>cfg.maxTailwindKt) ? "nogo"
-    : (cfg.maxCrosswindKt-c.cross<=2 || cfg.maxTailwindKt-(-c.head)<=1) ? "marginal"
+    : (c.cross>cfg.maxCrosswindKt || c.tail>cfg.maxTailwindKt) ? "nogo"
+    : (cfg.maxCrosswindKt-c.cross<=2 || cfg.maxTailwindKt-c.tail<=1) ? "marginal"
     : "go";
   return {c, st};
+}
+
+/* Les vents à confronter aux limites pour UNE phase : ceux que le moteur a
+   retenus pour elle, et à défaut — phase pas encore calculée, verdict tombé en
+   erreur — la seule observation. */
+function phaseWinds(wind, r){
+  const cands = r && Array.isArray(r.windCands) ? r.windCands.map(c=>c.w) : null;
+  return (cands && cands.length) ? cands : (wind ? [wind] : []);
 }
 
 /* Pouce d'une carte QFU : l'agrégat des pouces de critères des phases —
@@ -7820,9 +7839,12 @@ function qfuAggState(q, wind, results){
      visibilité ne la rouvrira. */
   if (q.pair && nfRwyClosed(currentIcao(), q.pair)) return "nogo";
   const sts = [];
-  const w = qfuWindState(q.deg, wind).st;
-  if (w!=="unknown") sts.push(w);
+  /* Le vent vote PHASE PAR PHASE depuis que la prévision entre dans le verdict :
+     la fenêtre du décollage n'est pas celle du dégagement, donc le vent
+     limitant non plus. */
   TABS.forEach((tb,i)=>{
+    const w = qfuWindState(q.deg, phaseWinds(wind, results[i])).st;
+    if (w!=="unknown") sts.push(w);
     const vis = mVisInfo(tb, results[i], q);
     if (vis.st!=="unknown") sts.push(vis.st);
   });
@@ -7842,7 +7864,7 @@ function qfuAggState(q, wind, results){
 function qfuTabState(q, wind, tb, r){
   if (q.pair && nfRwyClosed(currentIcao(), q.pair)) return "nogo";
   const sts = [];
-  const w = qfuWindState(q.deg, wind).st;
+  const w = qfuWindState(q.deg, phaseWinds(wind, r)).st;
   if (w!=="unknown") sts.push(w);
   const vis = mVisInfo(tb, r, q);
   if (vis.st!=="unknown") sts.push(vis.st);
@@ -7892,9 +7914,14 @@ function commonQfu(){
         élevé, et le traversier le plus faible pour départager.
 
    Un candidat n'entre dans un rang que si le vent tient dans les limites de
-   l'avion ET si les minima de CETTE extrémité laissent se poser. Un rang sans
-   candidat est vide et l'on descend au suivant : c'est ce qui fait passer du
-   rang 1 au rang 3 quand la météo ferme la piste au vent de face.
+   l'avion ET si les minima de CETTE extrémité laissent se poser. Ce vent-là est
+   le plus restrictif du relevé et de la prévision de la fenêtre, comme la case
+   « Wind » ; les seuils de 5, 6 et 10 kt des rangs, eux, se lisent sur le vent
+   observé — ils arbitrent la piste de maintenant, pas celle de l'heure qui
+   vient.
+
+   Un rang sans candidat est vide et l'on descend au suivant : c'est ce qui fait
+   passer du rang 1 au rang 3 quand la météo ferme la piste au vent de face.
 
    Les NOTAM sont déjà dans le tri, sans rien y ajouter : une paire fermée est
    écartée tant qu'il en reste une ouverte, un ILS HS n'est plus un ILS, et une
@@ -7945,7 +7972,7 @@ function autoQfuForTab(tb, r, wind){
                 head:c?c.head:null, cross:c?c.cross:null,
                 tail:c?-c.head:0, hw:c?c.head:0,
                 land:mVisInfo(tb, pr, q).st!=="nogo",
-                windOk:qfuWindState(q.deg, wind).st!=="nogo"});
+                windOk:qfuWindState(q.deg, phaseWinds(wind, pr)).st!=="nogo"});
   }));
   if (!cands.length) return null;
   /* Le départage, commun à tous les rangs. */
