@@ -11853,8 +11853,15 @@ document.addEventListener("keydown", e=>{
 });
 
 /* --------------------------- theme --------------------------- */
-/* Le mode jour est le même contrat que dans NOTAM Lens : une classe sur <body>,
-   mémorisée entre deux sessions. Le thème système sert de valeur initiale. */
+/* Le mode jour est le même contrat que dans le reste de Preflight Lens : une
+   classe sur <body>, mémorisée entre deux sessions — et, depuis que les deux
+   écrans sont la même application, dans la MÊME clé (`notam_theme`, lue et
+   écrite par notam-filter.html). Deux clés séparées faisaient repasser Minima
+   en jour alors que la page d'accueil était en nuit.
+   Même clé, donc même valeur par défaut que l'accueil : le jour. Le thème
+   système ne sert plus d'amorce — il ne valait que du temps où Minima était
+   une application séparée, et il ramenait la divergence par la fenêtre pour
+   qui n'a jamais touché au commutateur. */
 const themeBtn = document.getElementById("themeBtn");
 /* Le croissant du glyphe ☾ est un filet : à côté du soleil il disparaît.
    Une lune pleine, dessinée à la même taille que le glyphe qu'elle remplace. */
@@ -11871,17 +11878,25 @@ function applyTheme(light){
   fitReports();
   document.querySelector('meta[name="theme-color"]').setAttribute("content", light ? "#e8e8e8" : "#0d1117");
 }
-let lightMode = false;
+const THEME_KEY = "notam_theme";          // partagée avec notam-filter.html
+const THEME_KEY_LEGACY = "wl-minima-theme";
+let lightMode = true;
 try {
-  const saved = localStorage.getItem("wl-minima-theme");
-  lightMode = saved ? saved === "light"
-                    : window.matchMedia("(prefers-color-scheme: light)").matches;
+  let saved = localStorage.getItem(THEME_KEY);
+  /* Reprise de l'ancienne clé : le choix fait du temps des deux applications
+     n'est pas perdu, et il est recopié dans la clé commune pour que l'accueil
+     le voie lui aussi dès la prochaine ouverture. */
+  if (saved === null) {
+    saved = localStorage.getItem(THEME_KEY_LEGACY);
+    if (saved !== null) localStorage.setItem(THEME_KEY, saved);
+  }
+  if (saved !== null) lightMode = saved === "light";
 } catch(e){}
 applyTheme(lightMode);
 themeBtn.onclick = ()=>{
   lightMode = !lightMode;
   applyTheme(lightMode);
-  try { localStorage.setItem("wl-minima-theme", lightMode ? "light" : "dark"); } catch(e){}
+  try { localStorage.setItem(THEME_KEY, lightMode ? "light" : "dark"); } catch(e){}
 };
 
 /* --------------------------- pilot defaults --------------------------- */
