@@ -5154,13 +5154,18 @@ function qlvNotify(icao){
    quitté le 2026-08-31. Deux raisons : l'observation ne change pas d'un onglet
    à l'autre (c'est un état du terrain, pas un critère de phase), et elle se
    lit là où le pilote regarde déjà l'état du terrain, sous les relevés.
-   Même règle que la bande du jour pour le bilan de vol : rien dans le module,
-   dont la fiche va à l'essentiel. */
+   Contrairement à la bande du jour, elle reste affichée dans le module bilan
+   de vol : la fiche y va à l'essentiel, et le QFU que les avions utilisent EN
+   CE MOMENT en fait partie — c'est même là qu'on le cherche, en préparant la
+   route. La masquer là créait surtout une incohérence invisible à l'auteur et
+   criante à l'usage : la fiche mobile, qui n'a jamais eu ce garde-fou,
+   l'affichait quand le grand écran la cachait — « visible sur téléphone, pas
+   sur PC ». Un seul comportement, celui qui montre. */
 function mountQfuLive(){
   const el = document.getElementById("qfuLiveMain");
   if (!el) return;
   const icao = currentIcao() || "";
-  if (state.routeFocus!=null || !/^[A-Z]{4}$/.test(icao)){
+  if (!/^[A-Z]{4}$/.test(icao)){
     el.hidden = true; el.removeAttribute("data-qlv"); el.innerHTML = ""; return;
   }
   el.setAttribute("data-qlv", icao);
