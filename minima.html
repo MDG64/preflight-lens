@@ -5196,7 +5196,7 @@ function qlvState(icao){
     const clusters = (d ? (kind==="to" ? d.dep : d.arr) || [] : []).slice().sort((a,b)=>b.n-a.n);
     for (const c of clusters){
       const m = hitsOf(c, cand);
-      if (m.length) return {ids: uniq(m.map(e=>e.q.id)).slice(0,4), how:`observed ×${c.n}`, obs:true};
+      if (m.length) return {ids: uniq(m.map(e=>e.q.id)).slice(0,4), how:`observed ×${c.n}`, obs:true, trk:c.trk};
     }
     const pref = adPrefSet(rec, kind);
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
@@ -5208,7 +5208,25 @@ function qlvState(icao){
     }
     return null;
   };
-  const to = pick("to"), ldg = pick("ldg");
+  let to = pick("to"), ldg = pick("ldg");
+  /* Un seul sens observé : l'autre s'aligne dessus. Un terrain ne décolle pas
+     à l'ouest en atterrissant à l'est parce que l'échantillon n'a attrapé
+     qu'un sens — vu en production à CDG, où trois départs face à l'ouest
+     laissaient l'atterrissage retomber sur une préférentielle 08R plein est.
+     Le sens manquant se rechoisit donc parmi les candidates au cap de
+     l'observation (la préférentielle continue de départager À L'INTÉRIEUR de
+     ce cap). Deux sens observés opposés, en revanche, s'affichent tels
+     quels : c'est le réel, pas un trou d'échantillon. */
+  const alignOn = (obs, kind, lab) => {
+    const pool = cand.filter(q => cdiff(norm(q.deg + magvar), obs.trk) <= QLV_MATCH_DEG);
+    if (!pool.length) return null;
+    const pref = adPrefSet(rec, kind);
+    const pc = pool.filter(q => pref.has(q.id)).sort(byHead);
+    const chosen = pc.length ? pc : pool.slice().sort(byHead);
+    return {ids: uniq(chosen.map(q=>q.id)).slice(0,4), how:`aligned on observed ${lab}`};
+  };
+  if (to && to.obs && !(ldg && ldg.obs)) ldg = alignOn(to, "ldg", "departures") || ldg;
+  else if (ldg && ldg.obs && !(to && to.obs)) to = alignOn(ldg, "to", "arrivals") || to;
   const t = d && /^\d{4}-/.test(d.at || "") ? d.at.slice(11,16)+"Z" : "";
   const obsUsed = !!((to && to.obs) || (ldg && ldg.obs));
 
