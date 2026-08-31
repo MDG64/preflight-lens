@@ -2479,6 +2479,19 @@ body.light .rt-role{color:var(--text)}
 /* L'heure jugée et le QFU retenu, en pied de carte — poussés en bas pour que
    les trois cartes alignent leurs pieds quand l'une a une ligne de plus. */
 .rt-sub{font:400 9.5px/1.5 var(--mono);color:var(--muted2);margin-top:auto;padding-top:2px}
+/* Le QFU en service sur une carte de route : une seule ligne, et seulement
+   celui du RÔLE de la carte — décollage au départ, atterrissage ailleurs.
+   La carte est déjà dense ; la bande large des pages de terrain n'y tiendrait
+   pas, et les deux usages n'y servent à rien. Point vert quand du trafic
+   observé la soutient, gris quand elle ne tient qu'à la théorie. */
+.rt-qlv{display:flex;align-items:center;gap:6px;font:500 10.5px/1.4 var(--mono);
+  color:var(--muted);letter-spacing:.02em;min-width:0}
+.rt-qlv .dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex:none;
+  animation:qlv-pulse 2.4s ease-in-out infinite}
+.rt-qlv.idle .dot{background:var(--muted);opacity:.55;animation:none}
+.rt-qlv b{font:700 12.5px/1 var(--mono);letter-spacing:.04em;color:var(--text)}
+.rt-qlv .u{font:600 9px/1 var(--mono);letter-spacing:.09em;color:var(--muted);margin-right:3px}
+.rt-qlv .n{color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rt-hint{font:400 10.5px/1.5 var(--sans);color:var(--muted);text-align:center}
 /* Au téléphone, la carte ne quitte plus Minima : elle se DÉPLIE. La barre du
    haut ne bouge pas, les autres cartes restent en place, et la fiche du
@@ -5165,6 +5178,10 @@ function qlvLoad(icao){
          terrain est à l'écran ; sinon la retouche DOM de la fin suffit, et
          personne ne perd le panneau qu'il avait ouvert. */
       if (JSON.stringify(((qlvCache.get(icao) || {}).data) || null) !== before){
+        /* Le bilan de vol juge trois terrains dont aucun n'est forcément
+           celui de la page : ses cartes suivent toujours, comme pour les
+           drapeaux NOTAM (nfaNotify). */
+        if (window.RTV) RTV.refresh();
         if (currentIcao() === icao) return render();
         if (document.body.classList.contains("mobile") && mState.icao === icao) return renderMobile();
       }
@@ -13681,6 +13698,10 @@ window.RTV = (()=>{
      contredire les chiffres à côté. La piste fermée garde le dernier mot. */
   function judge(slot, icao){
     const wx = RT.wx[icao];
+    /* L'observation part avec les relevés — anti-rafale de vingt minutes, et
+       le disque partagé la donne souvent sans réseau. Son arrivée redessine
+       les cartes (qlvLoad → RTV.refresh). */
+    qlvLoad(icao);
     return withTerrain(icao, wx, ()=>{
       const results = assessAll();
       const tb = TABS[slot.tab];
@@ -13703,6 +13724,15 @@ window.RTV = (()=>{
               app: tb.role==="DEPARTURE" ? null : (r.dbAppType || null),
               end: q ? q.id : null,
               qfu:q, closed, closedPair:pair, alerts:nfAlerts(icao),
+              /* L'estimation du QFU en service, calculée ICI : qlvEstimate lit
+                 le terrain et le METAR COURANTS, que withTerrain vient de
+                 poser sur ceux de cette carte. Appelée dehors, elle jugerait
+                 le terrain de la page avec le vent d'un autre. */
+              qlv: (()=>{ try {
+                const e = qlvEstimate(icao);
+                if (!e || e.allClosed) return null;
+                return (slot.key==="dep" ? e.to : e.ldg) || null;
+              } catch(err){ return null; } })(),
               eta:etaDate(tb.role),
               obsTime: wx && wx.obsTime!=null ? wx.obsTime : null,
               noWx: !wx || (!wx.metarRaw && !wx.tafRaw),
@@ -13990,6 +14020,20 @@ window.RTV = (()=>{
     return `<span class="rt-app" title="${tip}">${parts.join(" · ")}</span>`;
   }
 
+  /* Le QFU en service de CETTE carte : celui de son rôle, et lui seul — la
+     carte du départ décolle, les deux autres se posent. Muette tant qu'aucune
+     observation n'est arrivée et que la théorie ne dit rien : une carte dense
+     ne se paie pas une ligne vide. Le `p` vient de judge(), calculé DANS
+     withTerrain — qlvEstimate lit le terrain courant et le METAR courant, et
+     les trois cartes en ont chacune d'autres. */
+  function rtQlvHtml(p){
+    if (!p) return "";
+    return `<span class="rt-qlv${p.obs ? "" : " idle"}"
+        title="Estimated runway in use for this phase — ${escapeHtmlText(p.how)}. An estimate, not the ATIS, not a clearance: the declared runway in use prevails.">
+      <span class="dot"></span><b><span class="u">QFU</span>${p.ids.join("/")}</b>
+      <span class="n">${escapeHtmlText(p.how)}</span></span>`;
+  }
+
   function cardHtml(slot, s, i){
     if (!s) return `<div class="rt-card empty">
         <span class="rt-role">${slot.lab}</span>
@@ -14008,6 +14052,7 @@ window.RTV = (()=>{
         ${ageHtml(s.obsTime)}
         <span class="rt-chev" aria-hidden="true">▾</span></span>
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
+      ${rtQlvHtml(s.qlv)}
       ${rtAppHtml(s)}
       <span class="rt-rows">${mVisRow(s.vis)}${mCeilRow(s.ceil)}${mWindRow(s.wind)}</span>
       ${alertsHtml(s)}
