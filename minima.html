@@ -5986,6 +5986,25 @@ function worstOfReports(tafLim, metLim){
   return out;
 }
 
+/* Le relevé SEUL, dans la même forme que l'enveloppe d'un TAF — c'est ce que
+   lit la phase jugée « now », où il n'y a rien à prévoir (voir `obsOnly`).
+   Ce n'est pas `worstOfReports(null, obsLim)` : la comparaison n'a pas lieu,
+   et les drapeaux du relevé — CAVOK, ciel annoncé sans BKN/OVC — doivent
+   traverser, sans quoi un ciel dégagé rendrait un plafond UNKNOWN. */
+function observedOnly(metLim){
+  const out = {vis_m:null, ceiling_ft:null, wind:null, visSrc:"METAR", ceilSrc:"METAR", obsOnly:true};
+  if (!metLim) return out;
+  out.vis_m = metLim.vis_m ?? null;
+  out.ceiling_ft = metLim.ceiling_ft ?? null;
+  out.wind = metLim.wind || null;
+  out.cavok = !!metLim.cavok;
+  out.noCeiling = !!metLim.noCeiling;
+  out.visFrom = metLim.visIsRvr ? `measured RVR${metLim.rvrRunway?" RWY "+metLim.rvrRunway:""}` : "observed";
+  out.ceilFrom = "observed";
+  out.visIsRvr = !!metLim.visIsRvr; out.visRvrRunway = metLim.rvrRunway;
+  return out;
+}
+
 /* --------------------------- planning minima --------------------------- */
 /* Schéma RÉELLEMENT appliqué. Les Tables 3 et 4 abaissent l'exigence — jusqu'à
    850 m au lieu de 1350 m sur un dégagement en CAT I — et cet abaissement est
@@ -6269,6 +6288,20 @@ function assess(role, ctx){
   const now = ctx.now;
   const eta = ctx.eta;
 
+  /* ---------------- « now » : le relevé, et lui seul ----------------
+     À l'échéance « now », la phase se juge sur l'OBSERVATION et sur rien
+     d'autre. La règle du plus restrictif entre les deux lectures compare une
+     mesure et une PRÉVISION de ce que sera le terrain ; à l'instant même, il
+     n'y a plus rien à prévoir — le METAR dit ce qui est, et un TEMPO qui
+     couvre l'heure en cours n'a pas à contredire ce qu'on mesure. Le
+     dégagement au décollage y a droit comme le départ : « now » y désigne le
+     même instant, et un dégagement déclaré inutilisable par un PROB40 alors
+     que le relevé du terrain est bon était une fausse alarme.
+     La comparaison des deux lectures reprend dès l'échéance suivante.
+     Sans relevé, rien ne change : la prévision reste la seule lecture. */
+  const obsOnly = !!metar && eta instanceof Date && now instanceof Date &&
+                  (eta.getTime() - now.getTime()) <= 60000;
+
   /* ---------------- fenêtre de prévision de la phase ----------------
      La même que celle des minima de planification plus bas — elle est calculée
      ICI parce que le VENT la lit aussi désormais : la phase se juge sur la plus
@@ -6289,9 +6322,14 @@ function assess(role, ctx){
       phW1 = atEtaW ? new Date(eta.getTime()+60000) : new Date(eta.getTime()+HOUR);
     }
   }
-  const fcLim = taf ? (tafForRole(taf, role, phW0, phW1, {visReq:null, ceilReq:null}).limiting || null) : null;
+  /* `obsOnly` coupe la prévision AVANT tout le reste : sans enveloppe de
+     prévision, ni le vent, ni la visibilité de décollage, ni les lignes de la
+     phase n'ont de quoi la faire parler. */
+  const fcLim = (taf && !obsOnly) ? (tafForRole(taf, role, phW0, phW1, {visReq:null, ceilReq:null}).limiting || null) : null;
   /* Le relevé, mis en enveloppe pour être comparable à la prévision. */
   const obsLim = metarLimiting(metar, ctx.rwyDesignator);
+  if (obsOnly && taf) push({severity:"INFO", code:"OBSERVATION_GOVERNS_NOW",
+    message:"Assessed for the present time: the OBSERVATION governs alone — visibility, ceiling and wind all come from the METAR. The forecast is shown for information but is not compared here; the more restrictive of the two readings applies from the next slot onwards."});
 
   /* ---------------- wind ---------------- */
   /* Le vent jugé est le PLUS FORT des deux lectures, composante par composante :
@@ -6766,12 +6804,16 @@ function assess(role, ctx){
        relâcher — il ne met pas l'outil en défaut, il le rend plus prudent. La
        ligne dit laquelle des deux l'emporte, sans quoi un NO GO venu du METAR
        sur un terrain où l'on arrive dans une heure serait inexplicable. */
-    const lim = worstOfReports(t.limiting || {}, obsLim);
+    /* À l'échéance « now », il n'y a pas de comparaison : le relevé gouverne
+       seul (voir `obsOnly`). La prévision reste calculée juste au-dessus —
+       elle a sa place dans le détail « TAF application » —, elle ne descend
+       simplement pas dans les lignes du verdict. */
+    const lim = obsOnly ? observedOnly(obsLim) : worstOfReports(t.limiting || {}, obsLim);
     const rows = [];
     const vObs = lim.vis_m==null ? null : visFromM(lim.vis_m, visUnit, -1);
     rows.push({param:"Visibility / RVR",
                src: lim.visSrc==="METAR"
-                 ? `Observed ${lim.visIsRvr?`RVR${lim.visRvrRunway?" RWY "+lim.visRvrRunway:""} (governs over the reported visibility)`:"visibility"} — more restrictive than the forecast`
+                 ? `Observed ${lim.visIsRvr?`RVR${lim.visRvrRunway?" RWY "+lim.visRvrRunway:""} (governs over the reported visibility)`:"visibility"} — ${lim.obsOnly?"assessed for the present time":"more restrictive than the forecast"}`
                  : `Forecast, ${lim.visFrom||"prevailing"} — ${winTxt}`,
                observed:vObs, required:visReq, unit:visUnit, cmp:"min",
                report:lim.visSrc, tafKind:"VIS",
@@ -6782,7 +6824,7 @@ function assess(role, ctx){
                     : (isToAlt && !isFAA ? " · MDH for a Type A approach or circling" : "");
       rows.push({param:"Ceiling",
                  src: (lim.ceilSrc==="METAR"
-                   ? "Observed, first BKN/OVC layer — more restrictive than the forecast"
+                   ? `Observed, first BKN/OVC layer — ${lim.obsOnly?"assessed for the present time":"more restrictive than the forecast"}`
                    : `Forecast, ${lim.ceilFrom||"prevailing"} — first BKN/OVC layer`) + ceilSrc,
                  observed: lim.ceiling_ft, required:ceilReq, unit:"ft", cmp:"min",
                  noCeiling: !!(lim.cavok || lim.noCeiling),
@@ -6841,8 +6883,10 @@ function assess(role, ctx){
      TEMPO/PROB incluse, une rafale hors limites s'appliquant toujours — est
      jugé au même barème que la carte vent (qfuWindState), pour être surligné
      dans le texte brut comme la vis et le plafond. VRB : pas de composantes,
-     donc pas de couleur. */
-  if (qfu!=null && res.taf && res.taf.limiting){
+     donc pas de couleur.
+     Jugée « now », la phase ne lit pas la prévision : peindre son vent au
+     barème du verdict lui ferait dire ce qu'elle ne dit plus. */
+  if (qfu!=null && !obsOnly && res.taf && res.taf.limiting){
     const lim = res.taf.limiting;
     const cands = [];
     if (lim.wind && lim.windRaw) cands.push({w:lim.wind, raw:lim.windRaw});
