@@ -22444,7 +22444,6 @@ window.addEventListener("scroll", hidePop, true);
       if (to && to.fresh && !(ldg && ldg.obs)) ldg = alignOn(to, "ldg", "departures") || ldg;
       else if (ldg && ldg.fresh && !(to && to.obs)) to = alignOn(ldg, "to", "arrivals") || to;
 
-      const t = d && /^\d{4}-/.test(d.at || "") ? d.at.slice(11, 16) + "Z" : "";
       // Le point vert ne salue que l'échantillon COURANT : une observation
       // mémorisée porte son heure dans sa justification.
       const obsUsed = !!((to && to.fresh) || (ldg && ldg.fresh));
@@ -22468,7 +22467,10 @@ window.addEventListener("scroll", hidePop, true);
         ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
         : "";
       const down = obsDown ? `<span class="grp"><span class="n">traffic check unavailable (${obsDown})</span></span>` : "";
-      const lbl = `<div class="qlv-lbl">Runway in use · estimated${d && d.sample > 0 && t ? ` · live traffic ${t}` : ""}</div>`;
+      // Titre nu : l'heure a quitté le titre quand chaque QFU a reçu la
+      // sienne — elle y faisait triple emploi, et un rappel de mémoire n'a pas
+      // l'âge d'un instantané. Seule la ligne du QFU peut le dire.
+      const lbl = `<div class="qlv-lbl">Runway in use · estimated</div>`;
       if (!to && !ldg) return { idle: true,
         html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, no traffic observed</span>${down}</div>` };
       return { idle: !obsUsed, html: lbl

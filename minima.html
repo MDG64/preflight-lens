@@ -5494,12 +5494,11 @@ function qlvEstimate(icao){
      décollage en 25 alors qu'on y décolle en 24. */
   if (to && to.fresh && !(ldg && ldg.obs)) ldg = alignOn(to, "ldg", "departures") || ldg;
   else if (ldg && ldg.fresh && !(to && to.obs)) to = alignOn(ldg, "to", "arrivals") || to;
-  const t = d && /^\d{4}-/.test(d.at || "") ? d.at.slice(11,16)+"Z" : "";
   /* Le point vert ne salue que l'échantillon COURANT : une observation
-     mémorisée porte déjà son heure dans sa justification, et un rappel de
-     deux heures n'est pas du direct. */
+     mémorisée porte déjà son heure dans sa justification, et un rappel d'une
+     heure n'est pas du direct. */
   const obsUsed = !!((to && to.fresh) || (ldg && ldg.fresh));
-  return {d, obsDown, to, ldg, t, obsUsed, cand, closed, cut, hitsOf};
+  return {d, obsDown, to, ldg, obsUsed, cand, closed, cut, hitsOf};
 }
 /* La bande : l'estimation mise en phrases. */
 function qlvState(icao){
@@ -5508,7 +5507,7 @@ function qlvState(icao){
   if (e.allClosed) return { idle: true,
     html: `<div class="wxpop-lbl">Runway in use · estimated</div>`
       + `<div class="qlv idle"><span class="dot"></span><span class="grp">All runways closed per NOTAM switches</span></div>` };
-  const {d, obsDown, to, ldg, t, obsUsed, cand, closed, cut, hitsOf} = e;
+  const {d, obsDown, to, ldg, obsUsed, cand, closed, cut, hitsOf} = e;
 
   /* La contradiction se montre : du trafic aligné sur une extrémité écartée —
      fermée, ou vent dans le dos — vaut d'être vu. Soit l'écartement est
@@ -5534,10 +5533,11 @@ function qlvState(icao){
     : "";
   const down = obsDown
     ? `<span class="grp"><span class="n">traffic check unavailable (${escapeHtmlText(obsDown)})</span></span>` : "";
-  /* L'heure est celle du DERNIER trafic observé (l'horodatage de la mesure,
-     que le serveur rend tel quel) : elle s'affiche dès que l'échantillon a vu
-     des avions, même si l'estimation retient une autre source. */
-  const lbl = `<div class="wxpop-lbl">Runway in use · estimated${d && d.sample > 0 && t ? ` · live traffic ${t}` : ""}</div>`;
+  /* Titre nu : l'heure a quitté le titre le 2026-08-31, quand chaque QFU a
+     reçu la sienne. Elle y faisait triple emploi sur une observation fraîche,
+     et elle y était moins juste — un rappel de mémoire et un instantané n'ont
+     pas le même âge, seule la ligne du QFU peut le dire. */
+  const lbl = `<div class="wxpop-lbl">Runway in use · estimated</div>`;
   if (!to && !ldg) return { idle: true,
     html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, no traffic observed</span>${down}</div>` };
   /* Point vert quand du trafic réel soutient l'estimation, gris quand elle ne
