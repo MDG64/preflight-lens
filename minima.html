@@ -13380,11 +13380,15 @@ window.RTV = (()=>{
   }
   /* Repeint le volet SEUL — c'est par là que la fiche mobile (render →
      renderMobile) tient à jour ce qui est déplié ici, sans rejuger les trois
-     cartes à chaque frappe. */
+     cartes à chaque frappe. Le volet ne porte QUE la fiche : on la remplace
+     entièrement. Garder ici son premier enfant — hérité du temps où une barre
+     ouvrait le volet — recollait devant la fiche neuve une copie figée de
+     l'ancienne : celle bâtie avant l'arrivée du relevé, METAR et TAF encore
+     vides, et ses identifiants doublés par-dessus les bons. */
   function renderDetail(){
     const el = document.getElementById("rtDetail");
     if (!el || inlineOpen()===null){ render(); return; }
-    el.innerHTML = el.firstElementChild.outerHTML + mobileResultsHtml();
+    el.innerHTML = mobileResultsHtml();
     bindDetail();
   }
   /* Déplier / replier. Le terrain se charge comme n'importe quel terrain
