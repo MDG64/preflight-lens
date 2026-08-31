@@ -2279,6 +2279,17 @@ body.mobile #rtOv:not([hidden]){display:flex}
 .rt-nlink:hover{color:var(--text)}
 .rt-nlink:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}
 .rt-nmore{font:400 10px/1.4 var(--sans);color:var(--muted)}
+/* Le dégagement au décollage, sous les alertes NOTAM de la carte Take off :
+   le terrain de départ jugé comme son propre T/O alternate — peut-on revenir
+   s'y poser ? Quand il ne le permet plus, la ligne du dessous PROPOSE le
+   terrain accessible le plus proche de la graine, avec sa distance. */
+.rt-toa{display:flex;flex-direction:column;gap:4px}
+.rt-toa-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font:500 10.5px/1.4 var(--sans);color:var(--muted)}
+.rt-toa-line .ico{width:13px;height:13px;flex:none}
+.rt-toa-line .ico svg{display:block;width:100%;height:100%}
+.rt-toa-line .cod{font:600 10.5px/1.4 var(--mono);letter-spacing:.02em;color:var(--text)}
+.rt-toa-line.bad .cod{color:var(--red)}
+.rt-toa-line .d{font:400 10px/1.4 var(--mono);color:var(--muted2)}
 /* Le NOTAM en entier : il monte du bas de l'écran et se pose SUR ce qu'on
    lisait, sans le couvrir — le bilan comme la fiche d'un terrain restent
    lisibles au-dessus. Trois gestes pour le refermer : la croix, Échap, ou
@@ -12471,7 +12482,9 @@ window.RTV = (()=>{
   const ov = document.getElementById("rtOv");
   /* `open` : le créneau dont la fiche est dépliée sous sa carte (téléphone
      seulement), `null` quand les trois cartes sont refermées. */
-  const RT = {icaos:["","",""], wx:{}, seq:0, timer:null, open:null};
+  /* `toa` : la proposition de dégagement au décollage — {key, phase, icao,
+     nm, st, t, n}, ou null tant que la carte Take off n'en a pas eu besoin. */
+  const RT = {icaos:["","",""], wx:{}, seq:0, timer:null, open:null, toa:null};
 
   function save(){ try { localStorage.setItem(KEY, JSON.stringify(RT.icaos)); } catch(e){} }
   function load(){
@@ -12562,6 +12575,116 @@ window.RTV = (()=>{
               noWx: !wx || (!wx.metarRaw && !wx.tafRaw),
               noTaf: !!(wx && wx.status==="no-taf")};
     });
+  }
+
+  /* ---------- dégagement au décollage ----------
+     Sous les alertes NOTAM de la carte Take off : le terrain de départ jugé
+     comme son propre T/O alternate — même moteur que l'onglet 02, minima
+     d'atterrissage sur la fenêtre ETA ± 1 h. S'il ne permet plus le retour
+     (NO GO : météo sous les minima ou piste fermée), on cherche dans la
+     graine le terrain à approche le plus proche dont les relevés passent le
+     même contrôle, et on le PROPOSE avec sa distance — « possible », parce
+     que ses NOTAM ne sont pas téléchargés ici et que le briefing reste au
+     pilote. Pas de rayon réglementaire dans le tri : la limite (1 h OEI à la
+     masse du jour, 2 h à 3/4 moteurs) dépend de l'avion — la distance
+     affichée laisse le pilote la comparer à la sienne. */
+  const TOA_TAB = 1;              // l'onglet T/O alternate du moteur
+  const TOA_MAX_NM = 400;         // au-delà, un dégagement au décollage ne sert plus
+  const TOA_CHECK = 8;            // candidats jugés, du plus proche au plus loin
+  const TOA_AGE_MS = 10*60000;    // la proposition se rejuge avec des relevés frais
+
+  /* Distance en NM entre deux terrains de la graine (coordonnées au centième
+     de degré — l'erreur reste sous le mille). Null si l'un des deux manque. */
+  function toaNm(a, b){
+    const A = ((window.AD_SEED||{})[a]||{}).c, B = ((window.AD_SEED||{})[b]||{}).c;
+    if (!A || !B) return null;
+    const rad = Math.PI/180;
+    const sLa = Math.sin((B[0]-A[0])*rad/2), sLo = Math.sin((B[1]-A[1])*rad/2);
+    const h = sLa*sLa + Math.cos(A[0]*rad)*Math.cos(B[0]*rad)*sLo*sLo;
+    return 2*3440.065*Math.asin(Math.sqrt(h));
+  }
+
+  function toaJudge(icao){
+    try { return judge({tab:TOA_TAB}, icao); }
+    catch(e){ return null; }
+  }
+
+  /* La recherche du terrain proposé : un seul /api/wx pour tous les candidats,
+     puis le moteur les juge du plus proche au plus loin — le premier GO ou
+     MARGINAL gagne. Un candidat sans relevé ne peut rien prouver : il est
+     passé. Les NOTAM des candidats ne sont PAS téléchargés (huit terrains de
+     plus par rafraîchissement pèseraient sur les sources amont) : l'infobulle
+     de la ligne le dit. */
+  async function toaSearch(dep){
+    const seedDb = window.AD_SEED || {};
+    const cands = Object.keys(seedDb)
+      .filter(k => k!==dep && seedDb[k].a && seedDb[k].c)
+      .map(k => ({icao:k, nm:toaNm(dep, k)}))
+      .filter(c => c.nm!=null && c.nm<=TOA_MAX_NM)
+      .sort((x,y)=>x.nm-y.nm)
+      .slice(0, TOA_CHECK);
+    const done = st => { RT.toa = Object.assign({key:dep, t:Date.now(), n:cands.length}, st); render(); };
+    if (!cands.length) return done({phase:"none"});
+    let data;
+    try {
+      const r = await fetch(`${WX_API}/api/wx?ids=${cands.map(c=>c.icao).join(",")}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      data = await r.json();
+    } catch(e){
+      if (RT.toa && RT.toa.key===dep && RT.toa.phase==="search") done({phase:"err"});
+      return;
+    }
+    /* Un geste plus récent (autre départ, relevés relancés) a repris la main :
+       cette réponse ne parle plus de la carte affichée. */
+    if (!RT.toa || RT.toa.key!==dep || RT.toa.phase!=="search") return;
+    for (const c of cands){
+      const s = (data.stations||{})[c.icao];
+      RT.wx[c.icao] = s && s.status!=="unknown"
+        ? {metarRaw: s.metar ? s.metar.raw : "",
+           tafRaw:   s.taf   ? s.taf.raw   : "",
+           obsTime:  s.metar && Number.isFinite(Date.parse(s.metar.time)) ? Date.parse(s.metar.time) : null,
+           status:   s.status}
+        : {metarRaw:"", tafRaw:"", obsTime:null, status:"unknown"};
+    }
+    for (const c of cands){
+      const j = toaJudge(c.icao);
+      if (j && (j.st==="go" || j.st==="marginal"))
+        return done({phase:"found", icao:c.icao, nm:c.nm, st:j.st});
+    }
+    done({phase:"none"});
+  }
+  /* Lance la recherche si la carte en a besoin et qu'aucune n'est en cours ni
+     à jour. Appelée du rendu : le garde-fou (clé + phase + âge) évite la
+     boucle rendu → recherche → rendu. */
+  function toaEnsure(dep){
+    const c = RT.toa;
+    if (c && c.key===dep && (c.phase==="search" || Date.now()-c.t<TOA_AGE_MS)) return;
+    RT.toa = {key:dep, phase:"search", t:Date.now()};
+    toaSearch(dep);
+  }
+
+  function toaHtml(s){
+    const self = toaJudge(s.icao);
+    if (!self) return "";
+    const icon = st => `<span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>`;
+    const lines = [`<span class="rt-toa-line${self.st==="nogo"?" bad":""}"
+        title="The departure judged as its own take-off alternate — same engine as tab 02, landing minima over ETA ± 1 h. ${STATE_LABEL[self.st]}.">
+      ${icon(self.st)}<span>T/O alternate</span><span class="cod">${s.icao}</span></span>`];
+    if (self.st==="nogo"){
+      toaEnsure(s.icao);
+      const c = RT.toa && RT.toa.key===s.icao ? RT.toa : null;
+      if (!c || c.phase==="search")
+        lines.push(`<span class="rt-toa-line"><span>Possible T/O altn</span><span class="d">searching nearby aerodromes…</span></span>`);
+      else if (c.phase==="found")
+        lines.push(`<span class="rt-toa-line"
+            title="Nearest seed aerodrome with an approach whose reports pass the take-off-alternate check (${STATE_LABEL[c.st]}). Its NOTAMs are NOT checked here — verify your briefing, and your own OEI radius.">
+          ${icon(c.st)}<span>Possible T/O altn</span><span class="cod">${c.icao}</span><span class="d">${Math.round(c.nm)} NM</span></span>`);
+      else if (c.phase==="err")
+        lines.push(`<span class="rt-toa-line"><span class="d">Could not fetch nearby reports to propose a T/O alternate.</span></span>`);
+      else
+        lines.push(`<span class="rt-toa-line"><span class="d">No accessible aerodrome among the ${c.n} nearest with an approach (≤ ${TOA_MAX_NM} NM) — reports only, NOTAMs not checked.</span></span>`);
+    }
+    return `<span class="rt-toa">${lines.join("")}</span>`;
   }
 
   /* ---------- le NOTAM en entier ----------
@@ -12718,6 +12841,7 @@ window.RTV = (()=>{
       <span class="rt-name" title="${escapeHtmlText(s.name)}">${escapeHtmlText(s.name)}</span>
       <span class="rt-rows">${mVisRow(s.vis)}${mCeilRow(s.ceil)}${mWindRow(s.wind)}</span>
       ${alertsHtml(s)}
+      ${slot.key==="dep" ? toaHtml(s) : ""}
       ${s.err ? `<span class="rt-note">Engine error: ${escapeHtmlText(s.err)}</span>`
         : s.noWx ? `<span class="rt-note dim">No reports available.</span>`
         : s.noTaf ? `<span class="rt-note dim">No TAF published.</span>` : ""}
