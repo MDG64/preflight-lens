@@ -3250,15 +3250,22 @@ const AD_APP_TYPES = [
   {id:"LNAV_VNAV", label:"RNP — LNAV/VNAV", fac:"GNSS_BARO_VNAV"},
   {id:"LNAV",      label:"RNP — LNAV", fac:"GNSS_LNAV", np:true},
   {id:"LP",        label:"RNP — LP", fac:"GNSS_SBAS_LP", np:true},
-  {id:"LOC",       label:"LOC", fac:"LOC", np:true},
   /* AVEC ET SANS DME SONT DEUX INSTALLATIONS, PAS UN DÉTAIL DE TITRE. La
      Table 4 leur donne des minimums système différents — VOR/DME 250 ft
      contre 300 pour un VOR seul, NDB/DME 300 contre 350 — parce que la
      distance continue change ce que l'approche permet. Les cartes le
      disent dans l'en-tête de leur colonne (« VOR DME », « NDB DME ») ;
      replier ces lignes sur VOR et NDB, comme on l'a fait un temps pour
-     GCFV, jetait la moitié de ce que la carte publiait. Le LOC, lui,
-     n'est pas dédoublé : la Table 4 lui donne 250 ft avec ou sans DME. */
+     GCFV, jetait la moitié de ce que la carte publiait.
+     LE LOC/DME A SA LIGNE POUR LA MÊME RAISON, MÊME SI LA TABLE 4 NE LES
+     SÉPARE PAS : 250 ft avec ou sans DME côté standard, mais les cartes
+     publient bel et bien « LOC DME » à part de « LOC », avec ses propres
+     chiffres — la distance continue remplace le repère de descente, et ce
+     n'est pas la même approche que l'on vole. Le pilote doit pouvoir
+     choisir et faire relever la ligne qu'il a réellement sous les yeux ;
+     les deux standards étant égaux, rien ne change pour qui reste sur LOC. */
+  {id:"LOC_DME",   label:"LOC / DME", fac:"LOC_DME", np:true},
+  {id:"LOC",       label:"LOC", fac:"LOC", np:true},
   {id:"VOR_DME",   label:"VOR / DME", fac:"VOR_DME", np:true},
   {id:"VOR",       label:"VOR", fac:"VOR", np:true},
   {id:"NDB_DME",   label:"NDB / DME", fac:"NDB_DME", np:true},
@@ -4243,8 +4250,7 @@ function adTypeFromCfg(cfg, icao, end){
   }
   const m = {ILS:"CAT_I", MLS:"CAT_I", GLS:"CAT_I", PAR:"CAT_I",
              GNSS_SBAS_LPV:"LPV", GNSS_SBAS_LP:"LP", GNSS_LNAV:"LNAV", GNSS_BARO_VNAV:"LNAV_VNAV",
-             /* Le LOC ne se dédouble pas : 250 ft en Table 4 avec ou sans DME. */
-             LOC:"LOC", LOC_DME:"LOC",
+             LOC:"LOC", LOC_DME:"LOC_DME",
              VOR:"VOR", VOR_DME:"VOR_DME", NDB:"NDB", NDB_DME:"NDB_DME"};
   const id = m[cfg.facility] || null;
   /* REPLI VERS LA LIGNE SANS DME, ET DANS CE SENS SEULEMENT. Un terrain
@@ -4259,8 +4265,11 @@ function adTypeFromCfg(cfg, icao, end){
      deux ne l'est, on garde l'installation déclarée et son standard à
      elle. Retomber sur VOR faute de tout relevé imposerait 300 ft à un
      VOR/DME qui en vaut 250 — plus exigeant que la règle, donc faux dans
-     l'autre sens, et cet outil ne durcit pas plus qu'il n'allège. */
-  const repli = {VOR_DME:"VOR", NDB_DME:"NDB"}[id];
+     l'autre sens, et cet outil ne durcit pas plus qu'il n'allège.
+     Le LOC/DME suit la même règle, pour une raison plus simple : ses deux
+     standards sont ÉGAUX (250 ft), donc lire la ligne LOC publiée quand
+     celle avec DME ne l'est pas ne peut qu'être aussi exigeante ou plus. */
+  const repli = {VOR_DME:"VOR", NDB_DME:"NDB", LOC_DME:"LOC"}[id];
   if (repli && icao && end
       && !adLignePubliee(icao, end, id) && adLignePubliee(icao, end, repli)) return repli;
   return id;
@@ -4322,6 +4331,7 @@ const AD_TYPE_CFG = {
   LNAV_VNAV: {opCategory:"APV", facility:"GNSS_BARO_VNAV", guidance:"3D", runwayType:"PRECISION_CAT_I"},
   LNAV:      {opCategory:"NPA", facility:"GNSS_LNAV",    guidance:"2D", runwayType:"NON_PRECISION"},
   LP:        {opCategory:"NPA", facility:"GNSS_SBAS_LP", guidance:"2D", runwayType:"NON_PRECISION"},
+  LOC_DME:   {opCategory:"NPA", facility:"LOC_DME", guidance:"2D", runwayType:"NON_PRECISION"},
   LOC:       {opCategory:"NPA", facility:"LOC", guidance:"2D", runwayType:"NON_PRECISION"},
   VOR_DME:   {opCategory:"NPA", facility:"VOR_DME", guidance:"2D", runwayType:"NON_PRECISION"},
   VOR:       {opCategory:"NPA", facility:"VOR", guidance:"2D", runwayType:"NON_PRECISION"},
@@ -4370,8 +4380,9 @@ const NF_KEY = "wl-notam-flags";
 /* Types d'approche de la base qui reposent sur l'ILS. CAT_I couvre aussi
    GLS/MLS : écarter la ligne entière est conservatif — le pilote qui dispose
    d'un GLS distinct décoche l'interrupteur et choisit sa ligne à la main. LOC
-   utilise le même localizer que l'ILS, il tombe avec lui. */
-const NF_ILS_TYPES = ["CAT_III","CAT_II","CAT_I","LOC"];
+   et LOC/DME utilisent le même localizer que l'ILS, ils tombent avec lui — le
+   DME ne remplace pas l'axe. */
+const NF_ILS_TYPES = ["CAT_III","CAT_II","CAT_I","LOC","LOC_DME"];
 const NF_ILS_FACILITIES = ["ILS","MLS","GLS","PAR","LOC","LOC_DME"];
 const nfStore = (()=>{ try { return JSON.parse(sessionStorage.getItem(NF_KEY)) || {}; } catch(e){ return {}; } })();
 function nfSave(){ try { sessionStorage.setItem(NF_KEY, JSON.stringify(nfStore)); } catch(e){} }
