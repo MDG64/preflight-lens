@@ -5724,29 +5724,23 @@ function metarLimiting(metar, rwy){
   if (!metar) return null;
   const out = {vis_m:null, ceiling_ft:null, wind:null, cavok:!!metar.cavok, visIsRvr:false};
   const rvrs = rvrForEnd(metar, rwy);
-  /* RVR mesurée de l'extrémité jugée ET visibilité du relevé : la PLUS BASSE
-     des deux gouverne. La règle d'exploitation ordinaire veut que la RVR prime
-     quand elle est publiée pour la piste en service — mais elle prime en tant
-     que valeur DE RÉFÉRENCE, pas en tant que valeur la plus favorable. À
-     Brive, « 1900 1200 R29/2000U » donne une RVR de 2000 m au-dessus d'une
-     visibilité minimale de 1200 : retenir 2000 revenait à effacer du relevé le
-     chiffre le plus bas qu'il porte, sur un outil dont toute la règle est de
-     garder le plus restrictif. Chacune garde son étiquette, pour que la ligne
-     dise laquelle des deux a été lue. */
-  let rvrM = null, rvrEnd = null;
+  /* LA RVR EST PRIORITAIRE, et elle l'est même quand la visibilité du relevé
+     est plus basse. Ce n'est pas une entorse à la règle du plus restrictif :
+     les minima de cette phase sont EXPRIMÉS en RVR, et la RVR est la mesure
+     qui répond de la piste. Une visibilité minimale plus basse à côté d'une
+     RVR haute est le cas normal — le balisage fait voir la piste mieux que
+     l'environnement. À Brive, « 1900 1200 R29/2000U » se lit donc 2000 m.
+     La règle du plus restrictif s'applique ENTRE LES DEUX RELEVÉS (observation
+     et prévision), pas entre deux grandeurs différentes du même relevé.
+     Sans RVR pour l'extrémité jugée (voir rvrForEnd — aucun repli sur une
+     autre piste), c'est la visibilité qui parle. */
   if (rvrs.length){
     const chosen = rvrs.reduce((a,b)=>(b.value<a.value?b:a));
-    rvrM = chosen.unit==="ft" ? Math.round(chosen.value*0.3048) : chosen.value;
-    rvrEnd = chosen.runway;
-  }
-  const visM = metar.visibility_m != null ? metar.visibility_m : null;
-  if (rvrM != null && (visM == null || rvrM <= visM)){
-    out.vis_m = rvrM; out.visIsRvr = true; out.rvrRunway = rvrEnd;
-  } else if (visM != null){
-    out.vis_m = visM;
-    /* Une RVR plus haute existe et a été écartée : la ligne doit pouvoir le
-       dire, sans quoi le pilote cherchera pourquoi son 2000 n'apparaît pas. */
-    if (rvrM != null){ out.rvrIgnored = rvrM; out.rvrRunway = rvrEnd; }
+    out.vis_m = chosen.unit==="ft" ? Math.round(chosen.value*0.3048) : chosen.value;
+    out.visIsRvr = true;
+    out.rvrRunway = chosen.runway;
+  } else if (metar.visibility_m != null){
+    out.vis_m = metar.visibility_m;
   }
   out.ceiling_ft = metar.ceiling_ft != null ? metar.ceiling_ft : null;
   /* Même lecture que pour le TAF : un ciel annoncé sans BKN/OVC n'est pas un
@@ -5776,7 +5770,6 @@ function worstOfReports(tafLim, metLim){
     out.visFrom = metLim.visIsRvr ? `measured RVR${metLim.rvrRunway?" RWY "+metLim.rvrRunway:""}` : "observed";
     out.visRaw = null;              /* le surlignage repart sur le METAR */
     out.visIsRvr = metLim.visIsRvr; out.visRvrRunway = metLim.rvrRunway;
-    out.visRvrIgnored = metLim.rvrIgnored;
   }
   /* Plafond : idem. Un CAVOK ou un ciel sans BKN/OVC n'abaisse rien — il ne
      porte pas de plafond, il ne peut donc pas être le plus restrictif. */
@@ -6196,27 +6189,15 @@ function assess(role, ctx){
        — on ne décolle pas sur une observation qui a déjà cessé d'être vraie.
        Elle ne peut que RESSERRER : les minima de décollage se jugent sur la
        RVR / visibilité du moment, et ce plancher ne relâche jamais rien. */
+    /* La RVR mesurée de l'extrémité jugée reste prioritaire sur la visibilité
+       du même relevé — c'est la mesure qui répond de la piste, et les minima de
+       décollage sont exprimés en RVR. Le plus restrictif se joue entre les DEUX
+       RELEVÉS : l'observation et la prévision de la fenêtre de décollage. */
     const obs = (()=>{
       const u = obsRaw.unit || (cfg.framework==="FAA"?"ft":"m");
-      let best = obsRaw;
-      /* Une RVR mesurée ne doit pas masquer une visibilité plus basse du même
-         relevé — même règle qu'aux phases d'atterrissage (metarLimiting). */
-      if (obsRaw.source==="RVR_MEASURED" && metar && metar.visibility_m!=null){
-        const mv = visFromM(metar.visibility_m, u, -1);
-        /* La RVR n'est citée que si elle porte sur L'EXTRÉMITÉ JUGÉE : sans ce
-           garde, un décollage en 11 s'expliquait par la RVR de la 29 — vraie
-           dans le relevé, hors sujet sur cette piste. */
-        const sameEnd = !!obsRaw.runway && !!ctx.rwyDesignator
-          && (obsRaw.runway===ctx.rwyDesignator
-              || obsRaw.runway===String(ctx.rwyDesignator).replace(/[LCR]$/,""));
-        if (best.value==null || mv < best.value)
-          best = {value:mv, unit:u, source:"MET_VISIBILITY",
-                  ...(sameEnd ? {rvrIgnored:obsRaw.value, rvrRunway:obsRaw.runway} : {}),
-                  note:"Reported visibility is below the measured RVR — the more restrictive of the two governs."};
-      }
-      if (!fcLim || fcLim.vis_m==null) return best;
+      if (!fcLim || fcLim.vis_m==null) return obsRaw;
       const fv = visFromM(fcLim.vis_m, u, -1);
-      if (best.value != null && !(fv < best.value)) return best;
+      if (obsRaw.value != null && !(fv < obsRaw.value)) return obsRaw;
       return {value:fv, unit:u,
               source:"FORECAST", fromTaf:true, groupRaw:fcLim.visRaw,
               note:"Forecast visibility in the take-off window is lower than the observation — it governs."};
@@ -6266,9 +6247,7 @@ function assess(role, ctx){
     const q1rows = [{param: obs.source==="RVR_MEASURED"?"RVR (controlling)":"Visibility",
              src: obs.source==="FORECAST" ? "Forecast in the take-off window — the more restrictive"
                 : obs.source==="RVR_MEASURED"?`Measured RVR${obs.runway?" RWY "+obs.runway:""} — every relevant point is controlling`
-                : obs.rvrIgnored!=null
-                  ? `Met visibility — more restrictive than the ${obs.rvrIgnored} m RVR reported${obs.rvrRunway?" on RWY "+obs.rvrRunway:""}`
-                  : "Met visibility (CMV prohibited for take-off)",
+                : "Met visibility (CMV prohibited for take-off)",
              observed:obs.value, required:req, unit, cmp:"min",
              report: obs.source==="FORECAST" ? "TAF" : "METAR",
              tafKind:"VIS", groupRaw: obs.groupRaw,
@@ -6584,9 +6563,7 @@ function assess(role, ctx){
     const vObs = lim.vis_m==null ? null : visFromM(lim.vis_m, visUnit, -1);
     rows.push({param:"Visibility / RVR",
                src: lim.visSrc==="METAR"
-                 ? `Observed ${lim.visIsRvr?`RVR${lim.visRvrRunway?" RWY "+lim.visRvrRunway:""}`:"visibility"} — more restrictive than the forecast`
-                   + (lim.visRvrIgnored!=null
-                      ? ` (below the ${lim.visRvrIgnored} m RVR reported${lim.visRvrRunway?" on RWY "+lim.visRvrRunway:""})` : "")
+                 ? `Observed ${lim.visIsRvr?`RVR${lim.visRvrRunway?" RWY "+lim.visRvrRunway:""} (governs over the reported visibility)`:"visibility"} — more restrictive than the forecast`
                  : `Forecast, ${lim.visFrom||"prevailing"} — ${winTxt}`,
                observed:vObs, required:visReq, unit:visUnit, cmp:"min",
                report:lim.visSrc, tafKind:"VIS",
