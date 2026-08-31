@@ -5249,15 +5249,29 @@ function qlvEstimate(icao){
        DEUX flux (26L et 27R), et les deux pistes sont en service. Un flux
        d'un autre sens (bascule en cours) ne se mélange pas au premier. */
     const clusters = (d ? (kind==="to" ? d.dep : d.arr) || [] : []).slice().sort((a,b)=>b.n-a.n);
-    let ids = [], mainTrk = null;
+    /* Deux étages de preuve. Un flux APPARIÉ À UN AXE (l'écart latéral colle
+       à moins de QLV_LAT_NM) désigne sa piste ; un flux au cap seul (départ
+       déjà en virage, terrain sans géométrie) ne fait que grouper les
+       parallèles. Dès que la géométrie a parlé quelque part, les flux sans
+       axe ne votent plus : en production à CDG, un départ en virage au 247°
+       rediluait le 27L pourtant apparié en « 26R/26L/27R/27L ». */
+    let geoIds = [], looseIds = [], geoTrk = null, looseTrk = null;
     for (const c of clusters){
-      if (mainTrk != null && cdiff(c.trk, mainTrk) > QLV_MATCH_DEG) continue;
-      const m = refine(hitsOf(c, cand), c);
-      if (!m.length) continue;
-      if (mainTrk == null) mainTrk = c.trk;
-      for (const e of m) if (!ids.includes(e.q.id)) ids.push(e.q.id);
+      const ref0 = geoTrk != null ? geoTrk : looseTrk;
+      if (ref0 != null && cdiff(c.trk, ref0) > QLV_MATCH_DEG) continue;
+      const m0 = hitsOf(c, cand);
+      if (!m0.length) continue;
+      const m = refine(m0, c);
+      if (m !== m0){
+        if (geoTrk == null) geoTrk = c.trk;
+        for (const e of m) if (!geoIds.includes(e.q.id)) geoIds.push(e.q.id);
+      } else {
+        if (looseTrk == null) looseTrk = c.trk;
+        for (const e of m) if (!looseIds.includes(e.q.id)) looseIds.push(e.q.id);
+      }
     }
-    if (ids.length) return {ids: ids.slice(0,4), how:"observed", obs:true, trk: mainTrk};
+    if (geoIds.length) return {ids: geoIds.slice(0,4), how:"observed", obs:true, trk: geoTrk};
+    if (looseIds.length) return {ids: looseIds.slice(0,4), how:"observed", obs:true, trk: looseTrk};
     const pref = adPrefSet(rec, kind);
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
     if (pc.length) return {ids: uniq(pc.map(q=>q.id)).slice(0,4), how:"preferential"};
