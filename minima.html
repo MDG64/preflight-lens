@@ -5040,23 +5040,36 @@ function qlvState(icao){
   const magvar = currentMagvar();
   const norm = x => { const v = Math.round(x)%360; return v<=0 ? v+360 : v; };
   const cdiff = (a,b) => { const x = Math.abs(a-b)%360; return x>180 ? 360-x : x; };
-  const ends = runwayList(icao).flatMap(p=>qfusOf(p));
+  const ends = runwayList(icao)
+    .flatMap(p=>qfusOf(p).map(q=>({id:q.id, deg:q.deg, closed:nfRwyClosed(icao,p)})));
+  const hits = c => ends
+    .map(q => ({id:q.id, closed:q.closed, d:cdiff(norm(q.deg + magvar), c.trk)}))
+    .filter(e => e.d <= QLV_MATCH_DEG)
+    .sort((a,b)=>a.d-b.d);
   /* Un groupe se nomme par les extrémités que sa route désigne — plusieurs
      quand des pistes sont parallèles (26L/26R : même cap, même flux, injuger
-     sans la géométrie latérale), la plus proche en tête. */
-  const endsFor = c => ends
-    .map(q => ({id:q.id, d:cdiff(norm(q.deg + magvar), c.trk)}))
-    .filter(e => e.d <= QLV_MATCH_DEG)
-    .sort((a,b)=>a.d-b.d).map(e=>e.id).slice(0,4);
-  /* Un avion seul dont la route ne désigne rien (départ déjà en virage,
-     hélicoptère) est du bruit DÈS QU'un autre groupe a nommé une piste ;
-     quand rien n'a collé, les routes brutes sont la seule information et
-     elles restent. */
+     sans la géométrie latérale), la plus proche en tête. JAMAIS une piste que
+     les drapeaux NOTAM ferment : à Orly, une route au 245° désigne la 25, pas
+     la 24 fermée à dix degrés d'elle — les caps seuls ne les départagent pas,
+     l'état de la piste si. Les drapeaux arrivent après coup (nfaLoad) : leur
+     nfaNotify re-rend la page, la ligne se corrige à leur arrivée. */
+  const endsFor = c => hits(c).filter(e=>!e.closed).map(e=>e.id).slice(0,4);
+  /* Un avion seul dont la route ne désigne AUCUNE piste, ouverte ou fermée
+     (départ déjà en virage, hélicoptère), est du bruit DÈS QU'un autre groupe
+     a nommé une piste ; quand rien n'a collé, les routes brutes sont la seule
+     information et elles restent. Aligné sur une piste fermée, il n'est pas
+     du bruit : c'est la contradiction que la phrase de name() doit montrer. */
   const anyMatch = (d.arr||[]).concat(d.dep||[]).some(c=>endsFor(c).length);
-  const keep = cs => (cs||[]).filter(c => endsFor(c).length || c.n > 1 || !anyMatch);
+  const keep = cs => (cs||[]).filter(c => hits(c).length || c.n > 1 || !anyMatch);
   const name = c => {
     const ids = endsFor(c);
-    return ids.length ? `<b>${ids.join("/")}</b>` : `trk ${String(c.trk).padStart(3,"0")}°`;
+    if (ids.length) return `<b>${ids.join("/")}</b>`;
+    /* Du trafic aligné sur une piste QUE SEULS les drapeaux ferment mérite
+       mieux que le silence : soit la fermeture est levée et le NOTAM traîne,
+       soit l'observation ment — dans les deux cas le pilote doit le voir. */
+    const clsd = [...new Set(hits(c).filter(e=>e.closed).map(e=>e.id))].slice(0,2);
+    const trk = `trk ${String(c.trk).padStart(3,"0")}°`;
+    return clsd.length ? `${trk} <span class="src">(aligns with ${clsd.join("/")} — closed per NOTAM switches)</span>` : trk;
   };
   const part = (label, cs) => cs.length
     ? `${label} ${cs.map(c=>`${name(c)}&thinsp;×${c.n}`).join(" · ")}` : "";
