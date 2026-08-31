@@ -5972,6 +5972,90 @@ body.light .stat.on {
       color: var(--muted)
     }
 
+    /* Bande du QFU en service, sous le code du terrain et AU-DESSUS des
+       relevés : elle répond à « par où ça se pose en ce moment », qu'on lit
+       avant le vent qui le justifie. Même module que celui de Minima
+       (minima.html, fonctions qlv*) — deux copies à garder synchrones, même
+       discipline que la bande du jour entre les deux backends. Le gabarit
+       suit .wx-block, pour que la section reste d'une seule pièce. */
+    .qlv-main {
+      margin-top: 16px
+    }
+
+    .qlv-lbl {
+      font: 600 10px/1 var(--sans);
+      letter-spacing: .12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin: 0 2px 5px
+    }
+
+    .qlv {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--elev);
+      padding: 10px 14px 11px
+    }
+
+    .qlv .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      flex: none;
+      animation: qlv-pulse 2.4s ease-in-out infinite
+    }
+
+    .qlv.idle .dot {
+      background: var(--muted);
+      opacity: .55;
+      animation: none
+    }
+
+    .qlv .grp {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      font: 500 12px/1.35 var(--mono);
+      color: var(--muted);
+      letter-spacing: .02em
+    }
+
+    .qlv .grp .k {
+      font-size: 13px;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+      color: var(--muted)
+    }
+
+    .qlv b {
+      font: 700 17px/1 var(--mono);
+      letter-spacing: .04em;
+      color: var(--text)
+    }
+
+    .qlv b .u {
+      font: 600 11px/1 var(--mono);
+      letter-spacing: .09em;
+      color: var(--muted);
+      margin-right: 4px
+    }
+
+    .qlv .n {
+      font: 600 11px/1 var(--num);
+      color: var(--muted2)
+    }
+
+    @keyframes qlv-pulse {
+      0%, 100% { opacity: 1 }
+      50% { opacity: .35 }
+    }
+
     /* L'âge se lit en pleine encre : c'est une information de décision, pas une
        mention de service. Seul celui du METAR change de couleur en vieillissant
        — un TAF couvre les heures à venir, son ancienneté n'a pas de seuil. */
@@ -22027,6 +22111,265 @@ window.addEventListener("scroll", hidePop, true);
       return `<span class="c">${eff}${rwxTimeTag(c.tEff, refDay)} `
            + `<span class="xw">${c.sign >= 0 ? "←" : "→"}${c.cross}kt</span>${rwxTimeTag(c.tX, refDay)}</span>`;
     }
+    /* ===== QFU en service — estimation, page Weather =====================
+       PORT du module qlv* de minima.html : même stratégie, mêmes seuils, même
+       route serveur. Deux copies à garder synchrones — c'est le prix de deux
+       pages qui n'ont ni le même moteur ni le même modèle de données, et la
+       même discipline que la bande du jour entre les deux backends.
+
+       La stratégie, dans l'ordre où elle trie :
+         0. paire fermée par les drapeaux NOTAM de Minima (quand ils sont là)
+            ne concourt pas ;
+         1. le VENT MOYEN élimine — plus de 8 kt dans le dos ;
+         2. les pistes PRÉFÉRENTIELLES de la fiche terrain, par usage ;
+         3. le trafic OBSERVÉ (ADS-B, /api/qfu), qui confirme ou renverse —
+            et qui nomme LA piste quand la graine porte les seuils des
+            parallèles (l'écart latéral départage 26L de 26R).
+       Un seul sens observé : l'autre s'aligne sur son cap.
+
+       Ce que cette page a en propre : la géométrie vient de la graine
+       (AD_SEED, chargée à la demande comme pour les QFU de la carte) et non
+       d'un modèle de fiche ; le vent vient du METAR affiché, via rwxWinds.
+       Ce qu'elle emprunte à Minima, par le stockage partagé de l'origine :
+       la fiche terrain éditée (localStorage) pour les QFU corrigés et les
+       pistes préférentielles, et les drapeaux NOTAM (sessionStorage) quand
+       l'onglet est passé par Minima. Absents, l'estimation tourne sans eux. */
+    const QLV_FRESH_MS = 20 * 60e3;   // le QFU en service tient des heures
+    const QLV_RETRY_MS = 20e3;        // un échec est passager : on retente vite
+    const QLV_MATCH_DEG = 25;         // au-delà, la route ne désigne plus l'extrémité
+    const QLV_MAX_TAIL_KT = 8;        // vent arrière moyen éliminatoire
+    const QLV_LAT_NM = 0.12;          // appariement d'un flux à SON axe
+    const qlvCache = new Map();
+    const qlvPending = new Map();
+    let qlvSeed = 0;                  // 0 rien, 1 en vol, 2 arrivée ou perdue
+
+    /* La graine porte les caps VRAIS, la déclinaison et — pour les terrains à
+       pistes parallèles — les seuils. RUNWAYS[] ne donne que le désignateur,
+       dont le ×10 ne suffit ni à juger un vent au degré ni à séparer 26L de
+       26R. Même chargeur paresseux que les QFU de la carte : le service
+       worker l'a déjà pré-cachée pour minima.html. */
+    function qlvSeedReady(icao) {
+      if (window.AD_SEED) return true;
+      if (qlvSeed) return false;
+      qlvSeed = 1;
+      const s = document.createElement("script");
+      s.src = "./airfield-seed.js";
+      s.onload = () => { qlvSeed = 2; document.querySelectorAll("[data-qlv]").forEach(el => qlvPaint(el.dataset.qlv)); };
+      s.onerror = () => { qlvSeed = 2; };
+      document.head.appendChild(s);
+      return false;
+    }
+    /* La fiche éditée dans Minima, lue à chaque appel : elle vit dans le même
+       stockage d'origine, et l'utilisateur peut l'avoir changée dans l'autre
+       page sans que celle-ci soit rechargée. */
+    function qlvFiche(icao) {
+      try { return (JSON.parse(localStorage.getItem("wl-airfield-db")) || {})[icao] || null; }
+      catch (e) { return null; }
+    }
+    function qlvClosed(icao, pair) {
+      try {
+        const f = (JSON.parse(sessionStorage.getItem("wl-notam-flags")) || {})[icao];
+        return !!(f && f.rwyClosed && f.rwyClosed[pair]);
+      } catch (e) { return false; }
+    }
+    /* Les extrémités du terrain, cap MAGNÉTIQUE exact et axe quand il existe.
+       Même étagement que qfusOf dans Minima : la valeur corrigée à la main
+       d'abord, puis le cap vrai de la graine moins la déclinaison, enfin le
+       désignateur ×10. */
+    function qlvEnds(icao) {
+      const s = (window.AD_SEED || {})[icao];
+      if (!s || !s.r || !s.r.length) return null;
+      const fiche = qlvFiche(icao);
+      const magvar = fiche && Number.isFinite(fiche.magvar) ? fiche.magvar
+        : (Number.isFinite(s.m) ? s.m : 0);
+      const norm = x => { const v = Math.round(x) % 360; return v <= 0 ? v + 360 : v; };
+      const out = [];
+      for (const [pair, , hdgT, tla, tlo] of s.r) {
+        const thr = Number.isFinite(tla) && Number.isFinite(tlo) ? [tla, tlo] : null;
+        const closed = qlvClosed(icao, pair);
+        const fr = fiche && fiche.runways && fiche.runways.find(r => r.pair === pair);
+        pair.split("/").forEach((raw, i) => {
+          const id = raw.trim();
+          if (/H$/.test(id)) return;                 // piste hélico : hors sujet
+          const fixed = fr && fr.qfu && Number.isFinite(fr.qfu[id]) ? fr.qfu[id] : null;
+          const num = parseInt(id.replace(/[LCR]/, ""), 10);
+          const deg = fixed != null ? norm(fixed)
+            : Number.isFinite(hdgT) ? norm(hdgT + (i === 0 ? 0 : 180) - magvar)
+              : norm(num * 10);
+          out.push({ id, deg, thr, closed, magvar });
+        });
+      }
+      return out.length ? out : null;
+    }
+    function qlvLoad(icao) {
+      if (!/^[A-Z]{4}$/.test(icao || "")) return;
+      const hit = qlvCache.get(icao);
+      const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS : QLV_FRESH_MS;
+      if (hit && Date.now() - hit.at < ttl) return;
+      if (qlvPending.has(icao)) return;
+      const p = (async () => {
+        try {
+          const r = await fetch(`${BACKEND_URL}/api/qfu?icao=${icao}`);
+          if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { status: r.status });
+          qlvCache.set(icao, { at: Date.now(), data: await r.json() });
+        } catch (err) {
+          /* Un échec SE DIT : une bande absente se confond avec « pas de
+             trafic ». Seul le 404 (terrain sans station) reste muet. */
+          const why = err instanceof TypeError ? "network unreachable"
+            : err.status === 429 ? "source rate limit"
+              : err.status ? "source error " + err.status
+                : (err && err.message) || "error";
+          qlvCache.set(icao, { at: Date.now(), err: true, silent: err.status === 404, why });
+        }
+        qlvPaint(icao);
+      })();
+      p.catch(() => { }).then(() => { if (qlvPending.get(icao) === p) qlvPending.delete(icao); });
+      qlvPending.set(icao, p);
+    }
+    /* L'estimation, en phrases. `wind` : {dir, spd} du METAR affiché — le vent
+       MOYEN, jamais la rafale : on estime ce que l'ATC choisit, pas ce que le
+       moteur limite. */
+    function qlvHtml(icao, wind) {
+      const ends = qlvEnds(icao);
+      if (!ends) return null;
+      const hit = qlvCache.get(icao);
+      const d = hit && !hit.err && hit.data && Array.isArray(hit.data.arr) ? hit.data : null;
+      const obsDown = hit && hit.err && !hit.silent ? (hit.why || "error") : null;
+      if (!d && !obsDown && !hit) return null;      // rien demandé encore
+
+      const norm = x => { const v = Math.round(x) % 360; return v <= 0 ? v + 360 : v; };
+      const cdiff = (a, b) => { const x = Math.abs(a - b) % 360; return x > 180 ? 360 - x : x; };
+      const open = ends.filter(q => !q.closed), closed = ends.filter(q => q.closed);
+      if (!open.length) return { idle: true, ids: null,
+        html: `<div class="qlv-lbl">Runway in use · estimated</div>`
+          + `<div class="qlv idle"><span class="dot"></span><span class="grp">All runways closed per NOTAM switches</span></div>` };
+
+      const hasWind = !!(wind && wind.dir != null && wind.spd != null);
+      const magvar = ends[0].magvar || 0;
+      /* Le vent du METAR est en nord VRAI, le QFU en magnétique : la
+         déclinaison ramène les deux dans le même référentiel — même calcul
+         que windComponents dans Minima. */
+      const comp = q => {
+        if (!hasWind) return null;
+        const a = (wind.dir - magvar - q.deg) * Math.PI / 180;
+        const head = Math.round(wind.spd * Math.cos(a));
+        return { head, tail: -head, cross: Math.abs(Math.round(wind.spd * Math.sin(a))) };
+      };
+      let cand = open.filter(q => { const c = comp(q); return !c || c.tail <= QLV_MAX_TAIL_KT; });
+      if (!cand.length) cand = open;
+      const cut = open.filter(q => !cand.includes(q));
+
+      const hitsOf = (c, pool) => pool
+        .map(q => ({ q, d: cdiff(norm(q.deg + magvar), c.trk) }))
+        .filter(e => e.d <= QLV_MATCH_DEG).sort((a, b) => a.d - b.d);
+      const byHead = (a, b) => (comp(b) ? comp(b).head : 0) - (comp(a) ? comp(a).head : 0);
+      const prefSet = kind => {
+        const f = qlvFiche(icao);
+        const l = f && f.pref && Array.isArray(f.pref[kind]) ? f.pref[kind] : [];
+        return new Set(l);
+      };
+      /* L'appariement LATÉRAL : l'écart du flux se compare à celui de chaque
+         axe, projeté du MÊME point de référence — c'est lui qui sépare 26L de
+         26R, indiscernables au cap. */
+      const refine = (m, c) => {
+        if (!d || !Array.isArray(d.ref) || !Number.isFinite(c.off)) return m;
+        const [rla, rlo] = d.ref, cosLa = Math.cos(rla * Math.PI / 180), T = c.trk * Math.PI / 180;
+        const scored = m.map(e => {
+          if (!e.q.thr) return null;
+          const dx = (e.q.thr[1] - rlo) * 60 * cosLa, dy = (e.q.thr[0] - rla) * 60;
+          return { e, off: Math.abs(dx * Math.cos(T) - dy * Math.sin(T) - c.off) };
+        }).filter(s => s && s.off <= QLV_LAT_NM).sort((a, b) => a.off - b.off);
+        return scored.length ? scored.map(s => s.e) : m;
+      };
+      const pick = kind => {
+        const clusters = (d ? (kind === "to" ? d.dep : d.arr) || [] : []).slice().sort((a, b) => b.n - a.n);
+        /* La preuve par l'axe prime la preuve par le cap : un départ déjà en
+           virage ne redilue pas un flux apparié. */
+        let geo = [], loose = [], geoTrk = null, looseTrk = null;
+        for (const c of clusters) {
+          const ref0 = geoTrk != null ? geoTrk : looseTrk;
+          if (ref0 != null && cdiff(c.trk, ref0) > QLV_MATCH_DEG) continue;
+          const m0 = hitsOf(c, cand);
+          if (!m0.length) continue;
+          const m = refine(m0, c);
+          if (m !== m0) { if (geoTrk == null) geoTrk = c.trk; for (const e of m) if (!geo.includes(e.q.id)) geo.push(e.q.id); }
+          else { if (looseTrk == null) looseTrk = c.trk; for (const e of m) if (!loose.includes(e.q.id)) loose.push(e.q.id); }
+        }
+        if (geo.length) return { ids: geo.slice(0, 4), how: "observed", obs: true, trk: geoTrk };
+        if (loose.length) return { ids: loose.slice(0, 4), how: "observed", obs: true, trk: looseTrk };
+        const pref = prefSet(kind);
+        const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
+        if (pc.length) return { ids: [...new Set(pc.map(q => q.id))].slice(0, 4), how: "preferential" };
+        if (hasWind && wind.spd > 0) {
+          const s = cand.slice().sort(byHead);
+          return { ids: [...new Set(s.filter(q => cdiff(q.deg, s[0].deg) <= 1).map(q => q.id))].slice(0, 4),
+            how: `wind ${comp(s[0]).head} kt head` };
+        }
+        return null;
+      };
+      let to = pick("to"), ldg = pick("ldg");
+      /* Un seul sens observé : l'autre s'aligne sur son cap — un terrain ne
+         décolle pas à l'ouest en atterrissant à l'est faute d'échantillon. */
+      const alignOn = (obs, kind, lab) => {
+        const pool = cand.filter(q => cdiff(norm(q.deg + magvar), obs.trk) <= QLV_MATCH_DEG);
+        if (!pool.length) return null;
+        const pref = prefSet(kind);
+        const pc = pool.filter(q => pref.has(q.id)).sort(byHead);
+        const chosen = pc.length ? pc : pool.slice().sort(byHead);
+        return { ids: [...new Set(chosen.map(q => q.id))].slice(0, 4), how: `aligned on observed ${lab}` };
+      };
+      if (to && to.obs && !(ldg && ldg.obs)) ldg = alignOn(to, "ldg", "departures") || ldg;
+      else if (ldg && ldg.obs && !(to && to.obs)) to = alignOn(ldg, "to", "arrivals") || to;
+
+      const t = d && /^\d{4}-/.test(d.at || "") ? d.at.slice(11, 16) + "Z" : "";
+      const obsUsed = !!((to && to.obs) || (ldg && ldg.obs));
+      /* La contradiction se montre : du trafic sur une extrémité écartée vaut
+         d'être vu — soit l'écartement est dépassé, soit l'observation ment. */
+      let conflict = "";
+      if (d) {
+        const excl = closed.concat(cut);
+        outer: for (const [cs, lab] of [[d.arr, "arrivals"], [d.dep, "departures"]])
+          for (const c of cs || []) {
+            if (hitsOf(c, cand).length) continue;
+            const m = hitsOf(c, excl);
+            if (m.length) {
+              const why = closed.includes(m[0].q) ? "closed per NOTAM switches" : `>${QLV_MAX_TAIL_KT} kt tailwind`;
+              conflict = `<span class="grp"><span class="n">⚠ ${lab} observed on ${m[0].q.id} — ${why}</span></span>`;
+              break outer;
+            }
+          }
+      }
+      const grp = (k, p) => p
+        ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
+        : "";
+      const down = obsDown ? `<span class="grp"><span class="n">traffic check unavailable (${obsDown})</span></span>` : "";
+      const lbl = `<div class="qlv-lbl">Runway in use · estimated${d && d.sample > 0 && t ? ` · live traffic ${t}` : ""}</div>`;
+      if (!to && !ldg) return { idle: true,
+        html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, no traffic observed</span>${down}</div>` };
+      return { idle: !obsUsed, html: lbl
+        + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${grp("Take off", to)}${grp("Landing", ldg)}${conflict}${down}</div>` };
+    }
+    /* Le conteneur vit dans la section, sous le code du terrain : on le
+       retrouve par data-qlv, et on le repeint sans toucher au reste — un
+       relevé qu'on lit ne doit pas sauter parce qu'une observation arrive. */
+    const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic observed within 8 NM (refreshed about every 20 min). An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
+    function qlvPaint(icao) {
+      document.querySelectorAll(`[data-qlv="${icao}"]`).forEach(el => {
+        if (!qlvSeedReady(icao)) { el.hidden = true; return; }
+        const raw = (wxShown[icao] && wxShown[icao].metar && wxShown[icao].metar.raw) || "";
+        const w = rwxWinds(raw)[0] || null;
+        const s = qlvHtml(icao, w);
+        el.hidden = !s;
+        el.title = QLV_TIP;
+        el.innerHTML = s ? s.html : "";
+      });
+    }
+    function qlvMount(icao) {
+      qlvSeedReady(icao);
+      qlvLoad(icao);
+      qlvPaint(icao);
+    }
+
     function wxRunwaysHtml(icao, d) {
       const s = RUNWAYS[icao];
       if (!s) return "";
@@ -22283,6 +22626,10 @@ window.addEventListener("scroll", hidePop, true);
       if (d.taf && d.taf.raw) { tEl.innerHTML = wxSevHtml(tafPretty(d.taf.raw)); tEl.classList.remove("empty"); }
       else { tEl.textContent = wxAbsent("taf", icao, d); tEl.classList.add("empty"); }
       sec.querySelector("[data-rwx]").innerHTML = wxRunwaysHtml(icao, d);
+      /* Le QFU en service se remonte À CHAQUE relevé : le vent est une de ses
+         trois entrées, et il vient d'arriver. L'appel amont, lui, garde son
+         anti-rafale de vingt minutes — la minuterie du relevé est gratuite. */
+      qlvMount(icao);
       renderWxAges();
     }
     // La bande du jour d'UNE section : elle part en parallèle du relevé et se
@@ -22400,6 +22747,7 @@ window.addEventListener("scroll", hidePop, true);
         <span class="wx-ap-name">${m ? `${m.city} · ${m.cc}` : ""}</span>
       </div>
       <div class="wx-ap-note" hidden></div>
+      <div class="qlv-main" data-qlv="${a.icao}" hidden></div>
       <div class="wx-block">
         <h3>METAR <span class="wx-age" data-age="metar"></span></h3>
         <pre class="wx-raw" data-raw="metar">—</pre>
