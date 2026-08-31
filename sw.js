@@ -125,12 +125,23 @@ self.addEventListener("fetch", e => {
   //    navigateur), donc le c.put() ci-dessous continue de fonctionner.
   const isHTML = e.request.mode === "navigate" || url.endsWith(".html") || url.endsWith("/");
   if (isHTML) {
+    //    La clé de cache est l'ADRESSE SANS SA REQUÊTE. Les pages se passent
+    //    leur état par l'adresse — minima.html?dep=…&dest=…&altn=…,
+    //    minima.html?ad=…, notam-filter.html?view=… — et le Cache API compare
+    //    les URL requête comprise. Hors ligne, minima.html?dep=LFBO ratait
+    //    donc la copie pré-cachée sous "minima.html" et tombait sur le repli :
+    //    l'accueil de Preflight revenait à la place du module Minimas, comme
+    //    si la page n'existait pas. Une seule porte y menait sans requête
+    //    (aucune), donc le module était INJOIGNABLE en vol.
+    //    Le dépôt suit la même clé : sinon chaque route visitée en ligne
+    //    laissait sa propre copie de la page (~1 Mo pièce) dans le cache.
+    const key = url.split("#")[0].split("?")[0];
     e.respondWith(
       fetch(url, { cache: "no-cache" }).then(r => {
         const copy = r.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        caches.open(CACHE).then(c => c.put(key, copy)).catch(() => {});
         return r;
-      }).catch(() => caches.match(e.request).then(r => r || caches.match("./notam-filter.html")))
+      }).catch(() => caches.match(key).then(r => r || caches.match("./notam-filter.html")))
     );
     return;
   }
