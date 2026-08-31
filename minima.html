@@ -584,14 +584,15 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .tab-slot .ico svg{display:block;width:100%;height:100%}
 /* Cinq colonnes sur une tablette ne laissent pas 45 px par horizon : côte à
    côte, libellé et pouce ne tenaient qu'en restant minuscules. Empilés — un
-   horizon par ligne, libellé à gauche, pouce à droite — chacun dispose de
-   toute la largeur de la case, et les deux peuvent grossir. Les dispositions
-   larges (solo, duo) gardent la rangée : la place y est déjà. */
+   horizon par ligne — chacun dispose de toute la largeur de la case, et les
+   deux peuvent grossir. Le couple reste groupé au centre de sa ligne plutôt
+   que jeté aux deux bords : c'est le pouce de CE libellé, pas celui du voisin.
+   Les dispositions larges (solo, duo) gardent la rangée : la place y est. */
 @media(min-width:761px){
   .tab-times:not(.solo):not(.duo) .tab-time{
     flex-direction:column;align-items:stretch;gap:0;padding:2px 9px;
   }
-  .tab-times:not(.solo):not(.duo) .tab-slot{justify-content:space-between;padding:5px 0}
+  .tab-times:not(.solo):not(.duo) .tab-slot{justify-content:center;gap:10px;padding:5px 0}
   .tab-times:not(.solo):not(.duo) .tab-slot+.tab-slot{border-top:1px solid var(--line)}
 }
 
