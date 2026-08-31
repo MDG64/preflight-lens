@@ -22195,6 +22195,13 @@ window.addEventListener("scroll", hidePop, true);
        et écrasait le souvenir de la vraie finale. Un flux qui ne désigne
        aucune piste n'apprend rien : il ne doit rien effacer. */
     const QLV_MEM_MS = 1 * 3600e3;
+    /* HORS LIGNE — ou quand la source ne répond pas —, le souvenir vaut bien
+       plus longtemps : il n'y a RIEN de plus frais à lui opposer, et « 20,
+       observé il y a deux heures » informe mieux qu'un repli sur la
+       préférentielle, qui n'a jamais rien observé. L'heure affichée laisse
+       juger. En ligne, un souvenir d'une heure sans rien voir depuis mérite
+       d'être lâché : le terrain a peut-être basculé. */
+    const QLV_MEM_HORS_LIGNE_MS = 6 * 3600e3;
     function qlvStoreWrite(icao, data) {
       try {
         const o = qlvStoreRead();
@@ -22218,11 +22225,11 @@ window.addEventListener("scroll", hidePop, true);
         localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
       } catch (e) { }
     }
-    function qlvMem(icao, kind) {
+    function qlvMem(icao, kind, horsLigne) {
       const m = (qlvStoreRead()[icao] || {}).mem;
       const e = m && m[kind === "to" ? "dep" : "arr"];
       if (!e || !Array.isArray(e.ids) || !e.ids.length || !Number(e.at)) return null;
-      return Date.now() - e.at <= QLV_MEM_MS ? e : null;
+      return Date.now() - e.at <= (horsLigne ? QLV_MEM_HORS_LIGNE_MS : QLV_MEM_MS) ? e : null;
     }
     function qlvAdopt(icao) {
       if (qlvCache.has(icao)) return;
@@ -22417,7 +22424,9 @@ window.addEventListener("scroll", hidePop, true);
         /* Rien dans ce sens à l'instant : le DERNIER réellement observé, avec
            son heure — c'est ce qui évite d'aligner le décollage sur les
            arrivées à Orly. Réapparié à l'état du moment. */
-        const mem = qlvMem(icao, kind);
+        // Sans échantillon courant — hors ligne, source muette, ou rien encore
+        // chargé — le souvenir est tout ce qu'on a : il vaut alors six heures.
+        const mem = qlvMem(icao, kind, !d);
         if (mem) {
           // Revalidation contre l'état du moment : une extrémité fermée
           // depuis, ou passée sous le vent arrière, n'est plus candidate.

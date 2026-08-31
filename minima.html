@@ -5211,6 +5211,14 @@ function qlvStoreRead(){
    moment : une piste fermée depuis, ou passée sous le vent arrière, ne
    ressort pas. */
 const QLV_MEM_MS = 1 * 3600e3;   // au-delà, une configuration n'engage plus rien
+/* HORS LIGNE — ou quand la source ne répond pas —, le souvenir vaut bien plus
+   longtemps : il n'y a RIEN de plus frais à lui opposer. « Décollage 20,
+   observé il y a deux heures » informe le pilote infiniment mieux qu'un repli
+   sur la préférentielle, qui n'a jamais rien observé du tout ; et l'heure
+   affichée lui laisse juger de ce qu'il en fait. En ligne, à l'inverse, un
+   souvenir d'une heure sans rien voir depuis mérite d'être lâché : le terrain
+   a peut-être basculé, et l'échantillon vivant le dira. */
+const QLV_MEM_HORS_LIGNE_MS = 6 * 3600e3;
 function qlvStoreWrite(icao, data){
   try{
     const o = qlvStoreRead();
@@ -5239,11 +5247,11 @@ function qlvMemWrite(icao, kind, ids, at){
   } catch(e){}
 }
 /* Le dernier sens observé encore recevable, ou null. */
-function qlvMem(icao, kind){
+function qlvMem(icao, kind, horsLigne){
   const m = (qlvStoreRead()[icao] || {}).mem;
   const e = m && m[kind === "to" ? "dep" : "arr"];
   if (!e || !Array.isArray(e.ids) || !e.ids.length || !Number(e.at)) return null;
-  return Date.now() - e.at <= QLV_MEM_MS ? e : null;
+  return Date.now() - e.at <= (horsLigne ? QLV_MEM_HORS_LIGNE_MS : QLV_MEM_MS) ? e : null;
 }
 /* La copie du disque prise pour ce qu'elle est : une réponse déjà obtenue,
    avec SON âge. Au-delà de la fraîcheur elle n'est pas jetée pour autant —
@@ -5463,7 +5471,9 @@ function qlvEstimate(icao){
        qu'aucun alignement ne peut distinguer. Réapparié à l'état du moment :
        une piste fermée depuis, ou passée sous le vent arrière, ne ressort
        pas. */
-    const mem = qlvMem(icao, kind);
+    /* Sans échantillon courant — hors ligne, source muette, ou rien encore
+       chargé — le souvenir est tout ce qu'on a : il vaut alors six heures. */
+    const mem = qlvMem(icao, kind, !d);
     if (mem){
       /* Revalidation contre l'état du moment : une extrémité fermée depuis, ou
          passée sous le vent arrière, n'est plus candidate. */
