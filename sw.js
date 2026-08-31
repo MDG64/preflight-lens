@@ -51,11 +51,25 @@ const ASSETS = [
   // donc l'app. Sans elle, la fiche terrain n'affiche plus ni circling ni
   // sidestep, et le suivi ne les compte plus — les deux pages en dépendent
   // désormais, et le pré-cache doit les servir ensemble hors ligne.
+  // Elle est aussi listée en règle 3 (« elle suit l'app ») : pré-cachée SEULE,
+  // elle serait retombée en règle 6 « cache d'abord » et n'aurait plus jamais
+  // consulté le réseau — la copie prise au dernier changement de sw.js aurait
+  // tenu pour toujours, et une retouche de la liste n'aurait atteint AUCUN
+  // appareil déjà installé. Le pré-cache garantit le premier lancement hors
+  // ligne, la règle 3 garantit la mise à jour.
   "./manoeuvres.js",
   // Le suivi de la base : il lit le journal partage quand il le peut, et sa
   // derniere copie connue sinon -- encore faut-il que la PAGE soit la. Sans
   // ce pre-cache, hors ligne on n'aurait meme pas l'ecran pour le dire.
   "./suivi.html",
+  // Le dépôt de fiches d'approche. Sa file d'attente IndexedDB existe POUR
+  // le hors-ligne — une fiche photographiée sans réseau part au retour —,
+  // mais sans la page en cache on tombait sur le repli, c'est-à-dire
+  // l'accueil de Preflight : la file était injoignable exactement quand elle
+  // sert. Son annuaire (annuaire-terrains.js) reste en règle 3, la page sait
+  // déjà s'en passer ; son manifeste et ses icônes ne servent qu'à
+  // l'installation, en ligne.
+  "./fiches.html",
   // Polices auto-hébergées (2026-08-06, retrait de Google Fonts). Pré-cache
   // OBLIGATOIRE : la règle 6 les sert « cache d'abord » mais ne dépose jamais
   // rien — sans cette liste, la typo tomberait en police système hors ligne.
@@ -123,19 +137,24 @@ self.addEventListener("fetch", e => {
   //    Avec no-cache, Pages répond 304 tant que rien n'a changé ; après un
   //    304, le fetch() rend quand même un 200 complet (copie HTTP du
   //    navigateur), donc le c.put() ci-dessous continue de fonctionner.
-  const isHTML = e.request.mode === "navigate" || url.endsWith(".html") || url.endsWith("/");
+  //    La clé de cache est l'ADRESSE SANS SA REQUÊTE. Les pages se passent
+  //    leur état par l'adresse — minima.html?dep=…&dest=…&altn=…,
+  //    minima.html?ad=…, notam-filter.html?view=… — et le Cache API compare
+  //    les URL requête comprise. Hors ligne, minima.html?dep=LFBO ratait donc
+  //    la copie pré-cachée sous "minima.html" et tombait sur le repli :
+  //    l'accueil de Preflight revenait à la place du module Minimas, comme si
+  //    la page n'existait pas. Une seule porte y menait sans requête (aucune),
+  //    donc le module était INJOIGNABLE en vol.
+  //    Le dépôt suit la même clé : sinon chaque route visitée en ligne
+  //    laissait sa propre copie de la page (~1 Mo pièce) dans le cache.
+  //    Et c'est cette même clé, pas l'URL brute, qu'on teste ci-dessous :
+  //    "minima.html?ad=LFPO" ne finit pas par ".html", la règle l'aurait
+  //    laissé filer jusqu'à la règle 6. Une navigation s'annonce (mode
+  //    "navigate") et passait quand même ; un fetch() de la même adresse,
+  //    non.
+  const key = url.split("#")[0].split("?")[0];
+  const isHTML = e.request.mode === "navigate" || key.endsWith(".html") || key.endsWith("/");
   if (isHTML) {
-    //    La clé de cache est l'ADRESSE SANS SA REQUÊTE. Les pages se passent
-    //    leur état par l'adresse — minima.html?dep=…&dest=…&altn=…,
-    //    minima.html?ad=…, notam-filter.html?view=… — et le Cache API compare
-    //    les URL requête comprise. Hors ligne, minima.html?dep=LFBO ratait
-    //    donc la copie pré-cachée sous "minima.html" et tombait sur le repli :
-    //    l'accueil de Preflight revenait à la place du module Minimas, comme
-    //    si la page n'existait pas. Une seule porte y menait sans requête
-    //    (aucune), donc le module était INJOIGNABLE en vol.
-    //    Le dépôt suit la même clé : sinon chaque route visitée en ligne
-    //    laissait sa propre copie de la page (~1 Mo pièce) dans le cache.
-    const key = url.split("#")[0].split("?")[0];
     e.respondWith(
       fetch(url, { cache: "no-cache" }).then(r => {
         const copy = r.clone();
@@ -148,12 +167,19 @@ self.addEventListener("fetch", e => {
 
   // 3) Plans de plateforme (layouts/*.json), frontières/fermetures FIR
   //    (fir/*.json), annuaire OACI/IATA de fiches.html
-  //    (annuaire-terrains.js, régénéré de temps en temps) et bases du module
-  //    MINIMAS (airfield-seed.js recompilé depuis aero-db, aircraft-db.js) :
+  //    (annuaire-terrains.js, régénéré de temps en temps), bases du module
+  //    MINIMAS (airfield-seed.js recompilé depuis aero-db, aircraft-db.js) et
+  //    liste des manœuvres (manoeuvres.js, du code qui suit l'app) :
   //    réseau d'abord ET mise en cache. Consultable EN VOL, sans connexion —
   //    tout en se rafraîchissant dès qu'on est en ligne.
+  //    TOUT FICHIER PRÉ-CACHÉ QUI CHANGE SANS QUE sw.js CHANGE A SA PLACE ICI.
+  //    La règle 6 ne dépose rien : un tel fichier y serait servi depuis la
+  //    copie déposée à l'install et ne consulterait plus jamais le réseau.
+  //    Les autres entrées du pré-cache y échappent parce qu'elles sont soit
+  //    des pages (règle 2), soit le manifeste (règle 4), soit des fichiers
+  //    dont le NOM porte la version — icônes, photos, polices.
   if (url.includes("/layouts/") || url.includes("/fir/") || url.includes("annuaire-terrains") ||
-      url.includes("airfield-seed") || url.includes("aircraft-db")) {
+      url.includes("airfield-seed") || url.includes("aircraft-db") || url.includes("manoeuvres")) {
     e.respondWith(
       fetch(e.request).then(r => {
         if (r && r.ok) {
