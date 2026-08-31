@@ -568,21 +568,32 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .tab-times{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px}
 @media(max-width:760px){.tab-times{grid-template-columns:repeat(2,1fr)}}
 .tab-time{
-  display:flex;align-items:center;justify-content:space-between;gap:2px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
   background:var(--panel);border:1px solid var(--line);border-radius:8px;
-  padding:6px 7px;
+  padding:6px 9px;
 }
-.tab-slot{display:flex;align-items:center;gap:3px;min-width:0}
+.tab-slot{display:flex;align-items:center;gap:6px;min-width:0}
 .tab-slot .sl{
-  font:500 8.5px/1 var(--mono);letter-spacing:.02em;text-transform:uppercase;
+  font:600 11px/1 var(--mono);letter-spacing:.02em;text-transform:uppercase;
   color:var(--muted);white-space:nowrap;
 }
 /* Pas de `color` sur `.ico` ici : la teinte vient des règles .ico.go /
    .marginal / .nogo, de même spécificité — la poser la leur volerait et tous
    les pouces resteraient gris. */
-.tab-slot .ico{width:13px;height:13px;flex:none}
+.tab-slot .ico{width:17px;height:17px;flex:none}
 .tab-slot .ico svg{display:block;width:100%;height:100%}
-@media(max-width:760px){.tab-slot{gap:2px}.tab-slot .sl{font-size:8px}}
+/* Cinq colonnes sur une tablette ne laissent pas 45 px par horizon : côte à
+   côte, libellé et pouce ne tenaient qu'en restant minuscules. Empilés — un
+   horizon par ligne, libellé à gauche, pouce à droite — chacun dispose de
+   toute la largeur de la case, et les deux peuvent grossir. Les dispositions
+   larges (solo, duo) gardent la rangée : la place y est déjà. */
+@media(min-width:761px){
+  .tab-times:not(.solo):not(.duo) .tab-time{
+    flex-direction:column;align-items:stretch;gap:0;padding:2px 9px;
+  }
+  .tab-times:not(.solo):not(.duo) .tab-slot{justify-content:space-between;padding:5px 0}
+  .tab-times:not(.solo):not(.duo) .tab-slot+.tab-slot{border-top:1px solid var(--line)}
+}
 
 /* ---------- heure de la phase, dans l'en-tête de la scène ----------
    Elle se pose contre le titre : saisie libre en DDHHMM, plus les trois mêmes
