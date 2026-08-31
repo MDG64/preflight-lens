@@ -5167,6 +5167,12 @@ const QLV_LAT_NM = 0.12;
    90 s laisserait « Check unavailable » à l'écran une minute et demie après
    que tout est rentré dans l'ordre. */
 const QLV_RETRY_MS = 20e3;
+/* Une réponse INCOMPLÈTE — vide, ou un seul sens observé — se redemande vite,
+   à la même cadence que le serveur la refait. Sans ce délai propre, le client
+   gardait 10 minutes un échantillon sans départ : le rattrapage rapide côté
+   serveur ne servait jamais, et il fallait attendre dix minutes pour espérer
+   attraper un décollage qui partait peut-être dans la minute. */
+const QLV_PARTIEL_MS = 4 * 60e3;
 const QLV_MATCH_DEG = 25;       // au-delà, la route observée ne désigne plus l'extrémité
 const qlvCache = new Map();     // icao -> {at, data} | {at, err:true, silent?, why}
 const qlvPending = new Map();
@@ -5254,7 +5260,10 @@ function qlvLoad(icao){
      venue du disque évite l'aller-retour entier. */
   qlvAdopt(icao);
   const hit = qlvCache.get(icao);
-  const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS : QLV_FRESH_MS;
+  const partiel = !!(hit && hit.data
+    && (!(hit.data.arr || []).length || !(hit.data.dep || []).length));
+  const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS
+            : partiel ? QLV_PARTIEL_MS : QLV_FRESH_MS;
   if (hit && Date.now() - hit.at < ttl) return qlvPending.get(icao);
   if (qlvPending.has(icao)) return qlvPending.get(icao);
   const p = (async () => {

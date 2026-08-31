@@ -22154,6 +22154,10 @@ window.addEventListener("scroll", hidePop, true);
        l'onglet est passé par Minima. Absents, l'estimation tourne sans eux. */
     const QLV_FRESH_MS = 10 * 60e3;   // un instantané toutes les dix minutes
     const QLV_RETRY_MS = 20e3;        // un échec est passager : on retente vite
+    /* Une réponse INCOMPLÈTE — vide, ou un seul sens observé — se redemande
+       vite, à la même cadence que le serveur la refait. Sans ce délai propre,
+       le client gardait 10 minutes un échantillon sans départ. */
+    const QLV_PARTIEL_MS = 4 * 60e3;
     const QLV_MATCH_DEG = 25;         // au-delà, la route ne désigne plus l'extrémité
     const QLV_MAX_TAIL_KT = 8;        // vent arrière moyen éliminatoire
     const QLV_LAT_NM = 0.12;          // appariement d'un flux à SON axe
@@ -22290,7 +22294,10 @@ window.addEventListener("scroll", hidePop, true);
       // du disque évite l'aller-retour entier.
       qlvAdopt(icao);
       const hit = qlvCache.get(icao);
-      const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS : QLV_FRESH_MS;
+      const partiel = !!(hit && hit.data
+        && (!(hit.data.arr || []).length || !(hit.data.dep || []).length));
+      const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS
+        : partiel ? QLV_PARTIEL_MS : QLV_FRESH_MS;
       if (hit && Date.now() - hit.at < ttl) return;
       if (qlvPending.has(icao)) return;
       const p = (async () => {
@@ -22826,6 +22833,14 @@ window.addEventListener("scroll", hidePop, true);
         const d = stations[a.icao];
         if (!d || d.error) continue;             // échec local : la section garde son relevé
         wxStore(a.icao, d);
+        /* Le QFU en service se rafraîchit AVANT le test de changement du
+           relevé : il ne dépend pas du METAR mais du trafic, qui bouge, lui,
+           entre deux relevés. Sans cet appel, la bande de cette page ne se
+           remettait à jour qu'au changement de METAR — jusqu'à trente minutes,
+           alors que son cache ne vaut que dix, et que la relance rapide sur
+           une réponse incomplète n'aurait jamais eu lieu. L'anti-rafale de
+           qlvLoad rend la minuterie gratuite ; Minima fait déjà ainsi. */
+        qlvMount(a.icao);
         const cur = wxShown[a.icao];
         if (cur && JSON.stringify([cur.metar, cur.taf]) === JSON.stringify([d.metar, d.taf])) continue;
         renderWxAirport(a.icao, d);
