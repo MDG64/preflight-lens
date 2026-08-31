@@ -10,9 +10,30 @@
      cadres portait un texte transparent ; visible depuis qu'elle porte le
      texte lisible. -->
 <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
-<title>Minima</title>
+<!-- Le noindex des pages sœurs. robots.txt annonce « le noindex posé dans le
+     <head> des trois pages » : celle-ci était la quatrième, et un Disallow
+     n'empêche pas d'indexer une URL découverte ailleurs. -->
+<meta name="robots" content="noindex, nofollow">
+<!-- Identité de la PAGE, reprise de notam-filter.html : Minima est un module,
+     pas une application. Elle a son nom dans l'app — la tuile, la barre — mais
+     hors de l'app c'est Preflight Lens qui doit répondre. Sans ce bloc, un
+     « ajouter à l'écran d'accueil » depuis ici — et c'est une porte d'entrée,
+     l'adresse ?dep&dest&altn tombe sur cette page — installait une SECONDE app
+     nommée « Minima », avec une vignette de capture d'écran, un favicon en 404
+     et aucun manifeste. Même manifeste et mêmes icônes que la maison : une
+     seule app, quelle que soit la page par laquelle on entre.
+     Manquent encore, à dessein, `apple-mobile-web-app-capable` et
+     `apple-mobile-web-app-status-bar-style` : en plein écran iOS ils font
+     passer le contenu SOUS l'encoche, et cette page n'a aucune marge
+     env(safe-area-inset-*) — son bandeau, ses cinq surcouches et sa barre du
+     bas sont à reprendre avant. -->
+<title>Preflight Lens — Minima</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32-v3.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16-v3.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180-v4.png">
 <meta name="theme-color" content="#0d1117">
-<meta name="apple-mobile-web-app-title" content="Minima">
+<meta name="apple-mobile-web-app-title" content="Preflight Lens">
 <!-- MODULE de Preflight Lens (2026-08-28) : cette page est la SEULE source du
      module Minima depuis le 2026-08-29. La copie qui vivait dans le dépôt
      Weather Lens (« Minima Lens.html ») est supprimée : elle n'en différait que
@@ -13457,7 +13478,11 @@ function dwxFresh(hit){
    se lit encore quand le réseau est parti. Un seul objet, les douze derniers
    terrains, chacun daté ; quand la requête échoue, la copie reprend la place,
    rognée de ses échéances passées et marquée « saved ». */
-const DWX_STORE_KEY = "wl-minima-daywx";
+/* Même clé que la page Weather de l'hôte (notam-filter.html) : même origine,
+   même route /api/daywx, même objet stocké, même code de relecture. Deux clés
+   faisaient deux caches, donc le même terrain redemandé une fois par écran —
+   et une bande de secours présente d'un côté, absente de l'autre, hors ligne. */
+const DWX_STORE_KEY = "notam_daywx";
 const DWX_STORE_MAX = 12;           // terrains gardés sur le disque
 const DWX_STORE_TTL = 24 * 3600e3;  /* au-delà, la copie vient d'un modèle
      vieux d'un jour, rejoué plusieurs fois depuis : ses cases restent à
