@@ -87,8 +87,72 @@ const ASSETS = [
   "./fonts/ibm-plex-mono-v20-latin-500-v3.woff2",
   "./fonts/ibm-plex-mono-v20-latin-ext-500.woff2",
   "./fonts/ibm-plex-mono-v20-latin-600-v3.woff2",
-  "./fonts/ibm-plex-mono-v20-latin-ext-600.woff2"
+  "./fonts/ibm-plex-mono-v20-latin-ext-600.woff2",
+  // Le picto de REPLI de la bande météo du jour. Les deux pages le nomment en
+  // dur dans leur onerror (dayWxIconHtml / dwxIconHtml) : c'est le seul des 83
+  // dont l'absence ne se rattrape par rien, puisqu'il EST le rattrapage. Les 82
+  // autres passent par le réchauffage ci-dessous, qui a le droit d'échouer ;
+  // celui-ci est dans le pré-cache atomique, avec les polices, parce que son
+  // existence est certaine et qu'on ne veut pas d'un carré vide en vol.
+  "./vendor/weather/cloudy.svg"
 ];
+
+/* PICTOGRAMMES MÉTÉO met.no — le vocabulaire complet (83 symboles, ~280 Ko).
+   Le code symbole EST le nom du fichier, et l'amont peut renvoyer n'importe
+   lequel : sans réchauffage, seuls ceux DÉJÀ RENCONTRÉS en ligne existaient
+   hors ligne (la règle 5 les dépose au passage, mais ne devine rien). Un vol
+   qui change de météo — ou simplement de jour à nuit, chaque symbole ayant ses
+   variantes _day/_night/_polartwilight — tombait donc sur le repli, quand il
+   n'était pas là non plus.
+   HORS du pré-cache atomique À DESSEIN : addAll() est tout ou rien, et faire
+   dépendre l'installation entière de 83 noms de fichiers tiers, c'est offrir à
+   un seul renommage le pouvoir de bloquer TOUTES les mises à jour de l'app.
+   Le réchauffage, lui, échoue fichier par fichier et ne coûte rien.
+   Les noms viennent du répertoire, coquilles d'amont comprises
+   (« lightssleetshowersandthunder », deux s : c'est le nom réel chez met.no).
+   Un symbole ajouté dans vendor/weather/ doit être ajouté ICI. */
+const WX_SYMBOLS = [
+  "clearsky_day", "clearsky_night", "clearsky_polartwilight", "cloudy",
+  "fair_day", "fair_night", "fair_polartwilight", "fog",
+  "heavyrain", "heavyrainandthunder", "heavyrainshowers_day", "heavyrainshowers_night",
+  "heavyrainshowers_polartwilight", "heavyrainshowersandthunder_day", "heavyrainshowersandthunder_night", "heavyrainshowersandthunder_polartwilight",
+  "heavysleet", "heavysleetandthunder", "heavysleetshowers_day", "heavysleetshowers_night",
+  "heavysleetshowers_polartwilight", "heavysleetshowersandthunder_day", "heavysleetshowersandthunder_night", "heavysleetshowersandthunder_polartwilight",
+  "heavysnow", "heavysnowandthunder", "heavysnowshowers_day", "heavysnowshowers_night",
+  "heavysnowshowers_polartwilight", "heavysnowshowersandthunder_day", "heavysnowshowersandthunder_night", "heavysnowshowersandthunder_polartwilight",
+  "lightrain", "lightrainandthunder", "lightrainshowers_day", "lightrainshowers_night",
+  "lightrainshowers_polartwilight", "lightrainshowersandthunder_day", "lightrainshowersandthunder_night", "lightrainshowersandthunder_polartwilight",
+  "lightsleet", "lightsleetandthunder", "lightsleetshowers_day", "lightsleetshowers_night",
+  "lightsleetshowers_polartwilight", "lightsnow", "lightsnowandthunder", "lightsnowshowers_day",
+  "lightsnowshowers_night", "lightsnowshowers_polartwilight", "lightssleetshowersandthunder_day", "lightssleetshowersandthunder_night",
+  "lightssleetshowersandthunder_polartwilight", "lightssnowshowersandthunder_day", "lightssnowshowersandthunder_night", "lightssnowshowersandthunder_polartwilight",
+  "partlycloudy_day", "partlycloudy_night", "partlycloudy_polartwilight", "rain",
+  "rainandthunder", "rainshowers_day", "rainshowers_night", "rainshowers_polartwilight",
+  "rainshowersandthunder_day", "rainshowersandthunder_night", "rainshowersandthunder_polartwilight", "sleet",
+  "sleetandthunder", "sleetshowers_day", "sleetshowers_night", "sleetshowers_polartwilight",
+  "sleetshowersandthunder_day", "sleetshowersandthunder_night", "sleetshowersandthunder_polartwilight", "snow",
+  "snowandthunder", "snowshowers_day", "snowshowers_night", "snowshowers_polartwilight",
+  "snowshowersandthunder_day", "snowshowersandthunder_night", "snowshowersandthunder_polartwilight"
+];
+
+/* Réchauffage, fichier par fichier et sans jamais rejeter. Un symbole déjà en
+   cache n'est pas redemandé : au deuxième lancement c'est 83 lectures locales
+   et zéro requête. Le tout tient dans une seule activation, en tâche de fond —
+   on ne bloque rien, et si le réseau coupe au milieu, ce qui manque sera repris
+   à la prochaine activation ou déposé à l'usage par la règle 5. */
+async function warmWxSymbols() {
+  let pris = 0, rates = 0;
+  const c = await caches.open(CACHE);
+  await Promise.all(WX_SYMBOLS.map(async n => {
+    const url = "./vendor/weather/" + n + ".svg";
+    try {
+      if (await c.match(url)) return;
+      await c.add(url);
+      pris++;
+    } catch (_) { rates++; }
+  }));
+  if (pris || rates) console.info(`[SW] pictos météo : ${pris} déposé(s), ${rates} manquant(s)`);
+}
 
 self.addEventListener("install", e => {
   // Pas de .catch() qui avale, À DESSEIN. addAll() est atomique : un seul 404
@@ -111,6 +175,17 @@ self.addEventListener("activate", e => {
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))  // purge anciens caches
     )
   );
+  // Réchauffage des pictogrammes : lancé ici, mais HORS du waitUntil À DESSEIN.
+  // Tant qu'une activation n'est pas terminée, le navigateur ne distribue aucun
+  // événement fetch : y attacher 83 téléchargements ferait attendre la page
+  // entière derrière eux, et d'autant plus longtemps que la liaison est
+  // mauvaise — c'est-à-dire précisément quand il ne faut pas.
+  // En tâche de fond, le service worker reste vivant tant que l'app le fait
+  // travailler, ce qui est le cas juste après une activation. S'il est arrêté
+  // en route, rien n'est perdu : les symboles déjà déposés y restent, les
+  // autres seront repris à la prochaine activation, et de toute façon déposés
+  // à l'usage par la règle 5.
+  warmWxSymbols();
   self.clients.claim();
 });
 
