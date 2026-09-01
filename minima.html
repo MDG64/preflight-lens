@@ -10478,6 +10478,78 @@ function setState(msg, cls){
 const WX_API = window.WL_API_BASE
   || "https://notam-proxy-production.up.railway.app";
 
+/* ---------- copie locale des relevés, PARTAGÉE AVEC L'HÔTE ----------
+   Même clé que la page Weather de Preflight (`notam_wx:<ICAO>`), au même titre
+   que notam_favs, notam_daywx, notam_theme et wl-qfu-live : un relevé demandé
+   d'un côté sert l'autre, et surtout il SURVIT à la fermeture de la page.
+   Minima était le seul module à ne rien garder de sa météo. Pire : il vide les
+   cases AVANT d'interroger (voir fetchWeather, et le même geste dans mOpen).
+   Hors ligne, demander un terrain effaçait donc les relevés qu'on avait sous
+   les yeux et laissait le moteur de minimas sans entrée — dans le module où
+   cela se paie le plus cher, puisque tout le calcul en dépend.
+   La forme écrite est EXACTEMENT celle de l'hôte : l'objet station rendu par
+   /api/wx (`data.stations[icao]`), pas l'enveloppe de la réponse. Écrire
+   autre chose ferait relire les deux pages de travers.
+   L'index et le plafond sont dupliqués depuis notam-filter.html, comme le sont
+   déjà dwxStoreWrite et qlvStoreWrite pour leurs propres clés partagées.
+   À GARDER SYNCHRONES avec l'hôte : WX_STORE_MAX et la liste des protégés. */
+const WX_STORE_PREFIX = "notam_wx:", WX_STORE_IDX = "notam_wx_idx", WX_STORE_MAX = 250;
+function wxStoreRead(icao){
+  try { const s = localStorage.getItem(WX_STORE_PREFIX + icao); return s ? JSON.parse(s) : null; }
+  catch(_){ return null; }
+}
+/* Protégés de la rotation : le corridor de route de l'hôte (`notam_route`), les
+   favoris (`notam_favs`, voir FAVS_KEY plus bas) et la route saisie ici
+   (`wl-minima-route`). Clés citées en clair : elles sont déclarées plus bas
+   dans le fichier, et une const n'existe pas avant sa ligne. */
+function wxProtected(){
+  const s = new Set();
+  const ajoute = v => { for (const c of (Array.isArray(v) ? v : [])){
+    const u = String(c || "").toUpperCase(); if (/^[A-Z]{4}$/.test(u)) s.add(u);
+  } };
+  try { ajoute((JSON.parse(localStorage.getItem("notam_route") || "null") || {}).icaos); } catch(_){ }
+  try { ajoute(JSON.parse(localStorage.getItem("notam_favs") || "[]")); } catch(_){ }
+  try { ajoute(JSON.parse(localStorage.getItem("wl-minima-route") || "[]")); } catch(_){ }
+  return s;
+}
+function wxStoreWrite(icao, d){
+  try {
+    const charge = JSON.stringify(d);
+    let idx; try { idx = JSON.parse(localStorage.getItem(WX_STORE_IDX) || "[]"); } catch(_){ }
+    if (!Array.isArray(idx)) idx = [];
+    idx = idx.filter(c => c !== icao); idx.unshift(icao);
+    const prot = wxProtected();
+    const unprot = idx.filter(c => !prot.has(c));
+    const jette = c => { try { localStorage.removeItem(WX_STORE_PREFIX + c); } catch(_){ } idx = idx.filter(x => x !== c); };
+    while (unprot.length > WX_STORE_MAX) jette(unprot.pop());
+    /* Reprise sur quota, identique à celle de l'hôte : on rend la place du plus
+       ancien au plus récent, sans toucher aux protégés ni à la copie en cours. */
+    const candidats = unprot.filter(c => c !== icao);
+    for(;;){
+      try { localStorage.setItem(WX_STORE_PREFIX + icao, charge); break; }
+      catch(e){ if (!candidats.length){ idx = idx.filter(c => c !== icao); break; } jette(candidats.pop()); }
+    }
+    localStorage.setItem(WX_STORE_IDX, JSON.stringify(idx));
+  } catch(_){ }
+}
+/* Pose une copie (fraîche ou gardée) dans les cases et réanalyse. Rend l'heure
+   d'observation du METAR, ou null si la copie ne porte aucun relevé. */
+function wxApplyStation(s){
+  const metarTa = document.getElementById("metarIn"), tafTa = document.getElementById("tafIn");
+  metarTa.value = s && s.metar ? withKindLine("METAR", s.metar.raw) : "";
+  tafTa.value   = s && s.taf   ? withKindLine("TAF",   s.taf.raw)   : "";
+  return s && s.metar ? Date.parse(s.metar.time) : null;
+}
+/* Horodatage court d'une copie gardée, calqué sur stampZ() de l'hôte : c'est
+   l'heure d'OBSERVATION du METAR qui parle au pilote, pas celle du
+   téléchargement — un relevé de 12:30Z reste un relevé de 12:30Z. */
+function wxStampZ(s){
+  const t = s && s.metar && s.metar.time ? Date.parse(s.metar.time) : NaN;
+  if (!isFinite(t)) return "an earlier time";
+  const d = new Date(t), p = n => String(n).padStart(2, "0");
+  return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z (${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)})`;
+}
+
 /* `opts.silent` : rafraîchissement automatique, déclenché par la minuterie et
    non par l'utilisateur. Il se comporte autrement sur trois points, et chacun
    compte — voir startAutoRefresh() plus bas :
@@ -10526,6 +10598,10 @@ async function fetchWeather(opts = {}){
     const data = await r.json();
     const s = data.stations[icao];
     if (!s || s.status === "unknown") throw new Error(`${icao} — no reports available`);
+    /* La copie locale part AVANT le rendu : ce qui compte est qu'elle soit sur
+       le disque, même si l'affichage échoue ensuite. La page Weather de l'hôte
+       la relira telle quelle, et c'est elle qui tiendra hors ligne. */
+    wxStoreWrite(icao, s);
 
     /* Le brut arrive déjà sur une seule ligne, prêt pour les parseurs. */
     const metarTa = document.getElementById("metarIn"), tafTa = document.getElementById("tafIn");
@@ -10587,7 +10663,30 @@ async function fetchWeather(opts = {}){
        qu'il faut faire. Dans la quasi-totalité des cas, le serveur météo n'est
        simplement pas démarré — autant l'écrire. */
     const injoignable = err instanceof TypeError;
-    setState(
+    /* LA COPIE GARDÉE PREND LA PLACE. Les cases ont été vidées juste avant
+       l'appel — à dessein, pour que rien du terrain précédent ne survive — mais
+       hors ligne ce geste laissait l'écran nu et le moteur sans entrée. La
+       copie relue appartient bien au terrain demandé : l'invariant tient, et le
+       pilote retrouve ses relevés au lieu de les perdre en interrogeant.
+       Elle est DATÉE à l'heure d'observation, et le calcul repart dessus : un
+       relevé de trois heures reste exploitable et vieillit à l'écran comme les
+       autres, ce que renderMetarAge() montre déjà en ambre puis en rouge. */
+    const garde = wxStoreRead(icao);
+    if (garde && (garde.metar || garde.taf)){
+      state.metarObsTime = wxApplyStation(garde);
+      state.wxIcao = icao;
+      if (!state.qfuManual) state.qfuIndex = null;
+      reparse();
+      setState(
+        `${injoignable ? "Offline" : `Could not fetch ${icao} (${err.message})`}` +
+        ` — showing last saved reports from ${wxStampZ(garde)}. Reconnect to refresh.`,
+        "err");
+      /* La minuterie repart : son passage silencieux ne détruit rien en cas
+         d'échec (voir le chemin `silent` ci-dessus), et c'est lui qui remettra
+         la page à jour toute seule dès que le signal revient — sans quoi il
+         faudrait penser à recliquer Fetch après chaque trou de couverture. */
+      startAutoRefresh();
+    } else setState(
       injoignable
         ? `Weather server unreachable at ${WX_API || location.origin} — is it running? (node server/server.js). Paste the raw reports below instead.`
         : `Could not fetch ${icao} (${err.message}). Paste the raw reports below instead.`,
@@ -14449,6 +14548,13 @@ window.RTV = (()=>{
     ids.forEach(id => nfaLoad(id));
     const my = ++RT.seq;
     sayState(`Requesting ${ids.length} station${ids.length>1?"s":""}…`);
+    /* Une station, telle que les cartes du bilan la consomment. */
+    const entree = s => s && s.status!=="unknown"
+      ? {metarRaw: s.metar ? s.metar.raw : "",
+         tafRaw:   s.taf   ? s.taf.raw   : "",
+         obsTime:  s.metar && Number.isFinite(Date.parse(s.metar.time)) ? Date.parse(s.metar.time) : null,
+         status:   s.status}
+      : {metarRaw:"", tafRaw:"", obsTime:null, status:"unknown"};
     let data;
     try {
       const r = await fetch(`${WX_API}/api/wx?ids=${ids.join(",")}`);
@@ -14456,20 +14562,36 @@ window.RTV = (()=>{
       data = await r.json();
     } catch(err){
       if (my!==RT.seq) return;
-      sayState(err instanceof TypeError
-        ? `Weather server unreachable at ${WX_API || location.origin} — is it running? (node server/server.js)`
-        : `Could not fetch the reports (${err.message}).`, true);
+      /* LES COPIES GARDÉES TIENNENT LE BILAN. C'est l'écran où l'absence de
+         relevé coûte le plus cher : sans eux, départ, destination et
+         dégagement passent tous en « unknown » et plus une seule ligne n'est
+         jugée — au moment précis où le pilote n'a plus de réseau pour y
+         remédier. Les relevés gardés sont datés et vieillissent à l'écran ;
+         c'est au pilote de décider s'ils sont encore bons, pas à la page de
+         les lui cacher. */
+      let repris = 0;
+      for (const id of ids){
+        const garde = wxStoreRead(id);
+        if (garde && (garde.metar || garde.taf)){ RT.wx[id] = entree(garde); repris++; }
+      }
+      const cause = err instanceof TypeError
+        ? "Offline"
+        : `Could not fetch the reports (${err.message})`;
+      sayState(repris
+        ? `${cause} — showing last saved reports for ${repris} of ${ids.length} station${ids.length>1?"s":""}. Reconnect to refresh.`
+        : (err instanceof TypeError
+            ? `Weather server unreachable at ${WX_API || location.origin} — is it running? (node server/server.js)`
+            : `Could not fetch the reports (${err.message}).`), true);
+      if (repris) render();
       return;
     }
     if (my!==RT.seq) return;
     for (const id of ids){
       const s = (data.stations||{})[id];
-      RT.wx[id] = s && s.status!=="unknown"
-        ? {metarRaw: s.metar ? s.metar.raw : "",
-           tafRaw:   s.taf   ? s.taf.raw   : "",
-           obsTime:  s.metar && Number.isFinite(Date.parse(s.metar.time)) ? Date.parse(s.metar.time) : null,
-           status:   s.status}
-        : {metarRaw:"", tafRaw:"", obsTime:null, status:"unknown"};
+      /* Même copie locale que la page principale et que l'hôte : le bilan
+         alimente le cache qu'il relira à la coupure suivante. */
+      if (s && s.status!=="unknown") wxStoreWrite(id, s);
+      RT.wx[id] = entree(s);
     }
     sayState(data.stale
       ? `${(data.staleFeeds||[]).join(" and ").toUpperCase() || "data"} feed interrupted — reports may not be the latest`

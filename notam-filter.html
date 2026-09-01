@@ -22002,12 +22002,23 @@ window.addEventListener("scroll", hidePop, true);
     const WX_STORE_IDX = "notam_wx_idx";
     const WX_STORE_MAX = 250;
     function wxIdx() { try { return JSON.parse(localStorage.getItem(WX_STORE_IDX) || "[]"); } catch (e) { return []; } }
-    /* Protégés de la rotation : la route active ET les favoris. Même principe
-       que routeProtected() pour les NOTAM — ce que le pilote a désigné ne doit
-       pas être évincé par ce qu'il a seulement effleuré. */
+    /* Protégés de la rotation : la route active, les favoris, ET la route saisie
+       dans le module Minima. Même principe que routeProtected() pour les NOTAM —
+       ce que le pilote a désigné ne doit pas être évincé par ce qu'il a
+       seulement effleuré.
+       `wl-minima-route` en fait partie parce que Minima est un MODULE de cette
+       app, pas une application voisine : ses trois terrains sont désignés aussi
+       explicitement qu'un favori. Sans cette ligne, l'hôte évinçait des relevés
+       que le module croyait protégés — et il suffisait d'ouvrir la page Weather
+       pour vider le bilan de vol. La liste doit rester IDENTIQUE à celle de
+       wxProtected() dans minima.html. */
     function wxProtected() {
       const s = routeProtected();
-      try { for (const c of JSON.parse(localStorage.getItem(FAVS_KEY) || "[]")) s.add(c); } catch (_) { }
+      const ajoute = v => { for (const c of (Array.isArray(v) ? v : [])) {
+        const u = String(c || "").toUpperCase(); if (/^[A-Z]{4}$/.test(u)) s.add(u);
+      } };
+      try { ajoute(JSON.parse(localStorage.getItem(FAVS_KEY) || "[]")); } catch (_) { }
+      try { ajoute(JSON.parse(localStorage.getItem("wl-minima-route") || "[]")); } catch (_) { }
       return s;
     }
     function wxDrop(icao, idx) {
