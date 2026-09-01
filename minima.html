@@ -2361,6 +2361,38 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 .qlv .src{font-size:11px;opacity:.85}
 @keyframes qlv-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
+/* La case D-ATIS, juste sous la bande des pistes : là où le terrain en
+   diffuse un, le texte existe et tient à un clic. Repliée par défaut — la
+   bande dit déjà la piste retenue, et dérouler d'office le message entier
+   sous chaque terrain noierait les relevés qui suivent. Ouverte, elle
+   prolonge la bande : même fond, mêmes bords, la bordure du milieu tombe pour
+   que le titre et le texte fassent un seul bloc. */
+.dts-box{
+  display:flex;align-items:center;gap:8px;width:100%;margin-top:6px;
+  background:var(--field);border:1px solid var(--line);border-radius:6px;
+  padding:7px 12px 8px;text-align:left;cursor:pointer;color:var(--muted);
+  font:600 11px/1.3 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+}
+.dts-box:hover{border-color:var(--line2);color:var(--text)}
+.dts-box .tag{flex:1;min-width:0}
+.dts-box .chev{flex:none;font-size:10px;opacity:.75}
+.dts-box[aria-expanded="true"]{
+  color:var(--text);border-bottom-color:transparent;
+  border-bottom-left-radius:0;border-bottom-right-radius:0;
+}
+.dts-panel{
+  background:var(--field);border:1px solid var(--line);border-top:0;
+  border-radius:0 0 6px 6px;padding:0 12px 10px;
+}
+/* Le texte tel qu'il est diffusé : ni recomposé, ni tronqué. Il se replie sur
+   la largeur disponible plutôt que de pousser une barre horizontale sous la
+   bande — un ATIS se lit en entier, ou il ne sert à rien. */
+.dts-raw{
+  margin:8px 0 0;font:500 11.5px/1.5 var(--mono);color:var(--muted);
+  white-space:pre-wrap;word-break:break-word;
+}
+.dts-raw .k{font-size:9.5px;letter-spacing:.11em;color:var(--muted2)}
+
 /* ======================== Bilan de vol — Minima ========================
    L'autre présentation de Minima Lens : la route entière — départ,
    destination, dégagement destination — sur un seul écran, un terrain par
@@ -5242,6 +5274,17 @@ const DTS_RETRY_MS = 60e3;
 const dtsCache = new Map();         // ICAO -> {at, atis:[...]} | {at, err, absent}
 const dtsPending = new Map();
 let dtsCodes = null, dtsCodesAt = 0;
+/* La liste des terrains couverts est gardée sur le disque : c'est elle qui
+   permet de NE PAS lancer d'observation ADS-B sur un terrain à D-ATIS. Sans
+   persistance elle arrivait après la première interrogation, et l'économie
+   sautait à chaque ouverture de l'app. Elle ne bouge pas dans la journée. */
+const DTS_CODES_KEY = "wl-datis-codes";
+try {
+  const o = JSON.parse(localStorage.getItem(DTS_CODES_KEY) || "null");
+  if (o && Array.isArray(o.codes) && Date.now() - (Number(o.at) || 0) < 12 * 3600e3) {
+    dtsCodes = new Set(o.codes); dtsCodesAt = Number(o.at);
+  }
+} catch (e) { }
 
 function dtsCouvert(icao) {
   /* Tant que la liste n'est pas là, on ne présume pas : on laisse passer, le
@@ -5254,7 +5297,11 @@ function dtsLoadCodes() {
   dtsCodesAt = Date.now();
   fetch(`${DTS_API}/api/datis`)
     .then(r => r.ok ? r.json() : null)
-    .then(d => { if (d && Array.isArray(d.airports)) dtsCodes = new Set(d.airports); })
+    .then(d => {
+      if (!d || !Array.isArray(d.airports)) return;
+      dtsCodes = new Set(d.airports);
+      try { localStorage.setItem(DTS_CODES_KEY, JSON.stringify({ at: Date.now(), codes: d.airports })); } catch (e) { }
+    })
     .catch(() => { });
 }
 function dtsLoad(icao) {
@@ -5328,6 +5375,39 @@ function dtsQfu(icao, extremites) {
   const lettre = t.map(x => x.code).filter(Boolean).join("/");
   const heure = t.map(x => x.time).filter(Boolean)[0] || "";
   return { arr: a, dep: d, lettre, heure };
+}
+
+/* ---------- La case D-ATIS, sous la bande des pistes ----------
+   Le moteur ne prend du D-ATIS que les extrémités en service. Le texte, lui,
+   porte tout le reste — piste fermée, travaux, ILS en panne, altimétrie,
+   consigne de lecture — et rien ne le remplace : c'est la parole du contrôle,
+   pas notre lecture de sa parole. La case le signale avec sa lettre, le clic
+   l'ouvre, et il reste là où on l'attend : sous la piste dont il parle.
+   L'état ouvert est rangé PAR TERRAIN et hors du DOM, parce que la bande se
+   repeint à chaque observation qui arrive — un texte qu'on lit ne doit pas se
+   refermer sous les yeux. */
+const dtsOpen = new Set();
+function dtsBoxHtml(icao){
+  const t = dtsTextes(icao);
+  if (!t) return "";
+  const open = dtsOpen.has(icao);
+  /* La lettre d'abord : c'est elle que le pilote annonce à la fréquence, et
+     la seule chose de l'ATIS qui se retienne par cœur. */
+  const lettre = t.map(x => x.code).filter(Boolean).join("/");
+  const heure = t.map(x => x.time).filter(Boolean)[0] || "";
+  const tag = `D-ATIS${lettre ? " · info " + escapeHtmlText(lettre) : ""}`
+    + `${heure ? " · " + escapeHtmlText(heure) + "Z" : ""}`;
+  /* Un terrain publie soit un ATIS unique, soit deux — arrivée et départ.
+     Chacun se nomme, mais seulement quand il y en a deux à distinguer. */
+  const nom = x => x.type === "arr" ? "ARRIVAL" : x.type === "dep" ? "DEPARTURE" : "";
+  const corps = open
+    ? `<div class="dts-panel" title="">${t.map(x =>
+        `<pre class="dts-raw">${t.length > 1 && nom(x) ? `<span class="k">${nom(x)}</span>\n` : ""}`
+        + `${escapeHtmlText(x.datis)}</pre>`).join("")}</div>`
+    : "";
+  return `<button type="button" class="dts-box" data-dts="${icao}" aria-expanded="${open}"
+      title="Digital ATIS as broadcast — the declared runway in use, and everything else the recording carries">`
+    + `<span class="tag">${tag}</span><span class="chev">${open ? "▾" : "▸"}</span></button>${corps}`;
 }
 
 /* Le D-ATIS arrivé : il change le QFU retenu par le moteur, donc la page se
@@ -5804,17 +5884,27 @@ function qlvState(icao){
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */
 const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic observed within 8 NM (refreshed about every 20 min). An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
+/* Le bloc entier : la bande estimée, puis la case D-ATIS sous elle. Les deux
+   vont ensemble — l'une estime la piste, l'autre porte ce que le contrôle en
+   dit — et le conteneur ne se cache que si NI l'une NI l'autre n'a de quoi
+   parler. Un terrain dont le D-ATIS ne cite aucune piste garde donc sa case :
+   le texte vaut d'être lu même quand il n'a rien donné au moteur. */
+function qlvBlockHtml(icao){
+  const s = qlvState(icao);
+  const box = dtsBoxHtml(icao);
+  return (s ? s.html : "") + box;
+}
 function qfuLiveHtml(icao){
   if (!/^[A-Z]{4}$/.test(icao || "")) return "";
   qlvLoad(icao);
-  const s = qlvState(icao);
-  return `<div class="qlv-main" data-qlv="${icao}"${s?"":" hidden"} title="${QLV_TIP}">${s?s.html:""}</div>`;
+  const h = qlvBlockHtml(icao);
+  return `<div class="qlv-main" data-qlv="${icao}"${h?"":" hidden"} title="${QLV_TIP}">${h}</div>`;
 }
 function qlvNotify(icao){
   document.querySelectorAll(`[data-qlv="${icao}"]`).forEach(el=>{
-    const s = qlvState(icao);
-    el.hidden = !s;
-    el.innerHTML = s ? s.html : "";
+    const h = qlvBlockHtml(icao);
+    el.hidden = !h;
+    el.innerHTML = h;
   });
 }
 /* La bande large de la page principale : elle vit dans le squelette, entre les
@@ -5841,6 +5931,19 @@ function mountQfuLive(){
   qlvLoad(icao);
   qlvNotify(icao);
 }
+/* Le clic sur la case, délégué au document : la bande est écrite par trois
+   chemins — le squelette de la page, la fiche mobile, la carte de route — et
+   aucun ne rebranche ses boutons après coup. Seules les bandes du terrain
+   concerné se repeignent : déplier un texte n'est pas une raison de refaire
+   la page. */
+document.addEventListener("click", e=>{
+  const b = e.target && e.target.closest && e.target.closest(".dts-box");
+  if (!b) return;
+  const icao = b.dataset.dts;
+  if (!icao) return;
+  if (dtsOpen.has(icao)) dtsOpen.delete(icao); else dtsOpen.add(icao);
+  qlvNotify(icao);
+});
 
 /* Terrain courant du point de vue du MOTEUR : la station du METAR chargé fait
    foi, à défaut le champ ICAO, à défaut le terrain ouvert sur mobile. */

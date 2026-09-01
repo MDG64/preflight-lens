@@ -22472,6 +22472,17 @@ window.addEventListener("scroll", hidePop, true);
     const dtsCache = new Map();         // ICAO -> {at, atis:[...]} | {at, err, absent}
     const dtsPending = new Map();
     let dtsCodes = null, dtsCodesAt = 0;
+/* La liste des terrains couverts est gardée sur le disque : c'est elle qui
+   permet de NE PAS lancer d'observation ADS-B sur un terrain à D-ATIS. Sans
+   persistance elle arrivait après la première interrogation, et l'économie
+   sautait à chaque ouverture de l'app. Elle ne bouge pas dans la journée. */
+const DTS_CODES_KEY = "wl-datis-codes";
+try {
+  const o = JSON.parse(localStorage.getItem(DTS_CODES_KEY) || "null");
+  if (o && Array.isArray(o.codes) && Date.now() - (Number(o.at) || 0) < 12 * 3600e3) {
+    dtsCodes = new Set(o.codes); dtsCodesAt = Number(o.at);
+  }
+} catch (e) { }
 
     function dtsCouvert(icao) {
       /* Tant que la liste n'est pas là, on ne présume pas : on laisse passer, le
@@ -22484,7 +22495,11 @@ window.addEventListener("scroll", hidePop, true);
       dtsCodesAt = Date.now();
       fetch(`${DTS_API}/api/datis`)
         .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d && Array.isArray(d.airports)) dtsCodes = new Set(d.airports); })
+        .then(d => {
+      if (!d || !Array.isArray(d.airports)) return;
+      dtsCodes = new Set(d.airports);
+      try { localStorage.setItem(DTS_CODES_KEY, JSON.stringify({ at: Date.now(), codes: d.airports })); } catch (e) { }
+    })
         .catch(() => { });
     }
     function dtsLoad(icao) {
