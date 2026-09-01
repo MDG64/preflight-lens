@@ -5480,6 +5480,12 @@ function qlvLoad(icao){
      surveiller. Si le D-ATIS tombe en panne ou ne cite aucune piste,
      l'observation reprend sa place d'elle-même. */
   if (dtsAUnQfu(icao)) return;
+  /* Terrain COUVERT dont le D-ATIS n'est pas encore arrivé : on attend sa
+     réponse au lieu de lancer une observation qu'elle rendrait inutile. Sans
+     cette attente, chaque première ouverture d'un terrain américain coûtait un
+     appel ADS-B pour rien. Si le D-ATIS revient muet ou en panne, son propre
+     rendu relance la page, et l'observation part alors normalement. */
+  if (dtsCodes && dtsCodes.has(icao) && !dtsCache.has(icao)) return;
   const hit = qlvCache.get(icao);
   const partiel = !!(hit && hit.data
     && (!(hit.data.arr || []).length || !(hit.data.dep || []).length));

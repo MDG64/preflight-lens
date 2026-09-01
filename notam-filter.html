@@ -22735,6 +22735,10 @@ function dtsAUnQfu(icao){
          DÉCLARÉE, l'ADS-B ne la confirmerait qu'en dépensant du budget amont.
          Si le D-ATIS tombe ou ne cite aucune piste, l'observation reprend. */
       if (dtsAUnQfu(icao)) return;
+      /* Terrain COUVERT dont le D-ATIS n'est pas encore arrivé : on attend sa
+         réponse plutôt que de lancer une observation qu'elle rendrait
+         inutile. Son rendu relancera celle-ci s'il revient muet. */
+      if (dtsCodes && dtsCodes.has(icao) && !dtsCache.has(icao)) return;
       const hit = qlvCache.get(icao);
       const partiel = !!(hit && hit.data
         && (!(hit.data.arr || []).length || !(hit.data.dep || []).length));
@@ -22980,7 +22984,9 @@ function dtsAUnQfu(icao){
           + t.map(x => `<pre class="dts-raw">${t.length > 1 ? `<span class="k">${x.type === "arr" ? "ARRIVAL" : x.type === "dep" ? "DEPARTURE" : ""}</span>\n` : ""}${esc(x.datis)}</pre>`).join("");
       });
     }
-    function dtsMount(icao) { dtsLoad(icao); dtsNotify(icao); }
+    /* Le D-ATIS arrivé peut DÉBLOQUER l'observation : s'il est muet sur les
+       pistes, c'est à l'ADS-B de reprendre — d'où le remontage de la bande. */
+    function dtsMount(icao) { dtsLoad(icao); dtsNotify(icao); qlvMount(icao); }
 
     function wxRunwaysHtml(icao, d) {
       const s = RUNWAYS[icao];
