@@ -2051,6 +2051,13 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
    l'ellipse mangeait justement les unités de la fin. */
 .m-cmp .val .wl{display:block}
 .m-cmp .val .wl+.wl{margin-top:3px}
+/* Et le vent lui-même à DROITE des deux couples, sur une colonne à part : les
+   composantes disent ce qui touche la limite, le relevé dit d’où il souffle. En
+   face des deux lignes plutôt qu’à la suite de l’une, sinon il se lirait comme un
+   troisième couple. Ton estompé : c’est la donnée d’entrée, pas la comparaison. */
+.m-cmp .val .wgrid{display:flex;flex-wrap:wrap;align-items:center;gap:3px 8px}
+.m-cmp .val .wcol{flex:0 0 auto}
+.m-cmp .val .wraw{flex:0 0 auto;color:var(--muted2);white-space:nowrap}
 /* Le critère qui fait le pouce rouge de la phase se lit en rouge : sur une
    ligne repliée, deux comparaisons se partagent un seul verdict, et rien ne
    disait laquelle des deux le tirait vers le bas.
@@ -6826,7 +6833,7 @@ function assess(role, ctx){
     const compsOf = c => {
       const g = !!c.w.gust_kt, sp = g ? c.w.gust_kt : c.w.speed_kt;
       const k = windComponents(qfu, c.w.direction_deg, sp);
-      return k ? {cross:k.cross, tail:Math.max(0,k.tail), gust:g, src:c.src} : null;
+      return k ? {cross:k.cross, tail:Math.max(0,k.tail), gust:g, src:c.src, w:c.w} : null;
     };
     const cand = windCands.map(compsOf).filter(Boolean);
     const pickMax = key => cand.reduce((a,b)=> (a==null || b[key]>a[key]) ? b : a, null);
@@ -6838,6 +6845,12 @@ function assess(role, ctx){
          ferait lire un pouce rouge à côté de deux chiffres verts. */
       res.wind.comp = {cross:bx.cross, tail:bt.tail};
       res.wind.govSrc = (bx.src==="TAF" || bt.src==="TAF") ? "TAF" : "METAR";
+      /* Le vent QUI GOUVERNE chaque composante, gardé tel quel : la case vent
+         l’écrit à côté des deux couples, et montrer l’observation quand c’est la
+         prévision qui commande afficherait une direction qui ne produit pas les
+         chiffres posés juste à sa gauche. Les deux couples ne viennent pas
+         forcément du même vent — d’où deux entrées et non une. */
+      res.wind.gov = {cross:bx, tail:bt};
       res.verdicts.push({
         question:"WIND", label:"Wind components",
         result: worst(bx.cross>cfg.maxCrosswindKt?"NO_GO":(cfg.maxCrosswindKt-bx.cross<=2?"MARGINAL":"GO"),
@@ -10901,7 +10914,14 @@ function mVisInfo(tb, r, qOpt){
 function mWindInfo(r){
   if (!r.wind || !r.wind.comp) return null;
   const wv = (r.verdicts||[]).find(v=>v.question==="WIND");
+  /* Le vent qui a produit les composantes, pas l’observation : quand la
+     prévision gouverne, c’est elle qu’il faut lire à côté des chiffres. Deux
+     entrées, parce que traversier et arrière se prennent séparément au pire
+     candidat et peuvent sortir de deux vents différents. */
+  const g = r.wind.gov;
+  const winds = g ? [g.cross.w, g.tail.w] : (r.wind.wind ? [r.wind.wind] : []);
   return {cross:r.wind.comp.cross, tail:Math.max(0,r.wind.comp.tail),
+          winds, src: g && (g.cross.src==="TAF" || g.tail.src==="TAF") ? "TAF" : "METAR",
           st: wv ? cls(wv.result) : "unknown"};
 }
 /* Le plafond de la phase, comme la vis/RVR juste au-dessus : la ligne de Q2 qui
@@ -11070,11 +11090,32 @@ function mEditCeilRow(tb, r, c){
     `<span class="o${oCls(c.st)}">${obs}</span> ${cmp} ${field}`, dhSub);
 }
 
+/* Le vent tel qu’il est reporté — direction, vitesse, rafale — dans l’écriture
+   de la bande météo des favoris : même barre oblique entre le d’où et le combien,
+   même unité rendue à la petite capitale grise que le reste de la case. */
+function mWindTxt(w){
+  if (!w || w.speed_kt==null) return "";
+  if (!w.speed_kt && !w.gust_kt) return "Calm";
+  const dir = w.variable ? "VRB" : (w.direction_deg!=null ? String(w.direction_deg).padStart(3,"0")+"°" : "—");
+  const sp = windRep(w, w.speed_kt), gu = w.gust_kt!=null ? windRep(w, w.gust_kt) : null;
+  return `${dir}/${sp.v}${gu ? "G"+gu.v : ""}<small>${sp.u}</small>`;
+}
+/* Les deux couples à gauche, le vent qui les produit à droite : sans lui, la case
+   dit de combien la limite est approchée mais tait d’où le vent souffle — et c’est
+   cette direction-là qui explique la piste retenue. Le vent écrit est celui qui
+   GOUVERNE les composantes (voir mWindInfo) ; les deux ne s’écrivent que s’ils
+   diffèrent vraiment, sinon la case répèterait deux fois le même chiffre. */
 function mWindRow(w){
   if (!w) return mCmpRow("WIND", "unknown", "—");
+  const txt = [...new Set((w.winds||[]).map(mWindTxt).filter(Boolean))].join(" / ");
+  const raw = txt
+    ? `<span class="wraw" title="Wind governing the components — ${w.src==="TAF"?"forecast in this phase’s window, the more restrictive":"observed"}; the announced gust is included">${txt}</span>`
+    : "";
   return mCmpRow("WIND", w.st,
-    `<span class="wl">XW <span class="o${oCls(maxCompSt(w.cross, cfg.maxCrosswindKt))}">${mUnitVal(w.cross,"kt")}</span> ${cmpSign(w.cross, cfg.maxCrosswindKt, "max")} ${mUnitVal(cfg.maxCrosswindKt,"kt")}</span>`
-   +`<span class="wl">TW <span class="o${oCls(maxCompSt(w.tail, cfg.maxTailwindKt))}">${mUnitVal(w.tail,"kt")}</span> ${cmpSign(w.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span>`);
+    `<span class="wgrid"><span class="wcol">`
+   +`<span class="wl">XW <span class="o${oCls(maxCompSt(w.cross, cfg.maxCrosswindKt))}">${mUnitVal(w.cross,"kt")}</span> ${cmpSign(w.cross, cfg.maxCrosswindKt, "max")} ${mUnitVal(cfg.maxCrosswindKt,"kt")}</span>`
+   +`<span class="wl">TW <span class="o${oCls(maxCompSt(w.tail, cfg.maxTailwindKt))}">${mUnitVal(w.tail,"kt")}</span> ${cmpSign(w.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span>`
+   +`</span>${raw}</span>`);
 }
 
 /* ---------- détail d'une phase ----------
