@@ -2366,23 +2366,37 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
    bande dit déjà la piste retenue, et dérouler d'office le message entier
    sous chaque terrain noierait les relevés qui suivent. Ouverte, elle
    prolonge la bande : même fond, mêmes bords, la bordure du milieu tombe pour
-   que le titre et le texte fassent un seul bloc. */
+   que le titre et le texte fassent un seul bloc.
+   Elle doit se lire comme un BOUTON, pas comme un titre. Premier jet manqué :
+   calquée sur l'étiquette « RUNWAY IN USE · ESTIMATED » juste au-dessus, elle
+   en avait la pâleur et le petit corps, et l'œil la classait avec elle —
+   regardée sans être vue. D'où l'encre pleine sur le mot D-ATIS, le trait de
+   bordure appuyé, et le chevron dans sa pastille à droite : trois signaux qui
+   disent « ceci s'ouvre » avant même qu'on lise. */
 .dts-box{
-  display:flex;align-items:center;gap:8px;width:100%;margin-top:6px;
-  background:var(--field);border:1px solid var(--line);border-radius:6px;
-  padding:7px 12px 8px;text-align:left;cursor:pointer;color:var(--muted);
-  font:600 11px/1.3 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+  display:flex;align-items:center;gap:10px;width:100%;margin-top:6px;
+  background:var(--field);border:1px solid var(--line2);border-radius:6px;
+  padding:9px 11px 9px 13px;text-align:left;cursor:pointer;color:var(--text);
+  font:700 12px/1.3 var(--mono);letter-spacing:.09em;text-transform:uppercase;
 }
-.dts-box:hover{border-color:var(--line2);color:var(--text)}
+.dts-box:hover{border-color:var(--cyan)}
+.dts-box:hover .chev{border-color:var(--cyan);color:var(--cyan)}
 .dts-box .tag{flex:1;min-width:0}
-.dts-box .chev{flex:none;font-size:10px;opacity:.75}
+/* Le mot D-ATIS porte l'encre, la lettre et l'heure restent des précisions :
+   c'est le mot qu'on cherche du regard. */
+.dts-box .tag .n{font-weight:500;color:var(--muted2);letter-spacing:.06em}
+.dts-box .chev{
+  flex:none;display:flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border:1px solid var(--line2);border-radius:50%;
+  font-size:11px;line-height:1;color:var(--muted);
+}
 .dts-box[aria-expanded="true"]{
-  color:var(--text);border-bottom-color:transparent;
+  border-bottom-color:transparent;
   border-bottom-left-radius:0;border-bottom-right-radius:0;
 }
 .dts-panel{
-  background:var(--field);border:1px solid var(--line);border-top:0;
-  border-radius:0 0 6px 6px;padding:0 12px 10px;
+  background:var(--field);border:1px solid var(--line2);border-top:0;
+  border-radius:0 0 6px 6px;padding:0 13px 11px;
 }
 /* Le texte tel qu'il est diffusé : ni recomposé, ni tronqué. Il se replie sur
    la largeur disponible plutôt que de pousser une barre horizontale sous la
@@ -5395,8 +5409,9 @@ function dtsBoxHtml(icao){
      la seule chose de l'ATIS qui se retienne par cœur. */
   const lettre = t.map(x => x.code).filter(Boolean).join("/");
   const heure = t.map(x => x.time).filter(Boolean)[0] || "";
-  const tag = `D-ATIS${lettre ? " · info " + escapeHtmlText(lettre) : ""}`
+  const prec = `${lettre ? " · info " + escapeHtmlText(lettre) : ""}`
     + `${heure ? " · " + escapeHtmlText(heure) + "Z" : ""}`;
+  const tag = `D-ATIS${prec ? `<span class="n">${prec}</span>` : ""}`;
   /* Un terrain publie soit un ATIS unique, soit deux — arrivée et départ.
      Chacun se nomme, mais seulement quand il y en a deux à distinguer. */
   const nom = x => x.type === "arr" ? "ARRIVAL" : x.type === "dep" ? "DEPARTURE" : "";
