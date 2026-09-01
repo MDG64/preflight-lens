@@ -2029,7 +2029,7 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
    verdict, cerclé de la couleur de leur propre pouce. Sans verdict, le cadre
    neutre — la case existe, elle n'a rien à dire. */
 .m-cmp{
-  display:flex;align-items:center;gap:5px;min-width:0;
+  display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0;
   padding:2px 5px;border:1px solid var(--line);border-radius:5px;
 }
 .m-cmp.edge-go{border-color:var(--green)}
@@ -2051,13 +2051,21 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
    l'ellipse mangeait justement les unités de la fin. */
 .m-cmp .val .wl{display:block}
 .m-cmp .val .wl+.wl{margin-top:3px}
-/* Et le vent lui-même à DROITE des deux couples, sur une colonne à part : les
-   composantes disent ce qui touche la limite, le relevé dit d’où il souffle. En
-   face des deux lignes plutôt qu’à la suite de l’une, sinon il se lirait comme un
-   troisième couple. Ton estompé : c’est la donnée d’entrée, pas la comparaison. */
-.m-cmp .val .wgrid{display:flex;flex-wrap:wrap;align-items:center;gap:3px 8px}
-.m-cmp .val .wcol{flex:0 0 auto}
-.m-cmp .val .wraw{flex:0 0 auto;color:var(--muted2);white-space:nowrap}
+/* Et le vent lui-même au BOUT de la case, passé le pouce, poussé contre le bord
+   droit : les composantes disent ce qui touche la limite, le relevé dit d’où il
+   souffle. Après le verdict et non entre les chiffres, parce qu’il n’est comparé
+   à rien — c’est la donnée d’entrée, pas un troisième couple. Ton estompé pour la
+   même raison. La case sait passer à la ligne : sur les lignes de phase repliées
+   du téléphone, large de 185 px, il ne reste pas 80 px à droite du pouce, et le
+   vent y prend la ligne du dessous plutôt que d’écraser les composantes. */
+.m-cmp .wraw{
+  flex:0 0 auto;margin-left:auto;
+  font:600 12px/1.2 var(--mono);font-variant-numeric:tabular-nums;
+  color:var(--muted2);white-space:nowrap;
+}
+.m-cmp .wraw small{font-size:9px;font-weight:400;margin-left:1px}
+.m-phase.stacked .m-cmp .wraw{font-size:15px}
+.m-phase.stacked .m-cmp .wraw small{font-size:10.5px}
 /* Le critère qui fait le pouce rouge de la phase se lit en rouge : sur une
    ligne repliée, deux comparaisons se partagent un seul verdict, et rien ne
    disait laquelle des deux le tirait vers le bas.
@@ -11082,9 +11090,12 @@ const M_STACKED = ["DESTINATION", "DESTINATION_ALTERNATE"];
    dégagement, l'exigence comparée est le minimum plus l'incrément de
    planification, et écrire l'un à la place de l'autre ferait taper 900 pour
    obtenir 1700. */
-const mCmpRow = (k, st, val, sub)=>`<span class="m-cmp edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":""}">
+/* `after` : ce qui se pose APRÈS le pouce, au bout de la case. La comparaison
+   s’arrête au verdict ; ce qui suit n’est plus comparé à rien — c’est le cas du
+   vent reporté, donnée d’entrée posée à côté des composantes qu’elle produit. */
+const mCmpRow = (k, st, val, sub, after)=>`<span class="m-cmp edge-${st}${st==="nogo"?" bad":st==="marginal"?" warn":""}">
     <span class="k">${k}</span><span class="val">${val}</span>
-    <span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>${sub?`<span class="sub">${sub}</span>`:""}</span>`;
+    <span class="ico ${st}" role="img" aria-label="${STATE_LABEL[st]}">${STATE_ICON[st]}</span>${after||""}${sub?`<span class="sub">${sub}</span>`:""}</span>`;
 function mVisRow(vis){
   const cmp = vis.obs==null || vis.req==null ? "" : (vis.obs < vis.req ? "&lt;" : "≥");
   return mCmpRow("VIS/RVR", vis.st,
@@ -11211,10 +11222,9 @@ function mWindRow(w){
     ? `<span class="wraw" title="Wind governing the components — ${w.src==="TAF"?"forecast in this phase’s window, the more restrictive":"observed"}; the announced gust is included">${txt}</span>`
     : "";
   return mCmpRow("WIND", w.st,
-    `<span class="wgrid"><span class="wcol">`
-   +`<span class="wl">XW <span class="o${oCls(maxCompSt(w.cross, cfg.maxCrosswindKt))}">${mUnitVal(w.cross,"kt")}</span> ${cmpSign(w.cross, cfg.maxCrosswindKt, "max")} ${mUnitVal(cfg.maxCrosswindKt,"kt")}</span>`
-   +`<span class="wl">TW <span class="o${oCls(maxCompSt(w.tail, cfg.maxTailwindKt))}">${mUnitVal(w.tail,"kt")}</span> ${cmpSign(w.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span>`
-   +`</span>${raw}</span>`);
+    `<span class="wl">XW <span class="o${oCls(maxCompSt(w.cross, cfg.maxCrosswindKt))}">${mUnitVal(w.cross,"kt")}</span> ${cmpSign(w.cross, cfg.maxCrosswindKt, "max")} ${mUnitVal(cfg.maxCrosswindKt,"kt")}</span>`
+   +`<span class="wl">TW <span class="o${oCls(maxCompSt(w.tail, cfg.maxTailwindKt))}">${mUnitVal(w.tail,"kt")}</span> ${cmpSign(w.tail, cfg.maxTailwindKt, "max")} ${mUnitVal(cfg.maxTailwindKt,"kt")}</span>`,
+    null, raw);
 }
 
 /* ---------- détail d'une phase ----------
