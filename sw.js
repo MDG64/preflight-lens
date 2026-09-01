@@ -192,6 +192,35 @@ self.addEventListener("fetch", e => {
     return;
   }
 
+  // 3 bis) COUCHE MÉTÉO MONDIALE (/api/wx/map) : réseau d'abord ET dépôt.
+  //    Seul appel d'API mis en cache, et la seule exception à la règle 1 :
+  //    c'est un INSTANTANÉ mondial complet — 5 300 stations, catégorie et vent
+  //    — que le proxy régénère toutes les 150 s. 93 Ko gzippés, à côté des
+  //    21 Mo de tuiles déjà déposés par la règle 5 : le coût ne se discute pas.
+  //    Sans lui, hors ligne la carte perdait TOUTE couleur en dehors des
+  //    terrains de la route — le reste du monde passait gris, alors que la
+  //    dernière situation connue reste ce qu'on a de mieux pour un déroutement.
+  //    Elle n'est pas servie « cache d'abord » : en ligne, une couche météo
+  //    doit être la plus fraîche possible, la copie n'est qu'un filet.
+  //    Les AUTRES appels météo (/api/wx?ids=…) restent hors cache À DESSEIN :
+  //    leur URL porte la liste des terrains, chaque combinaison déposerait sa
+  //    propre entrée, et l'app garde déjà ces relevés-là en localStorage, par
+  //    terrain et datés (notam_wx:*).
+  //    L'app ne déduit PAS de cette règle que les données sont fraîches : elle
+  //    lit l'heure de l'instantané dans le corps (`updated`) et l'affiche.
+  if (url.includes("/api/wx/map")) {
+    e.respondWith(
+      fetch(e.request).then(r => {
+        if (r && r.ok) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }).catch(() => caches.match(e.request))   // hors ligne : le dernier instantané
+    );
+    return;
+  }
+
   // 4) manifest.json : il porte l'identité de l'app (nom sous l'icône, écran
   //    de démarrage, nom repris par le wrapper store). En cache d'abord il
   //    restait figé jusqu'au prochain changement de CACHE — un renommage de

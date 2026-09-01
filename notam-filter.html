@@ -3988,6 +3988,22 @@
       gap: 4px;
     }
 
+    /* Bandeau « couleurs gardées » de la vue Weather. Ambre et non rouge : la
+       carte reste exploitable, c'est son ÂGE qui demande un regard. Il ne
+       s'affiche qu'en vue weather et seulement quand la copie n'est plus
+       adossée au réseau — voir mapWxOldNote(). */
+    .map-wxold {
+      background: var(--panel);
+      border: 1px solid var(--amber);
+      border-left: 3px solid var(--amber);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--amber);
+      max-width: 260px;
+    }
+
     .mleg {
       display: flex;
       align-items: center;
@@ -6912,6 +6928,13 @@ body .stat .k{
            la carte de Weather Lens (météo du dernier METAR, route seulement).
            NOTAM : vert/rouge selon la couverture hors ligne, comme avant. -->
       <div class="map-tools" id="mapTools">
+        <!-- Copie gardée de la couche météo mondiale. La carte garde ses
+             couleurs hors ligne — un point gris ne renseigne personne — mais
+             elle DOIT dire de quand elles datent, sinon rien ne distingue à
+             l'écran un relevé de dix minutes d'un relevé de six heures.
+             Hors du cartouche de légende À DESSEIN : l'œil replie la légende,
+             et un avertissement ne doit pas pouvoir se replier avec elle. -->
+        <div class="map-wxold" id="mapWxOld" hidden></div>
         <label class="map-mode" title="Switch the dots between weather colours and NOTAM download state">
           <span class="lb wx">Weather</span>
           <input type="checkbox" id="mapModeChk">
@@ -19331,36 +19354,79 @@ function renderInfo(icao) {
     /* `force` : la minuterie de la carte ouverte passe outre l'anti-rebond —
        elle bat au même pas que lui, s'y soumettre ferait sauter un tick sur
        deux. Les appels d'ouverture et de bascule, eux, le gardent. */
+    /* Âge de l'instantané mondial, au-delà duquel ses couleurs cessent d'être
+       « en direct ». Le proxy le régénère toutes les 150 s : à quinze minutes,
+       on ne discute plus la marge, plus personne n'alimente ces couleurs. */
+    const MAP_WXWORLD_LIVE_MS = 15 * 60e3;
+    let mapWxWorldUpdated = 0;                     // heure de l'instantané (d.updated)
+    /* Le bandeau de la carte. Il ne dit rien tant que les couleurs sont vivantes
+       — un avertissement permanent ne s'avertit plus de rien. */
+    function mapWxOldNote() {
+      const el = $("#mapWxOld");
+      if (!el) return;
+      const age = mapWxWorldUpdated ? Date.now() - mapWxWorldUpdated : 0;
+      if (mapMode !== "wx" || !mapWxWorldUpdated || age <= MAP_WXWORLD_LIVE_MS) { el.hidden = true; return; }
+      const h = Math.floor(age / 3600e3), m = Math.round((age % 3600e3) / 60e3);
+      el.textContent = `⚠ Weather colours from ${stampZ(mapWxWorldUpdated)}` +
+        ` — ${h ? h + " h " + m + " min" : m + " min"} old, ` +
+        `${netOnline() ? "not refreshing" : "offline"}. Stations may have changed.`;
+      el.hidden = false;
+    }
     async function mapWxWorldRefresh(force) {
       if (!force && Date.now() - mapWxWorldAt < MAP_WXWORLD_TTL) return;
       try {
+        /* En navigateur, le service worker garde cette réponse (règle 3 bis) :
+           hors ligne le fetch RÉUSSIT et rend la dernière copie. En natif il n'y
+           a pas de service worker, d'où natWrite/natRead ci-dessous — même
+           partage des rôles que pour les frontières FIR. */
         const r = await fetch(`${BACKEND_URL}/api/wx/map`);
         if (!r.ok) throw new Error("HTTP " + r.status);
-        const d = await r.json();
+        const t = await r.text();
+        const d = JSON.parse(t);
         if (!d || !Array.isArray(d.stations)) return;
-        const m = new Map(), w = new Map();
-        for (const s of d.stations) {
-          m.set(s[0], s[3]);
-          // [wdir, wspd] absents si calme ou METAR périmé, wdir null si VRB,
-          // rafale en 7e position quand elle dépasse la moyenne, pointe
-          // annoncée en 8e quand une rafale sans direction dépasse encore ce
-          // vent. La ligne est gardée telle quelle : mapWindOf en tire la
-          // flèche et le triangle. Le proxy applique la même règle de
-          // fraîcheur qu'à la catégorie.
-          if (s.length > 4 && (s[5] > 0 || s[7] > 0)) w.set(s[0], [s[4], s[5], s[6] || 0, s[7] || 0]);
-        }
-        // d.winds porte à part les vents PRÉVUS par TAF : par OACI, un triplet
-        // [dir,spd,gst] par horizon +1/+2/+3 h, ou 0 quand le TAF ne gouverne
-        // pas cet instant — le sélecteur d'horizon pioche dedans sans
-        // re-requêter.
-        const fc = new Map();
-        if (d.winds) for (const k in d.winds) fc.set(k, d.winds[k]);
-        // d.cb : les terrains dont le METAR ou le TAF annonce un cumulonimbus,
-        // quelle que soit l'heure — l'éclair jaune de la carte.
-        mapWxWorld = m; mapWxWind = w; mapWxFc = fc; mapWxCb = new Set(d.cb || []);
-        mapWxWorldAt = Date.now();
-        if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
-      } catch (_) { }
+        natWrite("wxmap.json", t);
+        mapWxWorldApply(d);
+        return;
+      } catch (_) {
+        /* Natif hors ligne : la copie du disque. En navigateur on n'arrive ici
+           que sans service worker — rien à repêcher, les points restent gris. */
+        try {
+          const s = await natRead("wxmap.json");
+          if (s) { const d = JSON.parse(s); if (d && Array.isArray(d.stations)) mapWxWorldApply(d); }
+        } catch (_) { }
+      }
+    }
+    /* L'ingestion, séparée de l'appel : la copie gardée et la réponse fraîche
+       peuplent les mêmes tables, par le même chemin. C'est `updated` — l'heure
+       de l'instantané, portée par les données elles-mêmes — qui dit si les
+       couleurs sont vivantes, et non la branche qui a servi : le service worker
+       rend une copie par un fetch RÉUSSI, on ne peut pas le déduire d'un catch. */
+    function mapWxWorldApply(d) {
+      const m = new Map(), w = new Map();
+      const maj = Date.parse(d.updated);
+      mapWxWorldUpdated = isFinite(maj) ? maj : 0;
+      for (const s of d.stations) {
+        m.set(s[0], s[3]);
+        // [wdir, wspd] absents si calme ou METAR périmé, wdir null si VRB,
+        // rafale en 7e position quand elle dépasse la moyenne, pointe
+        // annoncée en 8e quand une rafale sans direction dépasse encore ce
+        // vent. La ligne est gardée telle quelle : mapWindOf en tire la
+        // flèche et le triangle. Le proxy applique la même règle de
+        // fraîcheur qu'à la catégorie.
+        if (s.length > 4 && (s[5] > 0 || s[7] > 0)) w.set(s[0], [s[4], s[5], s[6] || 0, s[7] || 0]);
+      }
+      // d.winds porte à part les vents PRÉVUS par TAF : par OACI, un triplet
+      // [dir,spd,gst] par horizon +1/+2/+3 h, ou 0 quand le TAF ne gouverne
+      // pas cet instant — le sélecteur d'horizon pioche dedans sans
+      // re-requêter.
+      const fc = new Map();
+      if (d.winds) for (const k in d.winds) fc.set(k, d.winds[k]);
+      // d.cb : les terrains dont le METAR ou le TAF annonce un cumulonimbus,
+      // quelle que soit l'heure — l'éclair jaune de la carte.
+      mapWxWorld = m; mapWxWind = w; mapWxFc = fc; mapWxCb = new Set(d.cb || []);
+      mapWxWorldAt = Date.now();
+      mapWxOldNote();
+      if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
     }
 
     // Le curseur : position gauche = vue weather, droite = vue notam. La
@@ -19374,6 +19440,7 @@ function renderInfo(icao) {
       // d'un rechargement des couches — on s'en dispense.
       if (GL.map && document.body.classList.contains("light"))
         GL.map.setStyle(glStyle(true, GL.offline, mode === "wx"));
+      mapWxOldNote();              // le bandeau n'appartient qu'à la vue weather
     }
     $("#mapModeChk").onchange = e => {
       setMapMode(e.target.checked ? "notam" : "wx");
@@ -19396,6 +19463,10 @@ function renderInfo(icao) {
       if (document.hidden || $("#mapOv").hidden || mapMode !== "wx") return;
       mapWxRefresh();
       mapWxWorldRefresh(force);
+      /* L'âge affiché doit VIEILLIR sous les yeux, même quand plus rien
+         n'arrive : c'est le seul cas où le bandeau a quelque chose à dire, et
+         mapWxWorldApply() ne le rappellerait justement pas. */
+      mapWxOldNote();
     }
     setInterval(() => mapWxTick(true), MAP_WX_REFRESH_MS);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) mapWxTick(false); });
