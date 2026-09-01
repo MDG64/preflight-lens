@@ -2381,10 +2381,12 @@ details.warns.m-warns.worst-CRITICAL>summary{color:var(--red)}
 }
 .dts-box:hover{border-color:var(--cyan)}
 .dts-box:hover .chev{border-color:var(--cyan);color:var(--cyan)}
-.dts-box .tag{flex:1;min-width:0}
+/* `dts-nom` et pas `tag` : l'autre copie du module vit dans une page qui a
+   déjà une classe `.tag` (les catégories de NOTAM). Même nom des deux côtés. */
+.dts-box .dts-nom{flex:1;min-width:0}
 /* Le mot D-ATIS porte l'encre, la lettre et l'heure restent des précisions :
    c'est le mot qu'on cherche du regard. */
-.dts-box .tag .n{font-weight:500;color:var(--muted2);letter-spacing:.06em}
+.dts-box .dts-nom .n{font-weight:500;color:var(--muted2);letter-spacing:.06em}
 .dts-box .chev{
   flex:none;display:flex;align-items:center;justify-content:center;
   width:20px;height:20px;border:1px solid var(--line2);border-radius:50%;
@@ -5422,7 +5424,7 @@ function dtsBoxHtml(icao){
     : "";
   return `<button type="button" class="dts-box" data-dts="${icao}" aria-expanded="${open}"
       title="Digital ATIS as broadcast — the declared runway in use, and everything else the recording carries">`
-    + `<span class="tag">${tag}</span><span class="chev">${open ? "▾" : "▸"}</span></button>${corps}`;
+    + `<span class="dts-nom">${tag}</span><span class="chev">${open ? "▾" : "▸"}</span></button>${corps}`;
 }
 
 /* Le D-ATIS arrivé : il change le QFU retenu par le moteur, donc la page se

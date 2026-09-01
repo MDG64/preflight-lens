@@ -5998,24 +5998,107 @@ body.light .stat.on {
       margin-top: 16px
     }
 
-    /* D-ATIS : la configuration lue en tête, le texte diffusé en dessous. Le
-       texte garde sa casse et ses retours d'origine — c'est un message
-       opérationnel, pas de la prose à remettre en forme. */
+    /* D-ATIS : une CASE sous la bande des pistes, et derrière elle la
+       configuration lue puis le texte diffusé. Le texte garde sa casse et ses
+       retours d'origine — c'est un message opérationnel, pas de la prose à
+       remettre en forme.
+       Repliée par défaut depuis le 2026-09-01 : le message entier déroulé en
+       tête de chaque terrain poussait le METAR sous la ligne de flottaison, et
+       c'est le relevé qu'on vient lire. La case dit qu'il existe et porte sa
+       lettre ; le reste tient à un clic. Elle doit se lire comme un BOUTON et
+       non comme un titre — d'où l'encre pleine sur le mot D-ATIS, la bordure
+       appuyée et le chevron dans sa pastille. */
     .dts-main {
-      margin-top: 16px
+      margin-top: 10px
     }
 
+    .dts-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: var(--radius);
+      box-shadow: var(--elev);
+      padding: 9px 11px 9px 14px;
+      text-align: left;
+      cursor: pointer;
+      color: var(--text);
+      font: 700 12px/1.3 var(--mono);
+      letter-spacing: .09em;
+      text-transform: uppercase
+    }
+
+    .dts-box:hover {
+      border-color: var(--cyan-dim)
+    }
+
+    .dts-box:hover .chev {
+      border-color: var(--cyan-dim);
+      color: var(--cyan)
+    }
+
+    /* `dts-nom` et pas `tag` : cette page a déjà une classe `.tag`, celle des
+       catégories de NOTAM — bordure, hauteur fixe et texte CENTRÉ. Elle
+       s'appliquait à l'étiquette de la case et poussait « D-ATIS » au milieu
+       du bouton. */
+    .dts-box .dts-nom {
+      flex: 1;
+      min-width: 0
+    }
+
+    /* Le mot D-ATIS porte l'encre, la lettre et l'heure restent des
+       précisions : c'est le mot qu'on cherche du regard. */
+    .dts-box .dts-nom .n {
+      font-weight: 500;
+      color: var(--muted2);
+      letter-spacing: .06em
+    }
+
+    .dts-box .chev {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border: 1px solid var(--line2);
+      border-radius: 50%;
+      font-size: 11px;
+      line-height: 1;
+      color: var(--muted)
+    }
+
+    /* Ouverte, la case et son contenu font un seul bloc : la bordure du milieu
+       tombe, les coins se carrent. */
+    .dts-box[aria-expanded="true"] {
+      border-bottom-color: transparent;
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      box-shadow: none
+    }
+
+    .dts-panel {
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-top: 0;
+      border-radius: 0 0 var(--radius) var(--radius);
+      box-shadow: var(--elev);
+      padding: 11px 14px 12px
+    }
+
+    /* La configuration lue dans le texte, en tête du panneau : plus de cadre à
+       elle, elle est DÉJÀ dans celui de la case. Un cadre dans un cadre se
+       lisait comme deux blocs sans rapport. */
     .dts-rwy {
       display: flex;
       align-items: center;
       gap: 16px;
       flex-wrap: wrap;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--elev);
-      padding: 10px 14px 11px;
-      margin-bottom: 8px
+      padding-bottom: 9px;
+      margin-bottom: 9px;
+      border-bottom: 1px solid var(--line)
     }
 
     .dts-rwy .grp {
@@ -6045,17 +6128,19 @@ body.light .stat.on {
       margin-right: 4px
     }
 
+    /* Le texte diffusé, nu dans le panneau : il se replie sur la largeur
+       disponible plutôt que de pousser une barre horizontale — un ATIS se lit
+       en entier, ou il ne sert à rien. */
     .dts-raw {
-      margin: 0 0 8px;
-      padding: 11px 14px;
-      background: var(--field);
-      border: 1px solid var(--line);
-      border-radius: 6px;
+      margin: 0;
       font: 500 11.5px/1.55 var(--mono);
       color: var(--muted);
       white-space: pre-wrap;
-      word-break: break-word;
-      overflow-x: auto
+      word-break: break-word
+    }
+
+    .dts-raw + .dts-raw {
+      margin-top: 10px
     }
 
     .dts-raw .k {
@@ -22791,7 +22876,14 @@ function dtsAUnQfu(icao){
       const hit = qlvCache.get(icao);
       const d = hit && !hit.err && hit.data && Array.isArray(hit.data.arr) ? hit.data : null;
       const obsDown = hit && hit.err && !hit.silent ? (hit.why || "error") : null;
-      if (!d && !obsDown && !hit) return null;      // rien demandé encore
+      /* Rien demandé encore — SAUF si le D-ATIS déclare déjà la configuration.
+         Ces terrains-là ne sont volontairement pas observés (qlvLoad rend la
+         main dès que le contrôle déclare ses pistes), donc `hit` y reste vide
+         POUR TOUJOURS : la bande ne se dessinait jamais exactement là où elle
+         avait la meilleure source. Sur les 76 terrains à D-ATIS, la page
+         Weather n'affichait donc aucune piste en service quand Minima, lui,
+         les donnait — « visible dans un module, pas dans l'autre ». */
+      if (!d && !obsDown && !hit && !dtsQfu(icao, ends)) return null;
 
       const norm = x => { const v = Math.round(x) % 360; return v <= 0 ? v + 360 : v; };
       const cdiff = (a, b) => { const x = Math.abs(a - b) % 360; return x > 180 ? 360 - x : x; };
@@ -22980,25 +23072,51 @@ function dtsAUnQfu(icao){
       qlvPaint(icao);
     }
 
-    /* Le D-ATIS sous le code du terrain : la configuration qu'on en a tirée,
-       puis le texte tel qu'il est diffusé. On montre les deux — la lecture
-       parce que c'est elle qui sert, le texte parce qu'il porte bien plus que
-       les pistes : fermetures, travaux, consignes de lecture. */
+    /* Le D-ATIS sous la bande des pistes : une case qui le nomme et porte sa
+       lettre, et derrière elle la configuration qu'on en a tirée puis le texte
+       tel qu'il est diffusé. On garde les deux — la lecture parce que c'est
+       elle qui sert, le texte parce qu'il porte bien plus que les pistes :
+       fermetures, travaux, consignes de lecture.
+       L'état ouvert est rangé PAR TERRAIN et hors du DOM : la carte se repeint
+       quand une observation arrive, et un texte qu'on lit ne doit pas se
+       refermer sous les yeux. Même case, même geste que dans Minima. */
+    const dtsOpen = new Set();
     function dtsNotify(icao) {
       document.querySelectorAll(`[data-dts="${icao}"]`).forEach(el => {
         const t = dtsTextes(icao);
         el.hidden = !t;
         if (!t) { el.innerHTML = ""; return; }
+        const ouvert = dtsOpen.has(icao);
         const q = dtsQfu(icao, qlvEnds(icao) || []);
         const grp = (k, ids) => ids && ids.length
           ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${ids.join("/")}</b></span>` : "";
         const usage = q ? `<div class="dts-rwy">${grp("Take off", q.dep)}${grp("Landing", q.arr)}</div>` : "";
+        const prec = `${t[0].code ? " · info " + esc(t[0].code) : ""}`
+          + `${t[0].time ? " · " + esc(t[0].time) + "Z" : ""}`;
+        const corps = ouvert
+          ? `<div class="dts-panel" title="">${usage}`
+            + t.map(x => `<pre class="dts-raw">${t.length > 1 ? `<span class="k">${x.type === "arr" ? "ARRIVAL" : x.type === "dep" ? "DEPARTURE" : ""}</span>\n` : ""}${esc(x.datis)}</pre>`).join("")
+            + `</div>`
+          : "";
         el.innerHTML =
-          `<div class="qlv-lbl">D-ATIS${t[0].code ? " · info " + esc(t[0].code) : ""}${t[0].time ? " · " + esc(t[0].time) + "Z" : ""}</div>`
-          + usage
-          + t.map(x => `<pre class="dts-raw">${t.length > 1 ? `<span class="k">${x.type === "arr" ? "ARRIVAL" : x.type === "dep" ? "DEPARTURE" : ""}</span>\n` : ""}${esc(x.datis)}</pre>`).join("");
+          `<button type="button" class="dts-box" data-dts-box="${icao}" aria-expanded="${ouvert}"`
+          + ` title="Digital ATIS as broadcast — the declared runway in use, and everything else the recording carries">`
+          + `<span class="dts-nom">D-ATIS${prec ? `<span class="n">${prec}</span>` : ""}</span>`
+          + `<span class="chev">${ouvert ? "▾" : "▸"}</span></button>`
+          + corps;
       });
     }
+    /* Le clic sur la case, délégué au document : les cartes de terrain sont
+       réécrites en bloc à chaque rafraîchissement, et rien ne rebranche leurs
+       boutons après coup. Seule la case du terrain concerné se repeint. */
+    document.addEventListener("click", e => {
+      const b = e.target && e.target.closest && e.target.closest(".dts-box");
+      if (!b) return;
+      const icao = b.dataset.dtsBox;
+      if (!icao) return;
+      if (dtsOpen.has(icao)) dtsOpen.delete(icao); else dtsOpen.add(icao);
+      dtsNotify(icao);
+    });
     /* Le D-ATIS arrivé peut DÉBLOQUER l'observation : s'il est muet sur les
        pistes, c'est à l'ADS-B de reprendre — d'où le remontage de la bande. */
     function dtsMount(icao) { dtsLoad(icao); dtsNotify(icao); qlvMount(icao); }
@@ -23390,8 +23508,8 @@ function dtsAUnQfu(icao){
         <span class="wx-ap-name">${m ? `${m.city} · ${m.cc}` : ""}</span>
       </div>
       <div class="wx-ap-note" hidden></div>
-      <div class="dts-main" data-dts="${a.icao}" hidden></div>
       <div class="qlv-main" data-qlv="${a.icao}" hidden></div>
+      <div class="dts-main" data-dts="${a.icao}" hidden></div>
       <div class="wx-block">
         <h3>METAR <span class="wx-age" data-age="metar"></span></h3>
         <pre class="wx-raw" data-raw="metar">—</pre>
