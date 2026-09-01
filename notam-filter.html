@@ -5998,6 +5998,72 @@ body.light .stat.on {
       margin-top: 16px
     }
 
+    /* D-ATIS : la configuration lue en tête, le texte diffusé en dessous. Le
+       texte garde sa casse et ses retours d'origine — c'est un message
+       opérationnel, pas de la prose à remettre en forme. */
+    .dts-main {
+      margin-top: 16px
+    }
+
+    .dts-rwy {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--elev);
+      padding: 10px 14px 11px;
+      margin-bottom: 8px
+    }
+
+    .dts-rwy .grp {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      font: 500 12px/1.35 var(--mono);
+      color: var(--muted)
+    }
+
+    .dts-rwy .grp .k {
+      font-size: 13px;
+      letter-spacing: .09em;
+      text-transform: uppercase
+    }
+
+    .dts-rwy b {
+      font: 700 17px/1 var(--mono);
+      letter-spacing: .04em;
+      color: var(--text)
+    }
+
+    .dts-rwy b .u {
+      font: 600 11px/1 var(--mono);
+      letter-spacing: .09em;
+      color: var(--muted);
+      margin-right: 4px
+    }
+
+    .dts-raw {
+      margin: 0 0 8px;
+      padding: 11px 14px;
+      background: var(--field);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: 500 11.5px/1.55 var(--mono);
+      color: var(--muted);
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-x: auto
+    }
+
+    .dts-raw .k {
+      font-size: 9.5px;
+      letter-spacing: .11em;
+      color: var(--muted2)
+    }
+
     .qlv-lbl {
       font: 600 10px/1 var(--sans);
       letter-spacing: .12em;
@@ -22316,6 +22382,174 @@ window.addEventListener("scroll", hidePop, true);
       return `<span class="c">${eff}${rwxTimeTag(c.tEff, refDay)} `
            + `<span class="xw">${c.sign >= 0 ? "←" : "→"}${c.cross}kt</span>${rwxTimeTag(c.tX, refDay)}</span>`;
     }
+    /* Extrait du texte D-ATIS les pistes en service, par usage.
+       Le vocabulaire est très libre d'un terrain à l'autre : « DEPG RWYS, 8R, 9L »,
+       « LNDG AND DEPG RWY 10R », « ILS 22L, DEP 22R », « LNDG/DEPG RWYS 4/8 »,
+       « LANDING RWY 7R, 7L, DEPARTING RWY 7L, 33 », « RUNWAY 3 4 LEFT ». La lecture
+       se fait mot à mot, en suivant le RÔLE COURANT plutôt qu'en découpant :
+         · un mot d'usage (LANDING, DEPG…) ouvre un rôle ; deux qui se suivent sans
+           numéro entre eux ouvrent les DEUX (« LNDG AND DEPG ») ;
+         · un mot d'usage qui arrive APRÈS un numéro referme le rôle et en ouvre un
+           neuf — c'est ce qui sépare « ILS 22L » de « DEP 22R » ;
+         · un numéro n'est retenu que s'il suit IMMÉDIATEMENT un indice : à trois
+           mots de battement, « RWYS 22L 28R FROM NOVEMBER 5 » faisait passer la
+           voie de circulation November 5 pour une piste ;
+         · une phrase de fermeture ou de panne est écartée ENTIÈRE : « RWY 13R, 31L
+           CLSD » ne dit pas ce qui sert. */
+    const CLOS = /\bCLSD\b|\bCLOSED\b|\bOTS\b|OUT OF SERVICE|UNAVBL|UNUSABLE|NOT AVBL|SHORTENED|\bUNMONITORED\b/;
+    const ARR = /^(?:LNDG|LDG|LANDING|ARR|ARRIVAL|ARRIVALS|ARVNG|APCH|APCHS|APCHES|APPCH|APPROACH|APPROACHES|ILS|RNAV|GPS|VISUAL|VISA|LOC|VOR|RNP|PAR)$/;
+    const DEP = /^(?:DEPG|DEPTG|DEPARTING|DEPARTURE|DEPARTURES|DEPS|DEP)$/;
+    const RWY = /^R(?:UNWAY|WY|Y)S?$/;
+    const DESIG = /^(\d{1,2})([LRC])?$/;
+    const FENETRE = 1;
+    const COTE = { LEFT: "L", RIGHT: "R", CENTER: "C", CENTRE: "C" };
+
+    function mots(s) {
+      /* « RWY8 » colle le mot au numéro : on les décolle, mais SEULEMENT là —
+         décoller partout casserait « 22L » en « 22 L ». La barre oblique, elle,
+         sépare des mots et des numéros (« LNDG/DEPG », « RWYS 4/8 ») sans toucher
+         aux décimaux : « 118.3 » reste d'un bloc et ne peut pas être un QFU. */
+      const bruts = s.replace(/\bR(?:UNWAY|WY|Y)S?(?=\d)/g, m => m + " ")
+        .split(/[\s/]+/).map(w => w.replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, "")).filter(Boolean);
+      const out = [];
+      for (let i = 0; i < bruts.length; i++) {
+        const a = bruts[i], b = bruts[i + 1], c = bruts[i + 2];
+        /* Numéro ÉPELÉ : « RUNWAY 3 4 LEFT » vaut 34L, et non les pistes 3 et 4.
+           On ne recolle que devant un côté écrit en toutes lettres — sans cette
+           garde, deux pistes citées à la suite fusionneraient. */
+        if (/^\d$/.test(a) && /^\d$/.test(b) && c && COTE[c] && +(a + b) >= 1 && +(a + b) <= 36) {
+          out.push(a + b + COTE[c]); i += 2; continue;
+        }
+        if (/^\d{1,2}$/.test(a) && b && COTE[b]) { out.push(a + COTE[b]); i += 1; continue; }
+        out.push(a);
+      }
+      return out;
+    }
+
+    function datisRunways(text) {
+      const T = String(text || "").toUpperCase().replace(/\s+/g, " ");
+      const arr = [], dep = [];
+      for (const ph of T.split(/[.;]/)) {
+        if (CLOS.test(ph)) continue;
+        let role = new Set(), neuf = true, fen = 0;
+        for (const w of mots(ph)) {
+          const estArr = ARR.test(w), estDep = DEP.test(w);
+          if (estArr || estDep) {
+            if (!neuf) { role = new Set(); neuf = true; }
+            role.add(estArr ? "arr" : "dep");
+            fen = FENETRE; continue;
+          }
+          if (RWY.test(w)) { fen = FENETRE; continue; }
+          const m = DESIG.exec(w);
+          if (m && fen > 0 && role.size) {
+            const n = parseInt(m[1], 10);
+            if (n >= 1 && n <= 36) {
+              const d = String(n).padStart(2, "0") + (m[2] || "");
+              if (role.has("arr")) arr.push(d);
+              if (role.has("dep")) dep.push(d);
+              neuf = false; fen = FENETRE; continue;
+            }
+          }
+          if (fen > 0) fen--;
+        }
+      }
+      const uniq = x => [...new Set(x)];
+      return { arr: uniq(arr), dep: uniq(dep) };
+    }
+
+    /* ===== D-ATIS américain =====================================================
+       Là où il existe, la configuration ne s'estime pas : elle se LIT. « APPROACH
+       IN USE ILS RY 22L, ILS RY 22R. DEPG RY 22R » est ce que le contrôle déclare,
+       pas ce qu'on déduit d'un échantillon d'avions. Il prime donc sur tout le
+       reste, et il dispense d'interroger l'ADS-B pour ces terrains.
+       Couverture : 76 terrains américains (les plus gros). La LISTE est demandée
+       une fois par session, et c'est elle qui évite d'interroger pour les 5 000
+       autres stations — sans elle, chaque terrain européen coûterait un 404.
+       Deux copies de ce module, comme le reste : minima.html et notam-filter.html. */
+    const DTS_API = BACKEND_URL;
+    const DTS_FRESH_MS = 5 * 60e3;      // l'ATIS peut changer de lettre à tout moment
+    const DTS_RETRY_MS = 60e3;
+    const dtsCache = new Map();         // ICAO -> {at, atis:[...]} | {at, err, absent}
+    const dtsPending = new Map();
+    let dtsCodes = null, dtsCodesAt = 0;
+
+    function dtsCouvert(icao) {
+      /* Tant que la liste n'est pas là, on ne présume pas : on laisse passer, le
+         serveur répondra 404 si le terrain n'est pas couvert. */
+      return !dtsCodes || dtsCodes.has(icao);
+    }
+    function dtsLoadCodes() {
+      if (dtsCodes && Date.now() - dtsCodesAt < 12 * 3600e3) return;
+      if (dtsCodesAt && Date.now() - dtsCodesAt < 60e3) return;
+      dtsCodesAt = Date.now();
+      fetch(`${DTS_API}/api/datis`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && Array.isArray(d.airports)) dtsCodes = new Set(d.airports); })
+        .catch(() => { });
+    }
+    function dtsLoad(icao) {
+      if (!/^[A-Z]{4}$/.test(icao || "")) return;
+      dtsLoadCodes();
+      if (!dtsCouvert(icao)) return;
+      const hit = dtsCache.get(icao);
+      const ttl = hit && hit.err ? DTS_RETRY_MS : DTS_FRESH_MS;
+      if (hit && (hit.absent || Date.now() - hit.at < ttl)) return;
+      if (dtsPending.has(icao)) return;
+      const p = (async () => {
+        try {
+          const r = await fetch(`${DTS_API}/api/datis?icao=${icao}`);
+          if (r.status === 404) { dtsCache.set(icao, { at: Date.now(), absent: true }); return; }
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const d = await r.json();
+          dtsCache.set(icao, { at: Date.now(), atis: Array.isArray(d.atis) ? d.atis : [] });
+        } catch (e) {
+          dtsCache.set(icao, { at: Date.now(), err: true });
+        }
+        dtsNotify(icao);
+      })();
+      p.catch(() => { }).then(() => { if (dtsPending.get(icao) === p) dtsPending.delete(icao); });
+      dtsPending.set(icao, p);
+    }
+    /* Le texte à afficher : un terrain peut publier un ATIS unique (« combined »)
+       ou deux, arrivée et départ. On les rend dans cet ordre, chacun avec sa
+       lettre — c'est elle que le pilote annonce à la fréquence. */
+    function dtsTextes(icao) {
+      const hit = dtsCache.get(icao);
+      if (!hit || !hit.atis || !hit.atis.length) return null;
+      const ordre = { combined: 0, arr: 1, dep: 2 };
+      return hit.atis.slice().sort((a, b) => (ordre[a.type] ?? 9) - (ordre[b.type] ?? 9));
+    }
+    /* Les pistes déclarées, tous ATIS du terrain confondus, réduites à celles qui
+       existent VRAIMENT. Un ATIS dit souvent « RWY 24 » pour le doublet 24L/24R :
+       le raccourci est développé sur la base des pistes du terrain. Un désignateur
+       qui ne correspond à rien est écarté — à Charlotte, l'ATIS annonce des pistes
+       renumérotées que notre graine ne connaît pas encore, et inventer une piste
+       serait pire que se taire. */
+    function dtsQfu(icao, extremites) {
+      const t = dtsTextes(icao);
+      if (!t) return null;
+      const arr = [], dep = [];
+      for (const e of t) {
+        const r = datisRunways(e.datis);
+        arr.push(...r.arr); dep.push(...r.dep);
+      }
+      const ids = new Set((extremites || []).map(q => q.id));
+      const resoudre = liste => {
+        const out = [];
+        for (const d of [...new Set(liste)]) {
+          if (ids.has(d)) { out.push(d); continue; }
+          const larges = [...ids].filter(x => x.replace(/[LRC]$/, "") === d);
+          out.push(...larges);
+        }
+        return [...new Set(out)];
+      };
+      const a = resoudre(arr), d = resoudre(dep);
+      if (!a.length && !d.length) return null;
+      const lettre = t.map(x => x.code).filter(Boolean).join("/");
+      const heure = t.map(x => x.time).filter(Boolean)[0] || "";
+      return { arr: a, dep: d, lettre, heure };
+    }
+
     /* ===== QFU en service — estimation, page Weather =====================
        PORT du module qlv* de minima.html : même stratégie, mêmes seuils, même
        route serveur. Deux copies à garder synchrones — c'est le prix de deux
@@ -22598,7 +22832,14 @@ window.addEventListener("scroll", hidePop, true);
       // Même écriture que le titre de la bande.
       const hhmmZ = t => { const x = new Date(t); return isNaN(x) ? "" :
         String(x.getUTCHours()).padStart(2, "0") + ":" + String(x.getUTCMinutes()).padStart(2, "0") + "Z"; };
+      /* Le D-ATIS passe AVANT tout : il ne s'estime pas, il se lit. C'est la
+         configuration que le contrôle déclare, et aucune observation, si
+         fraîche soit-elle, ne la contredit utilement. */
+      const dts = dtsQfu(icao, cand.concat(closed));
       const pick = kind => {
+        const decl = dts && (kind === "to" ? dts.dep : dts.arr) || [];
+        const ouvertes = decl.filter(id => cand.some(q => q.id === id));
+        if (ouvertes.length) return { ids: ouvertes.slice(0, 4), how: `D-ATIS${dts.lettre ? " " + dts.lettre : ""}`, obs: true, fresh: true };
         const now = fromClusters(d ? (kind === "to" ? d.dep : d.arr) : null, d && d.ref);
         if (now) {
           // Résolu : c'est CE souvenir-là qui vaut d'être gardé. Et l'heure
@@ -22699,6 +22940,27 @@ window.addEventListener("scroll", hidePop, true);
       qlvLoad(icao);
       qlvPaint(icao);
     }
+
+    /* Le D-ATIS sous le code du terrain : la configuration qu'on en a tirée,
+       puis le texte tel qu'il est diffusé. On montre les deux — la lecture
+       parce que c'est elle qui sert, le texte parce qu'il porte bien plus que
+       les pistes : fermetures, travaux, consignes de lecture. */
+    function dtsNotify(icao) {
+      document.querySelectorAll(`[data-dts="${icao}"]`).forEach(el => {
+        const t = dtsTextes(icao);
+        el.hidden = !t;
+        if (!t) { el.innerHTML = ""; return; }
+        const q = dtsQfu(icao, qlvEnds(icao) || []);
+        const grp = (k, ids) => ids && ids.length
+          ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${ids.join("/")}</b></span>` : "";
+        const usage = q ? `<div class="dts-rwy">${grp("Take off", q.dep)}${grp("Landing", q.arr)}</div>` : "";
+        el.innerHTML =
+          `<div class="qlv-lbl">D-ATIS${t[0].code ? " · info " + esc(t[0].code) : ""}${t[0].time ? " · " + esc(t[0].time) + "Z" : ""}</div>`
+          + usage
+          + t.map(x => `<pre class="dts-raw">${t.length > 1 ? `<span class="k">${x.type === "arr" ? "ARRIVAL" : x.type === "dep" ? "DEPARTURE" : ""}</span>\n` : ""}${esc(x.datis)}</pre>`).join("");
+      });
+    }
+    function dtsMount(icao) { dtsLoad(icao); dtsNotify(icao); }
 
     function wxRunwaysHtml(icao, d) {
       const s = RUNWAYS[icao];
@@ -22960,6 +23222,7 @@ window.addEventListener("scroll", hidePop, true);
          trois entrées, et il vient d'arriver. L'appel amont, lui, garde son
          anti-rafale de vingt minutes — la minuterie du relevé est gratuite. */
       qlvMount(icao);
+      dtsMount(icao);
       renderWxAges();
     }
     // La bande du jour d'UNE section : elle part en parallèle du relevé et se
@@ -23037,6 +23300,7 @@ window.addEventListener("scroll", hidePop, true);
            une réponse incomplète n'aurait jamais eu lieu. L'anti-rafale de
            qlvLoad rend la minuterie gratuite ; Minima fait déjà ainsi. */
         qlvMount(a.icao);
+        dtsMount(a.icao);
         const cur = wxShown[a.icao];
         if (cur && JSON.stringify([cur.metar, cur.taf]) === JSON.stringify([d.metar, d.taf])) continue;
         renderWxAirport(a.icao, d);
@@ -23085,6 +23349,7 @@ window.addEventListener("scroll", hidePop, true);
         <span class="wx-ap-name">${m ? `${m.city} · ${m.cc}` : ""}</span>
       </div>
       <div class="wx-ap-note" hidden></div>
+      <div class="dts-main" data-dts="${a.icao}" hidden></div>
       <div class="qlv-main" data-qlv="${a.icao}" hidden></div>
       <div class="wx-block">
         <h3>METAR <span class="wx-age" data-age="metar"></span></h3>

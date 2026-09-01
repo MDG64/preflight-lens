@@ -5152,6 +5152,183 @@ function nfAlerts(icao){
   return out;
 }
 
+/* Extrait du texte D-ATIS les pistes en service, par usage.
+   Le vocabulaire est très libre d'un terrain à l'autre : « DEPG RWYS, 8R, 9L »,
+   « LNDG AND DEPG RWY 10R », « ILS 22L, DEP 22R », « LNDG/DEPG RWYS 4/8 »,
+   « LANDING RWY 7R, 7L, DEPARTING RWY 7L, 33 », « RUNWAY 3 4 LEFT ». La lecture
+   se fait mot à mot, en suivant le RÔLE COURANT plutôt qu'en découpant :
+     · un mot d'usage (LANDING, DEPG…) ouvre un rôle ; deux qui se suivent sans
+       numéro entre eux ouvrent les DEUX (« LNDG AND DEPG ») ;
+     · un mot d'usage qui arrive APRÈS un numéro referme le rôle et en ouvre un
+       neuf — c'est ce qui sépare « ILS 22L » de « DEP 22R » ;
+     · un numéro n'est retenu que s'il suit IMMÉDIATEMENT un indice : à trois
+       mots de battement, « RWYS 22L 28R FROM NOVEMBER 5 » faisait passer la
+       voie de circulation November 5 pour une piste ;
+     · une phrase de fermeture ou de panne est écartée ENTIÈRE : « RWY 13R, 31L
+       CLSD » ne dit pas ce qui sert. */
+const CLOS = /\bCLSD\b|\bCLOSED\b|\bOTS\b|OUT OF SERVICE|UNAVBL|UNUSABLE|NOT AVBL|SHORTENED|\bUNMONITORED\b/;
+const ARR = /^(?:LNDG|LDG|LANDING|ARR|ARRIVAL|ARRIVALS|ARVNG|APCH|APCHS|APCHES|APPCH|APPROACH|APPROACHES|ILS|RNAV|GPS|VISUAL|VISA|LOC|VOR|RNP|PAR)$/;
+const DEP = /^(?:DEPG|DEPTG|DEPARTING|DEPARTURE|DEPARTURES|DEPS|DEP)$/;
+const RWY = /^R(?:UNWAY|WY|Y)S?$/;
+const DESIG = /^(\d{1,2})([LRC])?$/;
+const FENETRE = 1;
+const COTE = { LEFT: "L", RIGHT: "R", CENTER: "C", CENTRE: "C" };
+
+function mots(s) {
+  /* « RWY8 » colle le mot au numéro : on les décolle, mais SEULEMENT là —
+     décoller partout casserait « 22L » en « 22 L ». La barre oblique, elle,
+     sépare des mots et des numéros (« LNDG/DEPG », « RWYS 4/8 ») sans toucher
+     aux décimaux : « 118.3 » reste d'un bloc et ne peut pas être un QFU. */
+  const bruts = s.replace(/\bR(?:UNWAY|WY|Y)S?(?=\d)/g, m => m + " ")
+    .split(/[\s/]+/).map(w => w.replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, "")).filter(Boolean);
+  const out = [];
+  for (let i = 0; i < bruts.length; i++) {
+    const a = bruts[i], b = bruts[i + 1], c = bruts[i + 2];
+    /* Numéro ÉPELÉ : « RUNWAY 3 4 LEFT » vaut 34L, et non les pistes 3 et 4.
+       On ne recolle que devant un côté écrit en toutes lettres — sans cette
+       garde, deux pistes citées à la suite fusionneraient. */
+    if (/^\d$/.test(a) && /^\d$/.test(b) && c && COTE[c] && +(a + b) >= 1 && +(a + b) <= 36) {
+      out.push(a + b + COTE[c]); i += 2; continue;
+    }
+    if (/^\d{1,2}$/.test(a) && b && COTE[b]) { out.push(a + COTE[b]); i += 1; continue; }
+    out.push(a);
+  }
+  return out;
+}
+
+function datisRunways(text) {
+  const T = String(text || "").toUpperCase().replace(/\s+/g, " ");
+  const arr = [], dep = [];
+  for (const ph of T.split(/[.;]/)) {
+    if (CLOS.test(ph)) continue;
+    let role = new Set(), neuf = true, fen = 0;
+    for (const w of mots(ph)) {
+      const estArr = ARR.test(w), estDep = DEP.test(w);
+      if (estArr || estDep) {
+        if (!neuf) { role = new Set(); neuf = true; }
+        role.add(estArr ? "arr" : "dep");
+        fen = FENETRE; continue;
+      }
+      if (RWY.test(w)) { fen = FENETRE; continue; }
+      const m = DESIG.exec(w);
+      if (m && fen > 0 && role.size) {
+        const n = parseInt(m[1], 10);
+        if (n >= 1 && n <= 36) {
+          const d = String(n).padStart(2, "0") + (m[2] || "");
+          if (role.has("arr")) arr.push(d);
+          if (role.has("dep")) dep.push(d);
+          neuf = false; fen = FENETRE; continue;
+        }
+      }
+      if (fen > 0) fen--;
+    }
+  }
+  const uniq = x => [...new Set(x)];
+  return { arr: uniq(arr), dep: uniq(dep) };
+}
+
+/* ===== D-ATIS américain =====================================================
+   Là où il existe, la configuration ne s'estime pas : elle se LIT. « APPROACH
+   IN USE ILS RY 22L, ILS RY 22R. DEPG RY 22R » est ce que le contrôle déclare,
+   pas ce qu'on déduit d'un échantillon d'avions. Il prime donc sur tout le
+   reste, et il dispense d'interroger l'ADS-B pour ces terrains.
+   Couverture : 76 terrains américains (les plus gros). La LISTE est demandée
+   une fois par session, et c'est elle qui évite d'interroger pour les 5 000
+   autres stations — sans elle, chaque terrain européen coûterait un 404.
+   Deux copies de ce module, comme le reste : minima.html et notam-filter.html. */
+const DTS_API = NFA_FALLBACK_API;
+const DTS_FRESH_MS = 5 * 60e3;      // l'ATIS peut changer de lettre à tout moment
+const DTS_RETRY_MS = 60e3;
+const dtsCache = new Map();         // ICAO -> {at, atis:[...]} | {at, err, absent}
+const dtsPending = new Map();
+let dtsCodes = null, dtsCodesAt = 0;
+
+function dtsCouvert(icao) {
+  /* Tant que la liste n'est pas là, on ne présume pas : on laisse passer, le
+     serveur répondra 404 si le terrain n'est pas couvert. */
+  return !dtsCodes || dtsCodes.has(icao);
+}
+function dtsLoadCodes() {
+  if (dtsCodes && Date.now() - dtsCodesAt < 12 * 3600e3) return;
+  if (dtsCodesAt && Date.now() - dtsCodesAt < 60e3) return;
+  dtsCodesAt = Date.now();
+  fetch(`${DTS_API}/api/datis`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { if (d && Array.isArray(d.airports)) dtsCodes = new Set(d.airports); })
+    .catch(() => { });
+}
+function dtsLoad(icao) {
+  if (!/^[A-Z]{4}$/.test(icao || "")) return;
+  dtsLoadCodes();
+  if (!dtsCouvert(icao)) return;
+  const hit = dtsCache.get(icao);
+  const ttl = hit && hit.err ? DTS_RETRY_MS : DTS_FRESH_MS;
+  if (hit && (hit.absent || Date.now() - hit.at < ttl)) return;
+  if (dtsPending.has(icao)) return;
+  const p = (async () => {
+    try {
+      const r = await fetch(`${DTS_API}/api/datis?icao=${icao}`);
+      if (r.status === 404) { dtsCache.set(icao, { at: Date.now(), absent: true }); return; }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      dtsCache.set(icao, { at: Date.now(), atis: Array.isArray(d.atis) ? d.atis : [] });
+    } catch (e) {
+      dtsCache.set(icao, { at: Date.now(), err: true });
+    }
+    dtsNotify(icao);
+  })();
+  p.catch(() => { }).then(() => { if (dtsPending.get(icao) === p) dtsPending.delete(icao); });
+  dtsPending.set(icao, p);
+}
+/* Le texte à afficher : un terrain peut publier un ATIS unique (« combined »)
+   ou deux, arrivée et départ. On les rend dans cet ordre, chacun avec sa
+   lettre — c'est elle que le pilote annonce à la fréquence. */
+function dtsTextes(icao) {
+  const hit = dtsCache.get(icao);
+  if (!hit || !hit.atis || !hit.atis.length) return null;
+  const ordre = { combined: 0, arr: 1, dep: 2 };
+  return hit.atis.slice().sort((a, b) => (ordre[a.type] ?? 9) - (ordre[b.type] ?? 9));
+}
+/* Les pistes déclarées, tous ATIS du terrain confondus, réduites à celles qui
+   existent VRAIMENT. Un ATIS dit souvent « RWY 24 » pour le doublet 24L/24R :
+   le raccourci est développé sur la base des pistes du terrain. Un désignateur
+   qui ne correspond à rien est écarté — à Charlotte, l'ATIS annonce des pistes
+   renumérotées que notre graine ne connaît pas encore, et inventer une piste
+   serait pire que se taire. */
+function dtsQfu(icao, extremites) {
+  const t = dtsTextes(icao);
+  if (!t) return null;
+  const arr = [], dep = [];
+  for (const e of t) {
+    const r = datisRunways(e.datis);
+    arr.push(...r.arr); dep.push(...r.dep);
+  }
+  const ids = new Set((extremites || []).map(q => q.id));
+  const resoudre = liste => {
+    const out = [];
+    for (const d of [...new Set(liste)]) {
+      if (ids.has(d)) { out.push(d); continue; }
+      const larges = [...ids].filter(x => x.replace(/[LRC]$/, "") === d);
+      out.push(...larges);
+    }
+    return [...new Set(out)];
+  };
+  const a = resoudre(arr), d = resoudre(dep);
+  if (!a.length && !d.length) return null;
+  const lettre = t.map(x => x.code).filter(Boolean).join("/");
+  const heure = t.map(x => x.time).filter(Boolean)[0] || "";
+  return { arr: a, dep: d, lettre, heure };
+}
+
+/* Le D-ATIS arrivé : il change le QFU retenu par le moteur, donc la page se
+   refait — mêmes gardes que les drapeaux NOTAM, pour ne pas replier un
+   panneau sous les doigts. */
+function dtsNotify(icao){
+  if (window.RTV) RTV.refresh();
+  if (currentIcao() === icao) return render();
+  if (document.body.classList.contains("mobile") && mState.icao === icao) renderMobile();
+}
+
 /* ---------- QFU observé : le trafic ADS-B en direct ----------
    La route sol d'un avion établi en finale EST le QFU en service — c'est la
    seule source qui le dise en direct sans ATIS. Le serveur (/api/qfu, dans
@@ -5286,6 +5463,7 @@ function qlvLoad(icao){
   /* Ce que l'autre page a peut-être déjà obtenu : une observation fraîche
      venue du disque évite l'aller-retour entier. */
   qlvAdopt(icao);
+  dtsLoad(icao);              // là où il existe, il dispensera de l'observation
   const hit = qlvCache.get(icao);
   const partiel = !!(hit && hit.data
     && (!(hit.data.arr || []).length || !(hit.data.dep || []).length));
@@ -5469,8 +5647,17 @@ function qlvEstimate(icao){
      se relisent deux fois. */
   const hhmmZ = t => { const x = new Date(t); return isNaN(x) ? "" :
     String(x.getUTCHours()).padStart(2,"0")+":"+String(x.getUTCMinutes()).padStart(2,"0")+"Z"; };
+  /* Le D-ATIS passe AVANT tout : il ne s'estime pas, il se lit. C'est la
+     configuration que le contrôle DÉCLARE, et aucune observation, si fraîche
+     soit-elle, ne la contredit utilement. Les extrémités déclarées sont tout
+     de même confrontées aux candidates : une piste fermée par NOTAM ou sous
+     un vent arrière rédhibitoire ne ressort pas. */
+  const dts = dtsQfu(icao, open.concat(closed));
   const pick = kind => {
-    /* Le trafic de l'échantillon d'abord : TOUS les flux du même sens qui
+    const decl = (dts && (kind==="to" ? dts.dep : dts.arr)) || [];
+    const ouvertes = decl.filter(id => cand.some(q => q.id === id));
+    if (ouvertes.length) return {ids: ouvertes.slice(0,4), how:`D-ATIS${dts.lettre?" "+dts.lettre:""}`, obs:true, fresh:true};
+    /* Le trafic de l'échantillon ensuite : TOUS les flux du même sens qui
        désignent une candidate — à CDG face à l'ouest, les arrivées font DEUX
        flux (26L et 27R), et les deux pistes sont en service. */
     const now = fromClusters(d ? (kind==="to" ? d.dep : d.arr) : null, d && d.ref);
