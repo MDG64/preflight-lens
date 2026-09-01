@@ -22059,6 +22059,8 @@ window.addEventListener("scroll", hidePop, true);
        gardée en localStorage : consultable hors ligne, datée.
        ============================================================ */
     const WX_STORE_PREFIX = "notam_wx:";
+    let wxList = [], wxToken = 0, wxTicker = null;
+    const wxShown = {};                       // icao -> payload actuellement rendu
     /* Index et plafond, calqués sur ceux des NOTAM (notam_data_idx / OFFLINE_MAX).
        Ce store était le SEUL du fichier sans index, sans plafond et sans purge :
        rien n'effaçait jamais une clé `notam_wx:*`. Chaque terrain consulté,
