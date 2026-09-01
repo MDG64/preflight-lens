@@ -21988,10 +21988,76 @@ window.addEventListener("scroll", hidePop, true);
        gardée en localStorage : consultable hors ligne, datée.
        ============================================================ */
     const WX_STORE_PREFIX = "notam_wx:";
-    let wxList = [], wxToken = 0, wxTicker = null;
-    const wxShown = {};                       // icao -> payload actuellement rendu
-    function wxStore(icao, d) { try { localStorage.setItem(WX_STORE_PREFIX + icao, JSON.stringify(d)); } catch (e) { } }
+    /* Index et plafond, calqués sur ceux des NOTAM (notam_data_idx / OFFLINE_MAX).
+       Ce store était le SEUL du fichier sans index, sans plafond et sans purge :
+       rien n'effaçait jamais une clé `notam_wx:*`. Chaque terrain consulté,
+       survolé sur la carte ou traversé par une route en laissait une, et elles
+       s'accumulaient sur toute la vie de l'installation.
+       Le danger n'est pas leur poids propre — un relevé pèse ~0,7 Ko en UTF-16,
+       trente fois moins qu'un jeu de NOTAM — mais le fait qu'elles mangent le
+       quota commun de ~5 Mo. C'est donc ce store qui finissait par faire
+       échouer saveOffline(), et le filet anti-quota des NOTAM qui payait.
+       250 terrains ≈ 175 Ko : de quoi tenir un corridor complet, les favoris et
+       une longue traînée de consultations, pour un coût négligeable. */
+    const WX_STORE_IDX = "notam_wx_idx";
+    const WX_STORE_MAX = 250;
+    function wxIdx() { try { return JSON.parse(localStorage.getItem(WX_STORE_IDX) || "[]"); } catch (e) { return []; } }
+    /* Protégés de la rotation : la route active ET les favoris. Même principe
+       que routeProtected() pour les NOTAM — ce que le pilote a désigné ne doit
+       pas être évincé par ce qu'il a seulement effleuré. */
+    function wxProtected() {
+      const s = routeProtected();
+      try { for (const c of JSON.parse(localStorage.getItem(FAVS_KEY) || "[]")) s.add(c); } catch (_) { }
+      return s;
+    }
+    function wxDrop(icao, idx) {
+      try { localStorage.removeItem(WX_STORE_PREFIX + icao); } catch (_) { }
+      return idx.filter(c => c !== icao);
+    }
+    function wxStore(icao, d) {
+      try {
+        const charge = JSON.stringify(d);
+        let idx = wxIdx().filter(c => c !== icao); idx.unshift(icao);
+        const prot = wxProtected();
+        const unprot = idx.filter(c => !prot.has(c));
+        while (unprot.length > WX_STORE_MAX) idx = wxDrop(unprot.pop(), idx);
+        // Même reprise sur quota que saveOffline : on rend la place du plus
+        // ancien au plus récent, sans toucher aux protégés ni à la copie en
+        // cours d'écriture.
+        const candidats = unprot.filter(c => c !== icao);
+        for (;;) {
+          try { localStorage.setItem(WX_STORE_PREFIX + icao, charge); break; }
+          catch (e) {
+            if (!candidats.length) { idx = idx.filter(c => c !== icao); break; }
+            idx = wxDrop(candidats.pop(), idx);
+          }
+        }
+        localStorage.setItem(WX_STORE_IDX, JSON.stringify(idx));
+      } catch (e) { }
+    }
     function wxLoad(icao) { try { const s = localStorage.getItem(WX_STORE_PREFIX + icao); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+    /* RATTRAPAGE — les installations existantes portent des clés `notam_wx:*`
+       accumulées avant l'index, donc invisibles de la rotation : sans ce
+       balayage unique elles ne seraient JAMAIS évincées et le plafond ne
+       s'appliquerait qu'aux terrains vus après la mise à jour. On les adopte
+       dans l'index (ordre inconnu, elles passent derrière) puis on laisse la
+       rotation faire son travail. */
+    function wxAdoptLegacy() {
+      try {
+        if (localStorage.getItem(WX_STORE_IDX) !== null) return;   // déjà fait
+        const connus = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(WX_STORE_PREFIX)) connus.push(k.slice(WX_STORE_PREFIX.length));
+        }
+        let idx = connus;
+        const prot = wxProtected();
+        const unprot = idx.filter(c => !prot.has(c));
+        while (unprot.length > WX_STORE_MAX) idx = wxDrop(unprot.pop(), idx);
+        localStorage.setItem(WX_STORE_IDX, JSON.stringify(idx));
+      } catch (_) { }
+    }
+    wxAdoptLegacy();
     /* Toute une liste de terrains en UN appel : /api/wx?ids=…
        Le proxy limite le nombre de requêtes par minute et par IP. La météo a
        désormais son propre seau, plus large que celui des NOTAM (qui sont
