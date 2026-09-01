@@ -22519,7 +22519,17 @@ window.addEventListener("scroll", hidePop, true);
       const ordre = { combined: 0, arr: 1, dep: 2 };
       return hit.atis.slice().sort((a, b) => (ordre[a.type] ?? 9) - (ordre[b.type] ?? 9));
     }
-    /* Les pistes déclarées, tous ATIS du terrain confondus, réduites à celles qui
+    /* Le terrain publie-t-il une configuration exploitable ? Sert à couper la
+   surveillance ADS-B : là où le contrôle DÉCLARE ses pistes, l'observation ne
+   nous apprend rien et coûte du budget amont. On exige que le texte donne
+   vraiment des pistes — un ATIS qui n'en cite aucune (cela arrive) laisse
+   l'observation reprendre son rôle. */
+function dtsAUnQfu(icao){
+  const t = dtsTextes(icao);
+  if (!t) return false;
+  return t.some(e => { const r = datisRunways(e.datis); return r.arr.length || r.dep.length; });
+}
+/* Les pistes déclarées, tous ATIS du terrain confondus, réduites à celles qui
        existent VRAIMENT. Un ATIS dit souvent « RWY 24 » pour le doublet 24L/24R :
        le raccourci est développé sur la base des pistes du terrain. Un désignateur
        qui ne correspond à rien est écarté — à Charlotte, l'ATIS annonce des pistes
@@ -22721,6 +22731,10 @@ window.addEventListener("scroll", hidePop, true);
       // Ce que Minima a peut-être déjà obtenu : une observation fraîche venue
       // du disque évite l'aller-retour entier.
       qlvAdopt(icao);
+      /* Terrain à D-ATIS exploitable : on n'observe pas. La configuration y est
+         DÉCLARÉE, l'ADS-B ne la confirmerait qu'en dépensant du budget amont.
+         Si le D-ATIS tombe ou ne cite aucune piste, l'observation reprend. */
+      if (dtsAUnQfu(icao)) return;
       const hit = qlvCache.get(icao);
       const partiel = !!(hit && hit.data
         && (!(hit.data.arr || []).length || !(hit.data.dep || []).length));
@@ -22835,11 +22849,17 @@ window.addEventListener("scroll", hidePop, true);
       /* Le D-ATIS passe AVANT tout : il ne s'estime pas, il se lit. C'est la
          configuration que le contrôle déclare, et aucune observation, si
          fraîche soit-elle, ne la contredit utilement. */
-      const dts = dtsQfu(icao, cand.concat(closed));
+      const dts = dtsQfu(icao, open.concat(closed));
       const pick = kind => {
+        /* Le D-ATIS PRIME SUR LES NOTAM : configuration du moment déclarée par
+           le contrôle, contre un NOTAM qui peut dater de la veille. La
+           contradiction s'affiche au lieu de se taire. */
         const decl = dts && (kind === "to" ? dts.dep : dts.arr) || [];
-        const ouvertes = decl.filter(id => cand.some(q => q.id === id));
-        if (ouvertes.length) return { ids: ouvertes.slice(0, 4), how: `D-ATIS${dts.lettre ? " " + dts.lettre : ""}`, obs: true, fresh: true };
+        if (decl.length) {
+          const ferme = decl.filter(id => closed.some(q => q.id === id));
+          const note = ferme.length ? ` · NOTAM says ${ferme.join("/")} closed` : "";
+          return { ids: decl.slice(0, 4), how: `D-ATIS${dts.lettre ? " " + dts.lettre : ""}${note}`, obs: true, fresh: true };
+        }
         const now = fromClusters(d ? (kind === "to" ? d.dep : d.arr) : null, d && d.ref);
         if (now) {
           // Résolu : c'est CE souvenir-là qui vaut d'être gardé. Et l'heure
