@@ -15838,27 +15838,60 @@ E) ${e}`;
     // par frame sur les 4400 terrains de la carte) et reconstruit uniquement sur saveOffline.
     let savedSet = new Set();
     function rebuildSavedSet() { try { savedSet = new Set(offlineIdx()); } catch (_) { savedSet = new Set(); } }
+    /* Éviction d'un terrain : ses NOTAM, son plan ET sa ligne d'index, d'un
+       seul geste. L'index ne doit JAMAIS décrire un terrain dont les données
+       viennent de partir — c'est ce décalage qui laissait `savedSet` afficher
+       des pastilles vertes mensongères sur la carte. */
+    function dropOffline(icao, idx) {
+      try { localStorage.removeItem("notam_data:" + icao); } catch (_) { }
+      dropLayoutOffline(icao);                 // le plan part avec ses NOTAM
+      return idx.filter(c => c !== icao);
+    }
     function saveOffline(icao, raw) {
       try {
         // `sums` aligné sur `raw` : les phrases de résumé suivent la copie
         // hors-ligne — en vol, la carte les affiche comme en ligne.
-        localStorage.setItem("notam_data:" + icao, JSON.stringify({ ts: Date.now(), raw,
-          sums: raw.map(r => summaryByRaw.get(r) || null) }));
+        const charge = JSON.stringify({ ts: Date.now(), raw,
+          sums: raw.map(r => summaryByRaw.get(r) || null) });
         let idx = offlineIdx().filter(c => c !== icao); idx.unshift(icao);
         // la rotation n'éjecte JAMAIS un terrain de la route active (voir Bloc 6)
         const prot = routeProtected();
         const unprot = idx.filter(c => !prot.has(c));
-        while (unprot.length > OFFLINE_MAX) {
-          const old = unprot.pop();
-          idx = idx.filter(c => c !== old);
-          localStorage.removeItem("notam_data:" + old);
-          dropLayoutOffline(old);              // le plan part avec ses NOTAM
+        while (unprot.length > OFFLINE_MAX) idx = dropOffline(unprot.pop(), idx);
+        // REPRISE SUR QUOTA. localStorage plafonne à ~5 Mo par origine, partagés
+        // avec le module minima, et un corridor de 54 terrains à ~24 Ko pièce
+        // (UTF-16) en consomme déjà la moitié : le débordement n'est pas une
+        // hypothèse d'école, c'est le régime normal d'une longue route.
+        // On rend la place terrain par terrain, du plus ancien au plus récent,
+        // et on retente — SANS JAMAIS TOUCHER À LA ROUTE, ni à la copie qu'on
+        // est en train d'écrire (la supprimer ne libèrerait rien).
+        // Avant, le filet gardait les 5 terrains les plus récents et jetait
+        // tout le reste : il éventrait donc le corridor que la LRU protège
+        // trois lignes plus haut, et il ne réécrivait pas `notam_data_idx` —
+        // les terrains vidés restaient verts sur la carte jusqu'au prochain
+        // enregistrement réussi. Un préchargement de route qui saturait le
+        // quota se sabotait lui-même, en silence, et ne se voyait qu'en vol.
+        const candidats = unprot.filter(c => c !== icao);
+        for (;;) {
+          try { localStorage.setItem("notam_data:" + icao, charge); break; }
+          catch (e) {
+            if (!candidats.length) {           // plus rien à rendre : on renonce
+              idx = idx.filter(c => c !== icao);
+              try { localStorage.setItem("notam_data_idx", JSON.stringify(idx)); } catch (_) { }
+              rebuildSavedSet();
+              console.warn("[hors-ligne] quota saturé, NOTAM non conservés —", icao);
+              return;
+            }
+            idx = dropOffline(candidats.pop(), idx);
+          }
         }
         localStorage.setItem("notam_data_idx", JSON.stringify(idx));
         rebuildSavedSet();
         cacheLayoutOffline(icao);              // ce terrain est vert : son plan suit
       } catch (e) {
-        try { offlineIdx().slice(5).forEach(c => localStorage.removeItem("notam_data:" + c)); } catch (_) { }
+        // Erreur autre que le quota (JSON, localStorage indisponible) : on ne
+        // détruit rien, on se contente de remettre `savedSet` d'accord avec
+        // l'index tel qu'il est réellement sur le disque.
         rebuildSavedSet();
       }
     }
