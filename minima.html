@@ -2058,8 +2058,12 @@ body.light .favwx-sheet{box-shadow:0 24px 60px rgba(15,40,55,.2)}
    même raison. La case sait passer à la ligne : sur les lignes de phase repliées
    du téléphone, large de 185 px, il ne reste pas 80 px à droite du pouce, et le
    vent y prend la ligne du dessous plutôt que d’écraser les composantes. */
+/* Il ne se colle pas au bord : il prend TOUT ce qui reste après le pouce et se
+   centre dedans. Collé à droite, il pendait au bout d’un vide ; centré dans ce
+   vide, il forme sa propre colonne, et la case garde ses trois temps — ce qui
+   est comparé, le verdict, la donnée d’entrée. */
 .m-cmp .wraw{
-  flex:0 0 auto;margin-left:auto;
+  flex:1 1 auto;text-align:center;
   font:600 12px/1.2 var(--mono);font-variant-numeric:tabular-nums;
   color:var(--muted2);white-space:nowrap;
 }
