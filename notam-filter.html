@@ -3807,6 +3807,13 @@
       transform: translate(14px, -50%)
     }
 
+    /* Le rond du curseur prend la couleur de la vue où il vient d'arriver :
+       vert du côté Weather, jaune du côté NOTAM — la commande dit la même
+       chose que les points qu'elle gouverne. */
+    #mapOv.notam-mode .map-mode .rd::after {
+      background: var(--gold)
+    }
+
     .map-mode:hover .rd {
       border-color: var(--muted)
     }
@@ -4033,6 +4040,12 @@
 
     .mleg .dot.mgrey {
       background: var(--muted2)
+    }
+
+    /* Jaune de la vue NOTAM — « téléchargé ». Il n'a pas de voisin dans la
+       palette météo : c'est ce qui empêche de confondre les deux vues. */
+    .mleg .dot.mgold {
+      background: var(--gold)
     }
 
     .mleg.src {
@@ -7077,7 +7090,9 @@ body .stat .k{
       </aside>
       <!-- Curseur de vue + légende. Weather : chaque point prend la couleur de
            la carte de Weather Lens (météo du dernier METAR, route seulement).
-           NOTAM : vert/rouge selon la couverture hors ligne, comme avant. -->
+           NOTAM : gris/jaune selon la couverture hors ligne — deux tons qui
+           n'appartiennent qu'à cette vue, pour ne pas la confondre avec la
+           météo. -->
       <div class="map-tools" id="mapTools">
         <!-- Copie gardée de la couche météo mondiale. La carte garde ses
              couleurs hors ligne — un point gris ne renseigne personne — mais
@@ -7133,8 +7148,8 @@ body .stat .k{
           <span class="mleg wx wd"><i class="wda r">⚠</i>Wind/gust &gt; 50 kts</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
-          <span class="mleg nt"><i class="dot mgreen"></i>NOTAM downloaded — readable offline</span>
-          <span class="mleg nt"><i class="dot mred"></i>NOTAM not downloaded</span>
+          <span class="mleg nt"><i class="dot mgold"></i>NOTAM downloaded — readable offline</span>
+          <span class="mleg nt"><i class="dot mgrey"></i>NOTAM not downloaded</span>
           <span class="mleg"><i class="tag rwy">08/26</i>Every runway QFU, longest first</span>
         </div>
       </div>
@@ -18747,20 +18762,26 @@ function renderInfo(icao) {
       }
 
       // --- couche mondiale des aérodromes (sous la route) ---
-      // Couleur selon le curseur de vue : NOTAM = vert en cache offline
-      // (savedSet), rouge non sauvegardé, aucune sévérité ; Weather = la
+      // Couleur selon le curseur de vue : NOTAM = jaune en cache offline
+      // (savedSet), gris non sauvegardé, aucune sévérité ; Weather = la
       // palette de la carte de Weather Lens — la route par ses relevés
       // individuels (plus frais), le reste du monde par le flux compact
       // /api/wx/map, gris quand aucun METAR exploitable n'existe.
       // Densité progressive : au dézoom seuls les grands terrains ; les petits apparaissent au zoom.
       mapWorldHits = [];
-      const GREEN = "#34d39a", RED = light ? "#e5484d" : "#ff5d6c";
+      // La vue NOTAM n'a que DEUX tons, gris et jaune — ni vert ni rouge, qui
+      // appartiennent à la météo. Deux vues, deux familles de couleurs : d'un
+      // coup d'œil on sait laquelle est à l'écran, ce que l'ancien vert/rouge
+      // ne disait pas — on lisait une carte météo verte là où il n'y avait que
+      // des NOTAM téléchargés.
+      const NT_ON = light ? "#c98a08" : "#f6c945",     // jaune : NOTAM en cache, lisible hors ligne
+        NT_OFF = light ? "#9aa6b0" : "#5e656c";        // gris  : rien en cache, il faudra du réseau
       const WXPAL = light
         ? ["#9aa6b0", "#12936a", "#cf7a12", "#e5484d"]    // gris, vert, ambre, rouge — thème jour
         : ["#5e656c", "#34d39a", "#f6b23e", "#ff5d6c"];   // idem, thème nuit — valeurs de Weather Lens
       const dotCol = icao => mapMode === "wx"
         ? WXPAL[mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0)]
-        : (savedSet.has(icao) ? GREEN : RED);
+        : (savedSet.has(icao) ? NT_ON : NT_OFF);
       // Priorité de dessin quand deux terrains se recouvrent — au dézoom, deux
       // voisins tombent sur le même pixel et c'est le dernier tracé qui reste
       // visible. Sans ordre, c'est l'ordre du fichier qui tranche : Minorque
@@ -18769,12 +18790,15 @@ function renderInfo(icao) {
       // moins parlant au plus parlant, et on dessine dans cet ordre :
       //   vue Weather  gris < vert < ambre < rouge — la sévérité l'emporte,
       //                et un point sans METAR ne masque jamais un point coloré ;
-      //   vue NOTAM    téléchargé < non téléchargé — même règle que le tri des
-      //                étiquettes de Weather Lens : c'est le manque qui doit
-      //                rester visible.
+      //   vue NOTAM    gris < jaune — même raison : le gris ne dit rien, le
+      //                jaune dit « lisible hors ligne », et un terrain
+      //                téléchargé ne doit jamais disparaître sous le point
+      //                d'un voisin qui ne l'est pas. (Avec le vert/rouge
+      //                d'avant, c'était l'inverse : le rouge, alarme, passait
+      //                au-dessus.)
       const dotPri = icao => mapMode === "wx"
         ? (mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0))
-        : (savedSet.has(icao) ? 0 : 1);
+        : (savedSet.has(icao) ? 1 : 0);
       // --- flèches de vent (vue Weather, interrupteur WIND) ---
       // Une flèche par tranche de 10 kt entamée — rafale comprise, c'est
       // mapWindOf qui rend le vent le plus fort annoncé —, aux couleurs de la carte :
@@ -19165,7 +19189,7 @@ function renderInfo(icao) {
           ctx.beginPath();
           if (ctx.roundRect) ctx.roundRect(bx, by, bw, boxH, rr);
           else { ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + boxH, rr); ctx.arcTo(bx + bw, by + boxH, bx, by + boxH, rr); ctx.arcTo(bx, by + boxH, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); }
-          // capsule transparente, liseré = couleur du point (vert=téléchargé, rouge=non)
+          // capsule transparente, liseré = couleur du point (jaune=téléchargé, gris=non)
           ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = col; ctx.stroke();
           ctx.fillStyle = C.txt;
           ctx.textAlign = "left"; ctx.fillText(a.icao, bx + pad, cy); ctx.textAlign = "start";
@@ -19258,7 +19282,7 @@ function renderInfo(icao) {
           ctx.beginPath();
           if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxW, boxH, rr);
           else { ctx.moveTo(boxX + rr, boxY); ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, rr); ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, rr); ctx.arcTo(boxX, boxY + boxH, boxX, boxY, rr); ctx.arcTo(boxX, boxY, boxX + boxW, boxY, rr); }
-          // capsule transparente, liseré = couleur du point (vert=téléchargé, rouge=non)
+          // capsule transparente, liseré = couleur du point (jaune=téléchargé, gris=non)
           ctx.lineWidth = 1.4 * lr * dpr; ctx.strokeStyle = col; ctx.stroke();
           ctx.fillStyle = C.txt;
           // Centré sur la capsule, plus sur le point : elle peut avoir déménagé.
@@ -20225,10 +20249,10 @@ function renderInfo(icao) {
         const w = hitWorld(px, py);
         if (!w) return;
         if (w.saved) {
-          // vert : on charge et on affiche les NOTAM sur la 1re page
+          // jaune : on charge et on affiche les NOTAM sur la 1re page
           openNotamPage(w.icao);
         } else if (netOnline()) {
-          // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
+          // gris + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe jaune)
           addWorldToRoute(w.icao);
           openNotamPage(w.icao);
         } else {
