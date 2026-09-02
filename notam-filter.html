@@ -22894,23 +22894,23 @@ function dtsAUnQfu(icao){
         const clusters = (cs || []).slice().sort((a, b) => b.n - a.n);
         /* La preuve par l'axe prime la preuve par le cap : un départ déjà en
            virage ne redilue pas un flux apparié. */
-        let geo = [], loose = [], geoTrk = null, looseTrk = null, geoN = 0, looseN = 0;
+        let geo = [], loose = [], geoTrk = null, looseTrk = null, geoN = 0, looseN = 0, geoLast = 0, looseLast = 0;
         for (const c of clusters) {
           const ref0 = geoTrk != null ? geoTrk : looseTrk;
           if (ref0 != null && cdiff(c.trk, ref0) > QLV_MATCH_DEG) continue;
           const m0 = hitsOf(c, cand);
           if (!m0.length) continue;
           const m = refine(m0, c, refPt);
-          if (m !== m0) { if (geoTrk == null) geoTrk = c.trk; geoN += c.n || 0; for (const e of m) if (!geo.includes(e.q.id)) geo.push(e.q.id); }
-          else { if (looseTrk == null) looseTrk = c.trk; looseN += c.n || 0; for (const e of m) if (!loose.includes(e.q.id)) loose.push(e.q.id); }
+          if (m !== m0) { if (geoTrk == null) geoTrk = c.trk; geoN += c.n || 0; geoLast = Math.max(geoLast, Date.parse(c.last || "") || 0); for (const e of m) if (!geo.includes(e.q.id)) geo.push(e.q.id); }
+          else { if (looseTrk == null) looseTrk = c.trk; looseN += c.n || 0; looseLast = Math.max(looseLast, Date.parse(c.last || "") || 0); for (const e of m) if (!loose.includes(e.q.id)) loose.push(e.q.id); }
         }
-        if (geo.length) return { ids: geo.slice(0, 4), obs: true, trk: geoTrk, n: geoN };
+        if (geo.length) return { ids: geo.slice(0, 4), obs: true, trk: geoTrk, n: geoN, last: geoLast || null };
         /* Le cap seul n'est recevable que faute de mieux. Quand TOUTES les
            candidates ont leur axe et que le flux n'est sur AUCUN, il n'est sur
            aucune piste : avion qui passe, ou départ déjà en virage — à Orly,
            un départ de la 20 viré à l'ouest empruntait le cap de la 25. */
         const geoDispo = cand.length && cand.every(q => q.thr) && refPt;
-        if (loose.length && !geoDispo) return { ids: loose.slice(0, 4), obs: true, trk: looseTrk, n: looseN };
+        if (loose.length && !geoDispo) return { ids: loose.slice(0, 4), obs: true, trk: looseTrk, n: looseN, last: looseLast || null };
         return null;
       };
       // Même écriture que le titre de la bande.
@@ -22919,6 +22919,17 @@ function dtsAUnQfu(icao){
       /* Le D-ATIS passe AVANT tout : il ne s'estime pas, il se lit. C'est la
          configuration que le contrôle déclare, et aucune observation, si
          fraîche soit-elle, ne la contredit utilement. */
+      /* Le dernier avion vu dans ce sens, même sorti de la fenêtre. Depuis le
+         2026-09-02 le serveur garde aussi sa DIRECTION (`lastDepFlow`,
+         `lastArrFlow`) : la note nomme la piste quand cette route désigne une
+         candidate, et se contente de l'heure sinon. */
+      const lastNoteOf = kind => {
+        const last = d && (kind === "to" ? d.lastDep : d.lastArr);
+        if (!last) return "";
+        const lf = d && (kind === "to" ? d.lastDepFlow : d.lastArrFlow);
+        const m = lf && Number.isFinite(lf.trk) ? fromClusters([{ trk: lf.trk, off: lf.off, n: 1 }], d.ref) : null;
+        return ` · last ${kind === "to" ? "departure" : "arrival"} seen ${m ? m.ids.join("/") + " " : ""}${hhmmZ(lf && lf.at ? lf.at : last)}`;
+      };
       const dts = dtsQfu(icao, open.concat(closed));
       const pick = kind => {
         /* Le D-ATIS PRIME SUR LES NOTAM : configuration du moment déclarée par
@@ -22935,19 +22946,18 @@ function dtsAUnQfu(icao){
            serveur cumule une heure de passages, l'heure est celle du dernier
            passage, l'effectif dit combien d'avions ont désigné ces pistes. */
         const at = d ? (Date.parse(d.at || "") || Date.now()) : Date.now();
-        if (now) return Object.assign(now, { how: `observed ${hhmmZ(at)} ×${now.n || 1}`, fresh: true });
+        if (now) return Object.assign(now, { how: `observed ${hhmmZ(now.last || at)} ×${now.n || 1}`, fresh: true });
         /* Rien en l'air dans ce sens : le SOL. Un avion qui roule à plus de
            40 kt est sur une piste, dans le sens du QFU — qu'il atterrisse ou
            décolle, on roule dans le sens où l'on se pose. */
         const roll = fromClusters(d ? d.gnd : null, d && d.ref);
-        if (roll) return Object.assign(roll, { how: `rolling ${hhmmZ(at)} ×${roll.n || 1}`, fresh: true });
+        if (roll) return Object.assign(roll, { how: `rolling ${hhmmZ(roll.last || at)} ×${roll.n || 1}`, fresh: true });
         /* Le dernier avion vu dans ce sens, même sorti de la fenêtre : la
            mémoire vit chez le serveur, la même pour tous. Passé l'heure elle
            ne nomme plus de piste, mais elle DATE — c'est ce qui dit que
            l'absence de départ est un trou d'échantillon, pas un terrain qui
            ne décolle pas. */
-        const last = d && (kind === "to" ? d.lastDep : d.lastArr);
-        const lastNote = last ? ` · last ${kind === "to" ? "departure" : "arrival"} seen ${hhmmZ(last)}` : "";
+        const lastNote = lastNoteOf(kind);
         const pref = prefSet(kind);
         const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
         if (pc.length) return { ids: [...new Set(pc.map(q => q.id))].slice(0, 4), how: "preferential" + lastNote };
@@ -22967,8 +22977,7 @@ function dtsAUnQfu(icao){
         const pref = prefSet(kind);
         const pc = pool.filter(q => pref.has(q.id)).sort(byHead);
         const chosen = pc.length ? pc : pool.slice().sort(byHead);
-        const last = d && (kind === "to" ? d.lastDep : d.lastArr);
-        const lastNote = last ? ` · last ${kind === "to" ? "departure" : "arrival"} seen ${hhmmZ(last)}` : "";
+        const lastNote = lastNoteOf(kind);
         return { ids: [...new Set(chosen.map(q => q.id))].slice(0, 4), how: `aligned on observed ${lab}` + lastNote };
       };
       /* L'alignement ne joue que faute de TOUTE observation dans ce sens,
