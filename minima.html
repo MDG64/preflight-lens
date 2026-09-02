@@ -7195,13 +7195,16 @@ function assess(role, ctx){
          GO tient quelle que soit la direction ; au-dessus, l'item devient
          inévaluable et le pilote doit trancher lui-même. */
       const within = speed <= cfg.maxCrosswindKt && speed <= cfg.maxTailwindKt;
+      /* Une seule ligne, au nom du vent tel qu'il est reporté — « VRB » et sa
+         force — face à la plus basse des deux limites : écrire « Tailwind »
+         ou « Crosswind » avec la vitesse totale prêtait au vent une composante
+         que personne n'a calculée. */
       res.verdicts.push({
         question:"WIND", label:"Wind components",
         result: within ? "GO" : "UNKNOWN",
         rows:[
-          {param:"Crosswind", src:"Worst case — direction not reported", observed:speed, required:cfg.maxCrosswindKt, unit:"kt", cmp:"max",
-           report:"METAR", metarKind:"WIND"},
-          {param:"Tailwind", src:"Worst case — direction not reported", observed:speed, required:cfg.maxTailwindKt, unit:"kt", cmp:"max",
+          {param: w.variable ? "VRB" : "DIR ?", src:"Worst case — lower of the two limits",
+           observed:speed, required:Math.min(cfg.maxCrosswindKt, cfg.maxTailwindKt), unit:"kt", cmp:"max",
            report:"METAR", metarKind:"WIND"}
         ],
         reference:"AFM / OM-B limits",
@@ -11330,8 +11333,17 @@ function mVisInfo(tb, r, qOpt){
   return {obs:row.observed, req:row.required, unit:row.unit, st:cls(rowVerdict(row).result)};
 }
 function mWindInfo(r){
-  if (!r.wind || !r.wind.comp) return null;
+  if (!r.wind) return null;
   const wv = (r.verdicts||[]).find(v=>v.question==="WIND");
+  /* Sans direction exploitable (VRB, ///), pas de composantes : la ligne
+     porte le vent tel qu'il est reporté — « VRB » et sa force — contre la
+     plus basse des deux limites, comme la case vent de la tablette. */
+  if (!r.wind.comp){
+    if (r.wind.speed==null) return null;
+    return {vrb:true, lab: r.wind.variable ? "VRB" : "DIR ?", speed:r.wind.speed,
+            lim:Math.min(cfg.maxCrosswindKt, cfg.maxTailwindKt),
+            winds:[], src:"METAR", st: wv ? cls(wv.result) : "unknown"};
+  }
   /* Le vent qui a produit les composantes, pas l’observation : quand la
      prévision gouverne, c’est elle qu’il faut lire à côté des chiffres. Deux
      entrées, parce que traversier et arrière se prennent séparément au pire
@@ -11528,6 +11540,10 @@ function mWindTxt(w){
    diffèrent vraiment, sinon la case répèterait deux fois le même chiffre. */
 function mWindRow(w){
   if (!w) return mCmpRow("WIND", "unknown", "—");
+  /* Vent sans direction : ni XW ni TW — le vent tel quel, VRB et sa force,
+     face à la plus basse des deux limites. */
+  if (w.vrb) return mCmpRow("WIND", w.st,
+    `<span class="wl">${w.lab} <span class="o${oCls(maxCompSt(w.speed, w.lim))}">${mUnitVal(w.speed,"kt")}</span> ${cmpSign(w.speed, w.lim, "max")} ${mUnitVal(w.lim,"kt")}</span>`);
   const txt = [...new Set((w.winds||[]).map(mWindTxt).filter(Boolean))].join(" / ");
   const raw = txt
     ? `<span class="wraw" title="Wind governing the components — ${w.src==="TAF"?"forecast in this phase’s window, the more restrictive":"observed"}; the announced gust is included">${txt}</span>`
