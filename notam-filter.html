@@ -6910,31 +6910,19 @@ body .stat .k{
       </div>
 
       <div class="home-cards">
-        <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
-          <img src="./home-wx-v8.jpg" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name">Weather</span>
-          <span class="hc-sub">METAR · TAF</span>
-        </button>
+        <!-- Ordre des cases (2 sept. 2026) : NOTAM d'abord — c'est la porte
+             d'entrée de l'app et le geste le plus fréquent — puis Weather,
+             Minima, Map. L'ordre du document est aussi l'ordre du clavier :
+             la tabulation suit la même route que le doigt. -->
         <button class="home-card" id="homeNotamCard" aria-label="NOTAM — open the NOTAM list of the aerodromes typed">
           <img src="./home-notam-v10.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">NOTAM</span>
           <span class="hc-sub">FILTERS</span>
         </button>
-        <!-- La carte a quitté le bandeau du haut pour rejoindre ses deux
-             sœurs : même geste, même taille de cible. Depuis l'arrivée de
-             MINIMAS (28 aout 2026), elle ne tient plus la ligne du bas à
-             elle seule : quatre cases, carré 2 x 2 sur téléphone. -->
-        <!-- Photo v3 (27 aout 2026) : la carte de l'app elle-meme, golfe de
-             Gascogne, plutot que la photo de carte papier au pion jaune. Prise
-             LARGE puis recadree carre sur toute la hauteur — un cadrage serre
-             coupait les etiquettes et ne laissait voir que trois terrains.
-             Meme gabarit que ses deux soeurs : 768 x 768. -->
-        <button class="home-card" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
-          <img src="./home-map-v3.jpg" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name">Map</span>
-          <!-- Ligne vide : la case n'a pas de sous-titre à dire, mais elle
-               doit faire la hauteur exacte des deux autres. -->
-          <span class="hc-sub" aria-hidden="true">&nbsp;</span>
+        <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
+          <img src="./home-wx-v8.jpg" alt="" aria-hidden="true" decoding="async">
+          <span class="hc-name">Weather</span>
+          <span class="hc-sub">METAR · TAF</span>
         </button>
         <!-- MINIMAS (28 aout 2026) : le module minima entre à l'accueil —
              la page ./minima.html est la copie déployée de Minima Lens.
@@ -6946,6 +6934,22 @@ body .stat .k{
           <img src="./home-minima-v1.jpg" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name">Minima</span>
           <span class="hc-sub">DA/DH · RVR</span>
+        </button>
+        <!-- La carte a quitté le bandeau du haut pour rejoindre ses trois
+             sœurs : même geste, même taille de cible. Depuis l'arrivée de
+             MINIMAS (28 aout 2026), elle ne tient plus la ligne du bas à
+             elle seule : quatre cases, carré 2 x 2 sur téléphone. -->
+        <!-- Photo v3 (27 aout 2026) : la carte de l'app elle-meme, golfe de
+             Gascogne, plutot que la photo de carte papier au pion jaune. Prise
+             LARGE puis recadree carre sur toute la hauteur — un cadrage serre
+             coupait les etiquettes et ne laissait voir que trois terrains.
+             Meme gabarit que ses trois soeurs : 768 x 768. -->
+        <button class="home-card" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
+          <img src="./home-map-v3.jpg" alt="" aria-hidden="true" decoding="async">
+          <span class="hc-name">Map</span>
+          <!-- Ligne vide : la case n'a pas de sous-titre à dire, mais elle
+               doit faire la hauteur exacte des trois autres. -->
+          <span class="hc-sub" aria-hidden="true">&nbsp;</span>
         </button>
       </div>
 
