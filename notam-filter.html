@@ -18297,16 +18297,18 @@ function renderInfo(icao) {
 
        Deux sources, un seul style à cinq couches de géométrie :
          - en ligne  : OpenFreeMap (schéma OpenMapTiles), jusqu'à z14 ;
-         - hors ligne: tiles/basemap-z6-v1.pmtiles (schéma Protomaps), z0-z6,
+         - hors ligne: tiles/basemap-z6-v2.pmtiles (schéma Protomaps), z0-z6,
                        au-delà MapLibre sur-zoome — la carte grossit sans
                        ajouter de détail, ce qui est le comportement voulu.
        Aucune couche `symbol` : tout le texte reste sur le canvas, donc ni
        glyphes ni sprites à héberger. C'est aussi pourquoi l'archive hors ligne
-       ne contient pas la couche `places` (l'app a déjà ses villes en dur). */
+       ne contient ni `places` (l'app a déjà ses villes en dur) ni `landcover`
+       (le couvert végétal n'est plus dessiné : 7 Mo sur 21 pour une nappe
+       verte qui ne dit rien au pilote). */
 
     const GL_JS  = "./vendor/maplibre-gl-5.6.0.js";
     const GL_CSS = "./vendor/maplibre-gl-5.6.0.css";
-    const PMTILES_URL = "./tiles/basemap-z6-v1.pmtiles";
+    const PMTILES_URL = "./tiles/basemap-z6-v2.pmtiles";
     const OFM_TILES = "https://tiles.openfreemap.org/planet/20260726_080001_pt/{z}/{x}/{y}.pbf";
 
     // Web Mercator normalisé [0,1] — pré-calculé une fois pour les points fixes.
@@ -18394,14 +18396,9 @@ function renderInfo(icao) {
           // Mer : #a9c8e0 remonte le contraste terre/mer à 1,75 et la côte à
           // 3,01, sans faire tomber le trait vert de la route — l'objet le plus
           // important de la carte — sous 2 au-dessus de l'eau (2,22).
-          // Le couvert végétal, lui, est le seul à ne PAS être poussé à fond :
-          // au-delà de #dae8d5 la forêt landaise devient une nappe verte qui
-          // dispute la couleur aux surcouches (trait de route, pastille verte)
-          // et sous laquelle la route secondaire retombe. Le fond doit rester
-          // le fond.
           land: "#ffffff", sea: "#a9c8e0", lake: "#a9c8e0", lakeEdge: "#7c9fba",
           coast: "#566f83", border: "#758fa4", river: "#78a4c4", dot: "#77899a",
-          cover: "#dae8d5", road: "#8a9dac", roadHi: "#66808f"
+          road: "#8a9dac", roadHi: "#66808f"
         }
         : {
           // Même logique de nuit, mais par le bas : la mer descend vers le noir
@@ -18410,7 +18407,7 @@ function renderInfo(icao) {
           // 2,07 contre la terre, côte 2,13 → 3,89 contre la mer).
           land: "#1b2229", sea: "#070a0d", lake: "#080c10", lakeEdge: "#2e3e4d",
           coast: "#5f7080", border: "#4e5c6a", river: "#3a5162", dot: "#697886",
-          cover: "#232d26", road: "#465464", roadHi: "#617484"
+          road: "#465464", roadHi: "#617484"
         };
     }
     // Mélange deux couleurs #rrggbb : t = 0 rend `a`, t = 1 rend `b`. Sert à
@@ -18423,10 +18420,10 @@ function renderInfo(icao) {
     }
     function glStyle(light, offline, wx) {
       const C = glPalette(light);
-      const cover = C.cover, road = C.road, roadHi = C.roadHi;
+      const road = C.road, roadHi = C.roadHi;
       // En vue WEATHER de jour, la palette ci-dessus dispute la vedette aux
-      // surcouches : mer bleue et couvert vert éteignent les flèches de vent
-      // et les pastilles météo. Tout ce qui est peint sur la terre blanche
+      // surcouches : la mer bleue éteint les flèches de vent et les
+      // pastilles météo. Tout ce qui est peint sur la terre blanche
       // s'efface alors à moitié — le fond redevient un repère. La vue NOTAM
       // garde ses contrastes plein soleil, et la nuit rien ne bouge.
       const FB = light && wx ? .45 : 1;
@@ -18452,7 +18449,6 @@ function renderInfo(icao) {
       if (offline) {                                     // schéma Protomaps
         L.push(
           { id: "earth", type: "fill", source: "o", "source-layer": "earth", paint: { "fill-color": C.land } },
-          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .85 * FB } },
           { id: "water", type: "fill", source: "o", "source-layer": "water", paint: { "fill-color": C.sea, "fill-opacity": FB } },
           { id: "coast", type: "line", source: "o", "source-layer": "earth", paint: { "line-color": C.coast, "line-opacity": FB, "line-width": .9 } },
           { id: "bnd", type: "line", source: "o", "source-layer": "boundaries", paint: { "line-color": C.border, "line-opacity": FB, "line-width": .8, "line-dasharray": [3, 3] } },
@@ -18462,7 +18458,6 @@ function renderInfo(icao) {
         );
       } else {                                           // schéma OpenMapTiles
         L.push(
-          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .9 * FB } },
           // Le trait de côte passe SOUS l'eau, et c'est voulu. Les polygones
           // d'eau des tuiles sont découpés au bord de chaque tuile : souligner
           // leur contour dessinait aussi ces coupures, d'où les longues droites
