@@ -78,6 +78,10 @@
       --amber: #f6b23e;
       --green: #34d39a;
       --gold: #f6c945;
+      /* Bleu des points « NOTAM téléchargé » de la carte. Pas --cyan : celui-ci
+         est une encre de texte, pâle de nuit à dessein, et un disque de 4,5 px
+         peint avec lui se confond avec le gris du terrain non téléchargé. */
+      --blue: #4bc4f0;
       /* Encre des noms mis en avant dans le texte des NOTAM (QFU, taxiway,
          approche). De nuit un or franc sur fond sombre ; de jour un bleu
          profond (voir body.light), le jaune s'effaçant sur le blanc — le nom
@@ -125,6 +129,7 @@
       --amber: #cf7a12;
       --green: #12936a;
       --gold: #c98a08;
+      --blue: #0e9bc4;
       --hl: #0b5cad;
       --red-bg: #fdecec;
       --amber-bg: #fbf1e2;
@@ -3808,10 +3813,10 @@
     }
 
     /* Le rond du curseur prend la couleur de la vue où il vient d'arriver :
-       vert du côté Weather, jaune du côté NOTAM — la commande dit la même
+       vert du côté Weather, bleu du côté NOTAM — la commande dit la même
        chose que les points qu'elle gouverne. */
     #mapOv.notam-mode .map-mode .rd::after {
-      background: var(--gold)
+      background: var(--blue)
     }
 
     .map-mode:hover .rd {
@@ -4042,10 +4047,10 @@
       background: var(--muted2)
     }
 
-    /* Jaune de la vue NOTAM — « téléchargé ». Il n'a pas de voisin dans la
+    /* Bleu de la vue NOTAM — « téléchargé ». Il n'a pas de voisin dans la
        palette météo : c'est ce qui empêche de confondre les deux vues. */
-    .mleg .dot.mgold {
-      background: var(--gold)
+    .mleg .dot.mblue {
+      background: var(--blue)
     }
 
     .mleg.src {
@@ -4094,10 +4099,10 @@
       color: var(--gold)
     }
 
-    /* Les QFU ne portent aucun verdict — ni météo, ni couverture NOTAM : la
-       piste est de la géographie. Le ton neutre le dit, et cette ligne ne se
-       range dans aucune vue, puisque la piste ne change pas de l'une à
-       l'autre. */
+    /* Les QFU ne portent aucun verdict — la piste est de la géographie, et le
+       ton neutre le dit. La ligne se range dans la vue Weather : c'est la
+       seule où les QFU s'écrivent, la vue NOTAM ne répondant qu'à une
+       question, quels terrains sont téléchargés. */
     .mleg .tag.rwy {
       font: 700 11px/1 var(--mono);
       font-style: normal;
@@ -7090,7 +7095,7 @@ body .stat .k{
       </aside>
       <!-- Curseur de vue + légende. Weather : chaque point prend la couleur de
            la carte de Weather Lens (météo du dernier METAR, route seulement).
-           NOTAM : gris/jaune selon la couverture hors ligne — deux tons qui
+           NOTAM : gris/bleu selon la couverture hors ligne — deux tons qui
            n'appartiennent qu'à cette vue, pour ne pas la confondre avec la
            météo. -->
       <div class="map-tools" id="mapTools">
@@ -7148,9 +7153,9 @@ body .stat .k{
           <span class="mleg wx wd"><i class="wda r">⚠</i>Wind/gust &gt; 50 kts</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
-          <span class="mleg nt"><i class="dot mgold"></i>NOTAM downloaded — readable offline</span>
+          <span class="mleg nt"><i class="dot mblue"></i>NOTAM downloaded — readable offline</span>
           <span class="mleg nt"><i class="dot mgrey"></i>NOTAM not downloaded</span>
-          <span class="mleg"><i class="tag rwy">08/26</i>Every runway QFU, longest first</span>
+          <span class="mleg wx"><i class="tag rwy">08/26</i>Every runway QFU, longest first</span>
         </div>
       </div>
     </div>
@@ -7310,8 +7315,9 @@ body .stat .k{
             the TAF wind as dashed arrows. Wherever a code is written, <b>every runway QFU</b> of that aerodrome
             is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
             together to a side free of the wind arrows and the ⚡; where they cannot travel together the code
-            keeps its place and the QFU find one of their own, further round the dot. Both views show them, no
-            switch needed.</div>
+            keeps its place and the QFU find one of their own, further round the dot. The <b>weather view</b>
+            shows them; the NOTAM view does not — there, the map answers one question only, which aerodromes are
+            downloaded.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div>
@@ -18663,6 +18669,8 @@ function renderInfo(icao) {
     // cran (showLabels), et ils arrivent tous ensemble. Ce n'est pas un
     // détail qu'on découvre en s'approchant — dès qu'un terrain est nommé,
     // par où s'y poser fait partie de ce qu'on lit.
+    // VUE WEATHER SEULEMENT : la vue NOTAM ne dit qu'une chose par terrain,
+    // téléchargé ou non, et les pistes n'y ajoutaient que du texte.
     // TOUTES les paires, sans plafond : un « +1 » ne dit rien à personne, et
     // une piste qu'on ne nomme pas est une piste qu'on ne verra pas. Le cas
     // extrême est connu et petit — 110 terrains ont quatre paires ou plus,
@@ -18762,20 +18770,20 @@ function renderInfo(icao) {
       }
 
       // --- couche mondiale des aérodromes (sous la route) ---
-      // Couleur selon le curseur de vue : NOTAM = jaune en cache offline
+      // Couleur selon le curseur de vue : NOTAM = bleu en cache offline
       // (savedSet), gris non sauvegardé, aucune sévérité ; Weather = la
       // palette de la carte de Weather Lens — la route par ses relevés
       // individuels (plus frais), le reste du monde par le flux compact
       // /api/wx/map, gris quand aucun METAR exploitable n'existe.
       // Densité progressive : au dézoom seuls les grands terrains ; les petits apparaissent au zoom.
       mapWorldHits = [];
-      // La vue NOTAM n'a que DEUX tons, gris et jaune — ni vert ni rouge, qui
-      // appartiennent à la météo. Deux vues, deux familles de couleurs : d'un
-      // coup d'œil on sait laquelle est à l'écran, ce que l'ancien vert/rouge
-      // ne disait pas — on lisait une carte météo verte là où il n'y avait que
-      // des NOTAM téléchargés.
-      const NT_ON = light ? "#c98a08" : "#f6c945",     // jaune : NOTAM en cache, lisible hors ligne
-        NT_OFF = light ? "#9aa6b0" : "#5e656c";        // gris  : rien en cache, il faudra du réseau
+      // La vue NOTAM n'a que DEUX tons, gris et bleu — ni vert, ni ambre, ni
+      // rouge : la palette de la météo ne sort pas de la vue Weather. Deux
+      // vues, deux familles de couleurs : d'un coup d'œil on sait laquelle est
+      // à l'écran, ce que l'ancien vert/rouge ne disait pas — on lisait une
+      // carte météo verte là où il n'y avait que des NOTAM téléchargés.
+      const NT_ON = light ? "#0e9bc4" : "#4bc4f0",     // bleu (--blue) : NOTAM en cache, lisible hors ligne
+        NT_OFF = light ? "#9aa6b0" : "#5e656c";        // gris : rien en cache, il faudra du réseau
       const WXPAL = light
         ? ["#9aa6b0", "#12936a", "#cf7a12", "#e5484d"]    // gris, vert, ambre, rouge — thème jour
         : ["#5e656c", "#34d39a", "#f6b23e", "#ff5d6c"];   // idem, thème nuit — valeurs de Weather Lens
@@ -18790,8 +18798,8 @@ function renderInfo(icao) {
       // moins parlant au plus parlant, et on dessine dans cet ordre :
       //   vue Weather  gris < vert < ambre < rouge — la sévérité l'emporte,
       //                et un point sans METAR ne masque jamais un point coloré ;
-      //   vue NOTAM    gris < jaune — même raison : le gris ne dit rien, le
-      //                jaune dit « lisible hors ligne », et un terrain
+      //   vue NOTAM    gris < bleu — même raison : le gris ne dit rien, le
+      //                bleu dit « lisible hors ligne », et un terrain
       //                téléchargé ne doit jamais disparaître sous le point
       //                d'un voisin qui ne l'est pas. (Avec le vert/rouge
       //                d'avant, c'était l'inverse : le rouge, alarme, passait
@@ -18997,10 +19005,11 @@ function renderInfo(icao) {
       // parle. D'où le seuil commun — ils arrivent avec les codes et s'en
       // vont avec eux. Le ton est neutre : ni la météo du point, ni la
       // couverture NOTAM, la piste est de la géographie et ne se juge pas.
-      // Ils ne dépendent d'aucun interrupteur, et pas davantage de la vue —
-      // une piste ne change pas selon qu'on regarde les NOTAM ou le temps
-      // qu'il fait.
-      const showQfu = showLabels && qfuSeedReady();
+      // Ils ne dépendent d'aucun interrupteur, mais ils appartiennent à la
+      // VUE WEATHER seule : la vue NOTAM se lit terrain par terrain — quels
+      // codes sont téléchargés, lesquels ne le sont pas — et trois lignes de
+      // pistes sous chaque code y ajoutaient un texte qu'on n'y cherche pas.
+      const showQfu = showLabels && mapMode === "wx" && qfuSeedReady();
       // Même corps que le code OACI : les QFU se lisent d'aussi loin que lui.
       // C'est la COULEUR qui les met au second plan, pas la taille — un ton
       // neutre sous une capsule colorée.
@@ -19189,7 +19198,7 @@ function renderInfo(icao) {
           ctx.beginPath();
           if (ctx.roundRect) ctx.roundRect(bx, by, bw, boxH, rr);
           else { ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + boxH, rr); ctx.arcTo(bx + bw, by + boxH, bx, by + boxH, rr); ctx.arcTo(bx, by + boxH, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); }
-          // capsule transparente, liseré = couleur du point (jaune=téléchargé, gris=non)
+          // capsule transparente, liseré = couleur du point (bleu=téléchargé, gris=non)
           ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = col; ctx.stroke();
           ctx.fillStyle = C.txt;
           ctx.textAlign = "left"; ctx.fillText(a.icao, bx + pad, cy); ctx.textAlign = "start";
@@ -19282,7 +19291,7 @@ function renderInfo(icao) {
           ctx.beginPath();
           if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxW, boxH, rr);
           else { ctx.moveTo(boxX + rr, boxY); ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, rr); ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, rr); ctx.arcTo(boxX, boxY + boxH, boxX, boxY, rr); ctx.arcTo(boxX, boxY, boxX + boxW, boxY, rr); }
-          // capsule transparente, liseré = couleur du point (jaune=téléchargé, gris=non)
+          // capsule transparente, liseré = couleur du point (bleu=téléchargé, gris=non)
           ctx.lineWidth = 1.4 * lr * dpr; ctx.strokeStyle = col; ctx.stroke();
           ctx.fillStyle = C.txt;
           // Centré sur la capsule, plus sur le point : elle peut avoir déménagé.
@@ -20249,10 +20258,10 @@ function renderInfo(icao) {
         const w = hitWorld(px, py);
         if (!w) return;
         if (w.saved) {
-          // jaune : on charge et on affiche les NOTAM sur la 1re page
+          // bleu : on charge et on affiche les NOTAM sur la 1re page
           openNotamPage(w.icao);
         } else if (netOnline()) {
-          // gris + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe jaune)
+          // gris + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe bleu)
           addWorldToRoute(w.icao);
           openNotamPage(w.icao);
         } else {
