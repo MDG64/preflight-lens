@@ -5448,14 +5448,15 @@ function dtsNotify(icao){
    Même contrat que les drapeaux NOTAM : chargement anti-rafale, repli
    Railway, et à l'arrivée une retouche DOM ciblée — jamais un re-rendu, qui
    replierait les panneaux sous les doigts. */
-/* Cadence du client. On ne suit pas des vols, on cherche le QFU en service —
-   une configuration de piste tient des heures et ne change qu'au gré du vent.
-   Vingt minutes (cahier des charges du 2026-08-31) : l'observation n'est plus
-   qu'une entrée de l'estimation, dont le vent et les préférentielles portent
-   l'essentiel entre deux échantillons — et le budget amont tombe à trois
-   appels par heure et par terrain. L'heure affichée est celle de la MESURE,
-   pas de la lecture — la bande la porte pour le dire. */
-const QLV_FRESH_MS = 10 * 60e3;
+/* Cadence du client. Depuis le 2026-09-01 le serveur RECENSE : il parcourt
+   en permanence une liste fermée de grands terrains commerciaux et garde par
+   terrain une fenêtre glissante d'une heure — la réponse sort de cet état,
+   sans appel amont, et elle est la même pour tous. Cinq minutes suffisent
+   donc ici : un terrain est revisité au plus toutes les trente minutes, et
+   redemander ne coûte rien à personne. L'heure affichée est celle du DERNIER
+   PASSAGE du recensement, pas de la lecture — la bande la porte pour le dire.
+   Hors liste (terrain d'aéro-club, D-ATIS) : 404, et la bande estime au vent. */
+const QLV_FRESH_MS = 5 * 60e3;
 /* Le seuil d'élimination au vent arrière MOYEN : 8 kt, celui du cahier des
    charges — au-dessus des 5 kt que l'OACI donne aux pistes préférentielles,
    pour ne pas écarter un QFU sur un souffle. */
@@ -5470,12 +5471,6 @@ const QLV_LAT_NM = 0.12;
    90 s laisserait « Check unavailable » à l'écran une minute et demie après
    que tout est rentré dans l'ordre. */
 const QLV_RETRY_MS = 20e3;
-/* Une réponse INCOMPLÈTE — vide, ou un seul sens observé — se redemande vite,
-   à la même cadence que le serveur la refait. Sans ce délai propre, le client
-   gardait 10 minutes un échantillon sans départ : le rattrapage rapide côté
-   serveur ne servait jamais, et il fallait attendre dix minutes pour espérer
-   attraper un décollage qui partait peut-être dans la minute. */
-const QLV_PARTIEL_MS = 4 * 60e3;
 const QLV_MATCH_DEG = 25;       // au-delà, la route observée ne désigne plus l'extrémité
 const qlvCache = new Map();     // icao -> {at, data} | {at, err:true, silent?, why}
 const qlvPending = new Map();
@@ -5495,66 +5490,19 @@ function qlvStoreRead(){
     return o && typeof o === "object" ? o : {};
   } catch(e){ return {}; }
 }
-/* ---------- mémoire du DERNIER sens observé ----------
-   Un échantillon de vingt minutes attrape souvent un seul sens : à Orly, une
-   série d'arrivées sans aucun départ. On alignait alors le décollage sur les
-   arrivées — FAUX là-bas, où l'on décolle en 24 et se pose en 25, deux pistes
-   distinctes du MÊME axe. La mémoire répond à ça : le dernier décollage
-   réellement observé est gardé avec SON heure, et il reprend la main avant
-   tout alignement. Symétrique pour les arrivées, où le piège est le même à
-   l'envers.
-   ON NE MÉMORISE QUE CE QUI A ABOUTI À UNE PISTE — les extrémités résolues,
-   pas les flux bruts. La première version gardait les flux : à Orly, un avion
-   en VENT ARRIÈRE (en descente, à vitesse d'approche, mais à 5,3 NM de tout
-   axe) était classé « arrivée », n'était apparié à rien, et écrasait au
-   passage le souvenir de la vraie finale — l'atterrissage retombait alors sur
-   la préférentielle alors qu'on se posait sans discontinuer. Un flux qui ne
-   désigne aucune piste n'apprend rien : il ne doit rien effacer.
-   Au rappel, les extrémités retenues sont revalidées contre l'état du
-   moment : une piste fermée depuis, ou passée sous le vent arrière, ne
-   ressort pas. */
-const QLV_MEM_MS = 1 * 3600e3;   // au-delà, une configuration n'engage plus rien
-/* HORS LIGNE — ou quand la source ne répond pas —, le souvenir vaut bien plus
-   longtemps : il n'y a RIEN de plus frais à lui opposer. « Décollage 20,
-   observé il y a deux heures » informe le pilote infiniment mieux qu'un repli
-   sur la préférentielle, qui n'a jamais rien observé du tout ; et l'heure
-   affichée lui laisse juger de ce qu'il en fait. En ligne, à l'inverse, un
-   souvenir d'une heure sans rien voir depuis mérite d'être lâché : le terrain
-   a peut-être basculé, et l'échantillon vivant le dira. */
-const QLV_MEM_HORS_LIGNE_MS = 6 * 3600e3;
+/* Plus de mémoire locale du dernier sens observé (2026-09-01) : elle vivait
+   dans CE navigateur, et chaque pilote repartait de zéro. Le serveur garde
+   désormais par terrain une fenêtre d'une heure et l'heure du dernier avion
+   vu dans chaque sens (`lastArr`, `lastDep`, `lastGnd`), les mêmes pour tous.
+   Ce qui reste ici, c'est la copie de sa dernière réponse, datée. */
 function qlvStoreWrite(icao, data){
   try{
     const o = qlvStoreRead();
-    const prev = o[icao] || {};
-    o[icao] = {at: Date.now(), data, mem: prev.mem};
+    o[icao] = {at: Date.now(), data};
     const keys = Object.keys(o).sort((a,b)=>(o[b].at||0)-(o[a].at||0));
     for (const k of keys.slice(QLV_STORE_MAX)) delete o[k];
     localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
   } catch(e){}
-}
-/* L'écriture vient de qlvEstimate, seul endroit qui sache apparier un flux à
-   une piste. Garde-fou anti-écriture : l'estimation est rejouée à chaque
-   rendu et à chaque sondage du moteur, la mémoire ne doit pas repartir au
-   disque à chaque fois. */
-const qlvMemLast = new Map();
-function qlvMemWrite(icao, kind, ids, at){
-  const key = icao + "|" + kind, sig = ids.join(",") + "@" + at;
-  if (qlvMemLast.get(key) === sig) return;
-  qlvMemLast.set(key, sig);
-  try{
-    const o = qlvStoreRead();
-    const rec = o[icao] || (o[icao] = {at: Date.now()});
-    rec.mem = rec.mem || {};
-    rec.mem[kind === "to" ? "dep" : "arr"] = {ids, at};
-    localStorage.setItem(QLV_STORE_KEY, JSON.stringify(o));
-  } catch(e){}
-}
-/* Le dernier sens observé encore recevable, ou null. */
-function qlvMem(icao, kind, horsLigne){
-  const m = (qlvStoreRead()[icao] || {}).mem;
-  const e = m && m[kind === "to" ? "dep" : "arr"];
-  if (!e || !Array.isArray(e.ids) || !e.ids.length || !Number(e.at)) return null;
-  return Date.now() - e.at <= (horsLigne ? QLV_MEM_HORS_LIGNE_MS : QLV_MEM_MS) ? e : null;
 }
 /* La copie du disque prise pour ce qu'elle est : une réponse déjà obtenue,
    avec SON âge. Au-delà de la fraîcheur elle n'est pas jetée pour autant —
@@ -5584,10 +5532,7 @@ function qlvLoad(icao){
      rendu relance la page, et l'observation part alors normalement. */
   if (dtsCodes && dtsCodes.has(icao) && !dtsCache.has(icao)) return;
   const hit = qlvCache.get(icao);
-  const partiel = !!(hit && hit.data
-    && (!(hit.data.arr || []).length || !(hit.data.dep || []).length));
-  const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS
-            : partiel ? QLV_PARTIEL_MS : QLV_FRESH_MS;
+  const ttl = hit && hit.err && !hit.silent ? QLV_RETRY_MS : QLV_FRESH_MS;
   if (hit && Date.now() - hit.at < ttl) return qlvPending.get(icao);
   if (qlvPending.has(icao)) return qlvPending.get(icao);
   const p = (async () => {
@@ -5736,7 +5681,7 @@ function qlvEstimate(icao){
        parallèles. Dès que la géométrie a parlé quelque part, les flux sans
        axe ne votent plus : en production à CDG, un départ en virage au 247°
        rediluait le 27L pourtant apparié en « 26R/26L/27R/27L ». */
-    let geoIds = [], looseIds = [], geoTrk = null, looseTrk = null;
+    let geoIds = [], looseIds = [], geoTrk = null, looseTrk = null, geoN = 0, looseN = 0;
     for (const c of clusters){
       const ref0 = geoTrk != null ? geoTrk : looseTrk;
       if (ref0 != null && cdiff(c.trk, ref0) > QLV_MATCH_DEG) continue;
@@ -5745,13 +5690,15 @@ function qlvEstimate(icao){
       const m = refine(m0, c, refPt);
       if (m !== m0){
         if (geoTrk == null) geoTrk = c.trk;
+        geoN += c.n || 0;
         for (const e of m) if (!geoIds.includes(e.q.id)) geoIds.push(e.q.id);
       } else {
         if (looseTrk == null) looseTrk = c.trk;
+        looseN += c.n || 0;
         for (const e of m) if (!looseIds.includes(e.q.id)) looseIds.push(e.q.id);
       }
     }
-    if (geoIds.length) return {ids: geoIds.slice(0,4), obs:true, trk: geoTrk};
+    if (geoIds.length) return {ids: geoIds.slice(0,4), obs:true, trk: geoTrk, n: geoN};
     /* Le cap seul n'est recevable que faute de mieux. Quand TOUTES les
        candidates ont leur axe et que le flux n'est sur AUCUN, il n'est sur
        aucune piste : c'est un avion qui passe, ou un départ déjà en virage —
@@ -5759,7 +5706,7 @@ function qlvEstimate(icao){
        25. Sans géométrie complète (monopiste, vieille réponse), le cap reste
        la seule information et il vaut mieux que le silence. */
     const geoDispo = cand.length && cand.every(q => q.thr) && refPt;
-    if (looseIds.length && !geoDispo) return {ids: looseIds.slice(0,4), obs:true, trk: looseTrk};
+    if (looseIds.length && !geoDispo) return {ids: looseIds.slice(0,4), obs:true, trk: looseTrk, n: looseN};
     return null;
   };
   /* Même écriture que le titre de la bande : deux formats pour la même heure
@@ -5788,38 +5735,33 @@ function qlvEstimate(icao){
        désignent une candidate — à CDG face à l'ouest, les arrivées font DEUX
        flux (26L et 27R), et les deux pistes sont en service. */
     const now = fromClusters(d ? (kind==="to" ? d.dep : d.arr) : null, d && d.ref);
-    if (now){
-      /* Résolu : c'est CE souvenir-là qui vaut d'être gardé. */
-      const at = Date.parse(d.at || "") || Date.now();
-      qlvMemWrite(icao, kind, now.ids, at);
-      /* L'heure accompagne TOUTE observation, même en cours : un instantané
-         de dix minutes n'est pas l'instant présent, et sur une carte de route
-         — qui n'a pas de titre de bande — c'est la seule façon de savoir de
-         quand parle ce qu'on lit. */
-      return Object.assign(now, {how:`observed ${hhmmZ(at)}`, fresh:true});
-    }
-    /* Rien dans ce sens à l'instant : le DERNIER réellement observé, avec son
-       heure. C'est ce qui évite d'aligner le décollage sur les arrivées à
-       Orly, où l'on décolle en 24 et se pose en 25 — deux pistes du même axe,
-       qu'aucun alignement ne peut distinguer. Réapparié à l'état du moment :
-       une piste fermée depuis, ou passée sous le vent arrière, ne ressort
-       pas. */
-    /* Sans échantillon courant — hors ligne, source muette, ou rien encore
-       chargé — le souvenir est tout ce qu'on a : il vaut alors six heures. */
-    const mem = qlvMem(icao, kind, !d);
-    if (mem){
-      /* Revalidation contre l'état du moment : une extrémité fermée depuis, ou
-         passée sous le vent arrière, n'est plus candidate. */
-      const still = mem.ids.filter(id => cand.some(q => q.id === id));
-      if (still.length) return {ids: still.slice(0,4), how:`observed ${hhmmZ(mem.at)}`, obs:true};
-    }
+    /* L'heure et l'effectif accompagnent TOUTE observation : la fenêtre du
+       serveur cumule une heure de passages, l'heure est celle du dernier
+       passage, l'effectif dit combien d'avions ont désigné ces pistes — un
+       avion n'est pas un flux, et sur une carte de route, qui n'a pas de titre
+       de bande, c'est la seule façon de savoir de quoi parle ce qu'on lit. */
+    const at = d ? (Date.parse(d.at || "") || Date.now()) : Date.now();
+    if (now) return Object.assign(now, {how:`observed ${hhmmZ(at)} ×${now.n || 1}`, fresh:true});
+    /* Rien en l'air dans ce sens : le SOL. Un avion qui roule à plus de 40 kt
+       est sur une piste, dans le sens du QFU — qu'il atterrisse ou décolle, on
+       roule dans le sens où l'on se pose. La fenêtre l'a peut-être attrapé
+       quand la finale ou la montée lui ont échappé. */
+    const roll = fromClusters(d ? d.gnd : null, d && d.ref);
+    if (roll) return Object.assign(roll, {how:`rolling ${hhmmZ(at)} ×${roll.n || 1}`, fresh:true});
+    /* Le dernier avion vu dans ce sens, même sorti de la fenêtre : la mémoire
+       vit chez le serveur, la même pour tous. Passé l'heure elle ne nomme plus
+       de piste — une configuration bascule en quelques minutes —, mais elle
+       DATE, et c'est ce qui dit au pilote que l'absence de départ est un trou
+       d'échantillon et non un terrain qui ne décolle pas. */
+    const last = d && (kind==="to" ? d.lastDep : d.lastArr);
+    const lastNote = last ? ` · last ${kind==="to" ? "departure" : "arrival"} seen ${hhmmZ(last)}` : "";
     const pref = adPrefSet(rec, kind);
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
-    if (pc.length) return {ids: uniq(pc.map(q=>q.id)).slice(0,4), how:"preferential"};
+    if (pc.length) return {ids: uniq(pc.map(q=>q.id)).slice(0,4), how:"preferential" + lastNote};
     if (hasWind && wind.speed_kt > 0){
       const s = cand.slice().sort(byHead);
       const ids = uniq(s.filter(q => cdiff(q.deg, s[0].deg) <= 1).map(q=>q.id)).slice(0,4);
-      return {ids, how:`wind ${comp(s[0]).head} kt head`};
+      return {ids, how:`wind ${comp(s[0]).head} kt head` + lastNote};
     }
     return null;
   };
@@ -5838,12 +5780,14 @@ function qlvEstimate(icao){
     const pref = adPrefSet(rec, kind);
     const pc = pool.filter(q => pref.has(q.id)).sort(byHead);
     const chosen = pc.length ? pc : pool.slice().sort(byHead);
-    return {ids: uniq(chosen.map(q=>q.id)).slice(0,4), how:`aligned on observed ${lab}`};
+    const last = d && (kind==="to" ? d.lastDep : d.lastArr);
+    const lastNote = last ? ` · last ${kind==="to" ? "departure" : "arrival"} seen ${hhmmZ(last)}` : "";
+    return {ids: uniq(chosen.map(q=>q.id)).slice(0,4), how:`aligned on observed ${lab}` + lastNote};
   };
-  /* L'alignement ne joue plus que faute de TOUTE observation dans ce sens,
-     mémoire comprise : il devine un cap, il ne connaît pas la répartition des
-     pistes entre décollage et atterrissage. À Orly, c'est lui qui donnait un
-     décollage en 25 alors qu'on y décolle en 24. */
+  /* L'alignement ne joue que faute de TOUTE observation dans ce sens, fenêtre
+     d'une heure et roulage au sol compris : il devine un cap, il ne connaît
+     pas la répartition des pistes entre décollage et atterrissage. À Orly,
+     c'est lui qui donnait un décollage en 25 alors qu'on y décolle en 24. */
   if (to && to.fresh && !(ldg && ldg.obs)) ldg = alignOn(to, "ldg", "departures") || ldg;
   else if (ldg && ldg.fresh && !(to && to.obs)) to = alignOn(ldg, "to", "arrivals") || to;
   /* Le point vert ne salue que l'échantillon COURANT : une observation
@@ -5868,7 +5812,7 @@ function qlvState(icao){
   let conflict = "";
   if (d){
     const excl = closed.concat(cut);
-    outer: for (const [cs, lab] of [[d.arr, "arrivals"], [d.dep, "departures"]])
+    outer: for (const [cs, lab] of [[d.arr, "arrivals"], [d.dep, "departures"], [d.gnd, "ground rolls"]])
       for (const c of cs || []){
         if (hitsOf(c, cand).length) continue;
         const m = hitsOf(c, excl);
@@ -5889,18 +5833,34 @@ function qlvState(icao){
      reçu la sienne. Elle y faisait triple emploi sur une observation fraîche,
      et elle y était moins juste — un rappel de mémoire et un instantané n'ont
      pas le même âge, seule la ligne du QFU peut le dire. */
+  /* Ce que le recensement a à dire quand il n'a RIEN désigné : « rien vu »
+     n'a pas le même sens selon qu'il chauffe encore, qu'il a regardé des
+     heures sans jamais un avion (pas de récepteur ADS-B ici — une partie de la
+     Chine, de la Russie, de l'Inde, de l'Afrique), ou qu'il a vu du trafic
+     sans qu'aucun flux ne désigne une piste candidate. Le pilote doit savoir
+     lequel, sinon « no traffic » se lit « terrain calme » là où c'est faux. */
+  const cov = d && d.coverage;
+  const zt = t => { const x = new Date(t); return isNaN(x) ? "" :
+    String(x.getUTCHours()).padStart(2,"0")+":"+String(x.getUTCMinutes()).padStart(2,"0")+"Z"; };
+  const covWhy = !d ? "no traffic observed"
+    : d.warming ? "traffic census warming up"
+    : (cov && cov.passes >= 6 && !cov.seen) ? "no ADS-B coverage here"
+    : d.sample ? "traffic seen, no candidate runway designated"
+    : (Date.now() - (Date.parse(d.at || "") || 0) > 2 * (d.window_min || 60) * 60e3) ? `nothing in the hour before the last census pass, ${zt(Date.parse(d.at || "") || Date.now())}`
+    : `no traffic seen in the last ${d.window_min || 60} min`;
+  const covNote = d && !obsUsed ? `<span class="grp"><span class="n">${covWhy}</span></span>` : "";
   const lbl = `<div class="wxpop-lbl">Runway in use · estimated</div>`;
   if (!to && !ldg) return { idle: true,
-    html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, no traffic observed</span>${down}</div>` };
+    html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, ${covWhy}</span>${down}</div>` };
   /* Point vert quand du trafic réel soutient l'estimation, gris quand elle ne
      tient qu'à la théorie — vent et déclarations. */
   const rows = (to || ldg) ? `<div class="qlv-rows">${grp("Take off", to)}${grp("Landing", ldg)}</div>` : "";
   return { html: lbl
-    + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${rows}${conflict}${down}</div>` };
+    + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${rows}${conflict}${covNote}${down}</div>` };
 }
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */
-const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic observed within 8 NM (refreshed about every 20 min). An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
+const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic the backend keeps observing within 8 NM of the major commercial airports (one-hour window, finals, initial climbs and fast ground rolls). An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
 /* Le bloc entier : la bande estimée, puis la case D-ATIS sous elle. Les deux
    vont ensemble — l'une estime la piste, l'autre porte ce que le contrôle en
    dit — et le conteneur ne se cache que si NI l'une NI l'autre n'a de quoi
