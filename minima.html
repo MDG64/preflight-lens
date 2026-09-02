@@ -10846,6 +10846,23 @@ function setState(msg, cls){
 const WX_API = window.WL_API_BASE
   || "https://notam-proxy-production.up.railway.app";
 
+/* Toute demande de relevé passe par ces options, et c'est le point important :
+   `no-cache` OBLIGE le navigateur à consulter le réseau, quoi qu'il ait gardé
+   en cache HTTP. Sans elles, revenir sur Minima — la case de l'accueil, le
+   bouton Flight, l'onglet ramené au premier plan — pouvait rejouer la réponse
+   gardée au lieu de la redemander : les cartes se repeignaient sur un METAR
+   périmé, et seul un RECHARGEMENT de la page ramenait le relevé du moment,
+   parce que c'est le seul geste qui court-circuite ce cache-là. Un module qui
+   compare la météo aux minima ne peut pas se contenter d'un relevé « assez
+   récent » servi sans qu'on ait demandé.
+   Ce n'est pas gratuit en apparence seulement : la requête part, mais les deux
+   backends portent un ETag — tant que le relevé n'a pas changé, elle revient
+   en 304 sans corps.
+   `no-cache` et non `no-store` : la copie gardée reste déposée, elle sert
+   encore de repli hors ligne. Même geste et même raison que les pages dans
+   sw.js (règle 2). */
+const WX_FETCH = { cache: "no-cache" };
+
 /* ---------- copie locale des relevés, PARTAGÉE AVEC L'HÔTE ----------
    Même clé que la page Weather de Preflight (`notam_wx:<ICAO>`), au même titre
    que notam_favs, notam_daywx, notam_theme et wl-qfu-live : un relevé demandé
@@ -10961,7 +10978,7 @@ async function fetchWeather(opts = {}){
     document.getElementById("dayWxMain").hidden = true;
   }
   try{
-    const r = await fetch(`${WX_API}/api/wx?ids=${icao}`);
+    const r = await fetch(`${WX_API}/api/wx?ids=${icao}`, WX_FETCH);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     const s = data.stations[icao];
@@ -11095,6 +11112,17 @@ function stopAutoRefresh(){
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden || !state.wxIcao || state.metarObsTime == null) return;
+  fetchWeather({ icao: state.wxIcao, silent: true });
+});
+
+/* Retour par le CACHE ARRIÈRE-AVANT : la page revient telle qu'on l'avait
+   laissée, sans rejouer une ligne de script — ni chargement, ni
+   visibilitychange, rien que `pageshow` avec `persisted`. C'est le chemin du
+   bouton Retour, et sur iOS celui d'un aller-retour vers une page sœur. Sans
+   ce rappel, les relevés d'il y a une heure restaient à l'écran, personne ne
+   les redemandait, et seul un rechargement les remettait à jour. */
+window.addEventListener("pageshow", e => {
+  if (!e.persisted || !state.wxIcao || state.metarObsTime == null) return;
   fetchWeather({ icao: state.wxIcao, silent: true });
 });
 
@@ -13892,7 +13920,7 @@ async function favWxFill(favs){
   listEl.innerHTML = `<div class="favwx-none">Requesting ${favs.length} station${favs.length>1?"s":""}…</div>`;
   let stations;
   try{
-    const r = await fetch(`${WX_API}/api/wx?ids=${favs.join(",")}`);
+    const r = await fetch(`${WX_API}/api/wx?ids=${favs.join(",")}`, WX_FETCH);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     stations = (await r.json()).stations || {};
   } catch(err){
@@ -14524,7 +14552,7 @@ window.RTV = (()=>{
     if (!cands.length) return done({phase:"none"});
     let data;
     try {
-      const r = await fetch(`${WX_API}/api/wx?ids=${cands.map(c=>c.icao).join(",")}`);
+      const r = await fetch(`${WX_API}/api/wx?ids=${cands.map(c=>c.icao).join(",")}`, WX_FETCH);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       data = await r.json();
     } catch(e){
@@ -14940,7 +14968,7 @@ window.RTV = (()=>{
       : {metarRaw:"", tafRaw:"", obsTime:null, status:"unknown"};
     let data;
     try {
-      const r = await fetch(`${WX_API}/api/wx?ids=${ids.join(",")}`);
+      const r = await fetch(`${WX_API}/api/wx?ids=${ids.join(",")}`, WX_FETCH);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       data = await r.json();
     } catch(err){
@@ -15188,6 +15216,10 @@ window.RTV = (()=>{
   document.addEventListener("visibilitychange", ()=>{
     if (!document.hidden && RT.timer && !ov.hidden) fetchWx();
   });
+  /* Le bilan rouvert par le cache arrière-avant : même raison que sur la page
+     (voir le `pageshow` près de startAutoRefresh) — les trois cartes
+     reviendraient jugées sur les relevés de la visite précédente. */
+  window.addEventListener("pageshow", e=>{ if (e.persisted && !ov.hidden) fetchWx(); });
   /* Échap : la page « ? » d'abord (elle marque e.helpClosed) ; ne reste
      ensuite que le bilan au premier plan. */
   document.addEventListener("keydown", e=>{

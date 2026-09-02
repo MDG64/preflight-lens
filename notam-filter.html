@@ -20074,7 +20074,10 @@ function renderInfo(icao) {
       void el.offsetWidth;
       el.classList.add("open");
       try {
-        const r = await fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(icao)}`);
+        /* `no-cache` : le relevé se redemande, il ne se resert pas depuis le
+           cache HTTP du navigateur — même règle que dans minima.html
+           (WX_FETCH), et la revalidation ne coûte qu'un 304. */
+        const r = await fetch(`${BACKEND_URL}/api/wx/${encodeURIComponent(icao)}`, { cache: "no-cache" });
         if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { status: r.status });
         const d = await r.json();
         if (seq !== mapWxSideSeq) return;      // panneau refermé ou rouvert ailleurs
@@ -22337,7 +22340,10 @@ window.addEventListener("scroll", hidePop, true);
       const out = {};
       for (let i = 0; i < ids.length; i += WX_BATCH_MAX) {
         const lot = ids.slice(i, i + WX_BATCH_MAX);
-        const r = await fetch(`${BACKEND_URL}/api/wx?ids=${lot.map(encodeURIComponent).join(",")}`);
+        /* `no-cache` : même règle que le relevé seul ci-dessus et que
+           minima.html — un METAR resservi par le cache HTTP est un METAR que
+           personne n'a demandé. */
+        const r = await fetch(`${BACKEND_URL}/api/wx?ids=${lot.map(encodeURIComponent).join(",")}`, { cache: "no-cache" });
         if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { status: r.status });
         const d = await r.json();
         if (d && d.error) throw Object.assign(new Error(String(d.error)), { svc: true });
