@@ -1586,6 +1586,7 @@
        centrage est fait au flex, rien d'autre ne bouge. */
     #homeBtn,
     .wx-home.help-btn,
+    #mapClose,
     #themeBtn,
     .theme-mirror {
       padding: 0
@@ -3582,7 +3583,7 @@
     /* Panneau METAR/TAF de la vue Weather : au clic sur un point ou un code,
        il monte du bas et se pose SUR la carte. Il se referme comme il est
        venu : un glissement du doigt vers le bas.
-       7 : au-dessus de la flèche ← (6) — panneau ouvert, la flèche disparaît
+       7 : au-dessus de la maison (6) — panneau ouvert, la pastille disparaît
        dessous ; on sort du relevé par sa croix ou le glissement, pas de la
        carte. */
     .mapwx {
@@ -4365,9 +4366,9 @@
 
     /* AU-DESSUS DU CANVAS, PAS À ÉGALITÉ. #routeMap porte z-index:2 pour passer
        devant le fond MapLibre, et #routeMapGL ne crée pas de contexte
-       d'empilement : le canvas et cette flèche se retrouvaient donc au même
+       d'empilement : le canvas et cette pastille se retrouvaient donc au même
        niveau dans la boîte de l'overlay, et c'est l'ordre du DOM qui tranchait
-       — canvas après la flèche, donc par-dessus. Quand MapLibre tourne le
+       — canvas après la pastille, donc par-dessus. Quand MapLibre tourne le
        canvas est transparent et laisse passer les clics, on ne voyait rien ;
        sans lui (pas de WebGL2, hors ligne sans archive) le canvas repeint son
        propre fond, et la seule sortie de la carte disparaissait sous lui.
@@ -4394,8 +4395,8 @@
     /* Jour/nuit sur la carte : même pastille que le retour, à l'autre bord.
        La carte est l'écran où le contraste se règle vraiment — plein soleil
        contre vision nocturne — et y arriver ne doit pas demander de la
-       refermer. Le glyphe est un peu plus petit que la flèche, qui remplit
-       moins son cercle. */
+       refermer. Le glyphe est un peu plus petit que la maison voisine, qui est
+       dessinée et mesurée en pourcentage de la pastille, pas en points. */
     .map-theme {
       left: auto;
       right: 14px;
@@ -7059,7 +7060,7 @@ body .stat .k{
 
   <!-- ================= OVERLAY CARTE ================= -->
   <div class="map-ov" id="mapOv" hidden>
-    <button class="map-x" id="mapClose" aria-label="Back">←</button>
+    <button class="map-x" id="mapClose" aria-label="Back" title="Back"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
     <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
     <button class="map-x map-help" id="mapHelpBtn" aria-label="Information" title="Information">?</button>
     <!-- Fond vectoriel MapLibre SOUS le canvas. Le canvas garde tout le dessin
