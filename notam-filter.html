@@ -1572,7 +1572,8 @@
        le panneau de guidage. */
     .help-btn .pict,
     .hd-cbtn .pict,
-    .map-x .pict {
+    .map-x .pict,
+    .fir-back-btn .pict {
       width: 53%;
       height: 53%;
       display: block;
@@ -1587,6 +1588,7 @@
     #homeBtn,
     .wx-home.help-btn,
     #mapClose,
+    #firBackBtn,
     #themeBtn,
     .theme-mirror {
       padding: 0
@@ -7149,7 +7151,7 @@ body .stat .k{
   <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
   <div class="map-ov" id="firOv" hidden>
     <!-- Bouton retour: visible UNIQUEMENT en vue mondiale -->
-    <button class="fir-back-btn" id="firBackBtn" aria-label="Back to app" title="Back to app">←</button>
+    <button class="fir-back-btn" id="firBackBtn" aria-label="Back to app" title="Back to app"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
     <button class="fir-back-btn fir-help-btn" id="firHelpBtn" aria-label="Information" title="Information">?</button>
     <div class="fir-split" id="firSplit">
       <div class="fir-panel" id="firPanel" hidden>
