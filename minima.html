@@ -5593,11 +5593,16 @@ function qlvLoad(icao){
    L'observation, quand elle existe, l'emporte sur la préférentielle : les
    avions sont la vérité terrain, une préférence publiée reste une intention.
    Chaque QFU affiché porte sa justification (observed ×n / preferential /
-   wind) : l'estimation montre son raisonnement au lieu de le cacher. */
+   ILS runway / wind) : l'estimation montre son raisonnement au lieu de le
+   cacher. Et ce raisonnement N'EST PAS DÉCORATIF : le QFU qu'il désigne est
+   celui sur lequel les minima se calculent (autoQfuForTab). C'est pourquoi son
+   dernier recours, le vent seul, connaît lui aussi la règle ILS — sans quoi la
+   bande nommerait une piste et le panneau en calculerait une autre. */
 /* Le cœur de l'estimation, partagé entre la BANDE (qlvState, qui le met en
    phrases) et l'AUTO-SÉLECTION du QFU des calculs (autoQfuForTab, qui borne
-   ses candidats dessus quand du trafic observé la soutient). Null quand il
-   n'y a rien à estimer, {allClosed:true} quand tout est fermé. */
+   ses candidats dessus — sans condition sur une observation, tant qu'elle
+   laisse une piste utilisable sur une préférentielle). Null quand il n'y a
+   rien à estimer, {allClosed:true} quand tout est fermé. */
 function qlvEstimate(icao){
   /* Pas de base piste fiable, pas d'estimation : runwayList() invente un
      « 09/27 » pour un terrain inconnu, et estimer sur une piste inventée
@@ -5770,9 +5775,29 @@ function qlvEstimate(icao){
     const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
     if (pc.length) return {ids: uniq(pc.map(q=>q.id)).slice(0,4), how:"preferential" + lastNote};
     if (hasWind && wind.speed_kt > 0){
-      const s = cand.slice().sort(byHead);
-      const ids = uniq(s.filter(q => cdiff(q.deg, s[0].deg) <= 1).map(q=>q.id)).slice(0,4);
-      return {ids, how:`wind ${comp(s[0]).head} kt head` + lastNote};
+      /* Le vent seul, dernier recours. À l'ATTERRISSAGE il ne suffit pas : une
+         plateforme garde sa piste ILS tant qu'elle ne rend pas plus de 5 kt
+         dans le dos, plutôt que de tourner pour deux nœuds de face. C'est déjà
+         la règle du moteur de minima (autoQfuForTab, rang 1) ; la bande la
+         reprend pour ne pas NOMMER une piste sur laquelle le calcul juste
+         dessous ne se fera pas. Le décollage, qui n'a pas d'approche, reste au
+         meilleur vent de face. */
+      const ils = kind==="ldg"
+        ? cand.filter(q => endHasIls(icao, q.id) && (comp(q) ? comp(q).tail : 0) <= 5)
+        : [];
+      const ref = (ils.length ? ils : cand).slice().sort(byHead)[0];
+      /* Le groupement des parallèles se fait toujours sur TOUTES les
+         candidates : à CDG, la 26R sans ILS est en service avec la 26L. */
+      const ids = uniq(cand.filter(q => cdiff(q.deg, ref.deg) <= 1).map(q=>q.id)).slice(0,4);
+      const c0 = comp(ref);
+      const how = ils.length
+        ? `ILS runway, ${c0.tail > 0 ? c0.tail + " kt tailwind" : c0.head + " kt head"}`
+        : `wind ${c0.head} kt head`;
+      /* `weak` : ce rang-là n'apprend RIEN au moteur de minima — il rejoue sa
+         propre règle avec moins d'informations. Il ne borne donc pas ses
+         candidats (autoQfuForTab) : c'est le moteur qui tranche, et la bande
+         tombe sur la même piste que lui par construction. */
+      return {ids, how: how + lastNote, weak: true};
     }
     return null;
   };
@@ -5870,7 +5895,7 @@ function qlvState(icao){
 }
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */
-const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic the backend keeps observing within 8 NM of the major commercial airports (one-hour window, finals, initial climbs and fast ground rolls). An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
+const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic the backend keeps observing within 8 NM of the major commercial airports (one-hour window, finals, initial climbs and fast ground rolls); with none of that, the ILS runway for landing, or the best headwind. The minima below are computed on this runway — unless your aircraft's limits or the minima themselves rule it out, and only a declared or observed runway holds even then. An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
 /* Le bloc entier : la bande estimée, puis la case D-ATIS sous elle. Les deux
    vont ensemble — l'une estime la piste, l'autre porte ce que le contrôle en
    dit — et le conteneur ne se cache que si NI l'une NI l'autre n'a de quoi
@@ -8875,21 +8900,42 @@ function autoQfuForTab(tb, r, wind){
                 windOk:qfuWindState(q.deg, phaseWinds(wind, pr)).st!=="nogo"});
   }));
   if (!cands.length) return null;
-  /* Le QFU que la bande estime borne les candidats quand du TRAFIC OBSERVÉ
-     la soutient (« observed », ou l'autre sens aligné dessus) : à ce degré de
-     certitude, le calcul doit se faire sur le QFU que le terrain UTILISE —
-     le décollage sur l'estimation décollage, toute phase d'atterrissage
-     (dégagements compris) sur l'estimation atterrissage. Le classement
-     ci-dessous continue de départager ENTRE les parallèles retenues (ILS,
-     verdicts, traversier), et un choix manuel garde le dernier mot
-     (qfuForRole). Théorie seule — vent, préférentielles — : rien ne bouge,
-     le moteur garde son classement complet. */
+  /* Le QFU que la bande estime borne les candidats du calcul : la piste
+     AFFICHÉE en service et celle sur laquelle on CALCULE doivent être la même.
+     Lire « QFU 23 preferential » sous les relevés et des minima calculés au 29
+     juste dessous n'était pas un raffinement, c'était une contradiction — vu
+     à LFBD. Le décollage suit l'estimation décollage, toute phase
+     d'atterrissage (dégagements compris) l'estimation atterrissage. Le
+     classement ci-dessous continue de départager ENTRE les parallèles
+     retenues (ILS, verdicts, traversier), et un choix manuel garde le dernier
+     mot (qfuForRole).
+
+     Le DERNIER RECOURS de la bande (`weak` : le vent seul, et la piste ILS
+     qu'il désigne à l'atterrissage) ne borne rien : c'est la seule base qui
+     n'apporte au moteur aucune information qu'il n'ait déjà, et le moteur y
+     ajoute les minima — lui seul sait se rabattre quand on ne peut pas
+     descendre là. C'est la bande qui suit : elle reprend sa règle ILS
+     (qlvEstimate, `pick`) au lieu de nommer une piste que le calcul
+     n'utiliserait pas, et les deux tombent sur la même sans se borner. */
   let pool = cands;
   const est = qlvEstimate(icao);
   const estPick = est && !est.allClosed ? (tb.role==="DEPARTURE" ? est.to : est.ldg) : null;
-  if (estPick && (estPick.obs || /^aligned/.test(estPick.how || ""))){
+  const estHow = (estPick && estPick.how) || "";
+  if (estPick && !estPick.weak){
     const keep = cands.filter(c => estPick.ids.includes(c.q.id));
-    if (keep.length) pool = keep;
+    /* Deux forces de bornage, parce que les bases de l'estimation n'ont pas
+       toutes le même poids :
+         · une OBSERVATION (D-ATIS, trafic vu, roulage, sens aligné dessus)
+           borne sans condition — si le terrain UTILISE cette piste, calculer
+           sur une autre est une fiction, fût-elle plus confortable ;
+         · une PRÉFÉRENTIELLE publiée est une intention, pas un fait : elle
+           borne tant qu'elle laisse une extrémité RÉELLEMENT utilisable (vent
+           dans les limites de l'avion, minima qui laissent se poser). Sinon le
+           moteur reprend tout le terrain — l'ATC se moque du traversier
+           maximal de CET avion, et le pilote a besoin de la piste où il PEUT
+           aller. */
+    const ferme = estPick.obs || /^aligned/.test(estHow);
+    if (keep.length && (ferme || keep.some(c => c.windOk && c.land))) pool = keep;
   }
   /* Le départage, commun à tous les rangs. */
   const better = (c, b)=>{
