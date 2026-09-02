@@ -22911,7 +22911,7 @@ function dtsAUnQfu(icao){
         return scored.length ? scored.map(s => s.e) : m;
       };
       /* Le tri d'un jeu de flux — ceux de l'échantillon, ou ceux de la mémoire. */
-      const fromClusters = (cs, refPt) => {
+      const fromClusters = (cs, refPt, pool = cand) => {
         const clusters = (cs || []).slice().sort((a, b) => b.n - a.n);
         /* La preuve par l'axe prime la preuve par le cap : un départ déjà en
            virage ne redilue pas un flux apparié. */
@@ -22919,7 +22919,7 @@ function dtsAUnQfu(icao){
         for (const c of clusters) {
           const ref0 = geoTrk != null ? geoTrk : looseTrk;
           if (ref0 != null && cdiff(c.trk, ref0) > QLV_MATCH_DEG) continue;
-          const m0 = hitsOf(c, cand);
+          const m0 = hitsOf(c, pool);
           if (!m0.length) continue;
           const m = refine(m0, c, refPt);
           if (m !== m0) { if (geoTrk == null) geoTrk = c.trk; geoN += c.n || 0; geoLast = Math.max(geoLast, Date.parse(c.last || "") || 0); for (const e of m) if (!geo.includes(e.q.id)) geo.push(e.q.id); }
@@ -22930,7 +22930,7 @@ function dtsAUnQfu(icao){
            candidates ont leur axe et que le flux n'est sur AUCUN, il n'est sur
            aucune piste : avion qui passe, ou départ déjà en virage — à Orly,
            un départ de la 20 viré à l'ouest empruntait le cap de la 25. */
-        const geoDispo = cand.length && cand.every(q => q.thr) && refPt;
+        const geoDispo = pool.length && pool.every(q => q.thr) && refPt;
         if (loose.length && !geoDispo) return { ids: loose.slice(0, 4), obs: true, trk: looseTrk, n: looseN, last: looseLast || null };
         return null;
       };
@@ -22940,16 +22940,34 @@ function dtsAUnQfu(icao){
       /* Le D-ATIS passe AVANT tout : il ne s'estime pas, il se lit. C'est la
          configuration que le contrôle déclare, et aucune observation, si
          fraîche soit-elle, ne la contredit utilement. */
-      /* Le dernier avion vu dans ce sens, même sorti de la fenêtre. Depuis le
-         2026-09-02 le serveur garde aussi sa DIRECTION (`lastDepFlow`,
-         `lastArrFlow`) : la note nomme la piste quand cette route désigne une
-         candidate, et se contente de l'heure sinon. */
+      /* La CONFIGURATION TENUE, hors fenêtre : le serveur garde par sens la
+         direction qu'il TIENT (`heldDep`, `heldArr`, `heldGnd`) et n'en change
+         que sur un demi-tour, ou sur deux avions DE SUITE sur une sécante.
+         Elle DÉSIGNE la piste quand la fenêtre s'est vidée, et elle BORNE les
+         flux de la fenêtre. Sa libération est à NOUS : `cand` a déjà écarté
+         les extrémités fermées et celles qui ont plus de QLV_MAX_TAIL_KT dans
+         le dos, si bien qu'une configuration tenue sous un vent qui a tourné
+         ne désigne plus rien. Un QFU observé le reste tant que le vent ne
+         passe pas arrière. */
+      const heldOf = kind => {
+        const h = d && (kind === "to" ? d.heldDep : kind === "ldg" ? d.heldArr : d.heldGnd);
+        if (!h || !Number.isFinite(h.trk)) return null;
+        const m = fromClusters([{ trk: h.trk, off: h.off, n: h.n || 1, last: h.at }], d.ref);
+        return m ? { h, m } : null;
+      };
+      /* Les flux ÉCARTÉS par la configuration tenue : du trafic observé, sur
+         une candidate, qui n'a pas emporté la bascule. La bande le montre. */
+      const chg = [];
+      /* La note de queue, quand l'estimation est retombée sur la
+         préférentielle ou le vent : la configuration tenue n'y désigne plus de
+         candidate (vent tourné, piste fermée), mais elle DATE. Elle nomme la
+         piste dès qu'elle en désigne une parmi les extrémités ouvertes. */
       const lastNoteOf = kind => {
+        const h = d && (kind === "to" ? d.heldDep : d.heldArr);
         const last = d && (kind === "to" ? d.lastDep : d.lastArr);
-        if (!last) return "";
-        const lf = d && (kind === "to" ? d.lastDepFlow : d.lastArrFlow);
-        const m = lf && Number.isFinite(lf.trk) ? fromClusters([{ trk: lf.trk, off: lf.off, n: 1 }], d.ref) : null;
-        return ` · last ${kind === "to" ? "departure" : "arrival"} seen ${m ? m.ids.join("/") + " " : ""}${hhmmZ(lf && lf.at ? lf.at : last)}`;
+        if (!h && !last) return "";
+        const m = h && Number.isFinite(h.trk) ? fromClusters([{ trk: h.trk, off: h.off, n: h.n || 1 }], d.ref, open) : null;
+        return ` · last ${kind === "to" ? "departure" : "arrival"} seen ${m ? m.ids.join("/") + " " : ""}${hhmmZ(h && h.at ? h.at : last)}`;
       };
       const dts = dtsQfu(icao, open.concat(closed));
       const pick = kind => {
@@ -22962,7 +22980,24 @@ function dtsAUnQfu(icao){
           const note = ferme.length ? ` · NOTAM says ${ferme.join("/")} closed` : "";
           return { ids: decl.slice(0, 4), how: `D-ATIS${dts.lettre ? " " + dts.lettre : ""}${note}`, obs: true, fresh: true };
         }
-        const now = fromClusters(d ? (kind === "to" ? d.dep : d.arr) : null, d && d.ref);
+        /* Les flux de la fenêtre, BORNÉS à la configuration tenue tant
+           qu'elle tient : un flux parti sur une sécante sans avoir emporté la
+           bascule (deux avions de suite, règle du serveur) ne renverse pas la
+           bande — à Orly, les gros porteurs qui décollent en 25 laissaient
+           croire à un terrain en 25 quand il partait en 20. */
+        const held = heldOf(kind);
+        const borne = (cs, hk, note) => {
+          const h = hk && hk.h, all = cs || [];
+          if (!h) return all;
+          const gardes = all.filter(c => cdiff(c.trk, h.trk) <= QLV_MATCH_DEG);
+          if (note) for (const c of all) {
+            if (gardes.includes(c)) continue;
+            const m = fromClusters([c], d.ref);
+            if (m) chg.push({ kind, ids: m.ids, n: c.n || 1 });
+          }
+          return gardes;
+        };
+        const now = fromClusters(borne(d ? (kind === "to" ? d.dep : d.arr) : null, held, true), d && d.ref);
         /* L'heure et l'effectif accompagnent TOUTE observation : la fenêtre du
            serveur cumule une heure de passages, l'heure est celle du dernier
            passage, l'effectif dit combien d'avions ont désigné ces pistes. */
@@ -22971,13 +23006,16 @@ function dtsAUnQfu(icao){
         /* Rien en l'air dans ce sens : le SOL. Un avion qui roule à plus de
            40 kt est sur une piste, dans le sens du QFU — qu'il atterrisse ou
            décolle, on roule dans le sens où l'on se pose. */
-        const roll = fromClusters(d ? d.gnd : null, d && d.ref);
+        const roll = fromClusters(borne(d ? d.gnd : null, heldOf("gnd"), false), d && d.ref);
         if (roll) return Object.assign(roll, { how: `rolling ${hhmmZ(roll.last || at)} ×${roll.n || 1}`, fresh: true });
-        /* Le dernier avion vu dans ce sens, même sorti de la fenêtre : la
-           mémoire vit chez le serveur, la même pour tous. Passé l'heure elle
-           ne nomme plus de piste, mais elle DATE — c'est ce qui dit que
-           l'absence de départ est un trou d'échantillon, pas un terrain qui
-           ne décolle pas. */
+        /* La fenêtre n'a plus rien dans ce sens : la CONFIGURATION TENUE prend
+           le relais, et c'est elle, la mémoire — le QFU observé reste en
+           service jusqu'à ce que le vent passe derrière, pas jusqu'à ce que la
+           fenêtre se vide. Plus du direct (pas de `fresh`, donc pas de point
+           vert), mais une OBSERVATION : elle porte son heure et le nombre
+           d'avions qui l'ont confirmée. */
+        if (held) return Object.assign({}, held.m, { obs: true,
+          how: `last observed ${hhmmZ(held.m.last || (kind === "to" ? d.lastDep : d.lastArr) || at)} ×${held.h.n || 1}` });
         const lastNote = lastNoteOf(kind);
         const pref = prefSet(kind);
         const pc = cand.filter(q => pref.has(q.id)).sort(byHead);
@@ -23027,6 +23065,12 @@ function dtsAUnQfu(icao){
             }
           }
       }
+      /* Le trafic qui n'a PAS emporté la configuration : montré, jamais tu.
+         Entrelacés dans le trafic tenu, deux sécants ne prennent jamais la
+         série — c'est le cas d'Orly, et cette ligne est ce qui le dit. */
+      const chgNote = chg.map(x =>
+        `<span class="grp"><span class="n">⚠ ${x.n} ${x.kind === "to" ? "departure" : "arrival"}${x.n > 1 ? "s" : ""}`
+        + ` also observed on ${x.ids.join("/")} — a crossing runway takes two in a row to switch</span></span>`).join("");
       const grp = (k, p) => p
         ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
         : "";
@@ -23050,12 +23094,12 @@ function dtsAUnQfu(icao){
       if (!to && !ldg) return { idle: true,
         html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, ${covWhy}</span>${down}</div>` };
       return { idle: !obsUsed, html: lbl
-        + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${grp("Take off", to)}${grp("Landing", ldg)}${conflict}${covNote}${down}</div>` };
+        + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${grp("Take off", to)}${grp("Landing", ldg)}${conflict}${chgNote}${covNote}${down}</div>` };
     }
     /* Le conteneur vit dans la section, sous le code du terrain : on le
        retrouve par data-qlv, et on le repeint sans toucher au reste — un
        relevé qu'on lit ne doit pas sauter parce qu'une observation arrive. */
-    const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic the backend keeps observing within 8 NM of the major commercial airports (one-hour window, finals, initial climbs and fast ground rolls). An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
+    const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic the backend keeps observing within 8 NM of the major commercial airports (one-hour window, finals, initial climbs and fast ground rolls). An observed runway is then held until the wind turns behind it, and a switch to a crossing runway takes two aircraft in a row. An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
     function qlvPaint(icao) {
       document.querySelectorAll(`[data-qlv="${icao}"]`).forEach(el => {
         if (!qlvSeedReady(icao)) { el.hidden = true; return; }
