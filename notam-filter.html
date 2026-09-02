@@ -2791,8 +2791,8 @@
 
     /* Phrase de résumé une-ligne (générée par LLM côté proxy — NOTAM longs et
        non verts seulement). En --sans et en italique, pas en mono : c'est une
-       aide de lecture, pas le message. La puce AI dit sa provenance — le NOTAM
-       au-dessous reste la seule référence. */
+       aide de lecture, pas le message — le NOTAM au-dessous reste la seule
+       référence. */
     /* La phrase se lit AVANT le NOTAM, pas en note de bas de page (retour
        propriétaire du 2026-08-30, deux fois).
        15px et non 13px comme .etext : à corps ÉGAL, le sans paraît plus petit
@@ -2826,21 +2826,6 @@
       color: var(--text);
       letter-spacing: .04em;
       margin-right: 2px
-    }
-
-    /* La puce vit ENTRE l'amorce et la phrase, jamais en fin de ligne : en
-       queue, une phrase longue la décrochait seule sur la ligne suivante. */
-    .ssum .ai {
-      display: inline-block;
-      font: 600 9.5px/1 var(--sans);
-      font-style: normal;
-      color: var(--muted);
-      border: 1px solid var(--line2);
-      border-radius: 4px;
-      padding: 2px 4px;
-      margin: 0 6px 0 5px;
-      vertical-align: 1px;
-      letter-spacing: .08em
     }
 
     .meta {
@@ -16939,7 +16924,7 @@ function renderInfo(icao) {
           <span class="qc gl" role="button" tabindex="0" data-q="${esc(n.qcode || "")}" data-t="${esc(n.traffic || "")}" data-p="${esc(n.purpose || "")}" data-s="${esc(n.scope || "")}">${esc(n.qcode || "—")}</span>
           <div class="tags">${tags}</div>
         </div>
-        ${n.summary ? `<div class="ssum"><span class="wq">What?</span><span class="ai">AI</span> ${esc(n.summary)}</div>` : ""}
+        ${n.summary ? `<div class="ssum"><span class="wq">What?</span> ${esc(n.summary)}</div>` : ""}
         <div class="etext">${annotate(n.e || n.raw)}</div>
         <div class="meta">
           <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
@@ -27154,7 +27139,7 @@ function dtsAUnQfu(icao){
             <span class="qc">${esc(n.qcode || "—")}</span>
             ${tag ? `<div class="tags"><span class="tag sol">${esc(tag)}</span></div>` : ""}
           </div>
-          ${n.summary ? `<div class="ssum"><span class="wq">What?</span><span class="ai">AI</span> ${esc(n.summary)}</div>` : ""}
+          ${n.summary ? `<div class="ssum"><span class="wq">What?</span> ${esc(n.summary)}</div>` : ""}
           <div class="etext">${esc(n.e || n.raw)}</div>
           <div class="meta">
             <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
