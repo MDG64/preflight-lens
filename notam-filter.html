@@ -18995,8 +18995,8 @@ function renderInfo(icao) {
       // (turbImage) est tirée ligne par ligne : chaque ligne de cases va de
       // sa latitude nord à sa latitude sud à l'écran, et d'un bord à l'autre
       // de la grille en x. Seules les lignes visibles sont tirées.
-      if (mapTurbOn && mapMode === "wx" && mapTurbEnt && mapTurbIndex) {
-        const g = mapTurbIndex.grid, img = turbImage(mapTurbEnt, g, light);
+      if (mapTurbOn && mapMode === "wx" && mapTurbEnt) {
+        const g = mapTurbEnt.grid, img = turbImage(mapTurbEnt, g, light);
         const hLat = Math.abs(g.dlat) / 2, hLon = g.dlon / 2, H = cv.height;
         const x0 = X(g.lon0 - hLon), x1 = X(g.lon0 + (g.nlon - 1) * g.dlon + hLon);
         ctx.save();
@@ -20160,9 +20160,11 @@ function renderInfo(icao) {
         if (alt >= 9000) {
           fl = turbNearestFl(fls, alt); c = -2;
           for (const fh of turbBracketHours(index, tkoMs + t * 60e3)) {
-            const g = clsOf(fl, fh);
-            if (!g) continue;
-            const k = turbCellClass(index.grid, g, p.lat, p.lon);
+            // clsOf rend soit { cls, grid } (le fichier et sa propre grille),
+            // soit la grille de classes nue, lue alors sur la grille de l'index.
+            const e = clsOf(fl, fh);
+            if (!e) continue;
+            const k = e.cls ? turbCellClass(e.grid, e.cls, p.lat, p.lon) : turbCellClass(index.grid, e, p.lat, p.lon);
             if (k > c) c = k;
           }
         }
@@ -20257,7 +20259,15 @@ function renderInfo(icao) {
       if (ent) return ent;
       const r = await fetch(turbBase + "/" + key + ".json");
       if (!r.ok) throw new Error("HTTP " + r.status);
-      ent = { cls: turbDecode(await r.json()), img: {} };
+      const d = await r.json();
+      // Chaque fichier porte SA grille : l'index et les fichiers passent par
+      // un cache de bord (raw.githubusercontent.com, 5 min) qui ne les
+      // rafraîchit pas au même instant, et pendant ce laps un index d'un
+      // cycle peut accompagner des fichiers du suivant. Un fichier sans
+      // grille (ancien format) hérite de celle de l'index.
+      const grid = d.grid || index.grid, cls = turbDecode(d);
+      if (cls.length !== grid.nlat * grid.nlon) throw new Error("turb: fichier et grille en désaccord");
+      ent = { cls, grid, img: {} };
       mapTurbCache.set(key, ent);
       return ent;
     }
@@ -20311,7 +20321,7 @@ function renderInfo(icao) {
       }
       await Promise.all([...need.values()].map(([fl, fh]) => mapTurbFile(index, fl, fh).catch(() => null)));
       if (seq !== mapTurbSeq) return;
-      const clsOf = (fl, fh) => { const e = mapTurbCache.get(turbKey(fl, fh)); return e ? e.cls : null; };
+      const clsOf = (fl, fh) => mapTurbCache.get(turbKey(fl, fh)) || null;
       mapTurbProf = turbSampleProfile(prof, A, B, index, tko, fls, clsOf);
       mapTurbProf.dep = r.dep; mapTurbProf.arr = r.arr; mapTurbProf.tko = tko;
       mapTurbProfRender(el, mapTurbProf);
