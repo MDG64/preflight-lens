@@ -46,6 +46,8 @@ const ASSETS = [
   // règle 3 les sert « réseau d'abord », comme l'annuaire — le pré-cache ne
   // fige rien, il garantit seulement le premier lancement hors ligne.
   "./minima.html", "./airfield-seed.js", "./aircraft-db.js",
+  // Temps de vol par route (2026-09-03), régénéré comme les bases : règle 3.
+  "./routes-seed.js",
   // La liste des manœuvres (2026-08-30), lue par le module minima ET par le
   // suivi. Elle ne se régénère pas comme les bases : c'est du code, elle suit
   // donc l'app. Sans elle, la fiche terrain n'affiche plus ni circling ni
@@ -243,7 +245,8 @@ self.addEventListener("fetch", e => {
   // 3) Plans de plateforme (layouts/*.json), frontières/fermetures FIR
   //    (fir/*.json), annuaire OACI/IATA de fiches.html
   //    (annuaire-terrains.js, régénéré de temps en temps), bases du module
-  //    MINIMAS (airfield-seed.js recompilé depuis aero-db, aircraft-db.js) et
+  //    MINIMAS (airfield-seed.js recompilé depuis aero-db, aircraft-db.js,
+  //    routes-seed.js recompilé par Weather Lens/Tools/build-routes.py) et
   //    liste des manœuvres (manoeuvres.js, du code qui suit l'app) :
   //    réseau d'abord ET mise en cache. Consultable EN VOL, sans connexion —
   //    tout en se rafraîchissant dès qu'on est en ligne.
@@ -254,7 +257,8 @@ self.addEventListener("fetch", e => {
   //    des pages (règle 2), soit le manifeste (règle 4), soit des fichiers
   //    dont le NOM porte la version — icônes, photos, polices.
   if (url.includes("/layouts/") || url.includes("/fir/") || url.includes("annuaire-terrains") ||
-      url.includes("airfield-seed") || url.includes("aircraft-db") || url.includes("manoeuvres")) {
+      url.includes("airfield-seed") || url.includes("aircraft-db") || url.includes("manoeuvres") ||
+      url.includes("routes-seed")) {
     e.respondWith(
       fetch(e.request).then(r => {
         if (r && r.ok) {

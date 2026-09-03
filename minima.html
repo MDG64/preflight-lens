@@ -2941,6 +2941,13 @@ body.light .rt-role{color:var(--text)}
       <p class="hd-p muted">A route in the address opens the app straight on this screen —
         <span class="hd-chip">?dep=LFPG&amp;dest=LFPO&amp;altn=LFOB</span> — which is how Preflight Lens
         hands its route over.</p>
+      <p class="hd-p"><b>Flight time</b> comes by itself: once departure and destination are set, the
+        destination is judged at take-off time plus the flight time observed on that route — the median of
+        a full year of ADS-B flights (2019), take-off to landing, each direction on its own since the wind is not the
+        same both ways — and the destination alternate at that time plus the diversion. A leg never observed
+        is estimated from its distance, and the card says which. Setting a time on the Destination or
+        Dest. alternate page keeps your time; changing that aerodrome lets the route time back in. The same
+        flight time feeds the no-alternate criterion.</p>
 
       <div class="hd-sec">Reading a card</div>
       <div class="hd-row">
@@ -2997,6 +3004,13 @@ body.light .rt-role{color:var(--text)}
           target="_blank" rel="noopener">ODbL 1.0</a>.</p>
       <p class="hd-p muted">Community ADS-B coverage: what it shows is real, what it misses is not proof of absence.
         An observation, never the runway in use declared by ATC.</p>
+      <p class="hd-p"><b>Flight times by route</b> — <i>Crowdsourced air traffic data from The OpenSky
+          Network 2020</i>, Strohmeier, Olive, Lübbe, Schäfer and Lenders,
+          <a href="https://zenodo.org/records/5815448" target="_blank" rel="noopener">Zenodo</a>, licensed
+          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.
+          Aerodrome positions from OurAirports (public domain).</p>
+      <p class="hd-p muted">Median over the year 2019, first to last ADS-B contact: take-off to landing, not
+        block time. A route never observed is estimated from its distance.</p>
 
       <!-- Seule adresse de contact de l'app : la page « ? » est la porte
            d'entrée pour une question, une remarque ou un signalement. -->
@@ -3094,6 +3108,10 @@ body.light .rt-role{color:var(--text)}
      l'app fonctionne sur ses replis internes. -->
 <script src="airfield-seed.js"></script>
 <script src="aircraft-db.js"></script>
+<!-- Temps de vol par route (2026-09-03) : médianes ADS-B OpenSky 2019-2021, CC-BY,
+     compilées par Weather Lens/Tools/build-routes.py. Fichier absent = pas de
+     temps de vol, les horizons par défaut restent. -->
+<script src="routes-seed.js"></script>
 <!-- La liste des manœuvres, partagée avec la page de suivi : elles doivent
      énumérer exactement les mêmes lignes, sans quoi un terrain se lit complet
      avec du travail en attente. Voir l'en-tête de manoeuvres.js. -->
@@ -10068,6 +10086,11 @@ function utcFromHourMin(ref, hour, min){
   return d;
 }
 
+/* L'heure d'une phase réglée par le pilote : le bilan de vol cesse d'y poser
+   le temps de vol de la route (RTV.syncEta) tant que le terrain de la route
+   ne change pas ; `released` = l'heure rendue aux horizons par défaut, la
+   route reprend la main. */
+function etaTouched(role, released){ if (window.RTV) RTV.etaTouched(role, released); }
 function etaDate(role){
   const base = refBase();
   const man = state.times[role];
@@ -10376,6 +10399,9 @@ function updateReportHighlights(r){
 }
 
 function render(){
+  /* Le temps de vol de la route pose l'heure de la destination et du
+     dégagement avant tout jugement (RTV.syncEta) — sans route, sans effet. */
+  if (window.RTV) RTV.syncEta();
   /* assessAll cale la classe de rampe et les valeurs de planification tirées de
      la fiche sur le QFU de chaque phase avant de l'évaluer, puis les rend au QFU
      de la phase affichée — les faire ici, en plus, ne servirait qu'à les poser
@@ -10446,6 +10472,7 @@ function bindClock(inner, tab){
   pop.querySelector('[data-act="ok"]').onclick = ()=>{
     state.times[tab.role] = pad2(CLOCK.h)+pad2(CLOCK.m);
     state.slot[tab.role] = -1;
+    etaTouched(tab.role);
     clockClose(); render();
   };
 
@@ -10702,6 +10729,7 @@ function renderStage(tab, r){
     state.now = new Date();
     state.slot[tab.role] = +b.dataset.j;
     delete state.times[tab.role];
+    etaTouched(tab.role);
     clockClose();
     render();
   });
@@ -10713,7 +10741,7 @@ function renderStage(tab, r){
     ti.onchange = ()=>{
       const d = ti.value.replace(/[^0-9]/g,"");
       if (/^\d{4}$/.test(d) && +d.slice(0,2)<24 && +d.slice(2)<60){
-        state.times[tab.role]=d; state.slot[tab.role]=-1;
+        state.times[tab.role]=d; state.slot[tab.role]=-1; etaTouched(tab.role);
       }
       clockClose();
       render();
@@ -11357,6 +11385,7 @@ function setMobileTime(hhmmStr){
   TABS.forEach(tb=>{
     if (hhmmStr){ state.times[tb.role] = hhmmStr; state.slot[tb.role] = -1; }
     else { delete state.times[tb.role]; delete state.slot[tb.role]; }
+    etaTouched(tb.role, !hhmmStr);
   });
 }
 function mobileTimeDate(){
@@ -14384,6 +14413,60 @@ function mDayWxHtml(icao){
 }
 
 /* =====================================================================
+   TEMPS DE VOL PAR ROUTE — routes-seed.js
+   Base mondiale compilée par Weather Lens/Tools/build-routes.py depuis les
+   listes de vols OpenSky publiées sur Zenodo (CC-BY 4.0 ; l'année 2019
+   entière, extensible jusqu'en 2021 — ROUTE_SEED_META.months le dit) :
+   par route ORIENTÉE, la médiane des minutes entre première et dernière
+   réception ADS-B — décollage → atterrissage, pas le temps bloc — et le
+   nombre de vols. Les deux sens sont distincts : le vent n'est pas le même
+   à l'aller et au retour (Paris → New York 7 h 30, retour 6 h 15).
+   Une paire jamais observée est ESTIMÉE par la distance orthodromique et
+   les coefficients ajustés sur la base elle-même (ROUTE_SEED_META.fallback,
+   erreur médiane 5 % au-delà de 300 NM), avec les coordonnées OurAirports
+   embarquées dans le même fichier. Fichier absent = pas de temps de vol,
+   l'app garde ses horizons par défaut.
+   Le texte n'est découpé qu'à la première demande : 100 000 lignes se
+   lisent en quelques dizaines de millisecondes, et seulement si une route
+   est saisie. */
+window.RTDB = (()=>{
+  let routes = null, pts = null;
+  function parse(){
+    routes = new Map(); pts = new Map();
+    for (const l of String(window.ROUTE_SEED||"").split("\n")){
+      const p = l.split(" ");
+      if (p.length===4) routes.set(p[0]+p[1], [+p[2], +p[3]]);
+    }
+    for (const l of String(window.ROUTE_SEED_PTS||"").split("\n")){
+      const p = l.split(" ");
+      if (p.length===3) pts.set(p[0], [+p[1], +p[2]]);
+    }
+  }
+  function nm(a, b){
+    const r = Math.PI/180, p1 = a[0]*r, p2 = b[0]*r, dl = (b[1]-a[1])*r;
+    const x = Math.sin((p2-p1)/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+    return 2*3440.065*Math.asin(Math.sqrt(x));
+  }
+  /* {min, n, src:"observed"} pour une route de la base, {min, nm,
+     src:"estimated"} pour une paire connue seulement par ses coordonnées,
+     null sinon (codes invalides, terrain inconnu, même terrain). */
+  function time(dep, dest){
+    if (!/^[A-Z0-9]{4}$/.test(dep||"") || !/^[A-Z0-9]{4}$/.test(dest||"") || dep===dest) return null;
+    if (!routes) parse();
+    const o = routes.get(dep+dest);
+    if (o) return {min:o[0], n:o[1], src:"observed"};
+    const pa = pts.get(dep), pb = pts.get(dest);
+    if (!pa || !pb) return null;
+    const d = nm(pa, pb);
+    const fb = (((window.ROUTE_SEED_META||{}).fallback)||[])
+      .find(b=>d>=b.fromNm && (b.toNm==null || d<b.toNm));
+    if (!fb) return null;
+    return {min:Math.round(fb.minAt0 + d*fb.minPerNm), nm:Math.round(d), src:"estimated"};
+  }
+  return {time};
+})();
+
+/* =====================================================================
    BILAN DE VOL — Minima
    L'autre présentation de Minima Lens : la route entière sur un écran.
    Trois créneaux — départ (onglet 01), destination (04), dégagement
@@ -14877,6 +14960,7 @@ window.RTV = (()=>{
       ${s.err ? `<span class="rt-note">Engine error: ${escapeHtmlText(s.err)}</span>`
         : s.noWx ? `<span class="rt-note dim">No reports available.</span>`
         : s.noTaf ? `<span class="rt-note dim">No TAF published.</span>` : ""}
+      ${timeHtml(slot, i)}
       <span class="rt-sub">judged for ${hhmm(s.eta)}${s.qfu ? ` · QFU ${s.qfu.id} ${String(s.qfu.deg).padStart(3,"0")}°` : ""}</span>
     </div>`;
   }
@@ -14956,6 +15040,7 @@ window.RTV = (()=>{
      s'engage pas à sa place. */
   function render(){
     if (ov.hidden) return;
+    syncEta();
     const sums = SLOTS.map((slot,i)=>{
       const icao = RT.icaos[i];
       if (!icao) return null;
@@ -15065,9 +15150,76 @@ window.RTV = (()=>{
     render();
   }
 
+  /* ---------- temps de vol de la route ----------
+     Dès que départ et destination sont posés, la destination est jugée à
+     l'heure du décollage plus le temps de vol de la route (RTDB, médiane
+     ADS-B ou estimation par la distance), et le dégagement à cette heure-là
+     plus le déroutement. C'est la même heure que celle des onglets 04 et 05
+     — une seule saisie fait foi — et cfg.flightTimeH (critère sans
+     dégagement) en découle.
+     AUTO[rôle] : true = l'heure posée est celle de la route ; false = le
+     pilote a réglé l'heure de cette phase lui-même (etaTouched), et la route
+     n'y touche plus tant que son terrain ne change pas (autoReset) ou que
+     l'heure n'est pas rendue aux horizons par défaut. Rien n'est persisté :
+     les heures repartent des horizons à chaque chargement, la route se
+     repose alors d'elle-même. */
+  const AUTO = {};
+  function routeTime(i){
+    if (!window.RTDB) return null;
+    if (i===1) return RTDB.time(RT.icaos[0], RT.icaos[1]);
+    if (i===2) return RTDB.time(RT.icaos[1], RT.icaos[2]);
+    return null;
+  }
+  function autoReset(i){
+    if (i<=1) delete AUTO.DESTINATION;
+    delete AUTO.DESTINATION_ALTERNATE;
+  }
+  function etaTouched(role, released){
+    if (role!=="DESTINATION" && role!=="DESTINATION_ALTERNATE") return;
+    if (released) delete AUTO[role]; else AUTO[role] = false;
+  }
+  function syncEta(){
+    const pose = (role, base, t)=>{
+      if (AUTO[role]===false) return;
+      if (!t){
+        /* Route défaite : l'heure posée par elle s'en va avec elle. */
+        if (AUTO[role]){ delete state.times[role]; delete state.slot[role]; delete AUTO[role]; }
+        return;
+      }
+      const d = new Date(base.getTime() + t.min*60000);
+      const h = pad2(d.getUTCHours()) + pad2(d.getUTCMinutes());
+      if (state.times[role]!==h || state.slot[role]!==-1){ state.times[role] = h; state.slot[role] = -1; }
+      AUTO[role] = true;
+    };
+    pose("DESTINATION", etaDate("DEPARTURE"), routeTime(1));
+    pose("DESTINATION_ALTERNATE", etaDate("DESTINATION"), routeTime(2));
+  }
+  /* La période lue par la base, telle qu'elle la déclare : « 2019 », ou
+     « 2019–21 » si la compilation a été étendue. */
+  function routePeriod(){
+    const m = ((window.ROUTE_SEED_META||{}).months||[]).map(x=>x.slice(0,4)).sort();
+    if (!m.length) return "";
+    return m[0]===m[m.length-1] ? m[0] : `${m[0]}–${m[m.length-1].slice(2)}`;
+  }
+  /* La ligne de la carte : d'où vient l'heure à laquelle le terrain est jugé. */
+  function timeHtml(slot, i){
+    if (slot.key==="dep") return "";
+    const t = routeTime(i);
+    if (!t) return "";
+    const role = TABS[slot.tab].role;
+    const dur = `${Math.floor(t.min/60)} h ${String(t.min%60).padStart(2,"0")}`;
+    const what = slot.key==="dest" ? "Flight time" : "Diversion";
+    const how = t.src==="observed"
+      ? `median of ${t.n} ADS-B flights on this route, take-off to landing (OpenSky, ${routePeriod()})`
+      : `estimated from ${t.nm} NM, no observed flights on this leg`;
+    const who = AUTO[role]===false ? " · your own time kept" : "";
+    return `<span class="rt-note dim">${what} ${t.src==="observed" ? "" : "≈ "}${dur} — ${how}${who}</span>`;
+  }
+
   /* ---------- gestes ---------- */
   function pick(i, icao){
     RT.icaos[i] = /^[A-Z]{4}$/.test(icao||"") ? icao : "";
+    autoReset(i);
     const el = document.getElementById("rtIcao"+i);
     /* Le code s'écrit ici dans une case qui garde le focus — la quatrième
        lettre tapée vaut choix. On l'arme : la lettre suivante remplace le
@@ -15077,6 +15229,7 @@ window.RTV = (()=>{
        referme plutôt que de mentir le temps d'un chargement. */
     if (RT.open===i) fold();
     save();
+    syncEta();
     fetchWx();
   }
   /* La carte ouvre la fiche du terrain sur SA phase, et sur elle seule :
@@ -15132,7 +15285,7 @@ window.RTV = (()=>{
     }
     const i = SLOTS.findIndex(s=>s.tab===state.routeFocus);
     if (i<0 || !/^[A-Z]{4}$/.test(icao||"")) return;
-    if (RT.icaos[i]!==icao){ RT.icaos[i] = icao; save(); }
+    if (RT.icaos[i]!==icao){ RT.icaos[i] = icao; autoReset(i); save(); syncEta(); }
   }
 
   /* Trois cases sur une seule ligne de téléphone, c'est une centaine de
@@ -15314,6 +15467,7 @@ window.RTV = (()=>{
       }
     } catch(e){}
     if (!fromUrl) load();
+    syncEta();
     if (fromUrl) open();
   }
 
@@ -15324,6 +15478,7 @@ window.RTV = (()=>{
   /* inlineOpen / renderDetail / fold : la fiche mobile dépliée sous une carte.
      renderMobile les appelle — c'est lui qui sait quand tout se repeint. */
   return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render,
+          syncEta, etaTouched, routeTime,
           openNotam, closeNotam, goHost, inlineOpen, renderDetail, fold,
           /* Le dégagement au décollage : la phase Take off le lit et l'écrit,
              la carte l'ouvre. `toAltRaw` rend le CHOIX (vide = le départ),
