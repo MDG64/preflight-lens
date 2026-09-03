@@ -296,6 +296,24 @@ self.addEventListener("fetch", e => {
     return;
   }
 
+  // 3 ter) ZONES DE TURBULENCE (/api/turb/…) : réseau d'abord ET dépôt, pour
+  //    la même raison que la couche météo mondiale — la dernière grille lue
+  //    reste ce qu'on a de mieux hors ligne, et le cartouche en affiche le
+  //    cycle. Une entrée par (FL, échéance) consultée, ~20 Ko chacune ; l'app
+  //    lit le cycle dans le corps et signale elle-même un run trop vieux.
+  if (url.includes("/api/turb/")) {
+    e.respondWith(
+      fetch(e.request).then(r => {
+        if (r && r.ok) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }).catch(() => caches.match(e.request))   // hors ligne : la dernière grille
+    );
+    return;
+  }
+
   // 4) manifest.json : il porte l'identité de l'app (nom sous l'icône, écran
   //    de démarrage, nom repris par le wrapper store). En cache d'abord il
   //    restait figé jusqu'au prochain changement de CACHE — un renommage de

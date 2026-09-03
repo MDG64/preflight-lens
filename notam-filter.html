@@ -4052,6 +4052,104 @@
       display: flex
     }
 
+    /* Même contrat pour la turbulence : ses lignes de légende, son curseur
+       de FL et son horizon n'existent que TURBULENCE allumé, et jamais en
+       vue NOTAM. */
+    .mleg.tb {
+      display: none
+    }
+
+    #mapOv.turb-on:not(.notam-mode) .mleg.tb {
+      display: flex
+    }
+
+    .mleg.tbnote {
+      font-size: 10.5px;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+
+    .mleg .sq {
+      width: 12px;
+      height: 10px;
+      border-radius: 2px;
+      flex: none;
+      border: 1px solid var(--line2);
+    }
+
+    .mleg .sq.t1 { background: rgba(240, 200, 40, .55) }
+    .mleg .sq.t2 { background: rgba(240, 130, 30, .6) }
+    .mleg .sq.t3 { background: rgba(229, 72, 77, .65) }
+
+    #mapOv:not(.turb-on) .map-turb-ctl,
+    #mapOv.notam-mode .map-turb-ctl,
+    #mapOv.notam-mode .map-turb {
+      display: none
+    }
+
+    .map-turb-ctl {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      cursor: default;
+      min-width: 220px;
+    }
+
+    .map-turb-ctl .tfl {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .map-turb-ctl .tfl .lb {
+      color: var(--text);
+    }
+
+    /* Le curseur est un VRAI champ à l'écran : on défait ce que .map-mode
+       input fait au rail caché des interrupteurs (absolu, invisible, 0×0). */
+    .map-turb-ctl input[type=range] {
+      position: static;
+      opacity: 1;
+      height: auto;
+      width: auto;
+      flex: 1;
+      min-width: 90px;
+      accent-color: var(--green);
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .map-turb-ctl .tfl-out {
+      font: 700 12px/1 var(--mono, var(--sans));
+      color: var(--text);
+      min-width: 44px;
+      text-align: right;
+    }
+
+    /* L'horizon reprend la rangée de ronds du vent, mais il vit dans le
+       cartouche turbulence : on annule la règle qui cache .map-wind-hours
+       quand WIND est éteint, et l'aspect « carte » du parent suffit. */
+    #mapOv .map-turb-ctl .turb-hours {
+      display: flex;
+      background: none;
+      border: 0;
+      padding: 0;
+    }
+
+    #mapOv.turb-on:not(.notam-mode) .map-turb-ctl .turb-hours {
+      display: flex
+    }
+
+    .map-turb-ctl .tinfo {
+      font: 10.5px/1.3 var(--sans);
+      color: var(--muted);
+      letter-spacing: .02em;
+    }
+
+    .map-turb-ctl .tinfo.warn {
+      color: var(--amber);
+    }
+
     .mleg .wda {
       font: 700 12px/1 var(--mono);
       font-style: normal;
@@ -7115,6 +7213,39 @@ body .stat .k{
           <button type="button" class="wh" data-h="2" aria-label="TAF wind in 2 hours"><i class="c" aria-hidden="true"></i>+2h</button>
           <button type="button" class="wh" data-h="3" aria-label="TAF wind in 3 hours"><i class="c" aria-hidden="true"></i>+3h</button>
         </div>
+        <!-- Zones de turbulence prévues, au niveau de vol choisi. Grille
+             calculée par le serveur depuis les vents du GFS (indice Ellrod,
+             tools/turb/build_turb.py) : ce n'est PAS l'EDR officiel du WAFS,
+             qui n'est plus en accès libre — la légende et l'aide le disent.
+             Vue weather seulement, comme le vent. -->
+        <label class="map-mode map-turb" title="Show forecast turbulence zones at the chosen flight level — light, moderate and severe, from a clear-air turbulence index computed on the GFS model winds, with a convective proxy under storms. Model guidance, not an official aviation product.">
+          <input type="checkbox" id="mapTurbChk">
+          <span class="rd" aria-hidden="true"></span>
+          <span class="lb">Turbulence</span>
+        </label>
+        <!-- Curseur de niveau de vol et horizon, visibles seulement quand
+             TURBULENCE est allumé. Neuf niveaux, ceux de la carte WAFS de
+             l'AWC : à 25 km de maille, un pas de 1 000 ft ne dirait rien de
+             plus. L'horizon choisit l'échéance de prévision : NOW = l'heure
+             de prévision la plus proche de maintenant, +3/+6/+12 h = celle
+             de maintenant plus ce délai — pour un départ dans la journée. -->
+        <div class="map-mode map-turb-ctl" id="mapTurbCtl">
+          <div class="tfl">
+            <span class="lb">FL</span>
+            <input type="range" id="mapTurbFl" min="0" max="8" step="1" value="6" aria-label="Flight level of the turbulence layer">
+            <output class="tfl-out" id="mapTurbFlOut" for="mapTurbFl">FL340</output>
+          </div>
+          <div class="map-wind-hours turb-hours" id="mapTurbHours" role="radiogroup" aria-label="Turbulence forecast time"
+               title="Forecast time — NOW is the model hour nearest to now; +3/+6/+12 h look ahead by that delay.">
+            <button type="button" class="wh on" data-h="0" aria-label="Turbulence now"><i class="c" aria-hidden="true"></i>now</button>
+            <button type="button" class="wh" data-h="3" aria-label="Turbulence in 3 hours"><i class="c" aria-hidden="true"></i>+3h</button>
+            <button type="button" class="wh" data-h="6" aria-label="Turbulence in 6 hours"><i class="c" aria-hidden="true"></i>+6h</button>
+            <button type="button" class="wh" data-h="12" aria-label="Turbulence in 12 hours"><i class="c" aria-hidden="true"></i>+12h</button>
+          </div>
+          <!-- Cycle et heure de validité de la grille affichée : une prévision
+               sans son heure ne se juge pas. Rempli par mapTurbNote(). -->
+          <div class="tinfo" id="mapTurbInfo" aria-live="polite">Turbulence — loading…</div>
+        </div>
         <!-- Le bandeau LEGEND coiffe le cartouche ; son œil le replie et le
              fait revenir — la carte se lit alors sans légende, le bandeau seul
              reste. Les interrupteurs, eux, ne bougent pas — on ne cache que ce
@@ -7138,6 +7269,10 @@ body .stat .k{
           <span class="mleg wx wd"><i class="wda r">↑↑↑</i>Wind/gust 31–40 kts</span>
           <span class="mleg wx wd"><i class="wda a">⚠</i>Wind/gust 41–50 kts</span>
           <span class="mleg wx wd"><i class="wda r">⚠</i>Wind/gust &gt; 50 kts</span>
+          <span class="mleg wx tb"><i class="sq t1"></i>Light turbulence at the chosen FL</span>
+          <span class="mleg wx tb"><i class="sq t2"></i>Moderate turbulence</span>
+          <span class="mleg wx tb"><i class="sq t3"></i>Severe turbulence</span>
+          <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), ~25 km cells — not an official aviation product</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgold"></i>NOTAM downloaded — readable offline</span>
@@ -7299,7 +7434,12 @@ body .stat .k{
             to open its <b>minima</b>. A yellow <b>⚡</b> marks a
             station whose METAR reports a <b>CB</b> or whose TAF announces one. The <b>Wind</b> switch adds
             surface-wind arrows — one per 10 kt, gusts and trend groups included; <b>now/+1/+2/+3&nbsp;h</b> shows
-            the TAF wind as dashed arrows. Wherever a code is written, <b>every runway QFU</b> of that aerodrome
+            the TAF wind as dashed arrows. The <b>Turbulence</b> switch shades the <b>forecast turbulence
+            zones</b> at the flight level set by the <b>FL slider</b> — yellow light, orange moderate, red
+            severe — for now or <b>+3/+6/+12&nbsp;h</b>; the cartouche names the GFS run and the valid hour.
+            It is a clear-air turbulence index computed on the model winds, with a convective proxy under
+            storms, on ~25 km cells: <b>guidance, not an official aviation weather product</b>, and not the
+            WAFS EDR charts of the briefing. Wherever a code is written, <b>every runway QFU</b> of that aerodrome
             is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
             together to a side free of the wind arrows and the ⚡; where they cannot travel together the code
             keeps its place and the QFU find one of their own, further round the dot. The <b>weather view</b>
@@ -7542,6 +7682,12 @@ body .stat .k{
             rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
             target="_blank" rel="noopener">CC BY 4.0</a>.
           The strip is a model forecast, <b>not an aviation weather product</b>.
+        </div>
+        <div class="hd-note">
+          <b>Turbulence zones</b> — computed from the <a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/"
+            target="_blank" rel="noopener">NOAA GFS 0.25° model winds</a> (public domain) with the Ellrod
+          clear-air turbulence index and a CAPE convective proxy. A model index on ~25 km cells,
+          <b>not the official WAFS turbulence forecast</b> and <b>not an aviation weather product</b>.
         </div>
         <div class="hd-note">
           <b>FIR boundaries</b> — <a href="https://github.com/vatsimnetwork/vatspy-data-project"
@@ -18751,6 +18897,34 @@ function renderInfo(icao) {
       ctx.drawImage(_bgCanvas, dx, dy, dw, dh);
       }
 
+      // --- zones de turbulence (vue Weather, interrupteur TURBULENCE) ---
+      // Sous tout le reste : une nappe qui se lit à travers les terrains, les
+      // flèches et la route, jamais par-dessus. Rectangles pré-fusionnés par
+      // ligne (turbRuns) ; on ne projette que ce qui tombe dans l'écran.
+      if (mapTurbOn && mapMode === "wx" && mapTurbRuns && mapTurbRuns.length) {
+        const TBPAL = light
+          ? [null, "rgba(240,200,40,.34)", "rgba(240,130,30,.40)", "rgba(229,72,77,.46)"]
+          : [null, "rgba(246,201,69,.30)", "rgba(246,140,50,.36)", "rgba(255,93,108,.42)"];
+        const R = mapTurbRuns, W = cv.width, H = cv.height;
+        ctx.save();
+        for (let c = 1; c <= 3; c++) {          // par classe : un seul changement de couleur chacune
+          ctx.fillStyle = TBPAL[c];
+          ctx.beginPath();
+          for (let k = 0; k < R.length; k += 5) {
+            if (R[k + 4] !== c) continue;
+            const y0 = Y(R[k]), y1 = Y(R[k + 1]);
+            if (y1 < 0 || y0 > H) continue;
+            const x0 = X(R[k + 2]), x1 = X(R[k + 3]);
+            if (x1 < 0 || x0 > W) continue;
+            // +0.5 px : les cases voisines se recouvrent d'un demi-pixel, sans
+            // quoi l'antialiasing laisse un fil clair entre deux rectangles.
+            ctx.rect(x0, y0, x1 - x0 + 0.5, y1 - y0 + 0.5);
+          }
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
       // --- couche mondiale des aérodromes (sous la route) ---
       // Couleur selon le curseur de vue : NOTAM = jaune en cache offline
       // (savedSet), gris non sauvegardé, aucune sévérité ; Weather = la
@@ -19305,6 +19479,26 @@ function renderInfo(icao) {
     let mapMode = "wx", mapWxTargets = [], mapWindOn = false;
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
     let mapWindHour = 0;
+    /* ---------- Turbulence prévue au niveau de vol choisi ----------
+       Le serveur publie, à chaque cycle GFS, une grille de classes 0..3
+       (nil, light, moderate, severe) par niveau de vol et par échéance
+       horaire, en RLE ligne par ligne (tools/turb/build_turb.py). Le client
+       ne calcule rien : il choisit un fichier (FL, échéance), le décode en
+       rectangles et les peint sous les terrains. Tout vit ici :
+         mapTurbOn      interrupteur
+         mapTurbFlIdx   index dans TURB_FLS (curseur)
+         mapTurbHour    horizon en heures : 0 = maintenant, 3, 6, 12
+         mapTurbIndex   index.json du serveur (cycle, échéances, grille)
+         mapTurbRuns    rectangles [latN, latS, lonW, lonE, cls] à peindre
+       Les fichiers déjà lus restent en mémoire par (FL, échéance) : bouger
+       le curseur d'avant en arrière ne redemande rien au réseau. */
+    const TURB_BASE = BACKEND_URL + "/api/turb";
+    const TURB_FLS = [100, 140, 180, 240, 270, 300, 340, 390, 450];
+    const TURB_INDEX_TTL = 10 * 60e3;      // l'index change quatre fois par jour
+    const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
+    let mapTurbOn = false, mapTurbFlIdx = 6, mapTurbHour = 0;
+    let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbRuns = null, mapTurbShown = null, mapTurbSeq = 0;
+    const mapTurbCache = new Map();        // "FL340/h006" -> runs décodés
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que
     // les retouches tactiles du plan (media query, boutons de zoom agrandis) :
     // les flèches de vent y plafonnent plus haut au zoom.
@@ -19610,7 +19804,7 @@ function renderInfo(icao) {
     }
     $("#mapModeChk").onchange = e => {
       setMapMode(e.target.checked ? "notam" : "wx");
-      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); }
+      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); if (mapTurbOn) mapTurbRefresh(); }
       else closeMapWxSide();       // le relevé appartient à la vue weather
       drawMap();
     };
@@ -19666,6 +19860,135 @@ function renderInfo(icao) {
         setMapWindHour(+b.dataset.h); drawMap();
       };
     });
+    // [turb-decode] — section évaluée seule par test/turb-grid.test.mjs.
+    /* RLE serveur -> classes. `rle` alterne classe et longueur, du nord au
+       sud puis d'ouest en est ; la somme des longueurs doit couvrir la
+       grille, sinon le fichier est tronqué et on le refuse. */
+    function turbDecode(d) {
+      const n = d.nlat * d.nlon, cls = new Uint8Array(n), r = d.rle || [];
+      let k = 0;
+      for (let i = 0; i + 1 < r.length; i += 2) {
+        const c = r[i] & 3, len = r[i + 1];
+        if (c) cls.fill(c, k, Math.min(n, k + len));
+        k += len;
+      }
+      if (k !== n) throw new Error("turb: grille " + k + " ≠ " + n);
+      return cls;
+    }
+    /* Classes -> rectangles à peindre. Une case du modèle est centrée sur son
+       point de grille ; les cases voisines d'une même ligne et d'une même
+       classe fusionnent en un seul rectangle, ce qui divise par dix ce que
+       drawMap() a à tracer à chaque image. Sortie plate, cinq nombres par
+       rectangle : latN, latS, lonW, lonE, classe. */
+    function turbRuns(g, cls) {
+      const out = [], hLat = Math.abs(g.dlat) / 2, hLon = g.dlon / 2;
+      for (let j = 0; j < g.nlat; j++) {
+        const lat = g.lat0 + j * g.dlat, latN = lat + hLat, latS = lat - hLat, row = j * g.nlon;
+        let i = 0;
+        while (i < g.nlon) {
+          const c = cls[row + i];
+          if (!c) { i++; continue; }
+          let e = i;
+          while (e + 1 < g.nlon && cls[row + e + 1] === c) e++;
+          out.push(latN, latS, g.lon0 + i * g.dlon - hLon, g.lon0 + e * g.dlon + hLon, c);
+          i = e + 1;
+        }
+      }
+      return Float64Array.from(out);
+    }
+    /* Échéance à afficher : l'heure de prévision la plus proche de
+       « maintenant + horizon », bornée aux échéances publiées. */
+    function turbPickHour(index, now, horizon) {
+      const run = Date.parse(index.run);
+      const want = (now + horizon * 3600e3 - run) / 3600e3;
+      let best = index.hours[0];
+      for (const h of index.hours) if (Math.abs(h - want) < Math.abs(best - want)) best = h;
+      return best;
+    }
+    // [/turb-decode]
+
+    function mapTurbNote(text, warn) {
+      const el = $("#mapTurbInfo");
+      if (!el) return;
+      el.textContent = text;
+      el.classList.toggle("warn", !!warn);
+    }
+    async function mapTurbIndexGet() {
+      if (mapTurbIndex && Date.now() - mapTurbIndexAt < TURB_INDEX_TTL) return mapTurbIndex;
+      const r = await fetch(TURB_BASE + "/index.json", { cache: "no-cache" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      if (!d || !d.grid || !Array.isArray(d.hours) || !d.hours.length) throw new Error("index invalide");
+      mapTurbIndex = d; mapTurbIndexAt = Date.now();
+      return d;
+    }
+    /* Choisit le fichier (FL, échéance), le lit — mémoire d'abord — et le
+       met à l'écran. Anti-croisement : un curseur bougé deux fois de suite
+       lance deux lectures, seule la DERNIÈRE a le droit de peindre. Un échec
+       réseau garde la grille déjà affichée et le dit dans le cartouche. */
+    async function mapTurbRefresh() {
+      if (!mapTurbOn) return;
+      const seq = ++mapTurbSeq;
+      try {
+        const index = await mapTurbIndexGet();
+        const fls = Array.isArray(index.fls) && index.fls.length ? index.fls : TURB_FLS;
+        const fl = fls[Math.min(mapTurbFlIdx, fls.length - 1)];
+        const fh = turbPickHour(index, Date.now(), mapTurbHour);
+        const key = "FL" + String(fl).padStart(3, "0") + "/h" + String(fh).padStart(3, "0");
+        let runs = mapTurbCache.get(key);
+        if (!runs) {
+          const r = await fetch(TURB_BASE + "/" + key + ".json");
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const d = await r.json();
+          runs = turbRuns(index.grid, turbDecode(d));
+          mapTurbCache.set(key, runs);
+        }
+        if (seq !== mapTurbSeq) return;
+        mapTurbRuns = runs; mapTurbShown = { fl, fh, run: index.run };
+        const runMs = Date.parse(index.run), valid = new Date(runMs + fh * 3600e3);
+        const hh = d => String(d.getUTCHours()).padStart(2, "0");
+        const stale = Date.now() - runMs > TURB_STALE_MS;
+        mapTurbNote("GFS " + hh(new Date(runMs)) + "Z run · valid " + hh(valid) + "Z (+" + fh + " h)"
+          + (stale ? " · OLD RUN" : ""), stale);
+      } catch (e) {
+        if (seq !== mapTurbSeq) return;
+        mapTurbNote(mapTurbRuns ? "Turbulence — network lost, last grid kept" : "Turbulence unavailable", true);
+      }
+      drawMap();
+    }
+    function setMapTurbFl(idx) {
+      mapTurbFlIdx = Math.max(0, Math.min(TURB_FLS.length - 1, idx));
+      const s = $("#mapTurbFl"), o = $("#mapTurbFlOut");
+      if (s) s.value = String(mapTurbFlIdx);
+      if (o) o.textContent = "FL" + TURB_FLS[mapTurbFlIdx];
+    }
+    function setMapTurbHour(h) {
+      mapTurbHour = h;
+      document.querySelectorAll("#mapTurbHours .wh").forEach(b =>
+        b.classList.toggle("on", +b.dataset.h === h));
+    }
+    $("#mapTurbChk").onchange = e => {
+      mapTurbOn = e.target.checked;
+      $("#mapOv").classList.toggle("turb-on", mapTurbOn);
+      // Trois lignes de légende de plus : repliée du même geste, comme le vent.
+      if (mapTurbOn) { $("#mapOv").classList.add("leg-off"); mapTurbNote("Turbulence — loading…"); mapTurbRefresh(); }
+      drawMap();
+    };
+    // Le curseur peint pendant le glissement : la lecture est en mémoire dès
+    // le deuxième passage, et l'anti-croisement absorbe les autres.
+    $("#mapTurbFl").oninput = e => { setMapTurbFl(+e.target.value); mapTurbRefresh(); };
+    document.querySelectorAll("#mapTurbHours .wh").forEach(b => {
+      b.onclick = () => { setMapTurbHour(+b.dataset.h); mapTurbRefresh(); };
+    });
+    setMapTurbFl(mapTurbFlIdx);
+    // Une carte laissée ouverte avec la turbulence allumée suit les cycles :
+    // l'index est redemandé au pas de la minuterie météo, la grille ne
+    // change de fichier que si le cycle ou l'échéance « now » a bougé.
+    setInterval(() => {
+      if (document.hidden || $("#mapOv").hidden || mapMode !== "wx" || !mapTurbOn) return;
+      mapTurbRefresh();
+    }, TURB_INDEX_TTL);
+
     // L'œil replie la légende ; il ne touche à rien d'autre.
     $("#mapLegEye").onclick = () => $("#mapOv").classList.toggle("leg-off");
     // Le bloc curseur+légende vit dans le conteneur qui écoute les clics de la
@@ -19743,7 +20066,7 @@ function renderInfo(icao) {
       // Rien à requêter en vue NOTAM : les couleurs viennent du cache des
       // NOTAMs, pas du proxy météo. Le curseur basculé sur weather déclenchera
       // ces mêmes appels.
-      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); }
+      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); if (mapTurbOn) mapTurbRefresh(); }
       // MapLibre disponible : c'est LUI qui cadre, mapView suivra au 1er rendu.
       if (GL.active && GL.map) {
         /* La bascule sur l'archive z6 était SANS RETOUR : un trou de réseau

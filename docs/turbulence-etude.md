@@ -348,6 +348,60 @@ client (PWA)            : 3 couches fill + 1 line + ligne de trace + ruban tempo
    orthodromie.
 5. Masque convectif (CAPE) et pondération par type avion.
 
+---
+
+## 8. Ce qui est implémenté (branche `claude/turbli-architecture-apis-wz2xus`)
+
+La route reste l'orthodromie déjà dessinée par la carte ; la trace du vol
+précédent (§2) n'est pas intégrée pour l'instant.
+
+**Serveur — `tools/turb/build_turb.py`** (Python, numpy + eccodes). À lancer
+par cron toutes les 6 h sur le backend Railway, ou à la main :
+
+```
+python3 tools/turb/build_turb.py --out /var/turb --hours 3-36
+python3 tools/turb/build_turb.py --selftest        # sans réseau
+```
+
+Il lit l'index `.idx` du GFS 0,25° sur AWS Open Data, télécharge par Range
+HTTP les seuls champs utiles (UGRD, VGRD, HGT à 11 niveaux, CAPE : ~20 Mo
+par échéance, 10 s), calcule l'indice Ellrod TI1 à chaque FL, applique le
+masque convectif et écrit une arborescence statique à servir telle quelle
+sous `/api/turb/` :
+
+```
+index.json          { run, generated, hours:[…], fls:[100,…,450],
+                      grid:{lat0,lon0,dlat,dlon,nlat,nlon}, thresholds }
+FL340/h006.json     { run, valid, fl, hour, nlat, nlon, rle:[cls,len,cls,len,…] }
+```
+
+La grille couvre 25°W–45°E, 30°N–72°N (169 × 281 points) ; un fichier pèse
+~20 Ko brut, quelques Ko gzippés. L'index s'écrit en dernier, pour qu'un
+client qui le lit trouve toutes les échéances annoncées.
+
+**Client — `notam-filter.html`, carte de route, vue Weather.** Un
+interrupteur **Turbulence** sous **Wind** ; allumé, il déplie un cartouche
+avec le **curseur FL** (neuf niveaux, FL100 à FL450), l'horizon
+**now / +3 h / +6 h / +12 h** et la ligne « GFS 00Z run · valid 06Z (+6 h) »,
+qui passe en ambre avec la mention OLD RUN si le cycle a plus de 18 h. Le
+client décode le RLE, fusionne les cases voisines d'une ligne en rectangles
+(`turbRuns`) et les peint sur le canvas sous les terrains, la route et les
+flèches ; les fichiers lus restent en mémoire par (FL, échéance), et le
+service worker garde le dernier pour le hors ligne (`sw.js`, règle 3 ter).
+Trois lignes de légende et une note « indice modèle, pas un produit aéro »
+apparaissent avec l'interrupteur ; l'aide et Data sources portent le crédit
+NOAA GFS et la même réserve.
+
+**Tests — `test/turb-grid.test.mjs`** : décodage RLE, refus d'une grille
+tronquée, fusion des rectangles, choix de l'échéance. Le pipeline Python a
+son autotest (`--selftest`) et a été exécuté sur le cycle réel du
+2026-09-03 00Z.
+
+**Reste à faire** : brancher le cron sur le backend et exposer `/api/turb/`
+(fichiers statiques, en-tête CORS pour l'origine de l'app) ; SIGMET TURB en
+surcouche (§1) ; profil H+x le long de l'orthodromie (§4) ; calibration des
+seuils Ellrod contre quelques journées de SIGMET et de retours pilotes.
+
 ## Sources
 
 - OpenSky REST API : https://openskynetwork.github.io/opensky-api/rest.html
