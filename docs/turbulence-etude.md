@@ -355,6 +355,22 @@ client (PWA)            : 3 couches fill + 1 line + ligne de trace + ruban tempo
 La route reste l'orthodromie déjà dessinée par la carte ; la trace du vol
 précédent (§2) n'est pas intégrée pour l'instant.
 
+**Profil H+x (§4) — implémenté sur l'orthodromie.** Dès qu'une route est
+entrée, le cartouche Turbulence ajoute le rejeu dep → dest : montée par
+paliers de performance d'un jet moyen (2 400 ft/min et 250 kt sous FL100,
+1 800 ft/min et 330 kt jusqu'à FL240, 1 200 ft/min et 420 kt au-dessus),
+croisière à 450 kt au FL du curseur, descente symétrique ; une étape trop
+courte plafonne là où montée et descente se rejoignent. Décollage à
+l'horizon choisi (now, +3, +6, +12 h). Chaque minute est lue dans la grille
+au FL le plus proche, avec la pire des deux échéances qui encadrent l'heure ;
+sous 9 000 ft la grille ne dit rien. À l'écran : un ruban de la durée du vol
+coloré par classe, l'échelle TKO/+1h/LDG, la liste des seules transitions
+(« H+51 min · FL140 · light · 332 NM from LFPG », un tap recentre la carte)
+et l'orthodromie surlignée en jaune/orange/rouge là où le rejeu rencontre
+de la turbulence. Fonctions pures entre les marqueurs `[turb-profile]`,
+testées dans `test/turb-grid.test.mjs` (distance et point d'orthodromie,
+profil long et court, encadrement des échéances, échantillonnage).
+
 **Serveur — `tools/turb/build_turb.py`** (Python, numpy + eccodes). À lancer
 par cron toutes les 6 h sur le backend Railway, ou à la main :
 
@@ -399,7 +415,8 @@ son autotest (`--selftest`) et a été exécuté sur le cycle réel du
 
 **Reste à faire** : brancher le cron sur le backend et exposer `/api/turb/`
 (fichiers statiques, en-tête CORS pour l'origine de l'app) ; SIGMET TURB en
-surcouche (§1) ; profil H+x le long de l'orthodromie (§4) ; calibration des
+surcouche (§1) ; profil par type avion (vitesses et taux depuis
+`aircraft-db.js`) et heure de décollage libre ; calibration des
 seuils Ellrod contre quelques journées de SIGMET et de retours pilotes.
 
 ## Sources
