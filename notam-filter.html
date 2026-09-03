@@ -14,7 +14,7 @@
        de styles en ligne, et un nonce demanderait un serveur qui l'insère.
        blob: pour worker-src : MapLibre fabrique son worker par createObjectURL.
        127.0.0.1:8787 : le proxy en développement local, cf. BACKEND_URL. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org https://raw.githubusercontent.com http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Détecteurs de données d'iOS, coupés comme sur minima.html. Sans cela,
        la tablette souligne de son propre trait les suites de chiffres qu'elle
@@ -19607,7 +19607,15 @@ function renderInfo(icao) {
          mapTurbRuns    rectangles [latN, latS, lonW, lonE, cls] à peindre
        Les fichiers déjà lus restent en mémoire par (FL, échéance) : bouger
        le curseur d'avant en arrière ne redemande rien au réseau. */
-    const TURB_BASE = BACKEND_URL + "/api/turb";
+    /* Deux sources, dans l'ordre : le backend s'il sert /api/turb/, sinon la
+       branche `turb-data` que le workflow .github/workflows/turb.yml pousse
+       toutes les 6 h — servie par raw.githubusercontent.com avec CORS ouvert
+       et un cache de 5 min. La première qui rend un index valide est gardée
+       pour les fichiers qui suivent ; l'index redemandé plus tard refait le
+       tour, donc un backend qui apparaît reprend la main tout seul. */
+    const TURB_SOURCES = [BACKEND_URL + "/api/turb",
+                          "https://raw.githubusercontent.com/MDG64/preflight-lens/turb-data"];
+    let turbBase = TURB_SOURCES[0];
     const TURB_FLS = [100, 140, 180, 240, 270, 300, 340, 390, 450];
     const TURB_INDEX_TTL = 10 * 60e3;      // l'index change quatre fois par jour
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
@@ -20177,12 +20185,18 @@ function renderInfo(icao) {
     }
     async function mapTurbIndexGet() {
       if (mapTurbIndex && Date.now() - mapTurbIndexAt < TURB_INDEX_TTL) return mapTurbIndex;
-      const r = await fetch(TURB_BASE + "/index.json", { cache: "no-cache" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const d = await r.json();
-      if (!d || !d.grid || !Array.isArray(d.hours) || !d.hours.length) throw new Error("index invalide");
-      mapTurbIndex = d; mapTurbIndexAt = Date.now();
-      return d;
+      let last = null;
+      for (const base of TURB_SOURCES) {
+        try {
+          const r = await fetch(base + "/index.json", { cache: "no-cache" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const d = await r.json();
+          if (!d || !d.grid || !Array.isArray(d.hours) || !d.hours.length) throw new Error("index invalide");
+          turbBase = base; mapTurbIndex = d; mapTurbIndexAt = Date.now();
+          return d;
+        } catch (e) { last = e; }
+      }
+      throw last || new Error("aucune source");
     }
     /* Choisit le fichier (FL, échéance), le lit — mémoire d'abord — et le
        met à l'écran. Anti-croisement : un curseur bougé deux fois de suite
@@ -20219,7 +20233,7 @@ function renderInfo(icao) {
       const key = turbKey(fl, fh);
       let ent = mapTurbCache.get(key);
       if (ent) return ent;
-      const r = await fetch(TURB_BASE + "/" + key + ".json");
+      const r = await fetch(turbBase + "/" + key + ".json");
       if (!r.ok) throw new Error("HTTP " + r.status);
       const cls = turbDecode(await r.json());
       ent = { cls, runs: turbRuns(index.grid, cls) };
