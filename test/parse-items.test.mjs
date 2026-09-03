@@ -41,7 +41,18 @@ async function chargerParseNotam() {
   assert.ok(ordre, "ITEM_ORDRE introuvable dans notam-filter.html");
   const cancel = /const CANCEL_HEAD_RE = (\/.*\/);/.exec(html);
   assert.ok(cancel, "CANCEL_HEAD_RE introuvable dans notam-filter.html");
-  const fns = ["cleanHtml", "itemMarkers", "field", "innerBody", "unwrapOriginalNotam", "parseNotam"].map(nom => {
+  // unwrapNotam() (ex-unwrapOriginalNotam) lit WRAPPED_RE, et parseNotam()
+  // valide la ligne Q) par qField() et ses quatre regex : tous déclarés hors
+  // des fonctions découpées, on les rapatrie — comme classify.test.mjs le
+  // fait pour CNL_TEXT et RESTRICT_TEXT.
+  const consts = ["WRAPPED_RE", "Q_CODE", "Q_TRAFFIC", "Q_PURPOSE", "Q_SCOPE"].map(nom => {
+    const m = new RegExp(`const ${nom}\\s*= (\\/.*?\\/);`).exec(html);
+    assert.ok(m, `${nom} introuvable dans notam-filter.html`);
+    return `const ${nom} = ${m[1]};`;
+  });
+  const qField = /const qField = \(re, v\) => \{.*\};/.exec(html);
+  assert.ok(qField, "qField introuvable dans notam-filter.html");
+  const fns = ["cleanHtml", "itemMarkers", "field", "innerBody", "unwrapNotam", "parseNotam"].map(nom => {
     const re = new RegExp(`function ${nom}\\([^)]*\\) \\{[\\s\\S]*?\\n {4}\\}`);
     const m = re.exec(html);
     assert.ok(m, `function ${nom}() introuvable dans notam-filter.html`);
@@ -49,6 +60,7 @@ async function chargerParseNotam() {
   });
   const src = ["const ITEM_ORDRE = " + ordre[1] + ";",
                "const CANCEL_HEAD_RE = " + cancel[1] + ";",
+               ...consts, qField[0],
                ...fns, "export { parseNotam };"].join("\n");
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
