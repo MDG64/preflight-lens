@@ -19617,7 +19617,7 @@ function renderInfo(icao) {
     const TURB_INDEX_TTL = 10 * 60e3;      // l'index change quatre fois par jour
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
     let mapTurbOn = false, mapTurbFlIdx = 6, mapTurbHour = 0;
-    let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbEnt = null, mapTurbShown = null, mapTurbSeq = 0;
+    let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbEnt = null, mapTurbShown = null, mapTurbSeq = 0, mapTurbStamp = null;
     const mapTurbCache = new Map();        // "FL340/h006" -> { cls, img } : grille décodée et son image
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que
     // les retouches tactiles du plan (media query, boutons de zoom agrandis) :
@@ -20207,6 +20207,13 @@ function renderInfo(icao) {
           if (!r.ok) throw new Error("HTTP " + r.status);
           const d = await r.json();
           if (!d || !d.grid || !Array.isArray(d.hours) || !d.hours.length) throw new Error("index invalide");
+          // Un index NOUVEAU (autre cycle, autre grille, autre source) rend
+          // caducs tous les fichiers déjà lus : ils portaient l'ancien cycle,
+          // voire une grille d'une autre taille — l'image en serait fausse.
+          // On les oublie ; l'affichage courant est relu depuis la nouvelle
+          // source par l'appelant.
+          const stamp = base + "|" + (d.generated || d.run) + "|" + JSON.stringify(d.grid);
+          if (stamp !== mapTurbStamp) { mapTurbCache.clear(); mapTurbEnt = null; mapTurbStamp = stamp; }
           turbBase = base; mapTurbIndex = d; mapTurbIndexAt = Date.now();
           return d;
         } catch (e) { last = e; }
