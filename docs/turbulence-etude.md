@@ -1,0 +1,365 @@
+# Turbulence sur la carte : trace sol, zones par FL, prévision H+x
+
+Étude d'architecture pour un module « turbulence » de Preflight Lens, dans la
+continuité de l'analyse Turbli. Tout ce qui est marqué **vérifié** a été
+testé le 2026-09-03 (requêtes HTTP réelles) ; le reste vient de la
+documentation des fournisseurs.
+
+Trois questions, trois réponses courtes :
+
+| Question | Réponse | Source retenue |
+|---|---|---|
+| Trace sol du vol précédent | Oui, gratuit | OpenSky `/flights/departure` puis `/tracks/all` (30 jours d'historique) |
+| Zones de turbulence par FL sur la carte | Oui, mais **pas** avec les grilles WAFS EDR : elles ne sont plus publiques. On calcule un indice (Ellrod TI1) à partir des vents GFS 0,25° | GFS sur AWS Open Data (public, sans compte) + SIGMET TURB de l'AWC |
+| Alerte à H+x minutes après le décollage | Oui : on rejoue le profil du vol précédent minute par minute contre la grille horaire | Même grille, échéances horaires jusqu'à H+120 |
+
+Échelle demandée, 3 niveaux : **light / moderate / severe** (seuils au §5).
+
+---
+
+## 1. Ce que l'étude Turbli avait juste, et ce qui a changé
+
+- **Juste** : Turbli assemble une grille EDR (GTG/WAFS) et une route par
+  indicatif (plan de vol déposé ou vol précédent), puis échantillonne la
+  grille le long de la route à l'altitude et à l'heure de chaque segment.
+- **À corriger : les grilles WAFS 0,25° de turbulence ne sont plus en accès
+  libre.** Vérifié : sur NOMADS, `gfs.tCCz.awf_0p25.fFFF.grib2` répond 404 et
+  le répertoire `com/wafs/prod/` répond 403 ; le bucket AWS `noaa-gfs-bdp-pds`
+  ne contient aucun fichier `awf`/`wafs`. La Service Change Notice 22-104 de
+  NCEP explique le retrait des données de risque WAFS « due to a restricted
+  access agreement ». Elles ne sont servies que par **WIFS** (États-Unis,
+  inscription réservée aux compagnies, prestataires MET et autorités) et
+  **SADIS** (Met Office, abonnement). Un pilote seul ou un petit outil n'y
+  a pas accès.
+- **GTG / DAFS / GTGN** restent gratuits mais **CONUS seulement**.
+- **Conséquence** : pour l'Europe, la seule voie gratuite est de recalculer
+  soi-même un indice de turbulence en air clair depuis les vents d'un modèle
+  public (GFS ou ECMWF open data). C'est ce que GTG fait en interne, avec
+  plus de diagnostics et une calibration par PIREP. On perd la calibration,
+  on garde la physique (cisaillement × déformation).
+- **Gratuit et mondial, en plus** : les **SIGMET internationaux** de l'AWC
+  (`https://aviationweather.gov/api/data/isigmet?format=json&hazard=turb`,
+  vérifié : 40 SIGMET TURB actifs, polygones + base/top en pieds +
+  qualificatif MOD/SEV). C'est l'observation/prévision officielle des MWO,
+  à dessiner par-dessus la grille calculée.
+- Les PIREP de l'AWC sont quasi vides hors Amérique du Nord (vérifié : 0
+  PIREP turbulence sur l'Europe en 3 h). Inutile ici.
+
+---
+
+## 2. Trace sol du vol précédent
+
+### 2.1 Option recommandée : OpenSky Network (gratuit)
+
+Besoin : à partir d'un indicatif OACI (`AFR1234`, pas `AF1234`) et d'un
+terrain de départ, récupérer la trace du dernier vol effectué sous cet
+indicatif.
+
+Authentification : OAuth2 *client credentials* (compte gratuit), jeton
+valable 30 min :
+
+```
+POST https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token
+grant_type=client_credentials&client_id=…&client_secret=…
+```
+
+Recette en deux appels :
+
+1. **Trouver le vol** : `GET /api/flights/departure?airport=LFPG&begin=<t-48h>&end=<t>`
+   (fenêtre ≤ 2 jours). Réponse : liste de `{icao24, callsign, firstSeen,
+   lastSeen, estDepartureAirport, estArrivalAirport}`. On filtre sur le
+   callsign (padded à 8 caractères, à `trim()`), on prend le `firstSeen` le
+   plus récent. La table des vols est reconstruite par lot chaque nuit : le
+   « vol précédent » est celui d'hier ou d'avant, ce qui est exactement le
+   besoin.
+2. **La trace** : `GET /api/tracks/all?icao24=<hex>&time=<firstSeen>`.
+   Réponse : `{icao24, callsign, startTime, endTime, path:[[time, lat, lon,
+   baro_altitude_m, true_track, on_ground], …]}`. Historique **≤ 30 jours**.
+   La trace est décimée (points aux changements de cap/altitude), ce qui
+   suffit largement pour une ligne sur la carte et pour le profil du §4.
+
+Quotas (par famille d'endpoint) : 4 000 crédits/jour avec compte, 8 000 si
+on héberge un récepteur. Un appel `/tracks` par consultation est négligeable
+et le backend met en cache par (callsign, jour).
+
+Limites : altitudes barométriques en mètres ; pas de trace au-delà de 30
+jours ; un indicatif absent la veille (vol saisonnier) remonte vide → repli
+sur la route orthodromique (§4.3).
+
+### 2.2 Compléments et alternatives
+
+- **adsb.lol** (déjà utilisé par le backend pour le QFU) : **live seulement**
+  (`/v2/callsign/{cs}` vérifié, `/v2/hex`, `/v2/point/{lat}/{lon}/{nm}`).
+  Aucun endpoint d'historique. Les dumps quotidiens `adsblol/globe_history_2026`
+  (GitHub, un tar par jour, plusieurs Go) sont inexploitables à la demande.
+  En revanche `POST /api/0/routeset` avec `{"planes":[{"callsign":"AFR1234",
+  "lat":48.9,"lng":2.5}]}` rend origine/destination d'un indicatif : utile
+  pour valider le couple indicatif → étape avant d'interroger OpenSky.
+- **Enregistrer soi-même** : le backend « recense » déjà adsb.lol toutes les
+  30 min autour des grands terrains. Étendre ce recensement en suivant
+  `/v2/callsign/{cs}` toutes les 2 min pour une liste d'indicatifs suivis
+  donne une trace maison, sans quota OpenSky, mais seulement pour les vols
+  que l'on a décidé de suivre à l'avance.
+- **FlightAware AeroAPI** (payant, ~0,01 $/requête) : `GET /flights/{ident}`
+  (10 jours en arrière) donne les `fa_flight_id`, puis
+  `GET /flights/{id}/track` rend `{timestamp, latitude, longitude,
+  altitude (centaines de ft), groundspeed, heading}` à pleine résolution ;
+  `/history/flights/{ident}?start&end` remonte à 2011 (≥ 15 jours). Et
+  `GET /flights/{ident}/route` donne la route **déposée** (fixes), ce que
+  Turbli affiche. À réserver si l'on veut la route déposée plutôt que la
+  trace volée.
+
+### 2.3 Forme côté backend (Railway, comme `/api/qfu`)
+
+```
+GET /api/trace?cs=AFR1234&dep=LFPG
+→ 200 { cs, icao24, date, dep, dest, source:"opensky",
+        points:[[t, lat, lon, alt_ft, trk], …] }   (cache 24 h)
+→ 404 { reason:"no-flight-30d" }                      (repli orthodromie)
+```
+
+Le client trace une `line` MapLibre (source GeoJSON `LineString`), comme la
+couche FIR existante, et garde les points pour le §4.
+
+---
+
+## 3. Zones de turbulence sur la carte selon le niveau de vol choisi
+
+### 3.1 Données : vents GFS 0,25° sur AWS (public, vérifié)
+
+- Bucket `https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.YYYYMMDD/HH/atmos/`
+  (HTTP 200 sans compte), fichiers `gfs.tHHz.pgrb2.0p25.fFFF.grib2` avec leur
+  index `.idx`. 4 cycles/jour (00/06/12/18 Z, disponibles ~3 h 30 après),
+  **échéances horaires f000…f120**, puis toutes les 3 h jusqu'à f384.
+- Grâce au `.idx`, on télécharge par **Range HTTP** uniquement les champs
+  utiles : `UGRD`, `VGRD`, `HGT` (et `TMP` pour la Richardson si on veut) aux
+  niveaux 700, 600, 500, 400, 350, 300, 250, 200, 150 hPa. Soit 27 champs ×
+  ~0,7 Mo ≈ 20 Mo par échéance, monde entier. Pour l'Europe seule, on
+  découpe après décodage.
+- Le bucket **n'envoie pas d'en-têtes CORS** (vérifié) : le téléchargement se
+  fait côté serveur, jamais dans la PWA. Le GRIB2 GFS est compressé en
+  JPEG2000 : décoder avec `eccodes`/`cfgrib` (Python) ou `wgrib2` dans
+  l'image Docker Railway. Pas de décodeur JavaScript fiable pour ce packing.
+- Alternative sans GRIB : **ECMWF open data** 0,25° (CC-BY, horaire jusqu'à
+  H+90, 9 niveaux de pression), même principe. Ou **Open-Meteo** en JSON
+  (vent et géopotentiel à 19 niveaux, horaire, 16 jours, coordonnées
+  multiples par requête) : parfait pour prototyper sans toucher au GRIB,
+  mais il faut demander une grille de points pour dériver spatialement, et le
+  quota gratuit (usage non commercial) limite la maille.
+
+### 3.2 Du FL au niveau de pression (atmosphère standard)
+
+| FL | hPa GFS le plus proche | FL | hPa |
+|---|---|---|---|
+| FL100 | 700 | FL300 | 300 |
+| FL140 | 600 | FL340 | 250 |
+| FL180 | 500 | FL390 | 200 |
+| FL240 | 400 | FL450 | 150 |
+| FL270 | 350 | | |
+
+Ce sont les huit niveaux qu'utilise l'AWC pour son affichage WAFS, plus
+FL100 : on propose le même sélecteur (9 niveaux) plutôt qu'un pas de 1 000 ft
+qui n'apporterait rien avec un modèle à ~25 km.
+
+### 3.3 L'indice : Ellrod TI1
+
+Pour chaque niveau *p* et son voisin inférieur *p+1* (par exemple 250 et
+300 hPa pour FL340) :
+
+```
+DSH = ∂v/∂x + ∂u/∂y            (déformation de cisaillement)
+DST = ∂u/∂x − ∂v/∂y            (déformation d'étirement)
+DEF = sqrt(DSH² + DST²)
+VWS = |V(p) − V(p+1)| / (z(p) − z(p+1))     (cisaillement vertical, s⁻¹)
+TI1 = VWS × DEF                             (s⁻²)
+```
+
+Dérivées horizontales par différences centrées sur la grille 0,25° (Δx
+corrigé par cos φ), `z` tiré de `HGT`. TI2 ajoute la convergence
+(`VWS × (DEF + CVG)`), utile près des jets. Seuils classiques (Ellrod &
+Knapp 1992), en 10⁻⁷ s⁻² :
+
+| Niveau | TI1 |
+|---|---|
+| light | 4 – 8 |
+| moderate | 8 – 12 |
+| severe | ≥ 12 |
+
+C'est un indice d'air clair (CAT). Pour la turbulence convective, on ajoute
+un masque « CB » : `CAPE` (champ GFS de surface, aussi dans `pgrb2`) au-dessus
+de 1 000 J/kg **et** niveau demandé sous le sommet estimé, marqué au moins
+moderate. Le relief (ondes orographiques) reste hors de portée à cette
+maille ; le SIGMET couvre ce cas.
+
+### 3.4 Produit servi au client
+
+Pré-calcul à chaque cycle GFS (cron toutes les 6 h sur le backend) :
+
+- pour chaque échéance horaire de f003 à f036 (couvre tout départ dans les
+  24 h à venir avec marge), pour chacun des 9 niveaux : une grille Europe
+  (35°N–72°N, 25°W–45°E → 149 × 281 points) de la classe 0/1/2/3 sur un
+  `Uint8Array`, soit ~42 Ko brut, 3 à 6 Ko gzip.
+- puis **contourage** (marching squares, `d3-contour` ou équivalent Python)
+  aux trois seuils → un `MultiPolygon` par classe.
+
+Endpoint :
+
+```
+GET /api/turb?fl=340&t=2026-09-03T14:00Z&bbox=-10,35,30,60
+→ 200 GeoJSON FeatureCollection, features [{ properties:{ level:"light"|"moderate"|"severe",
+     fl:340, valid:"…Z", run:"2026-09-03T06Z", src:"gfs-ellrod" } }]   (cache 1 h)
+GET /api/turb/sigmet            → SIGMET TURB de l'AWC, filtrés au FL (base ≤ FL ≤ top), cache 10 min
+```
+
+Côté carte (`notam-filter.html`), trois couches `fill` sur une source
+GeoJSON, filtrées par `level`, avec la même palette que l'échelle
+(jaune / orange / rouge, opacité 0,35), puis une couche `line` hachurée pour
+les SIGMET. Le sélecteur de FL et le curseur horaire ne font que changer
+l'URL de la source : rien à recalculer dans le navigateur. Le service worker
+peut garder la dernière réponse par (fl, heure) : la carte reste lisible
+hors ligne au briefing.
+
+---
+
+## 4. Alerte « turbulence à H+x minutes après le décollage »
+
+### 4.1 Principe
+
+On ne prédit pas une position, on **rejoue un profil** : à chaque minute
+après le décollage, où sera l'avion (lat, lon) et à quel niveau, puis quelle
+classe la grille donne à cet endroit, à ce niveau, à cette heure.
+
+### 4.2 Le profil
+
+Trois sources, par ordre de préférence :
+
+1. **La trace du vol précédent** (§2) : on la rééchantillonne à la minute
+   depuis le premier point `on_ground=false`, en gardant l'altitude vraie de
+   la veille. C'est le plus fidèle (SID réelle, paliers ATC, TOC réel).
+2. **La route déposée** (AeroAPI `/route`, si payant) + un profil de montée
+   type.
+3. **Orthodromie dep → dest** + profil de montée type. Pour un A320 :
+
+| Temps après décollage | Distance | Niveau |
+|---|---|---|
+| 5 min | ~30 NM | FL100 |
+| 10 min | ~70 NM | FL200 |
+| 17 min | ~120 NM | FL300 |
+| 22 min | ~160 NM | croisière FL350 |
+
+(250 kt sous FL100, puis 300 kt / M0,78 ; à paramétrer par type via
+`aircraft-db.js`.)
+
+### 4.3 L'échantillonnage
+
+```
+for m in 0..durée:
+    (lat, lon, alt) = profil(m)
+    fl   = niveau GFS le plus proche de alt
+    t    = t_décollage + m
+    cls  = max( grille[fl][échéance(t)] interpolée bilinéairement en (lat, lon),
+                grille[fl][échéance(t)+1h] idem )      # on prend le pire des deux heures encadrantes
+    cls  = max(cls, sigmet_turb(lat, lon, alt, t))
+```
+
+Prendre le maximum des deux échéances horaires encadrantes, plutôt qu'une
+interpolation temporelle, va dans le sens de la sécurité et absorbe une
+partie de l'incertitude sur l'heure réelle de décollage.
+
+### 4.4 Ce que voit le pilote
+
+Un ruban temporel sous la carte, de H+0 à l'arrivée, coloré par classe, et
+une liste ne retenant que les **transitions** :
+
+```
+H+14 min   FL240  moderate   35 NM SE de DJL   (GFS 06Z, échéance 14Z)
+H+31 min   FL350  light      jusqu'à H+47
+H+52 min   FL350  severe     SIGMET LFFF 3 valide 13:00–17:00, FL300–FL400
+```
+
+Un tap sur une ligne recentre la carte au point et bascule le sélecteur de
+FL et l'heure sur ceux de l'alerte : la zone de §3 apparaît sous le point.
+
+### 4.5 Limites à afficher
+
+- Précision temporelle : le GFS est horaire, mais son erreur de position sur
+  les zones de CAT est de l'ordre de 50–100 NM ; « H+14 » veut dire « dans
+  la tranche H+10 à H+20 ».
+- Latence : le cycle 06Z sort vers 09:30Z. Une consultation à 10Z utilise
+  donc une prévision de 4 h d'âge ; l'échéance affichée le dit (`run`,
+  `valid`).
+- Sans EDR calibré, l'indice ne connaît pas la masse de l'avion : les seuils
+  du §5 sont ceux d'un avion moyen (A320/B737). Un régional ressent une
+  classe de plus, un gros-porteur une de moins.
+
+---
+
+## 5. Échelle à trois niveaux
+
+Deux échelles coexistent : l'EDR (ce que Turbli, WAFS et GTG affichent) et
+l'indice Ellrod (ce que nous calculons). Le module n'expose que la classe.
+
+| Classe | EDR (m^2/3 s^-1), avion moyen | Ellrod TI1 (10⁻⁷ s⁻²) | Couleur |
+|---|---|---|---|
+| light | 0,15 – 0,20 | 4 – 8 | jaune |
+| moderate | 0,20 – 0,35 | 8 – 12 | orange |
+| severe | ≥ 0,35 | ≥ 12 | rouge |
+
+Les seuils EDR sont ceux qu'appliquent les WAFC pour tracer MOD et SEV sur
+les cartes SIGWX depuis le 26 novembre 2024 (AIC 131/2024 du Royaume-Uni :
+MOD si 0,20 ≤ EDR < 0,35, SEV si EDR ≥ 0,35) ; le seuil bas 0,15 est celui à
+partir duquel l'AWC commence à colorer sa carte WAFS. Ils servent le jour où
+une source EDR devient accessible (WIFS/SADIS, ou GTG si l'on couvre les
+États-Unis) : le contrat `/api/turb` ne change pas, seule la fonction de
+classement change.
+
+---
+
+## 6. Pipeline complet et coûts
+
+```
+cron 6 h (backend)      : GFS AWS (Range sur .idx) → décodage → TI1 par niveau
+                          → grilles Uint8 + GeoJSON contourés → cache disque / KV
+cron 10 min             : SIGMET TURB (AWC isigmet) → polygones filtrés par FL
+à la demande            : /api/trace (OpenSky, cache 24 h)
+                          /api/turb?fl&t (statique une fois calculé)
+                          /api/turb/route?cs&dep&tko= (profil §4, ~1 ms par minute de vol)
+client (PWA)            : 3 couches fill + 1 line + ligne de trace + ruban temporel,
+                          tout en GeoJSON, rien à décoder, cache service worker
+```
+
+- Coût données : 0 € (AWS Open Data, OpenSky, AWC). Trafic serveur ≈ 20 Mo
+  × 34 échéances × 4 cycles ≈ 2,7 Go/jour, à réduire à ~1 Go en ne
+  décodant que la sous-grille Europe (le Range ne coupe pas
+  géographiquement, mais on peut passer à 12 échéances si le besoin est
+  « départ dans les 12 h »).
+- CPU : le calcul TI1 sur 9 niveaux × 34 échéances tient en quelques
+  dizaines de secondes en NumPy.
+- Évolution payante possible sans refonte : AeroAPI pour la route déposée
+  (0,01 $/vol), SADIS/WIFS pour l'EDR officiel si l'éligibilité est obtenue.
+
+## 7. Ordre de réalisation proposé
+
+1. `/api/trace` OpenSky + ligne sur la carte (un jour de travail, valeur
+   immédiate).
+2. Pipeline GFS → TI1 → GeoJSON, sélecteur de FL et curseur horaire.
+3. SIGMET TURB en surcouche.
+4. Profil H+x et ruban temporel, d'abord sur la trace de la veille, repli
+   orthodromie.
+5. Masque convectif (CAPE) et pondération par type avion.
+
+## Sources
+
+- OpenSky REST API : https://openskynetwork.github.io/opensky-api/rest.html
+- adsb.lol OpenAPI : https://api.adsb.lol/api/openapi.json ; dumps https://github.com/adsblol/globe_history_2026
+- AeroAPI v4 (référence non officielle) : https://wal.sh/research/ads-b/aeroapi-reference.html
+- NCEP SCN 22-104 (retrait WAFS de NOMADS) : https://www.weather.gov/media/notification/pdf2/scn22-104_gfs.v16.3.0_aaa.pdf
+- WIFS User's Guide : https://aviationweather.gov/wifs/users_guide/
+- AWC WAFS help (niveaux, EDR×100 ≥ 15) : https://aviationweather.gov/wafs/help.html
+- AWC Data API (isigmet, pirep) : https://aviationweather.gov/data/api/
+- GFS sur AWS Open Data : https://noaa-gfs-bdp-pds.s3.amazonaws.com/
+- ECMWF open data : https://www.ecmwf.int/en/forecasts/datasets/open-data
+- Open-Meteo (niveaux de pression) : https://open-meteo.com/en/docs
+- Ellrod index : https://en.wikipedia.org/wiki/Ellrod_index
+- AIC 131/2024 (seuils EDR SIGWX 0,20 / 0,35) : https://www.aurora.nats.co.uk/htmlAIP/Publications/2024-07-25/html/eAIC/EG-eAIC-2024-131-P-en-GB.html
+- Turbli, FAQ et cartes : https://turbli.com/frequently-asked-questions/
