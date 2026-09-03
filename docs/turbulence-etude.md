@@ -413,8 +413,16 @@ tronquée, fusion des rectangles, choix de l'échéance. Le pipeline Python a
 son autotest (`--selftest`) et a été exécuté sur le cycle réel du
 2026-09-03 00Z.
 
-**Reste à faire** : brancher le cron sur le backend et exposer `/api/turb/`
-(fichiers statiques, en-tête CORS pour l'origine de l'app) ; SIGMET TURB en
+**Publication sans serveur — `.github/workflows/turb.yml`.** Toutes les 6 h
+(HH+4 h 20), GitHub Actions lance le script et pousse son dossier de sortie
+en un seul commit sur la branche orpheline `turb-data`, écrasée à chaque
+fois. L'app essaie d'abord `/api/turb/` sur le backend, puis
+`https://raw.githubusercontent.com/MDG64/preflight-lens/turb-data/`
+(CORS ouvert, cache 5 min) : aucune pièce à déployer sur Railway pour que
+les nappes s'affichent. Le backend peut plus tard servir la même
+arborescence pour reprendre la main.
+
+**Reste à faire** : SIGMET TURB en
 surcouche (§1) ; profil par type avion (vitesses et taux depuis
 `aircraft-db.js`) et heure de décollage libre ; calibration des
 seuils Ellrod contre quelques journées de SIGMET et de retours pilotes.

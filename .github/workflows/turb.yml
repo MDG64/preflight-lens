@@ -1,0 +1,46 @@
+# Grille de turbulence : calculée toutes les 6 h depuis les vents GFS
+# (tools/turb/build_turb.py) et publiée sur la branche orpheline `turb-data`,
+# que l'app lit via raw.githubusercontent.com (CORS ouvert, cache 5 min).
+# Un seul commit à chaque fois, écrasé au suivant : l'historique ne grossit
+# pas. Le backend Railway peut servir la même arborescence sous /api/turb/ ;
+# l'app l'essaie d'abord et retombe ici.
+#
+# Horaires : le cycle GFS HHZ est complet sur AWS ~3 h 45 après HH ; on part
+# à HH+4 h 20 pour ne jamais tomber sur un cycle incomplet (le script prend
+# de toute façon le dernier cycle dont l'échéance 36 est publiée).
+name: Turbulence grid
+
+on:
+  schedule:
+    - cron: "20 4,10,16,22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: turb-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet numpy eccodes
+      - run: python3 tools/turb/build_turb.py --selftest
+      - name: Build the grid (GFS 0.25, hours 3-36)
+        run: python3 tools/turb/build_turb.py --out out --hours 3-36
+      - name: Publish to the turb-data branch
+        run: |
+          cd out
+          git init -q -b turb-data
+          git config user.name "turb-bot"
+          git config user.email "turb-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Turbulence grid $(python3 -c 'import json;print(json.load(open("index.json"))["run"])')"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" turb-data
