@@ -34,7 +34,7 @@ jobs:
       - run: pip install --quiet numpy eccodes
       - run: python3 tools/turb/build_turb.py --selftest
       - name: Build the grid (GFS 0.25, hours 3-36)
-        run: python3 tools/turb/build_turb.py --out out --hours 3-36
+        run: python3 tools/turb/build_turb.py --out out --hours 3-36 --bbox=-180,-90,180,90 --pool 2
       - name: Publish to the turb-data branch
         run: |
           cd out

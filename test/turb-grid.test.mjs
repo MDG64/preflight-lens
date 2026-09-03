@@ -21,7 +21,7 @@ async function chargerTurb() {
   const c = html.indexOf("// [turb-profile]"), d = html.indexOf("// [/turb-profile]");
   assert.ok(c >= 0 && d > c, "marqueurs [turb-profile] introuvables");
   const src = html.slice(a, b) + "\n" + html.slice(c, d)
-    + "\nexport { turbDecode, turbRuns, turbPickHour, gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbSampleProfile };";
+    + "\nexport { turbDecode, turbRuns, turbPickHour, gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbSampleProfile, turbEpisodes };";
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 
@@ -128,4 +128,21 @@ test("turbSampleProfile : la pire des deux échéances, sous FL100 rien, transit
   const tiny = { ...index, grid: { lat0: 45, lon0: 6, dlat: -1, dlon: 1, nlat: 2, nlon: 2 } };
   const Q = turbSampleProfile(prof, LFPG, LFMN, tiny, tko, index.fls, () => zero);
   assert.ok(Q.pts.some(p => p.cls === -2), "hors grille signalé");
+});
+
+test("turbEpisodes regroupe les transitions en plages continues de turbulence", async () => {
+  const { turbEpisodes } = await chargerTurb();
+  const P = { total: 100, dist: 700, events: [
+    { t: 0, d: 0, fl: null, cls: -1, lat: 0, lon: 0 },
+    { t: 4, d: 17, fl: 100, cls: 0, lat: 0, lon: 0 },
+    { t: 20, d: 120, fl: 340, cls: 1, lat: 1, lon: 1 },
+    { t: 25, d: 160, fl: 340, cls: 3, lat: 2, lon: 2 },     // même épisode, pire classe
+    { t: 30, d: 200, fl: 340, cls: 1, lat: 3, lon: 3 },
+    { t: 40, d: 280, fl: 340, cls: 0, lat: 0, lon: 0 },     // fin du premier
+    { t: 80, d: 600, fl: 240, cls: 2, lat: 4, lon: 4 },     // second, jusqu'à l'atterrissage
+  ] };
+  const eps = turbEpisodes(P);
+  assert.equal(eps.length, 2);
+  assert.deepEqual([eps[0].t0, eps[0].t1, eps[0].cls, eps[0].d0, eps[0].d1, eps[0].lat], [20, 40, 3, 120, 280, 2]);
+  assert.deepEqual([eps[1].t0, eps[1].t1, eps[1].cls, eps[1].d1, eps[1].flMin], [80, 100, 2, 700, 240]);
 });

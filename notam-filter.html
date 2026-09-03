@@ -7359,7 +7359,7 @@ body .stat .k{
           <span class="mleg wx tb"><i class="sq t1"></i>Light turbulence at the chosen FL</span>
           <span class="mleg wx tb"><i class="sq t2"></i>Moderate turbulence</span>
           <span class="mleg wx tb"><i class="sq t3"></i>Severe turbulence</span>
-          <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), ~25 km cells — not an official aviation product</span>
+          <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), ~50 km cells — not an official aviation product</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgold"></i>NOTAM downloaded — readable offline</span>
@@ -7525,7 +7525,7 @@ body .stat .k{
             zones</b> at the flight level set by the <b>FL slider</b> — yellow light, orange moderate, red
             severe — for now or <b>+3/+6/+12&nbsp;h</b>; the cartouche names the GFS run and the valid hour.
             It is a clear-air turbulence index computed on the model winds, with a convective proxy under
-            storms, on ~25 km cells: <b>guidance, not an official aviation weather product</b>, and not the
+            storms, on ~50 km cells: <b>guidance, not an official aviation weather product</b>, and not the
             WAFS EDR charts of the briefing. With a route entered, the same cartouche adds the <b>H+x
             profile</b>: the great circle from departure to destination replayed minute by minute with a
             generic medium-jet climb and descent, cruising at the slider FL, taking off at the chosen time —
@@ -7778,7 +7778,7 @@ body .stat .k{
         <div class="hd-note">
           <b>Turbulence zones</b> — computed from the <a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/"
             target="_blank" rel="noopener">NOAA GFS 0.25° model winds</a> (public domain) with the Ellrod
-          clear-air turbulence index and a CAPE convective proxy. A model index on ~25 km cells,
+          clear-air turbulence index and a convective proxy (CAPE, convective rain, simulated reflectivity). A model index on ~50 km cells,
           <b>not the official WAFS turbulence forecast</b> and <b>not an aviation weather product</b>.
         </div>
         <div class="hd-note">
@@ -18991,28 +18991,25 @@ function renderInfo(icao) {
 
       // --- zones de turbulence (vue Weather, interrupteur TURBULENCE) ---
       // Sous tout le reste : une nappe qui se lit à travers les terrains, les
-      // flèches et la route, jamais par-dessus. Rectangles pré-fusionnés par
-      // ligne (turbRuns) ; on ne projette que ce qui tombe dans l'écran.
-      if (mapTurbOn && mapMode === "wx" && mapTurbRuns && mapTurbRuns.length) {
-        const TBPAL = light
-          ? [null, "rgba(240,200,40,.34)", "rgba(240,130,30,.40)", "rgba(229,72,77,.46)"]
-          : [null, "rgba(246,201,69,.30)", "rgba(246,140,50,.36)", "rgba(255,93,108,.42)"];
-        const R = mapTurbRuns, W = cv.width, H = cv.height;
+      // flèches et la route, jamais par-dessus. L'image de la grille
+      // (turbImage) est tirée ligne par ligne : chaque ligne de cases va de
+      // sa latitude nord à sa latitude sud à l'écran, et d'un bord à l'autre
+      // de la grille en x. Seules les lignes visibles sont tirées.
+      if (mapTurbOn && mapMode === "wx" && mapTurbEnt && mapTurbIndex) {
+        const g = mapTurbIndex.grid, img = turbImage(mapTurbEnt, g, light);
+        const hLat = Math.abs(g.dlat) / 2, hLon = g.dlon / 2, H = cv.height;
+        const x0 = X(g.lon0 - hLon), x1 = X(g.lon0 + (g.nlon - 1) * g.dlon + hLon);
         ctx.save();
-        for (let c = 1; c <= 3; c++) {          // par classe : un seul changement de couleur chacune
-          ctx.fillStyle = TBPAL[c];
-          ctx.beginPath();
-          for (let k = 0; k < R.length; k += 5) {
-            if (R[k + 4] !== c) continue;
-            const y0 = Y(R[k]), y1 = Y(R[k + 1]);
-            if (y1 < 0 || y0 > H) continue;
-            const x0 = X(R[k + 2]), x1 = X(R[k + 3]);
-            if (x1 < 0 || x0 > W) continue;
-            // +0.5 px : les cases voisines se recouvrent d'un demi-pixel, sans
-            // quoi l'antialiasing laisse un fil clair entre deux rectangles.
-            ctx.rect(x0, y0, x1 - x0 + 0.5, y1 - y0 + 0.5);
-          }
-          ctx.fill();
+        ctx.imageSmoothingEnabled = false;         // des cases nettes, pas un dégradé
+        for (let j = 0; j < g.nlat; j++) {
+          const lat = g.lat0 + j * g.dlat;
+          // Bords ARRONDIS au pixel, et le bas d'une bande est exactement le
+          // haut de la suivante : ni fil clair entre deux bandes (un bord
+          // fractionnaire laissait passer le fond), ni double épaisseur là où
+          // elles se recouvriraient (la transparence s'y additionnerait).
+          const y0 = Math.round(Y(lat + hLat)), y1 = Math.round(Y(lat - hLat));
+          if (y1 <= 0 || y0 >= H || y1 <= y0) continue;
+          ctx.drawImage(img, 0, j, g.nlon, 1, x0, y0, x1 - x0, y1 - y0);
         }
         ctx.restore();
       }
@@ -19604,7 +19601,7 @@ function renderInfo(icao) {
          mapTurbFlIdx   index dans TURB_FLS (curseur)
          mapTurbHour    horizon en heures : 0 = maintenant, 3, 6, 12
          mapTurbIndex   index.json du serveur (cycle, échéances, grille)
-         mapTurbRuns    rectangles [latN, latS, lonW, lonE, cls] à peindre
+         mapTurbEnt     grille décodée du fichier affiché, et son image
        Les fichiers déjà lus restent en mémoire par (FL, échéance) : bouger
        le curseur d'avant en arrière ne redemande rien au réseau. */
     /* Deux sources, dans l'ordre : le backend s'il sert /api/turb/, sinon la
@@ -19620,8 +19617,8 @@ function renderInfo(icao) {
     const TURB_INDEX_TTL = 10 * 60e3;      // l'index change quatre fois par jour
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
     let mapTurbOn = false, mapTurbFlIdx = 6, mapTurbHour = 0;
-    let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbRuns = null, mapTurbShown = null, mapTurbSeq = 0;
-    const mapTurbCache = new Map();        // "FL340/h006" -> runs décodés
+    let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbEnt = null, mapTurbShown = null, mapTurbSeq = 0;
+    const mapTurbCache = new Map();        // "FL340/h006" -> { cls, img } : grille décodée et son image
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que
     // les retouches tactiles du plan (media query, boutons de zoom agrandis) :
     // les flèches de vent y plafonnent plus haut au zoom.
@@ -20175,6 +20172,24 @@ function renderInfo(icao) {
       }
       return { pts, events, total: prof.total, top: prof.top, dist, max };
     }
+    /* Les événements regroupés en ÉPISODES : une plage continue de classe ≥ 1,
+       avec son début, sa fin, sa pire classe, ses FL et ses distances. Sur un
+       transatlantique, trente transitions light/moderate/light ne se lisent
+       pas ; six épisodes, oui. */
+    function turbEpisodes(P) {
+      const out = [];
+      let cur = null;
+      for (let i = 0; i < P.events.length; i++) {
+        const e = P.events[i], end = i + 1 < P.events.length ? P.events[i + 1].t : P.total;
+        if (e.cls >= 1) {
+          if (!cur) cur = { t0: e.t, t1: end, d0: e.d, d1: null, cls: e.cls, flMin: e.fl, flMax: e.fl, lat: e.lat, lon: e.lon };
+          else { cur.t1 = end; if (e.cls > cur.cls) { cur.cls = e.cls; cur.lat = e.lat; cur.lon = e.lon; } }
+          cur.flMin = Math.min(cur.flMin, e.fl); cur.flMax = Math.max(cur.flMax, e.fl);
+        } else if (cur) { cur.d1 = e.d; out.push(cur); cur = null; }
+      }
+      if (cur) { cur.d1 = P.dist; out.push(cur); }
+      return out;
+    }
     // [/turb-profile]
 
     function mapTurbNote(text, warn) {
@@ -20212,7 +20227,7 @@ function renderInfo(icao) {
         const fh = turbPickHour(index, Date.now(), mapTurbHour);
         const ent = await mapTurbFile(index, fl, fh);
         if (seq !== mapTurbSeq) return;
-        mapTurbRuns = ent.runs; mapTurbShown = { fl, fh, run: index.run };
+        mapTurbEnt = ent; mapTurbShown = { fl, fh, run: index.run };
         const runMs = Date.parse(index.run), valid = new Date(runMs + fh * 3600e3);
         const hh = d => String(d.getUTCHours()).padStart(2, "0");
         const stale = Date.now() - runMs > TURB_STALE_MS;
@@ -20221,24 +20236,49 @@ function renderInfo(icao) {
         mapTurbProfile(index, seq);        // le profil H+x suit, sans retenir la carte
       } catch (e) {
         if (seq !== mapTurbSeq) return;
-        mapTurbNote(mapTurbRuns ? "Turbulence — network lost, last grid kept" : "Turbulence unavailable", true);
+        mapTurbNote(mapTurbEnt ? "Turbulence — network lost, last grid kept" : "Turbulence unavailable", true);
       }
       drawMap();
     }
     const turbKey = (fl, fh) => "FL" + String(fl).padStart(3, "0") + "/h" + String(fh).padStart(3, "0");
     /* Un fichier (FL, échéance) : mémoire d'abord, sinon le serveur. L'entrée
-       garde la grille décodée (pour le profil) ET ses rectangles (pour la
-       nappe), les deux servent. */
+       garde la grille décodée (le profil la lit case par case) et, une fois
+       peinte, son image (turbImage). */
     async function mapTurbFile(index, fl, fh) {
       const key = turbKey(fl, fh);
       let ent = mapTurbCache.get(key);
       if (ent) return ent;
       const r = await fetch(turbBase + "/" + key + ".json");
       if (!r.ok) throw new Error("HTTP " + r.status);
-      const cls = turbDecode(await r.json());
-      ent = { cls, runs: turbRuns(index.grid, cls) };
+      ent = { cls: turbDecode(await r.json()), img: {} };
       mapTurbCache.set(key, ent);
       return ent;
+    }
+    /* La nappe en une IMAGE d'un pixel par case, construite une fois par
+       grille et par thème. Le monde entier à 0,5° fait 720 × 360 cases :
+       peindre 40 000 rectangles par image de la carte, c'est trop pour un
+       téléphone ; tirer 360 bandes d'une ligne chacune (drawMap), non. La
+       ligne est la bonne unité : x est linéaire en longitude dans les deux
+       projections de la carte, seule la latitude se déforme, et une bande
+       d'une ligne de grille n'a qu'une latitude. */
+    function turbImage(ent, grid, light) {
+      const k = light ? "l" : "d";
+      if (ent.img[k]) return ent.img[k];
+      const PAL = light
+        ? [[0, 0, 0, 0], [240, 200, 40, 87], [240, 130, 30, 102], [229, 72, 77, 117]]
+        : [[0, 0, 0, 0], [246, 201, 69, 77], [246, 140, 50, 92], [255, 93, 108, 107]];
+      const c = document.createElement("canvas");
+      c.width = grid.nlon; c.height = grid.nlat;
+      const g = c.getContext("2d"), im = g.createImageData(grid.nlon, grid.nlat), px = im.data, cls = ent.cls;
+      for (let i = 0, n = cls.length; i < n; i++) {
+        const v = cls[i];
+        if (!v) continue;
+        const p = PAL[v], o = i * 4;
+        px[o] = p[0]; px[o + 1] = p[1]; px[o + 2] = p[2]; px[o + 3] = p[3];
+      }
+      g.putImageData(im, 0, 0);
+      ent.img[k] = c;
+      return c;
     }
     /* Profil H+x : dep → dest de la route courante, décollage à l'horizon
        choisi, croisière au FL du curseur. Lit d'abord tous les fichiers que
@@ -20286,22 +20326,30 @@ function renderInfo(icao) {
       ticks.push('<span style="left:0">TKO</span>');
       for (let h = 60; h < P.total - 20; h += 60) ticks.push('<span style="left:' + (h / total * 100).toFixed(1) + '%">+' + (h / 60) + 'h</span>');
       ticks.push('<span style="left:100%">LDG</span>');
-      // La liste : seulement les transitions, dans l'ordre du vol.
-      const rows = P.events.filter(e => e.cls >= 0).map((e, i) =>
-        '<div class="ev k' + e.cls + '" data-i="' + P.events.indexOf(e) + '"><span class="t">' + hm(e.t) + '</span>'
-        + '<span>FL' + (e.fl || Math.round(e.alt / 100)) + '</span><span class="k">' + TURB_NAMES[e.cls] + '</span>'
-        + '<span>' + Math.round(e.d) + ' NM from ' + P.dep + '</span></div>');
+      // La liste : les épisodes de turbulence, dans l'ordre du vol — début,
+      // fin, pire classe, niveaux traversés, distance depuis le départ.
+      // Un épisode light de moins de trois minutes, c'est une case effleurée :
+      // il reste sur le ruban et sur la route, pas dans la liste.
+      const eps = turbEpisodes(P).filter(e => e.cls >= 2 || e.t1 - e.t0 >= 3), MAX_ROWS = 8;
+      const rows = eps.slice(0, MAX_ROWS).map((e, i) =>
+        '<div class="ev k' + e.cls + '" data-i="' + i + '"><span class="t">' + hm(e.t0) + '</span>'
+        + '<span class="k">' + TURB_NAMES[e.cls] + '</span>'
+        + '<span>' + (e.t1 - e.t0 >= 1.5 ? "for " + Math.round(e.t1 - e.t0) + " min · " : "")
+        + "FL" + e.flMin + (e.flMax !== e.flMin ? "–" + e.flMax : "") + " · " + Math.round(e.d0) + " NM from " + P.dep + '</span></div>');
+      if (eps.length > MAX_ROWS) rows.push('<div class="none">+ ' + (eps.length - MAX_ROWS) + " more later in the flight</div>");
       const worst = P.max >= 1 ? "worst " + TURB_NAMES[P.max] : P.max === 0 ? "smooth all along" : "no grid on this route";
       el.innerHTML = '<div class="tp-head">' + P.dep + " → " + P.arr + " · " + Math.round(P.dist) + " NM · " + hm(P.total).slice(2)
         + " · TKO " + z(P.tko) + " · FL" + Math.round(P.top / 100) + " · " + worst + "</div>"
         + '<div class="tp-bar">' + bar.join("") + "</div>"
         + '<div class="tp-ticks">' + ticks.join("") + "</div>"
-        + '<div class="tp-list">' + (rows.length ? rows.join("") : '<div class="none">No grid data along this route (outside the covered area).</div>') + "</div>";
+        + '<div class="tp-list">' + (rows.length ? rows.join("")
+          : P.max === 0 ? '<div class="none">Smooth all along at this level and time.</div>'
+          : '<div class="none">No grid data along this route (outside the covered area).</div>') + "</div>";
       el.hidden = false;
-      // Un tap sur une ligne recentre la carte sur le point de l'événement.
+      // Un tap sur une ligne recentre la carte sur le point le plus dur de l'épisode.
       el.querySelectorAll(".ev").forEach(row => {
         row.onclick = () => {
-          const e = P.events[+row.dataset.i];
+          const e = eps[+row.dataset.i];
           if (!e || !mapView) return;
           if (GL.active && GL.map) GL.map.jumpTo({ center: [e.lon, e.lat] });
           else { mapView.cx = e.lon; mapView.cy = e.lat; _bg = null; }
