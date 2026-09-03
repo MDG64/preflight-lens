@@ -128,6 +128,13 @@ test("turbSampleProfile : la pire des deux échéances, sous FL100 rien, transit
   const tiny = { ...index, grid: { lat0: 45, lon0: 6, dlat: -1, dlon: 1, nlat: 2, nlon: 2 } };
   const Q = turbSampleProfile(prof, LFPG, LFMN, tiny, tko, index.fls, () => zero);
   assert.ok(Q.pts.some(p => p.cls === -2), "hors grille signalé");
+  // Un fichier qui porte sa propre grille est lu dessus, même si l'index en
+  // annonce une autre (cache de bord déphasé) : ici la grille du fichier est
+  // décalée d'un degré, la case de Nice est donc (43,6) dans SES indices.
+  const own = { lat0: 49, lon0: -1, dlat: -1, dlon: 1, nlat: 8, nlon: 9 };
+  const g3 = new Uint8Array(72); g3[Math.round((44 - own.lat0) / own.dlat) * own.nlon + Math.round((7 - own.lon0) / own.dlon)] = 3;
+  const R = turbSampleProfile(prof, LFPG, LFMN, index, tko, index.fls, () => ({ cls: g3, grid: own }));
+  assert.equal(R.max, 3, "lu sur la grille du fichier, pas sur celle de l'index");
 });
 
 test("turbEpisodes regroupe les transitions en plages continues de turbulence", async () => {

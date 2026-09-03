@@ -274,8 +274,12 @@ def write_out(out_dir, run, hours, grids, grid):
             d = os.path.join(out_dir, "FL%03d" % fl)
             os.makedirs(d, exist_ok=True)
             with open(os.path.join(d, "h%03d.json" % fh), "w") as f:
+                # La grille est répétée dans CHAQUE fichier : index et fichiers
+                # traversent un cache de bord qui ne les rafraîchit pas ensemble,
+                # et le client doit pouvoir lire un fichier sur sa propre grille.
                 json.dump({"run": index["run"], "valid": valid.strftime("%Y-%m-%dT%H:00Z"), "fl": fl,
-                           "hour": fh, "nlat": nlat, "nlon": nlon, "rle": rle(cls)}, f, separators=(",", ":"))
+                           "hour": fh, "nlat": nlat, "nlon": nlon, "grid": index["grid"],
+                           "rle": rle(cls)}, f, separators=(",", ":"))
     # L'index s'écrit EN DERNIER : un client qui le lit trouve toutes les heures.
     with open(os.path.join(out_dir, "index.json"), "w") as f:
         json.dump(index, f, separators=(",", ":"))
