@@ -22324,8 +22324,15 @@ window.addEventListener("scroll", hidePop, true);
        Le lot est découpé à la borne du proxy ; en pratique une route ou une
        liste de favoris tient largement dans un seul. */
     const WX_BATCH_MAX = 40;
-    async function wxFetchGroup(ids) {
-      const out = {};
+    /* La réponse ENTIÈRE : les stations, et ce que le proxy dit de lui-même.
+       `refreshing` — vrai quand il a répondu depuis sa copie mondiale alors
+       qu'un téléchargement plus frais est encore en vol, faux quand il l'a
+       attendu, absent chez un proxy qui ne le dit pas encore. C'est ce que
+       wxPlanRelance() lit pour décider de repasser. Sur plusieurs lots, un
+       seul en vol suffit : la réponse entière ne se fie pas. */
+    async function wxFetchReply(ids) {
+      const stations = {};
+      let refreshing;
       for (let i = 0; i < ids.length; i += WX_BATCH_MAX) {
         const lot = ids.slice(i, i + WX_BATCH_MAX);
         /* `no-cache` : même règle que le relevé seul ci-dessus et que
@@ -22335,10 +22342,14 @@ window.addEventListener("scroll", hidePop, true);
         if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { status: r.status });
         const d = await r.json();
         if (d && d.error) throw Object.assign(new Error(String(d.error)), { svc: true });
-        Object.assign(out, (d && d.stations) || {});
+        Object.assign(stations, (d && d.stations) || {});
+        if (d && typeof d.refreshing === "boolean") refreshing = refreshing || d.refreshing;
       }
-      return out;
+      return { stations, refreshing };
     }
+    // Les stations seules : ce que lisent la carte, la minuterie et le volet
+    // des favoris, qui n'ont pas à décider d'une relance.
+    async function wxFetchGroup(ids) { return (await wxFetchReply(ids)).stations; }
     /* L'échec d'UNE station dans un lot réussi : le proxy le porte dans son
        entrée (`error`), et il se lit comme un échec de service — la note de la
        section doit dire la même chose que si l'appel entier avait échoué. */
@@ -23466,13 +23477,14 @@ function dtsAUnQfu(icao){
       $("#wxRefresh").disabled = true;
       prefetchDayWx(wxList.map(a => a.icao));   // les bandes du jour en un appel
       wxList.forEach(a => loadWxDaySec(a.icao, my));
-      let stations = null, err = null;
-      try { stations = await wxFetchGroup(wxList.map(a => a.icao)); }
+      let stations = null, err = null, reply = null;
+      try { reply = await wxFetchReply(wxList.map(a => a.icao)); stations = reply.stations; }
       catch (e) { err = e; }
       if (my !== wxToken) return;               // l'écran a changé de sujet
       for (const a of wxList) renderWxStation(a.icao, stations && stations[a.icao], err);
       $("#wxRefresh").disabled = false;
       setWxStatus("");
+      if (reply) wxPlanRelance(reply);          // le proxy a pu répondre d'avant
     }
     /* ---- rafraîchissement automatique, comme la page de Minima Lens ----
        Le proxy se met à jour tout seul ; sans minuterie l'écran, lui, restait
@@ -23515,6 +23527,32 @@ function dtsAUnQfu(icao){
     }
     const WX_REFRESH_MS = 60e3;
     let wxAutoTimer = null;
+    /* ---- la seconde lecture, quelques secondes après l'ouverture ----
+       Le proxy sert les relevés depuis sa copie du fichier mondial de l'AWC,
+       relue au plus toutes les 150 s — et il la relit EN FOND : la demande qui
+       trouve la copie trop vieille reçoit le relevé d'avant, et ne fait que
+       déclencher le téléchargement du suivant. C'est exactement ce qu'on
+       voyait à l'ouverture de cette page après une accalmie : le METAR de la
+       demi-heure passée, et seule une relance — un rechargement de la page,
+       en pratique — ramenait celui du moment. La minuterie ci-dessus finissait
+       par le faire, mais une minute c'est long quand on vient d'ouvrir l'écran
+       pour ça. La copie locale n'y est pour rien : la requête part bien,
+       c'est la réponse qui date (voir wxFetchReply, `no-cache`).
+       On repasse donc UNE fois, huit secondes après, et en silence : le
+       téléchargement du proxy tient en une ou deux secondes, la relance le
+       trouve fini. Une section ne se réécrit que si son relevé a changé —
+       rien ne clignote quand rien n'a bougé.
+       Un proxy qui dit avoir attendu son rafraîchissement (`refreshing:
+       false`) dispense de la relance : sa réponse est déjà la plus fraîche.
+       Un proxy qui la dit encore en vol, ou qui ne dit rien — c'est le cas
+       du proxy d'aujourd'hui —, la reçoit. */
+    const WX_RELANCE_MS = 8e3;
+    let wxRelance = null;
+    function wxPlanRelance(reply) {
+      if (wxRelance) { clearTimeout(wxRelance); wxRelance = null; }
+      if (reply && reply.refreshing === false) return;
+      wxRelance = setTimeout(() => { wxRelance = null; refreshWxSilent(); }, WX_RELANCE_MS);
+    }
     // Retour au premier plan : c'est précisément là que le relevé affiché
     // risque d'être vieux — un téléphone rangé une heure revient sur l'écran
     // tel qu'il l'a laissé. On rafraîchit tout de suite, sans attendre le tick.
@@ -23692,6 +23730,7 @@ function dtsAUnQfu(icao){
       wxToken++;                                 // coupe les requêtes en cours
       if (wxTicker) { clearInterval(wxTicker); wxTicker = null; }
       if (wxAutoTimer) { clearInterval(wxAutoTimer); wxAutoTimer = null; }
+      if (wxRelance) { clearTimeout(wxRelance); wxRelance = null; }
     }
     function closeWx() {
       wxTeardown();
