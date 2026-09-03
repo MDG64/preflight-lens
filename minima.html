@@ -2953,7 +2953,8 @@ body.light .rt-role{color:var(--text)}
         <span class="hd-chip">?dep=LFPG&amp;dest=LFPO&amp;altn=LFOB</span> — which is how Preflight Lens
         hands its route over.</p>
       <p class="hd-p"><b>Times</b> sit under the three boxes, in UTC. Typing the departure poses the
-        <b>take-off time at now + 1 h 30</b>; <b>flight time</b> then comes by itself: the
+        <b>take-off time at now + 1 h</b> — a planning time: the Take off card itself stays judged on the
+        current report, as its <b>now</b> horizon; <b>flight time</b> then comes by itself: the
         destination is judged at take-off time plus the flight time observed on that route — the median of
         a full year of ADS-B flights (2019), take-off to landing, each direction on its own since the wind is not the
         same both ways — and the destination alternate at that time plus the diversion. A leg never observed
@@ -3099,14 +3100,15 @@ body.light .rt-role{color:var(--text)}
         </div>
       </div>
       <!-- Les heures du vol, UTC : le décollage se pose seul à la saisie du
-           départ (maintenant + 1 h 30), l'arrivée et le dégagement suivent par
-           le temps de vol de la route. Chacune se corrige ici, et c'est la
-           même heure que celle de l'onglet de phase. -->
+           départ (maintenant + 1 h, heure de PLANIFICATION — la phase Take off
+           reste jugée sur le relevé), l'arrivée et le dégagement suivent par
+           le temps de vol de la route et sont les heures des onglets 04 et 05.
+           Chacune se corrige ici. -->
       <div class="rt-form rt-times">
         <div class="rt-field">
           <label for="rtTime0">Take-off · UTC</label>
           <input id="rtTime0" class="rt-time" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
-                 spellcheck="false" autocomplete="off" aria-label="Take-off time, UTC — HHMM, posed at now + 1 h 30 when the departure is set">
+                 spellcheck="false" autocomplete="off" aria-label="Take-off time, UTC — HHMM, posed at now + 1 h when the departure is set">
         </div>
         <div class="rt-field">
           <label for="rtTime1">Arrival · UTC</label>
@@ -3643,7 +3645,12 @@ function syncPlanningFromDb(qOpt){
      fenêtre TAF. Une heure de destination fausse fausserait de toute façon
      tout le jugement de la phase : une seule saisie fait foi. */
   if (typeof etaDate === "function"){
-    const ms = etaDate("DESTINATION") - etaDate("DEPARTURE");
+    /* Le décollage PRÉVU est celui de la case du bilan (RTV.takeoffDate) —
+       maintenant + 1 h, ou l'heure que le pilote y a mise — et non l'heure de
+       jugement de la phase Take off, qui reste « now » : le départ se juge
+       sur le relevé, pas sur une prévision à l'heure du décollage. */
+    const tko = (window.RTV && RTV.takeoffDate && RTV.takeoffDate()) || etaDate("DEPARTURE");
+    const ms = etaDate("DESTINATION") - tko;
     cfg.flightTimeH = Math.max(0, Math.round(ms/360000)/10);
   }
   /* Lignes « two or more » de la planification (Tables 3 et 4) : la base
@@ -15204,31 +15211,34 @@ window.RTV = (()=>{
     return null;
   }
   const ROLE_OF = ["DEPARTURE", "DESTINATION", "DESTINATION_ALTERNATE"];
-  const TAKEOFF_LEAD_MIN = 90;
+  /* L'heure de décollage PRÉVUE : maintenant + 1 h dès qu'un départ est saisi,
+     posée UNE fois (elle ne glisse pas avec l'horloge), ou l'heure que le
+     pilote met dans la case. C'est une heure de ROUTE — le point de départ
+     des heures d'arrivée et de dégagement, et du temps de vol du critère sans
+     dégagement — et NON l'heure de jugement de la phase Take off, qui reste
+     « now » : le décollage se juge sur le relevé, pas sur une prévision à
+     l'heure prévue (takeoffSlotVerdict). Rien n'est persisté. */
+  const TAKEOFF_LEAD_MIN = 60;
+  let TKO = null;   // {h:"HHMM", mine:bool} ou null
+  function takeoffDate(){
+    return TKO ? utcFromHourMin(refBase(), +TKO.h.slice(0,2), +TKO.h.slice(2,4)) : null;
+  }
   function autoReset(i){
-    if (i===0) delete AUTO.DEPARTURE;
+    if (i===0) TKO = null;
     if (i<=1) delete AUTO.DESTINATION;
     delete AUTO.DESTINATION_ALTERNATE;
   }
   function etaTouched(role, released){
-    if (!ROLE_OF.includes(role)) return;
+    if (role!=="DESTINATION" && role!=="DESTINATION_ALTERNATE") return;
     if (released) delete AUTO[role]; else AUTO[role] = false;
   }
   function syncEta(){
-    /* Le décollage : maintenant + 1 h 30 dès qu'un départ est saisi, posé
-       UNE fois (AUTO passe à true) — il ne glisse pas avec l'horloge, sans
-       quoi l'heure changerait sous les yeux à chaque rendu. Le départ retiré
-       rend l'heure aux horizons par défaut. */
     if (RT.icaos[0]){
-      if (AUTO.DEPARTURE===undefined){
+      if (!TKO){
         const d = new Date(Date.now() + TAKEOFF_LEAD_MIN*60000);
-        state.times.DEPARTURE = pad2(d.getUTCHours()) + pad2(d.getUTCMinutes());
-        state.slot.DEPARTURE = -1;
-        AUTO.DEPARTURE = true;
+        TKO = {h: pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()), mine:false};
       }
-    } else if (AUTO.DEPARTURE){
-      delete state.times.DEPARTURE; delete state.slot.DEPARTURE; delete AUTO.DEPARTURE;
-    }
+    } else TKO = null;
     const pose = (role, base, t)=>{
       if (AUTO[role]===false) return;
       if (!t){
@@ -15241,7 +15251,7 @@ window.RTV = (()=>{
       if (state.times[role]!==h || state.slot[role]!==-1){ state.times[role] = h; state.slot[role] = -1; }
       AUTO[role] = true;
     };
-    pose("DESTINATION", etaDate("DEPARTURE"), routeTime(1));
+    pose("DESTINATION", takeoffDate() || etaDate("DEPARTURE"), routeTime(1));
     pose("DESTINATION_ALTERNATE", etaDate("DESTINATION"), routeTime(2));
     syncTimeFields();
   }
@@ -15252,6 +15262,11 @@ window.RTV = (()=>{
     ROLE_OF.forEach((role,i)=>{
       const el = document.getElementById("rtTime"+i);
       if (!el || document.activeElement===el) return;
+      if (i===0){
+        el.value = TKO ? TKO.h + "Z" : "";
+        el.classList.toggle("mine", !!(TKO && TKO.mine));
+        return;
+      }
       el.value = RT.icaos[i] ? fmtTimeInput(etaDate(role)) : "";
       el.classList.toggle("mine", AUTO[role]===false);
     });
@@ -15266,10 +15281,14 @@ window.RTV = (()=>{
       el.addEventListener("keydown", e=>{ if (e.key==="Enter"){ e.preventDefault(); el.blur(); } });
       el.addEventListener("change", ()=>{
         const d = el.value.replace(/[^0-9]/g,"");
-        if (!d && el.value.trim()===""){ etaTouched(role, true); }
-        else if (/^\d{4}$/.test(d) && +d.slice(0,2)<24 && +d.slice(2)<60){
-          state.times[role] = d; state.slot[role] = -1; etaTouched(role);
+        const ok = /^\d{4}$/.test(d) && +d.slice(0,2)<24 && +d.slice(2)<60;
+        const cleared = !d && el.value.trim()==="";
+        if (i===0){
+          if (cleared) TKO = null;
+          else if (ok) TKO = {h:d, mine:true};
         }
+        else if (cleared){ etaTouched(role, true); }
+        else if (ok){ state.times[role] = d; state.slot[role] = -1; etaTouched(role); }
         el.blur();
         if (window.render) window.render();
         render();
@@ -15285,7 +15304,10 @@ window.RTV = (()=>{
   }
   /* La ligne de la carte : d'où vient l'heure à laquelle le terrain est jugé. */
   function timeHtml(slot, i){
-    if (slot.key==="dep") return "";
+    if (slot.key==="dep"){
+      if (!TKO) return "";
+      return `<span class="rt-note dim">Take-off planned ${TKO.h}Z${TKO.mine ? " (your time)" : " (now + 1 h)"} — the card is judged on the current report</span>`;
+    }
     const t = routeTime(i);
     if (!t) return "";
     const role = TABS[slot.tab].role;
@@ -15561,7 +15583,7 @@ window.RTV = (()=>{
   /* inlineOpen / renderDetail / fold : la fiche mobile dépliée sous une carte.
      renderMobile les appelle — c'est lui qui sait quand tout se repeint. */
   return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render,
-          syncEta, etaTouched, routeTime,
+          syncEta, etaTouched, routeTime, takeoffDate,
           openNotam, closeNotam, goHost, inlineOpen, renderDetail, fold,
           /* Le dégagement au décollage : la phase Take off le lit et l'écrit,
              la carte l'ouvre. `toAltRaw` rend le CHOIX (vide = le départ),
