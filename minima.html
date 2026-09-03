@@ -2446,6 +2446,17 @@ body.mobile #rtOv:not([hidden]){display:flex}
 .rt-field input::placeholder{color:var(--muted2);font-weight:400;text-transform:none}
 .rt-field input:focus{border-color:var(--cyan)}
 .rt-field .ac{width:100%;min-width:0;top:calc(100% + 4px)}
+/* La rangée des heures, sous les trois cases et dans les mêmes colonnes :
+   décollage, arrivée, dégagement. Étiquettes discrètes — ce sont des
+   réglages, pas des titres. Une heure posée par la route est en encre
+   atténuée ; une heure réglée par le pilote reprend la pleine encre. */
+.rt-times{margin-top:8px}
+.rt-times>.rt-field>label{
+  font:600 10.5px/1.2 var(--sans);letter-spacing:.06em;color:var(--muted);
+  text-transform:uppercase;margin-bottom:4px;
+}
+.rt-times input{font-size:13px;padding:7px 8px;color:var(--muted)}
+.rt-times input.mine{color:var(--text)}
 /* Pas de bilan d'ensemble au-dessus des cartes : aucun verdict de VOL n'est
    agrégé — chaque terrain répond de sa phase, la décision reste au pilote et
    l'outil ne s'engage pas à sa place. */
@@ -2941,13 +2952,14 @@ body.light .rt-role{color:var(--text)}
       <p class="hd-p muted">A route in the address opens the app straight on this screen —
         <span class="hd-chip">?dep=LFPG&amp;dest=LFPO&amp;altn=LFOB</span> — which is how Preflight Lens
         hands its route over.</p>
-      <p class="hd-p"><b>Flight time</b> comes by itself: once departure and destination are set, the
+      <p class="hd-p"><b>Times</b> sit under the three boxes, in UTC. Typing the departure poses the
+        <b>take-off time at now + 1 h 30</b>; <b>flight time</b> then comes by itself: the
         destination is judged at take-off time plus the flight time observed on that route — the median of
         a full year of ADS-B flights (2019), take-off to landing, each direction on its own since the wind is not the
         same both ways — and the destination alternate at that time plus the diversion. A leg never observed
-        is estimated from its distance, and the card says which. Setting a time on the Destination or
-        Dest. alternate page keeps your time; changing that aerodrome lets the route time back in. The same
-        flight time feeds the no-alternate criterion.</p>
+        is estimated from its distance, and the card says which. Each box can be corrected — HHMM — and is the
+        same time as the phase tab's: a time you set is kept and shown in full ink, a cleared box or a changed
+        aerodrome lets the route time back in. The same flight time feeds the no-alternate criterion.</p>
 
       <div class="hd-sec">Reading a card</div>
       <div class="hd-row">
@@ -3084,6 +3096,27 @@ body.light .rt-role{color:var(--text)}
                  role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="rtAcPop2"
                  aria-label="Destination alternate aerodrome — ICAO or IATA code, name or city">
           <div class="ac" id="rtAcPop2" role="listbox" aria-label="Aerodrome suggestions" hidden></div>
+        </div>
+      </div>
+      <!-- Les heures du vol, UTC : le décollage se pose seul à la saisie du
+           départ (maintenant + 1 h 30), l'arrivée et le dégagement suivent par
+           le temps de vol de la route. Chacune se corrige ici, et c'est la
+           même heure que celle de l'onglet de phase. -->
+      <div class="rt-form rt-times">
+        <div class="rt-field">
+          <label for="rtTime0">Take-off · UTC</label>
+          <input id="rtTime0" class="rt-time" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
+                 spellcheck="false" autocomplete="off" aria-label="Take-off time, UTC — HHMM, posed at now + 1 h 30 when the departure is set">
+        </div>
+        <div class="rt-field">
+          <label for="rtTime1">Arrival · UTC</label>
+          <input id="rtTime1" class="rt-time" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
+                 spellcheck="false" autocomplete="off" aria-label="Arrival time, UTC — HHMM, posed from the route flight time">
+        </div>
+        <div class="rt-field">
+          <label for="rtTime2">Alternate · UTC</label>
+          <input id="rtTime2" class="rt-time" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
+                 spellcheck="false" autocomplete="off" aria-label="Alternate arrival time, UTC — HHMM, posed from the diversion time">
         </div>
       </div>
       <div class="rt-cards" id="rtCards"></div>
@@ -15170,15 +15203,32 @@ window.RTV = (()=>{
     if (i===2) return RTDB.time(RT.icaos[1], RT.icaos[2]);
     return null;
   }
+  const ROLE_OF = ["DEPARTURE", "DESTINATION", "DESTINATION_ALTERNATE"];
+  const TAKEOFF_LEAD_MIN = 90;
   function autoReset(i){
+    if (i===0) delete AUTO.DEPARTURE;
     if (i<=1) delete AUTO.DESTINATION;
     delete AUTO.DESTINATION_ALTERNATE;
   }
   function etaTouched(role, released){
-    if (role!=="DESTINATION" && role!=="DESTINATION_ALTERNATE") return;
+    if (!ROLE_OF.includes(role)) return;
     if (released) delete AUTO[role]; else AUTO[role] = false;
   }
   function syncEta(){
+    /* Le décollage : maintenant + 1 h 30 dès qu'un départ est saisi, posé
+       UNE fois (AUTO passe à true) — il ne glisse pas avec l'horloge, sans
+       quoi l'heure changerait sous les yeux à chaque rendu. Le départ retiré
+       rend l'heure aux horizons par défaut. */
+    if (RT.icaos[0]){
+      if (AUTO.DEPARTURE===undefined){
+        const d = new Date(Date.now() + TAKEOFF_LEAD_MIN*60000);
+        state.times.DEPARTURE = pad2(d.getUTCHours()) + pad2(d.getUTCMinutes());
+        state.slot.DEPARTURE = -1;
+        AUTO.DEPARTURE = true;
+      }
+    } else if (AUTO.DEPARTURE){
+      delete state.times.DEPARTURE; delete state.slot.DEPARTURE; delete AUTO.DEPARTURE;
+    }
     const pose = (role, base, t)=>{
       if (AUTO[role]===false) return;
       if (!t){
@@ -15193,6 +15243,38 @@ window.RTV = (()=>{
     };
     pose("DESTINATION", etaDate("DEPARTURE"), routeTime(1));
     pose("DESTINATION_ALTERNATE", etaDate("DESTINATION"), routeTime(2));
+    syncTimeFields();
+  }
+  /* Les trois cases d'heure montrent l'heure en vigueur de leur phase — celle
+     que le pilote a réglée, sinon celle de la route, sinon rien tant que le
+     créneau est vide. Une case en cours de frappe n'est pas réécrite. */
+  function syncTimeFields(){
+    ROLE_OF.forEach((role,i)=>{
+      const el = document.getElementById("rtTime"+i);
+      if (!el || document.activeElement===el) return;
+      el.value = RT.icaos[i] ? fmtTimeInput(etaDate(role)) : "";
+      el.classList.toggle("mine", AUTO[role]===false);
+    });
+  }
+  /* Saisie d'une heure : quatre chiffres HHMM (le Z est toléré) prennent la
+     phase, comme sur son onglet ; une case vidée rend l'heure à la route. Toute
+     autre frappe est ignorée et la case réaffiche l'heure en vigueur. */
+  function bindTimeFields(){
+    ROLE_OF.forEach((role,i)=>{
+      const el = document.getElementById("rtTime"+i);
+      if (!el) return;
+      el.addEventListener("keydown", e=>{ if (e.key==="Enter"){ e.preventDefault(); el.blur(); } });
+      el.addEventListener("change", ()=>{
+        const d = el.value.replace(/[^0-9]/g,"");
+        if (!d && el.value.trim()===""){ etaTouched(role, true); }
+        else if (/^\d{4}$/.test(d) && +d.slice(0,2)<24 && +d.slice(2)<60){
+          state.times[role] = d; state.slot[role] = -1; etaTouched(role);
+        }
+        el.blur();
+        if (window.render) window.render();
+        render();
+      });
+    });
   }
   /* La période lue par la base, telle qu'elle la déclare : « 2019 », ou
      « 2019–21 » si la compilation a été étendue. */
@@ -15371,6 +15453,7 @@ window.RTV = (()=>{
   }
 
   /* ---------- liaisons ---------- */
+  bindTimeFields();
   SLOTS.forEach((slot,i)=>{
     const inp = document.getElementById("rtIcao"+i);
     const pop = document.getElementById("rtAcPop"+i);
