@@ -364,8 +364,11 @@ courte plafonne là où montée et descente se rejoignent. Décollage à
 l'horizon choisi (now, +3, +6, +12 h). Chaque minute est lue dans la grille
 au FL le plus proche, avec la pire des deux échéances qui encadrent l'heure ;
 sous 9 000 ft la grille ne dit rien. À l'écran : un ruban de la durée du vol
-coloré par classe, l'échelle TKO/+1h/LDG, la liste des seules transitions
-(« H+51 min · FL140 · light · 332 NM from LFPG », un tap recentre la carte)
+coloré par classe, l'échelle TKO/+1h/LDG, la liste des épisodes de
+turbulence — plages continues, pire classe, durée, niveaux, distance
+(« H+1h45 · severe · for 132 min · FL340 · 753 NM from LFPG », huit au
+plus, un tap recentre la carte sur le point le plus dur ; les light de
+moins de trois minutes restent sur le ruban seulement)
 et l'orthodromie surlignée en jaune/orange/rouge là où le rejeu rencontre
 de la turbulence. Fonctions pures entre les marqueurs `[turb-profile]`,
 testées dans `test/turb-grid.test.mjs` (distance et point d'orthodromie,
@@ -391,9 +394,22 @@ index.json          { run, generated, hours:[…], fls:[100,…,450],
 FL340/h006.json     { run, valid, fl, hour, nlat, nlon, rle:[cls,len,cls,len,…] }
 ```
 
-La grille couvre 25°W–45°E, 30°N–72°N (169 × 281 points) ; un fichier pèse
-~20 Ko brut, quelques Ko gzippés. L'index s'écrit en dernier, pour qu'un
-client qui le lit trouve toutes les échéances annoncées.
+La grille couvre le **monde entier à 0,5°** (720 × 360 cases) : calcul à
+0,25°, puis regroupement 2 × 2 en gardant la pire classe (`--pool 2`). Un
+fichier pèse ~160 Ko brut, ~30 Ko gzippés sur le fil. Le masque convectif
+n'est plus le CAPE seul (les tropiques en ont en permanence) : il exige de
+la pluie convective instantanée du modèle (CPRAT) et relève en severe sous
+les cellules dont la réflectivité simulée (REFC) dépasse 40 dBZ. Le client
+peint la grille comme une image d'un pixel par case, tirée ligne par ligne
+(x est linéaire en longitude dans les deux projections), au lieu de
+40 000 rectangles par image. L'index s'écrit en dernier, pour qu'un client
+qui le lit trouve toutes les échéances annoncées.
+
+**Publication — `.github/workflows/turb.yml`.** Toutes les 6 h (HH+4 h 20 après
+chaque cycle GFS) et à la demande, GitHub Actions lance le script et pousse
+le dossier en un seul commit sur la branche orpheline `turb-data`, servie
+par raw.githubusercontent.com (CORS ouvert, cache 5 min, gzip). L'app
+essaie `/api/turb/` sur le backend, puis cette branche.
 
 **Client — `notam-filter.html`, carte de route, vue Weather.** Un
 interrupteur **Turbulence** sous **Wind** ; allumé, il déplie un cartouche
