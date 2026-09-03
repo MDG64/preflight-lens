@@ -7827,7 +7827,7 @@ body.light .turb-time input { color-scheme: light }
               --:--</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Enter a <b>UTC time</b> (or tap <b>Now</b>) to show only NOTAMs active within <b>±1 h</b>
-            today.</div>
+            today. Opened from the start page, the filter is <b>preset to the take-off time</b> typed there.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis" style="min-width:auto"><span class="hd-chip">Today</span></div>
@@ -16868,7 +16868,9 @@ E) ${e}`;
       if (!timeWin) return "Time filter off — showing all NOTAMs";
       if (timeMode === "today") return "Today · <b>00:00–23:59 Z</b>";
       if (timeMode === "tomorrow") return "Tomorrow · <b>00:00–23:59 Z</b> · " + dateLabel(timeWin.start);
-      return "Window <b>" + hm(timeWin.start) + "–" + hm(timeWin.end) + " Z</b> · today (± 1 h)";
+      const today = new Date().getUTCDate() === new Date(timeWin.start + 3600000).getUTCDate();
+      return "Window <b>" + hm(timeWin.start) + "–" + hm(timeWin.end) + " Z</b> · "
+        + (today ? "today" : dateLabel(timeWin.start + 3600000)) + " (± 1 h)";
     }
     function activeAt(n, win) {   // le NOTAM est-il actif quelque part dans la fenêtre ?
       const b = ts(n.b);
@@ -17549,6 +17551,32 @@ function renderInfo(icao) {
       render();
     };
     $("#clearTime").onclick = () => { $("#htime").value = ""; timeWin = null; timeMode = null; render(); };
+    /* L'heure de décollage de l'accueil (2026-09-03) règle le filtre à
+       l'ouverture des NOTAM : fenêtre ± 1 h autour du décollage prévu, le
+       jour du décollage — demain compris quand l'heure est déjà passée. Le
+       pilote garde la main ensuite : Now, Today, Tomorrow et la case
+       reprennent le filtre comme avant, jusqu'à la prochaine ouverture depuis
+       l'accueil. Sans heure de décollage, ou sous le plan qui verrouille le
+       filtre, rien ne change. */
+    function timeFilterFromTakeoff() {
+      const t = HT.tko && HT.tko.h;
+      if (!t || gateBlocked("timeFilter")) return;
+      const c = hhmmDate(t);
+      if (!c) return;
+      const h = c.getUTCHours(), m = c.getUTCMinutes();
+      $("#htime").value = P(h) + ":" + P(m);
+      timeWin = { start: c.getTime() - 3600000, end: c.getTime() + 3600000, h, m };
+      timeMode = "time";
+      /* Le bandeau tout de suite : le rendu des NOTAM ne vient qu'avec le
+         chargement, et un chargement en échec le laisserait dire « off ». */
+      const ro = $("#winreadout");
+      ro.classList.add("on");
+      ro.innerHTML = scopeLabel();
+      $("#clearTime").hidden = false;
+      document.querySelector(".scratch.time").classList.add("timeon");
+      $("#todayBtn").classList.remove("on");
+      $("#tomBtn").classList.remove("on");
+    }
 
     function setBeacon(online) {
       // Deux pastilles : celle du bandeau ET celle de l'accueil — même état.
@@ -23159,6 +23187,7 @@ window.addEventListener("scroll", hidePop, true);
       if (!codes.length) { needHomeIcao(); return; }
       notamRoute = codes.length > 1 ? codes : [];
       closeHome();
+      timeFilterFromTakeoff();
       // Une route revalide ses terrains EN UN LOT : le départ s'affiche depuis
       // sa copie locale, et les trois codes partent ensemble dans un seul
       // /api/notams/batch. Les onglets voisins sont donc frais avant même
