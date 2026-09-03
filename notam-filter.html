@@ -5141,6 +5141,59 @@ body.light .stat.on {
       padding: 11px 6px 11px 12px
     }
 
+    /* Les heures du vol (2026-09-03), sous chaque code : décollage à
+       maintenant + 1 h dès que le départ est saisi, arrivée et dégagement
+       par le temps de vol de la route. Encre atténuée pour une heure posée
+       par la route, pleine encre pour une heure réglée par le pilote — les
+       mêmes heures que Minima et Weather. */
+    .home-time-label {
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+    .home-time {
+      width: 100%;
+      box-sizing: border-box;
+      font: 600 13px/1.2 var(--mono);
+      letter-spacing: .08em;
+      padding: 8px 6px;
+      border: 1px solid var(--line2);
+      border-radius: 8px;
+      background: #06101a;
+      color: var(--muted);
+      text-align: center;
+      outline: 0
+    }
+    body.light .home-time {
+      background: var(--field, #fff)
+    }
+    .home-time.mine {
+      color: var(--text)
+    }
+    .home-time:focus {
+      border-color: var(--cyan)
+    }
+    .home-time::placeholder {
+      color: var(--muted2);
+      font-weight: 400;
+      letter-spacing: .02em
+    }
+    .home-time:disabled {
+      opacity: .45
+    }
+    .wx-ap-time {
+      font: 600 12px/1 var(--mono);
+      letter-spacing: .06em;
+      color: var(--text);
+      white-space: nowrap
+    }
+    .taf-on {
+      background: color-mix(in srgb, var(--cyan) 14%, transparent);
+      box-shadow: -4px 0 0 var(--cyan);
+      border-radius: 2px
+    }
+
     /* Étoile de favori DANS chaque case (ICAO, FROM, TO, ALT) : on peut
        favoriser un code dès la saisie, sans passer par la page NOTAM. Taille
        resserrée pour tenir dans des cases déjà étroites (78 px d'entrée) —
@@ -7096,6 +7149,9 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hFromSuggest" hidden></div>
           </div>
+          <label class="home-field-label home-time-label" for="hTime0">Take-off · UTC</label>
+          <input class="home-time" id="hTime0" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
+            autocomplete="off" spellcheck="false" aria-label="Take-off time, UTC — HHMM, posed at now + 1 h when the departure is set">
         </div>
         <!-- Inverser la route d'un geste : la fleche du haut part a droite, celle
              du bas revient a gauche. Le degagement, choisi pour l'ancienne
@@ -7122,6 +7178,9 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hToSuggest" hidden></div>
           </div>
+          <label class="home-field-label home-time-label" for="hTime1">Arrival · UTC</label>
+          <input class="home-time" id="hTime1" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
+            autocomplete="off" spellcheck="false" aria-label="Arrival time, UTC — HHMM, posed from the route flight time">
         </div>
         <div class="home-field home-field-code">
           <label class="home-field-label" for="hAlt">Alternate</label>
@@ -7132,6 +7191,9 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hAltSuggest" hidden></div>
           </div>
+          <label class="home-field-label home-time-label" for="hTime2">Alternate · UTC</label>
+          <input class="home-time" id="hTime2" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
+            autocomplete="off" spellcheck="false" aria-label="Alternate arrival time, UTC — HHMM, posed from the diversion time">
         </div>
         <!-- L'étoile de la ROUTE, au bout de la file : les trois cases
              portent chacune la leur, celle-ci prend les trois d'un coup. Elle
@@ -7894,6 +7956,16 @@ body.light .turb-time input { color-scheme: light }
             one. <b>⇄</b> swaps FROM and TO.</div>
         </div>
         <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip" style="font-family:var(--mono)">HHMMZ</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Under each code, the <b>time in UTC</b>: take-off is posed at <b>now + 1 h</b> as soon as
+            the departure is typed, arrival and alternate follow from the <b>flight time observed on that
+            route</b> (median of a year of ADS-B flights, take-off to landing, each direction on its own) or,
+            on a route never observed, from its distance. Correct any of them — a time you set is kept in full
+            ink until that aerodrome changes; clear it to let the route time back in. <b>Minima</b> judges each
+            aerodrome at that time, and <b>Weather</b> shows the TAF line in force then.</div>
+        </div>
+        <div class="hd-row">
           <div class="hd-vis" style="min-width:auto"><span class="hd-chip">≥2400 m</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Keep only aerodromes with a <b>hard runway</b> of at least that length.</div>
@@ -7931,7 +8003,15 @@ body.light .turb-time input { color-scheme: light }
              l'exigent : coin de la carte (#routeMapAttr), coin du plan de
              terrain (.plan-attr). Les pictos Yr (MIT) portent leur notice dans
              vendor/weather/LICENSE : rien à afficher. Le domaine public — NOAA,
-             OurAirports, Natural Earth — et le service NOTAM n'exigent rien. -->
+             OurAirports, Natural Earth — et le service NOTAM n'exigent rien.
+             Troisième crédit (2026-09-03) : le CC BY des temps de vol par route
+             (OpenSky sur Zenodo), porté ici et sur la page « ? » de Minima. -->
+        <div class="hd-note"><b>Flight times by route</b> — <i>Crowdsourced air traffic data from The OpenSky
+          Network 2020</i>, Strohmeier, Olive, Lübbe, Schäfer and Lenders,
+          <a href="https://zenodo.org/records/5815448" target="_blank" rel="noopener">Zenodo</a>, licensed
+          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>;
+          median over the year 2019, first to last ADS-B contact. Aerodrome positions from OurAirports (public
+          domain).</div>
         <div class="hd-note">
           <b>Weather pictograms and day forecast</b> — <a href="https://www.met.no/en" target="_blank"
             rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
@@ -22701,6 +22781,234 @@ window.addEventListener("scroll", hidePop, true);
       $("#hRouteWx").disabled = routeSlotsFilled(codes).length < 1;
       // Rien dans les cases : rien a effacer, le bouton s'eteint.
       $("#hClearBtn").disabled = !HOME_FIELDS.some(id => rVal(id));
+      homeTimesSync();
+    }
+
+    /* ============================================================
+       LES HEURES DU VOL (2026-09-03) — sous les trois cases de l'accueil.
+       Le décollage se pose à maintenant + 1 h dès que le départ est saisi
+       (une fois : il ne glisse pas avec l'horloge) ; l'arrivée et le
+       dégagement suivent par le temps de vol de la route — routes-seed.js,
+       la base mondiale des médianes ADS-B compilée par Weather Lens
+       (OpenSky, Zenodo 5815448, CC BY 4.0), chargée À LA DEMANDE : 1,8 Mo
+       que l'accueil n'a pas à porter tant qu'aucune route n'est écrite.
+       Chaque heure se corrige ; réglée par le pilote elle passe en pleine
+       encre et tient jusqu'au changement de SON terrain, vidée elle revient à
+       la route. Les trois heures partent dans l'adresse vers Minima (tko,
+       eta, altt) et dans le stockage partagé du domaine (TIMES_KEY), que
+       Minima relit et réécrit : les deux pages disent la même heure. La
+       page Weather les affiche en tête de section et surligne la ligne du
+       TAF en vigueur à cette heure-là.
+       Le module RTDB est la COPIE de celui de minima.html — deux copies à
+       garder synchrones, comme qlv*. */
+    const TIMES_KEY = "pl-route-times";
+    const TAKEOFF_LEAD_MIN = 60;
+    const HT = { codes: ["", "", ""], tko: null, eta: null, altt: null, restored: false };
+    const RTDB = (() => {
+      let routes = null, pts = null;
+      function parse() {
+        routes = new Map(); pts = new Map();
+        for (const l of String(window.ROUTE_SEED || "").split("\n")) {
+          const p = l.split(" ");
+          if (p.length === 4) routes.set(p[0] + p[1], [+p[2], +p[3]]);
+        }
+        for (const l of String(window.ROUTE_SEED_PTS || "").split("\n")) {
+          const p = l.split(" ");
+          if (p.length === 3) pts.set(p[0], [+p[1], +p[2]]);
+        }
+      }
+      function nm(a, b) {
+        const r = Math.PI / 180, p1 = a[0] * r, p2 = b[0] * r, dl = (b[1] - a[1]) * r;
+        const x = Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+        return 2 * 3440.065 * Math.asin(Math.sqrt(x));
+      }
+      function time(dep, dest) {
+        if (!window.ROUTE_SEED) return null;
+        if (!/^[A-Z0-9]{4}$/.test(dep || "") || !/^[A-Z0-9]{4}$/.test(dest || "") || dep === dest) return null;
+        if (!routes) parse();
+        const o = routes.get(dep + dest);
+        if (o) return { min: o[0], n: o[1], src: "observed" };
+        const pa = pts.get(dep), pb = pts.get(dest);
+        if (!pa || !pb) return null;
+        const d = nm(pa, pb);
+        const fb = (((window.ROUTE_SEED_META || {}).fallback) || [])
+          .find(b => d >= b.fromNm && (b.toNm == null || d < b.toNm));
+        if (!fb) return null;
+        return { min: Math.round(fb.minAt0 + d * fb.minPerNm), nm: Math.round(d), src: "estimated" };
+      }
+      return { time };
+    })();
+    let routesSeedP = null;
+    function loadRoutesSeed() {
+      if (window.ROUTE_SEED) return Promise.resolve(true);
+      if (routesSeedP) return routesSeedP;
+      routesSeedP = new Promise(res => {
+        const sc = document.createElement("script");
+        sc.src = "./routes-seed.js";
+        sc.onload = () => res(!!window.ROUTE_SEED);
+        sc.onerror = () => res(false);
+        document.head.appendChild(sc);
+      });
+      return routesSeedP;
+    }
+    const hhmmOk = d => /^\d{4}$/.test(d) && +d.slice(0, 2) < 24 && +d.slice(2) < 60;
+    function hhmmPlus(h, min) {
+      const t = ((+h.slice(0, 2)) * 60 + (+h.slice(2)) + Math.round(min)) % 1440;
+      return P(Math.floor(t / 60)) + P(t % 60);
+    }
+    /* L'heure HHMM en Date UTC : aujourd'hui, ou demain si elle est déjà
+       passée de plus de six heures — un vol se planifie devant soi. */
+    function hhmmDate(h) {
+      if (!h) return null;
+      const now = new Date();
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), +h.slice(0, 2), +h.slice(2)));
+      if (d.getTime() < now.getTime() - 6 * 3600e3) d.setUTCDate(d.getUTCDate() + 1);
+      return d;
+    }
+    function timesLoad() { return store.get(TIMES_KEY); }
+    function timesSave() {
+      const codes = HOME_FIELDS.map(homeFieldCode);
+      if (!codes[0]) { store.remove(TIMES_KEY); return; }
+      store.set(TIMES_KEY, { codes, tko: HT.tko, eta: HT.eta, altt: HT.altt, ts: Date.now() });
+    }
+    /* Recale les trois heures sur les codes des cases : appelé à chaque
+       rendu des étoiles, donc à chaque changement de case — quel qu'en soit
+       le chemin. */
+    function homeTimesSync() {
+      const codes = HOME_FIELDS.map(homeFieldCode);
+      /* Première passe : les heures retenues sur ce domaine (par l'accueil ou
+         par Minima) reviennent si elles parlent de la même route et datent de
+         moins de douze heures. */
+      if (!HT.restored) {
+        HT.restored = true;
+        const st = timesLoad();
+        if (st && Array.isArray(st.codes) && st.codes[0] === codes[0] && st.codes[1] === codes[1]
+            && Date.now() - (st.ts || 0) < 12 * 3600e3) {
+          HT.tko = st.tko || null;
+          HT.eta = st.eta || null;
+          HT.altt = st.codes[2] === codes[2] ? (st.altt || null) : null;
+          HT.codes = codes.slice();
+        }
+      }
+      /* Un terrain qui change emporte les heures qui dépendaient de lui. */
+      if (codes[0] !== HT.codes[0]) { HT.tko = null; HT.eta = null; HT.altt = null; }
+      else if (codes[1] !== HT.codes[1]) { HT.eta = null; HT.altt = null; }
+      else if (codes[2] !== HT.codes[2]) HT.altt = null;
+      HT.codes = codes.slice();
+      if (codes[0]) {
+        if (!HT.tko) {
+          const d = new Date(Date.now() + TAKEOFF_LEAD_MIN * 60e3);
+          HT.tko = { h: P(d.getUTCHours()) + P(d.getUTCMinutes()), mine: false };
+        }
+      } else HT.tko = null;
+      if (codes[0] && codes[1] && !window.ROUTE_SEED) {
+        loadRoutesSeed().then(ok => { if (ok) { renderHomeTimes(); homeTimesSync(); } });
+      }
+      const pose = (key, from, t) => {
+        if (HT[key] && HT[key].mine) return;
+        HT[key] = (from && t) ? { h: hhmmPlus(from.h, t.min), mine: false } : null;
+      };
+      pose("eta", codes[1] ? HT.tko : null, RTDB.time(codes[0], codes[1]));
+      pose("altt", codes[2] ? HT.eta : null, RTDB.time(codes[1], codes[2]));
+      renderHomeTimes();
+      timesSave();
+      wxApplyTimes();
+    }
+    function renderHomeTimes() {
+      [HT.tko, HT.eta, HT.altt].forEach((t, i) => {
+        const el = $("#hTime" + i);
+        if (!el || document.activeElement === el) return;
+        el.value = t ? t.h + "Z" : "";
+        el.classList.toggle("mine", !!(t && t.mine));
+        el.disabled = !HOME_FIELDS.map(homeFieldCode)[i];
+      });
+    }
+    ["tko", "eta", "altt"].forEach((key, i) => {
+      const el = $("#hTime" + i);
+      el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
+      el.addEventListener("change", () => {
+        const d = el.value.replace(/[^0-9]/g, "");
+        if (!d && el.value.trim() === "") HT[key] = null;
+        else if (hhmmOk(d)) HT[key] = { h: d, mine: true };
+        /* L'arrivée réglée à la main emporte le dégagement posé par la route,
+           le décollage réglé emporte les deux : ils se recalculent. */
+        if (key === "tko") { if (HT.eta && !HT.eta.mine) HT.eta = null; if (HT.altt && !HT.altt.mine) HT.altt = null; }
+        if (key === "eta" && HT.altt && !HT.altt.mine) HT.altt = null;
+        el.blur();
+        homeTimesSync();
+      });
+    });
+    /* Les heures dans l'adresse de Minima : celles qui sont posées — le
+       module les reprend et les relit aussi dans le stockage partagé. */
+    function homeTimesToQuery(q) {
+      if (HT.tko) q.set("tko", HT.tko.h);
+      if (HT.eta) q.set("eta", HT.eta.h);
+      if (HT.altt) q.set("altt", HT.altt.h);
+    }
+    /* ---- page Weather : l'heure de chaque rôle en tête de section, et la
+       ligne du TAF en vigueur à cette heure surlignée ---- */
+    function wxTimeFor(role) {
+      const t = role === "dep" ? HT.tko : role === "arr" ? HT.eta : role === "alt" ? HT.altt : null;
+      return t ? t.h : "";
+    }
+    function wxTimeLabel(role) {
+      const h = wxTimeFor(role);
+      if (!h) return "";
+      return (role === "dep" ? "Take-off " : "ETA ") + h + "Z";
+    }
+    function wxApplyTimes() {
+      document.querySelectorAll("#wxBody .wx-ap-time").forEach(el => {
+        el.textContent = wxTimeLabel(el.dataset.time);
+      });
+      /* Le TAF déjà rendu se resurligne pour l'heure du jour. */
+      document.querySelectorAll("#wxBody .wx-ap").forEach(sec => {
+        const icao = sec.dataset.icao, d = wxShown[icao];
+        const tEl = sec.querySelector('[data-raw="taf"]');
+        if (d && d.taf && d.taf.raw && tEl) tEl.innerHTML = tafInForceHtml(d.taf.raw, wxAtFor(icao));
+      });
+    }
+    function wxAtFor(icao) {
+      const a = wxList.find(x => x.icao === icao);
+      return a ? hhmmDate(wxTimeFor(a.role)) : null;
+    }
+    /* Les groupes du TAF en vigueur à l'instant `at` : la ligne de base ou le
+       dernier FM qui la remplace, plus les BECMG déjà entamés et les TEMPO /
+       PROB dont la fenêtre couvre l'instant. Les jours du TAF (dd) se lisent
+       dans le mois de l'émission ; un jour plus petit que celui de l'émission
+       est le mois suivant. Sans heure, le rendu d'avant. */
+    function tafInForceHtml(raw, at) {
+      const lines = tafPretty(raw).split("\n");
+      const html = lines.map(l => wxSevHtml(l));
+      if (!at) return html.join("\n");
+      const head = lines[0] || "";
+      const iss = /\b(\d{2})(\d{2})(\d{2})Z\b/.exec(head);
+      const val = /\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/.exec(head);
+      if (!val) return html.join("\n");
+      const y = at.getUTCFullYear(), mo = at.getUTCMonth();
+      const issDay = iss ? +iss[1] : +val[1];
+      const D = (dd, hh, mm) => {
+        const m = (+dd < issDay - 7) ? mo + 1 : mo;
+        return Date.UTC(y, m, +dd, +hh, +(mm || 0));
+      };
+      const t = at.getTime();
+      const start = D(val[1], val[2]), end = D(val[3], val[4]);
+      if (t < start - 3600e3 || t > end) return html.join("\n");
+      const on = lines.map(() => false);
+      let base = 0;
+      lines.forEach((l, i) => {
+        if (!i) return;
+        const g = l.trim();
+        let m;
+        if ((m = /^FM(\d{2})(\d{2})(\d{2})/.exec(g))) { if (D(m[1], m[2], m[3]) <= t) base = i; return; }
+        if ((m = /^BECMG\s+(\d{2})(\d{2})\/(\d{2})(\d{2})/.exec(g))) { if (D(m[1], m[2]) <= t) on[i] = true; return; }
+        if ((m = /^(?:PROB\d{2}\s+)?(?:TEMPO\s+)?(\d{2})(\d{2})\/(\d{2})(\d{2})/.exec(g))) {
+          if (D(m[1], m[2]) <= t && t < D(m[3], m[4])) on[i] = true;
+        }
+      });
+      on[base] = true;
+      /* Un FM remplace tout ce qui précède : les BECMG d'avant s'éteignent. */
+      lines.forEach((l, i) => { if (i && i < base && on[i]) on[i] = false; });
+      return html.map((h, i) => on[i] ? `<span class="taf-on">${h}</span>` : h).join("\n");
     }
     $("#hFromStar").onclick = () => toggleFavCode(homeFieldCode("#hFrom"));
     $("#hToStar").onclick = () => toggleFavCode(homeFieldCode("#hTo"));
@@ -22920,6 +23228,7 @@ window.addEventListener("scroll", hidePop, true);
         if (!slot) break;
         q.set(slot, icao);
       }
+      homeTimesToQuery(q);
       const qs = q.toString();
       window.location.href = "./minima.html" + (qs ? "?" + qs : "");
     }
@@ -24324,7 +24633,7 @@ function dtsAUnQfu(icao){
       const mEl = sec.querySelector('[data-raw="metar"]'), tEl = sec.querySelector('[data-raw="taf"]');
       if (d.metar && d.metar.raw) { mEl.innerHTML = wxSevHtml(d.metar.raw); mEl.classList.remove("empty"); }
       else { mEl.textContent = wxAbsent("metar", icao, d); mEl.classList.add("empty"); }
-      if (d.taf && d.taf.raw) { tEl.innerHTML = wxSevHtml(tafPretty(d.taf.raw)); tEl.classList.remove("empty"); }
+      if (d.taf && d.taf.raw) { tEl.innerHTML = tafInForceHtml(d.taf.raw, wxAtFor(icao)); tEl.classList.remove("empty"); }
       else { tEl.textContent = wxAbsent("taf", icao, d); tEl.classList.add("empty"); }
       sec.querySelector("[data-rwx]").innerHTML = wxRunwaysHtml(icao, d);
       /* Le QFU en service se remonte À CHAQUE relevé : le vent est une de ses
@@ -24456,6 +24765,7 @@ function dtsAUnQfu(icao){
       <div class="wx-ap-head">
         <span class="wx-ap-code">${a.icao}</span>
         <span class="wx-ap-name">${m ? `${m.city} · ${m.cc}` : ""}</span>
+        <span class="wx-ap-time" data-time="${a.role || ""}">${wxTimeLabel(a.role)}</span>
       </div>
       <div class="wx-ap-note" hidden></div>
       <div class="qlv-main" data-qlv="${a.icao}" hidden></div>

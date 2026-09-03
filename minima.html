@@ -15220,6 +15220,49 @@ window.RTV = (()=>{
      l'heure prévue (takeoffSlotVerdict). Rien n'est persisté. */
   const TAKEOFF_LEAD_MIN = 60;
   let TKO = null;   // {h:"HHMM", mine:bool} ou null
+  /* Les heures partagées avec l'accueil de Preflight Lens (même domaine) :
+     {codes, tko, eta, altt, ts}. L'accueil les écrit en premier — c'est là
+     que le pilote les saisit — et les relit au retour ; ici on les reprend
+     au démarrage si elles parlent de la même route et datent de moins de
+     douze heures, et on les réécrit à chaque changement. Dans l'adresse
+     (?tko=&eta=&altt=), les mêmes heures priment : c'est le lien qui parle. */
+  const TIMES_KEY = "pl-route-times";
+  let timesLast = "";
+  function timesRestore(p){
+    let st = null;
+    try {
+      st = JSON.parse(localStorage.getItem(TIMES_KEY) || "null");
+      const same = st && Array.isArray(st.codes) && st.codes[0]===RT.icaos[0] && st.codes[1]===RT.icaos[1]
+          && Date.now() - (st.ts||0) < 12*3600e3;
+      if (!same) st = null;
+    } catch(e){ st = null; }
+    const ok = v => /^\d{4}$/.test(v||"") && +v.slice(0,2)<24 && +v.slice(2)<60;
+    /* L'heure de l'adresse fait foi ; le stockage dit si elle venait de la
+       route (auto — Minima la recalcule pareil) ou du pilote (gardée). Sans
+       adresse, le stockage seul. */
+    const pick = (key, fromUrl)=>{
+      const sv = st && st[key] && ok(st[key].h) ? st[key] : null;
+      if (ok(fromUrl)) return {h:fromUrl, mine: sv && sv.h===fromUrl ? !!sv.mine : true};
+      return sv ? {h:sv.h, mine:!!sv.mine} : null;
+    };
+    const tko = pick("tko", p && p.get("tko"));
+    if (tko) TKO = tko;
+    const take = (v, role)=>{
+      if (v && v.mine){ state.times[role] = v.h; state.slot[role] = -1; AUTO[role] = false; }
+    };
+    take(pick("eta", p && p.get("eta")), "DESTINATION");
+    if (!st || st.codes[2]===RT.icaos[2] || (p && p.get("altt")))
+      take(pick("altt", p && p.get("altt")), "DESTINATION_ALTERNATE");
+  }
+  function timesSave(){
+    if (!RT.icaos[0]) return;
+    const v = role => state.times[role] && state.slot[role]===-1 ? {h:state.times[role], mine:AUTO[role]===false} : null;
+    const rec = {codes:RT.icaos.slice(), tko:TKO, eta:v("DESTINATION"), altt:v("DESTINATION_ALTERNATE")};
+    const key = JSON.stringify(rec);
+    if (key===timesLast) return;
+    timesLast = key;
+    try { localStorage.setItem(TIMES_KEY, JSON.stringify({...rec, ts:Date.now()})); } catch(e){}
+  }
   function takeoffDate(){
     return TKO ? utcFromHourMin(refBase(), +TKO.h.slice(0,2), +TKO.h.slice(2,4)) : null;
   }
@@ -15254,6 +15297,7 @@ window.RTV = (()=>{
     pose("DESTINATION", takeoffDate() || etaDate("DEPARTURE"), routeTime(1));
     pose("DESTINATION_ALTERNATE", etaDate("DESTINATION"), routeTime(2));
     syncTimeFields();
+    timesSave();
   }
   /* Les trois cases d'heure montrent l'heure en vigueur de leur phase — celle
      que le pilote a réglée, sinon celle de la route, sinon rien tant que le
@@ -15550,8 +15594,10 @@ window.RTV = (()=>{
      retenue, à retrouver derrière le bouton Flight. */
   function boot(){
     let fromUrl = false;
+    let params = null;
     try {
       const p = new URLSearchParams(location.search);
+      params = p;
       const route = (p.get("route")||"").split(/[\s,|+-]+/).filter(Boolean);
       const want = [p.get("dep")  || route[0] || "",
                     p.get("dest") || p.get("arr") || route[1] || "",
@@ -15572,6 +15618,7 @@ window.RTV = (()=>{
       }
     } catch(e){}
     if (!fromUrl) load();
+    timesRestore(params);
     syncEta();
     if (fromUrl) open();
   }
