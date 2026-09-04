@@ -56,10 +56,11 @@ TI_LIGHT, TI_MOD, TI_SEV = 4.0, 8.0, 12.0
 CAPE_LIGHT, CAPE_MOD = 1000.0, 2000.0
 # L'octet publié : TI1 (×1e-7) × BYTE_PER_E7, arrondi au pas BYTE_STEP,
 # plafonné à 252, mis à zéro sous BYTE_FLOOR. Les seuils de classe en
-# octets (LEVELS) et la nuance forte que pose le relèvement convectif.
+# octets (BYTE_LEVELS — pas LEVELS, qui sont les hPa lus dans le GRIB) et
+# la nuance forte que pose le relèvement convectif.
 BYTE_PER_E7, BYTE_STEP, BYTE_FLOOR = 16, 4, 32
-LEVELS = (int(TI_LIGHT * BYTE_PER_E7), int(TI_MOD * BYTE_PER_E7), int(TI_SEV * BYTE_PER_E7))   # 64, 128, 192
-CONV_BYTES = tuple(l + 32 for l in LEVELS)                                                      # 96, 160, 224
+BYTE_LEVELS = (int(TI_LIGHT * BYTE_PER_E7), int(TI_MOD * BYTE_PER_E7), int(TI_SEV * BYTE_PER_E7))   # 64, 128, 192
+CONV_BYTES = tuple(l + 32 for l in BYTE_LEVELS)                                                      # 96, 160, 224
 CPRAT_MIN = 1e-5                                   # ≈ 0,04 mm/h : la cellule existe dans le modèle
 REFC_SEV = 40.0                                    # dBZ : cellule violente, quel que soit le CAPE
 CAPE_MAX_FL = 390                                  # au-dessus, le proxy convectif ne s'applique plus
@@ -192,7 +193,7 @@ def quantize_ti(ti):
 def classify_bytes(val):
     """L'octet -> la classe 0..3, avec les seuils publiés dans l'index."""
     cls = np.zeros(val.shape, dtype=np.uint8)
-    for k, lv in enumerate(LEVELS):
+    for k, lv in enumerate(BYTE_LEVELS):
         cls[val >= lv] = k + 1
     return cls
 
@@ -364,7 +365,7 @@ def write_out(out_dir, run, hours, grids, grid):
         # ce que vaut l'octet — le client lit ses seuils ICI, pas en dur.
         "files": "png",
         "encoding": {"type": "png8", "byte_per_e7": BYTE_PER_E7, "step": BYTE_STEP, "floor": BYTE_FLOOR,
-                     "levels": list(LEVELS), "conv": list(CONV_BYTES)},
+                     "levels": list(BYTE_LEVELS), "conv": list(CONV_BYTES)},
     }
     os.makedirs(out_dir, exist_ok=True)
     for fh, per_fl in grids.items():
@@ -377,7 +378,7 @@ def write_out(out_dir, run, hours, grids, grid):
             # rafraîchit pas ensemble, et le client doit pouvoir lire un
             # fichier sur sa propre grille.
             meta = {"run": index["run"], "valid": valid.strftime("%Y-%m-%dT%H:00Z"), "fl": fl, "hour": fh,
-                    "grid": index["grid"], "levels": list(LEVELS)}
+                    "grid": index["grid"], "levels": list(BYTE_LEVELS)}
             with open(os.path.join(d, "h%03d.png" % fh), "wb") as f:
                 f.write(png_gray8(val, {"turb": json.dumps(meta, separators=(",", ":"))}))
     # L'index s'écrit EN DERNIER : un client qui le lit trouve toutes les heures.
@@ -435,6 +436,25 @@ def selftest():
     png = png_gray8(smooth)
     assert np.array_equal(png_read_gray8(png)[0], smooth), "PNG lisse"
     assert len(png) < smooth.size, "un champ lisse se compresse"
+    # Les niveaux de pression lus dans le GRIB : LEVELS est la liste des hPa,
+    # pas des octets — une collision de nom a déjà vidé le téléchargement
+    # (2026-09-04, le run échouait en six secondes, sans un seul vent).
+    assert 250 in LEVELS and 700 in LEVELS and 64 not in LEVELS, LEVELS
+    assert wanted("UGRD", "250 mb") and wanted("HGT", "700 mb") and not wanted("TMP", "250 mb") and not wanted("UGRD", "925 mb")
+    assert wanted("CAPE", "surface", "3 hour fcst") and not wanted("CAPE", "surface", "0-3 hour ave fcst")
+    # build_hour sur des champs synthétiques, comme les rend fetch_fields :
+    # chaque FL sort, à la taille de la boîte, en octets.
+    nj, ni = 41, 80
+    fields = {"_grid": (90.0, 0.0, 0.25, 0.25, nj, ni)}
+    for p in LEVELS:
+        fields[("UGRD", p)] = np.full((nj, ni), 20.0 + p / 50.0)
+        fields[("VGRD", p)] = np.zeros((nj, ni))
+        fields[("HGT", p)] = np.full((nj, ni), 16000.0 - 15.0 * p)
+    for v in ("CAPE", "CPRAT", "REFC"):
+        fields[(v, "sfc")] = np.zeros((nj, ni))
+    res, g = build_hour(fields, (0.0, 80.0, 19.75, 90.0), 1)
+    assert sorted(res) == sorted(FL_TO_HPA), sorted(res)
+    assert all(v.shape == (g[4], g[5]) == (41, 80) and v.dtype == np.uint8 for v in res.values()), (g, {k: v.shape for k, v in res.items()})
     # Sous-grille : lon 0→359.75 découpée sur -10..10 doit ressortir triée d'ouest en est.
     world = np.tile(np.arange(1440, dtype=float), (721, 1))
     sub, g = subset(world, (90.0, 0.0, 0.25, 0.25, 721, 1440), (-10, 40, 10, 50))
