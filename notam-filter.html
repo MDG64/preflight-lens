@@ -7878,7 +7878,7 @@ body.light .turb-time input { color-scheme: light }
         <div class="map-mode map-turb-ctl" id="mapTurbCtl">
           <div class="tfl">
             <span class="lb">FL</span>
-            <input type="range" id="mapTurbFl" min="0" max="8" step="1" value="6" aria-label="Flight level of the turbulence layer">
+            <input type="range" id="mapTurbFl" min="0" max="11" step="1" value="7" aria-label="Flight level of the turbulence layer">
             <output class="tfl-out" id="mapTurbFlOut" for="mapTurbFl">FL340</output>
           </div>
           <div class="map-wind-hours turb-hours" id="mapTurbHours" role="radiogroup" aria-label="Turbulence forecast time"
@@ -20241,10 +20241,11 @@ function renderInfo(icao) {
     const TURB_SOURCES = [BACKEND_URL + "/api/turb",
                           "https://raw.githubusercontent.com/MDG64/preflight-lens/turb-data"];
     let turbBase = TURB_SOURCES[0];
-    const TURB_FLS = [100, 140, 180, 240, 270, 300, 340, 390, 450];
+    // Les mêmes niveaux que le script (FL_TO_HPA) : 320, 360, 410 viennent du pgrb2b depuis le 2026-09-04.
+    const TURB_FLS = [100, 140, 180, 240, 270, 300, 320, 340, 360, 390, 410, 450];
     const TURB_INDEX_TTL = 10 * 60e3;      // l'index change quatre fois par jour
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
-    let mapTurbOn = false, mapTurbFlIdx = 6, mapTurbHour = 0;
+    let mapTurbOn = false, mapTurbFlIdx = TURB_FLS.indexOf(340), mapTurbHour = 0;
     let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbEnt = null, mapTurbShown = null, mapTurbSeq = 0, mapTurbStamp = null;
     const mapTurbCache = new Map();        // "FL340/h006" -> { val, cls, grid } : le fichier décodé
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que

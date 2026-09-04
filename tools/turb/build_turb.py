@@ -48,10 +48,19 @@ import numpy as np
 
 BUCKET = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
 # Niveau de vol -> niveau de pression GFS le plus proche (atmosphère standard).
-FL_TO_HPA = {100: 700, 140: 600, 180: 500, 240: 400, 270: 350, 300: 300, 340: 250, 390: 200, 450: 150}
+# Le fichier principal (pgrb2) s'arrête à un pas de 50 hPa entre 300 et 100 :
+# FL300, FL340, FL390 — un trou pile sur la croisière. Les niveaux
+# intermédiaires (275, 225, 175 hPa : FL320, FL360, FL410) sont des sorties
+# du même cycle, publiées à côté dans le fichier pgrb2b (vérifié le
+# 2026-09-04 sur l'index du run 00Z). Deux index à lire, même mécanisme.
+FL_TO_HPA = {100: 700, 140: 600, 180: 500, 240: 400, 270: 350, 300: 300, 320: 275,
+             340: 250, 360: 225, 390: 200, 410: 175, 450: 150}
 # Tous les niveaux à lire : ceux des FL plus un voisin dessus et dessous pour
 # le cisaillement vertical centré aux deux extrémités.
-LEVELS = [800, 700, 600, 500, 400, 350, 300, 250, 200, 150, 100]
+LEVELS = [800, 700, 600, 500, 400, 350, 300, 275, 250, 225, 200, 175, 150, 100]
+# Ce que chaque fichier GFS porte : les niveaux « ronds » dans pgrb2, les
+# quarts (275, 225, 175…) dans pgrb2b. Les champs de surface sont dans pgrb2.
+GFS_FILES = ("pgrb2", "pgrb2b")
 # Grille de sortie par défaut : le monde, du nord au sud, de l'ouest à l'est.
 DEFAULT_BBOX = (-180.0, -90.0, 180.0, 90.0)       # W, S, E, N
 R_EARTH = 6371000.0
@@ -81,8 +90,8 @@ def http_get(url, rng=None, timeout=120):
         return r.read()
 
 
-def gfs_path(run, fh):
-    return "gfs.%s/%02d/atmos/gfs.t%02dz.pgrb2.0p25.f%03d" % (run.strftime("%Y%m%d"), run.hour, run.hour, fh)
+def gfs_path(run, fh, kind="pgrb2"):
+    return "gfs.%s/%02d/atmos/gfs.t%02dz.%s.0p25.f%03d" % (run.strftime("%Y%m%d"), run.hour, run.hour, kind, fh)
 
 
 def parse_idx(text):
@@ -111,9 +120,20 @@ def wanted(var, level, fcst=""):
 
 
 def fetch_fields(run, fh):
-    """Télécharge par Range les seuls messages utiles et les décode avec eccodes."""
+    """Télécharge par Range les seuls messages utiles (des deux fichiers du
+    cycle, pgrb2 puis pgrb2b) et les décode avec eccodes."""
+    fields = {}
+    for kind in GFS_FILES:
+        fields.update(fetch_file(run, fh, kind))
+    missing = [(v, p) for p in LEVELS for v in ("UGRD", "VGRD", "HGT") if (v, p) not in fields]
+    if missing:
+        raise RuntimeError("niveaux absents du cycle %s f%03d : %s" % (run.strftime("%Y%m%d%H"), fh, missing))
+    return fields
+
+
+def fetch_file(run, fh, kind):
     import eccodes
-    base = "%s/%s" % (BUCKET, gfs_path(run, fh))
+    base = "%s/%s" % (BUCKET, gfs_path(run, fh, kind))
     rows = [r for r in parse_idx(http_get(base + ".idx")) if wanted(r[0], r[1], r[4])]
     if not rows:
         raise RuntimeError("index sans champ utile : " + base)
@@ -349,7 +369,8 @@ def latest_run(now, max_fh):
     cand = cand.replace(hour=(cand.hour // 6) * 6)
     for _ in range(6):
         try:
-            http_get("%s/%s.idx" % (BUCKET, gfs_path(cand, max_fh)), rng=(0, 64))
+            for kind in GFS_FILES:
+                http_get("%s/%s.idx" % (BUCKET, gfs_path(cand, max_fh, kind)), rng=(0, 64))
             return cand
         except Exception:
             cand -= dt.timedelta(hours=6)
@@ -447,7 +468,11 @@ def selftest():
     # pas des octets — une collision de nom a déjà vidé le téléchargement
     # (2026-09-04, le run échouait en six secondes, sans un seul vent).
     assert 250 in LEVELS and 700 in LEVELS and 64 not in LEVELS, LEVELS
-    assert wanted("UGRD", "250 mb") and wanted("HGT", "700 mb") and not wanted("TMP", "250 mb") and not wanted("UGRD", "925 mb")
+    # Les quarts de niveau viennent du pgrb2b : lus, et chaque FL a bien son hPa dans LEVELS.
+    assert all(p in LEVELS for p in FL_TO_HPA.values()) and {275, 225, 175} <= set(LEVELS), LEVELS
+    assert FL_TO_HPA[320] == 275 and FL_TO_HPA[360] == 225 and FL_TO_HPA[410] == 175
+    assert gfs_path(dt.datetime(2026, 9, 4, 0), 6, "pgrb2b") == "gfs.20260904/00/atmos/gfs.t00z.pgrb2b.0p25.f006"
+    assert wanted("UGRD", "250 mb") and wanted("HGT", "700 mb") and wanted("VGRD", "225 mb") and not wanted("TMP", "250 mb") and not wanted("UGRD", "925 mb")
     assert wanted("CAPE", "surface", "3 hour fcst") and not wanted("CAPE", "surface", "0-3 hour ave fcst")
     # build_hour sur des champs synthétiques, comme les rend fetch_fields :
     # chaque FL sort, à la taille de la boîte, en octets.
