@@ -368,7 +368,11 @@ coloré par classe, l'échelle TKO/+1h/LDG, la liste des épisodes de
 turbulence — plages continues, pire classe, durée, niveaux, distance
 (« H+1h45 · severe · for 132 min · FL340 · 753 NM from LFPG », huit au
 plus, un tap recentre la carte sur le point le plus dur ; les light de
-moins de trois minutes restent sur le ruban seulement)
+moins de trois minutes restent sur le ruban seulement). Les niveaux
+affichés sont ceux du VOL sur la plage, pas ceux des fichiers lus : FL320
+tapé, FL320 affiché, même si la grille n'a que FL300 et FL340 et se lit au
+plus proche ; une plage entamée en montée se lit « FL290–320 », et le
+niveau lu se dit dans le détail d'un morceau touché de la barre
 et l'orthodromie surlignée en jaune/orange/rouge là où le rejeu rencontre
 de la turbulence. Fonctions pures entre les marqueurs `[turb-profile]`,
 testées dans `test/turb-grid.test.mjs` (distance et point d'orthodromie,

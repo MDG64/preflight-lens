@@ -20838,6 +20838,13 @@ function renderInfo(icao) {
       for (const f of fls) if (Math.abs(f - fl) < Math.abs(best - fl)) best = f;
       return best;
     }
+    /* Le niveau AFFICHÉ : celui du profil, arrondi à la dizaine — FL320 pour
+       32 000 ft. La grille n'a que neuf niveaux (FL300, FL340…) et la lecture
+       se fait au plus proche (`fl` des points et des événements), mais les
+       cartes disent le niveau VOLÉ, celui que le pilote a tapé : FL320 tapé,
+       FL320 affiché, même si le fichier lu est celui du FL300. Le niveau lu
+       reste dans le détail d'un morceau touché. */
+    const turbFlOf = altFt => Math.round(altFt / 1000) * 10;
     /* Classe autour de (lat, lon) : la case qui contient le point et, sur
        une grille fine (pas ≤ 0,3°), ses huit voisines — la pire l'emporte.
        C'est le regard latéral qu'avait le regroupement 2×2 de l'ancienne
@@ -20864,7 +20871,10 @@ function renderInfo(icao) {
        proche, pire classe des deux échéances encadrant l'heure. Sous
        9 000 ft la grille ne dit rien (-1). `clsOf(fl, fh)` rend la grille
        décodée, ou null si elle manque (-2). Les événements ne retiennent que
-       les CHANGEMENTS de classe, avec la minute, le FL et la distance. */
+       les CHANGEMENTS de classe, avec la minute, le FL lu, l'altitude et la
+       distance ; chacun garde aussi les altitudes extrêmes de son morceau
+       (altMin, altMax), jusqu'au changement suivant — une plage entamée en
+       montée à 29 000 ft et poursuivie en croisière se lira FL290–320. */
     function turbSampleProfile(prof, A, B, index, tkoMs, fls, clsOf) {
       const dist = gcDistNM(A, B), pts = [], events = [];
       let prev = null, max = -2;
@@ -20884,23 +20894,26 @@ function renderInfo(icao) {
         }
         pts.push({ t, d, alt, fl, lat: p.lat, lon: p.lon, cls: c });
         if (c > max) max = c;
-        if (prev === null || c !== prev) { events.push({ t, d, fl, alt, cls: c, lat: p.lat, lon: p.lon }); prev = c; }
+        if (prev === null || c !== prev) { events.push({ t, d, fl, alt, altMin: alt, altMax: alt, cls: c, lat: p.lat, lon: p.lon }); prev = c; }
+        else { const ev = events[events.length - 1]; if (alt < ev.altMin) ev.altMin = alt; if (alt > ev.altMax) ev.altMax = alt; }
       }
       return { pts, events, total: prof.total, top: prof.top, dist, max };
     }
     /* Les événements regroupés en ÉPISODES : une plage continue de classe ≥ 1,
        avec son début, sa fin, sa pire classe, ses FL et ses distances. Sur un
        transatlantique, trente transitions light/moderate/light ne se lisent
-       pas ; six épisodes, oui. */
+       pas ; six épisodes, oui. Les FL (flMin, flMax) sont ceux du VOL sur
+       toute la plage, pas ceux des fichiers lus. */
     function turbEpisodes(P) {
       const out = [];
       let cur = null;
       for (let i = 0; i < P.events.length; i++) {
         const e = P.events[i], end = i + 1 < P.events.length ? P.events[i + 1].t : P.total;
         if (e.cls >= 1) {
-          if (!cur) cur = { t0: e.t, t1: end, d0: e.d, d1: null, cls: e.cls, flMin: e.fl, flMax: e.fl, lat: e.lat, lon: e.lon };
+          const lo = turbFlOf(e.altMin ?? e.alt), hi = turbFlOf(e.altMax ?? e.alt);
+          if (!cur) cur = { t0: e.t, t1: end, d0: e.d, d1: null, cls: e.cls, flMin: lo, flMax: hi, lat: e.lat, lon: e.lon };
           else { cur.t1 = end; if (e.cls > cur.cls) { cur.cls = e.cls; cur.lat = e.lat; cur.lon = e.lon; } }
-          cur.flMin = Math.min(cur.flMin, e.fl); cur.flMax = Math.max(cur.flMax, e.fl);
+          cur.flMin = Math.min(cur.flMin, lo); cur.flMax = Math.max(cur.flMax, hi);
         } else if (cur) { cur.d1 = e.d; out.push(cur); cur = null; }
       }
       if (cur) { cur.d1 = P.dist; out.push(cur); }
@@ -25784,10 +25797,14 @@ function dtsAUnQfu(icao){
       const e = res.events[i], end = i + 1 < res.events.length ? res.events[i + 1].t : res.total, t0 = res.cfg.t0;
       [...$("#turbBar").children].forEach((el, k) => el.classList.toggle("on", k === i));
       const lat = `${Math.abs(e.lat).toFixed(1)}°${e.lat >= 0 ? "N" : "S"}`, lon = `${Math.abs(e.lon).toFixed(1)}°${e.lon >= 0 ? "E" : "W"}`;
-      const lvl = e.fl ? `FL${e.fl}` : `${Math.round(e.alt / 100) * 100} ft`;
+      // Le niveau volé sur le morceau (FL320, ou FL290–320 en montée), pas
+      // celui du fichier lu ; le fichier se dit dans l'explication.
+      const lo = turbFlOf(e.altMin ?? e.alt), hi = turbFlOf(e.altMax ?? e.alt);
+      const lvl = e.fl ? `FL${lo}${hi !== lo ? `–${hi}` : ""}` : `${Math.round(e.alt / 100) * 100} ft`;
+      const near = e.fl && lo === hi && e.fl !== lo ? `FL${e.fl} (nearest level in the grid)` : "the nearest level";
       const why = e.cls === -1 ? "the grid starts at FL100 — nothing is said below"
         : e.cls === -2 ? "outside the area covered by the grid, or file missing"
-        : `GFS grid read at the nearest level, worst of the two forecast hours around each minute`;
+        : `GFS grid read at ${near}, worst of the two forecast hours around each minute`;
       $("#turbDetail").innerHTML = `<b>${turbHPlus(e.t)} → ${turbHPlus(end)} · ${turbHM(t0 + e.t * 60e3)}Z–${turbHM(t0 + end * 60e3)}Z · ${lvl}</b>`
         + ` <span class="muted">${lat} ${lon} · ${Math.round(e.d)} NM from ${esc(res.cfg.dep)}</span><br><b>${turbClsLbl(e.cls)}</b> <span class="muted">— ${why}</span>`;
     }
