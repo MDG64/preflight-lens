@@ -48,6 +48,10 @@ const ASSETS = [
   "./minima.html", "./airfield-seed.js", "./aircraft-db.js",
   // Temps de vol par route (2026-09-03), régénéré comme les bases : règle 3.
   "./routes-seed.js",
+  // Fuseau horaire des terrains (2026-09-04), régénéré comme les bases par
+  // Weather Lens/Tools/build-airport-tz.js : règle 3. Sans lui, les heures du vol
+  // restent en Z seul — la page s'ouvre quand même.
+  "./airport-tz.js",
   // La liste des manœuvres (2026-08-30), lue par le module minima ET par le
   // suivi. Elle ne se régénère pas comme les bases : c'est du code, elle suit
   // donc l'app. Sans elle, la fiche terrain n'affiche plus ni circling ni
@@ -246,7 +250,8 @@ self.addEventListener("fetch", e => {
   //    (fir/*.json), annuaire OACI/IATA de fiches.html
   //    (annuaire-terrains.js, régénéré de temps en temps), bases du module
   //    MINIMAS (airfield-seed.js recompilé depuis aero-db, aircraft-db.js,
-  //    routes-seed.js recompilé par Weather Lens/Tools/build-routes.py) et
+  //    routes-seed.js recompilé par Weather Lens/Tools/build-routes.py,
+  //    airport-tz.js recompilé par Weather Lens/Tools/build-airport-tz.js) et
   //    liste des manœuvres (manoeuvres.js, du code qui suit l'app) :
   //    réseau d'abord ET mise en cache. Consultable EN VOL, sans connexion —
   //    tout en se rafraîchissant dès qu'on est en ligne.
@@ -258,7 +263,7 @@ self.addEventListener("fetch", e => {
   //    dont le NOM porte la version — icônes, photos, polices.
   if (url.includes("/layouts/") || url.includes("/fir/") || url.includes("annuaire-terrains") ||
       url.includes("airfield-seed") || url.includes("aircraft-db") || url.includes("manoeuvres") ||
-      url.includes("routes-seed")) {
+      url.includes("routes-seed") || url.includes("airport-tz")) {
     e.respondWith(
       fetch(e.request).then(r => {
         if (r && r.ok) {
