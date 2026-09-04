@@ -5174,41 +5174,6 @@ body.light .stat.on {
       overflow: hidden;
       text-overflow: ellipsis
     }
-    /* L'HORLOGE sur la case de l'heure : un champ `time` natif, transparent,
-       posé PAR-DESSUS la case. On garde ainsi l'affichage maison — « 0857Z »,
-       en chiffres de la fonte à chasse fixe, encre atténuée ou pleine selon
-       qui a posé l'heure — et le doigt tombe quand même sur le sélecteur du
-       système : cadran sur téléphone, horloge déroulante sur ordinateur. Le
-       champ natif accepte aussi la frappe (2203), donc rien n'est perdu de la
-       saisie au clavier ; c'est lui qui porte l'étiquette et le focus, la case
-       visible passe en `readonly` et sort du parcours de tabulation. */
-    .home-time-wrap {
-      position: relative
-    }
-
-    .home-time-pick {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      opacity: 0;
-      cursor: pointer
-    }
-
-    .home-time-pick:disabled {
-      cursor: default
-    }
-
-    /* Le liseré du focus se voit sur la case du dessous, puisque c'est elle
-       qu'on regarde. */
-    .home-time-wrap:focus-within .home-time {
-      border-color: var(--cyan)
-    }
-
     .home-time {
       width: 100%;
       box-sizing: border-box;
@@ -5238,6 +5203,205 @@ body.light .stat.on {
     }
     .home-time:disabled {
       opacity: .45
+    }
+
+    /* La case s'ouvre au doigt, elle ne se tape pas : le curseur le dit. */
+    .home-time:not(:disabled) {
+      cursor: pointer
+    }
+
+    /* ---------- cadran à aiguille (toutes les heures de l'app) ------------
+       Les 24 heures tiennent sur UN seul cadran : 00–11 sur l'anneau
+       extérieur, 12–23 sur l'intérieur — c'est le rayon du doigt qui tranche,
+       donc pas d'AM/PM à choisir, et rien qui ressemble au sélecteur d'un
+       système plutôt qu'à une horloge. On règle l'heure, le cadran bascule
+       aux minutes, l'aiguille suit le doigt, et rien n'est appliqué avant OK.
+
+       Le dessin, les classes et la géométrie sont ceux du cadran de
+       minima.html (l'heure d'évaluation des phases) : DEUX COPIES À GARDER
+       SYNCHRONES, comme RTDB. Ce qui diffère ici : le cadran n'est pas rendu
+       dans la page, il s'ouvre en surcouche au-dessus du champ touché — c'est
+       ce qui lui permet de servir tous les champs d'heure d'un coup. */
+    .clock-back {
+      position: fixed;
+      inset: 0;
+      z-index: 220;
+      background: rgba(3, 7, 11, .5);
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    body.light .clock-back {
+      background: rgba(20, 40, 60, .26)
+    }
+
+    .clock-pop {
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: 12px;
+      box-shadow: var(--elev-hi);
+      padding: 12px;
+      width: 268px
+    }
+
+    .clock-title {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 9px
+    }
+
+    .clock-read {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 10px
+    }
+
+    .cr {
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--muted);
+      font: 600 22px/1 var(--mono);
+      padding: 7px 10px;
+      cursor: pointer;
+      font-variant-numeric: tabular-nums
+    }
+
+    .cr.on {
+      background: color-mix(in srgb, var(--cyan) 18%, var(--panel2));
+      border-color: var(--cyan);
+      color: var(--text)
+    }
+
+    .cr:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
+    }
+
+    .cs {
+      font: 600 22px/1 var(--mono);
+      color: var(--muted)
+    }
+
+    .cz {
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .14em;
+      color: var(--muted);
+      margin-left: 6px
+    }
+
+    /* touch-action: none — sans quoi le geste de glissement est confisqué par
+       le défilement de la page dès le premier pixel vertical. */
+    .clock-wrap {
+      touch-action: none;
+      user-select: none;
+      cursor: pointer
+    }
+
+    .clock {
+      display: block;
+      width: 100%;
+      height: auto
+    }
+
+    .cface {
+      fill: var(--bg2);
+      stroke: var(--line)
+    }
+
+    .chand {
+      stroke: var(--cyan);
+      stroke-width: 2
+    }
+
+    .cknob,
+    .ccent {
+      fill: var(--cyan)
+    }
+
+    .ct {
+      fill: var(--muted2)
+    }
+
+    .cn {
+      font: 500 15px var(--num);
+      fill: var(--text);
+      text-anchor: middle;
+      dominant-baseline: central;
+      font-variant-numeric: tabular-nums
+    }
+
+    .cn.sm {
+      font-size: 12.5px;
+      fill: var(--muted)
+    }
+
+    /* Le chiffre retenu est posé SUR la pastille : il lui faut la teinte du
+       fond, pas celle du texte. */
+    .cn.on {
+      fill: #0b1116;
+      font-weight: 700
+    }
+
+    body.light .cn.on {
+      fill: #fff
+    }
+
+    .clock-act {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 10px
+    }
+
+    .ckb {
+      border: 1px solid var(--line2);
+      background: transparent;
+      color: var(--muted);
+      font: 600 12px/1 var(--sans);
+      letter-spacing: .06em;
+      padding: 9px 14px;
+      border-radius: 8px;
+      cursor: pointer
+    }
+
+    .ckb:hover {
+      color: var(--text);
+      border-color: var(--cyan-dim)
+    }
+
+    .ckb:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
+    }
+
+    .ckb.pri {
+      border-color: var(--cyan);
+      background: var(--cyan);
+      color: var(--bg)
+    }
+
+    body.light .ckb.pri {
+      color: #fff
+    }
+
+    /* « Clear » rend l'heure à la route : c'est un geste d'un autre ordre que
+       OK / Cancel, il se tient à l'autre bout de la ligne. */
+    .ckb.clr {
+      margin-right: auto
+    }
+
+    @media (max-width: 640px) {
+      .clock-pop {
+        width: 244px
+      }
     }
     .wx-ap-time {
       font: 600 12px/1 var(--mono);
@@ -7204,13 +7368,10 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hFromSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hPick0">Take-off · UTC</label>
-          <div class="home-time-wrap">
-            <input class="home-time" id="hTime0" placeholder="HHMMZ" readonly tabindex="-1" aria-hidden="true"
-              autocomplete="off" spellcheck="false">
-            <input class="home-time-pick" id="hPick0" type="time"
-              aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set">
-          </div>
+          <label class="home-field-label home-time-label" for="hTime0">Take-off · UTC</label>
+          <input class="home-time" id="hTime0" placeholder="HHMMZ" readonly
+            autocomplete="off" spellcheck="false"
+            aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set; tap to set it on the clock">
         </div>
         <!-- Inverser la route d'un geste : la fleche du haut part a droite, celle
              du bas revient a gauche. Le degagement, choisi pour l'ancienne
@@ -7239,13 +7400,10 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hToSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hPick1">Arrival · UTC</label>
-          <div class="home-time-wrap">
-            <input class="home-time" id="hTime1" placeholder="HHMMZ" readonly tabindex="-1" aria-hidden="true"
-              autocomplete="off" spellcheck="false">
-            <input class="home-time-pick" id="hPick1" type="time"
-              aria-label="Arrival time, UTC — posed from the route flight time">
-          </div>
+          <label class="home-field-label home-time-label" for="hTime1">Arrival · UTC</label>
+          <input class="home-time" id="hTime1" placeholder="HHMMZ" readonly
+            autocomplete="off" spellcheck="false"
+            aria-label="Arrival time, UTC — posed from the route flight time; tap to set it on the clock">
         </div>
         <div class="home-field home-field-code">
           <label class="home-field-label" for="hAlt">Alternate</label>
@@ -7256,13 +7414,10 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hAltSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hPick2">Alternate · UTC</label>
-          <div class="home-time-wrap">
-            <input class="home-time" id="hTime2" placeholder="HHMMZ" readonly tabindex="-1" aria-hidden="true"
-              autocomplete="off" spellcheck="false">
-            <input class="home-time-pick" id="hPick2" type="time"
-              aria-label="Alternate arrival time, UTC — posed from the diversion time">
-          </div>
+          <label class="home-field-label home-time-label" for="hTime2">Alternate · UTC</label>
+          <input class="home-time" id="hTime2" placeholder="HHMMZ" readonly
+            autocomplete="off" spellcheck="false"
+            aria-label="Alternate arrival time, UTC — posed from the diversion time; tap to set it on the clock">
         </div>
         <!-- L'étoile de la ROUTE, au bout de la file : les trois cases
              portent chacune la leur, celle-ci prend les trois d'un coup. Elle
@@ -17602,6 +17757,19 @@ function renderInfo(icao) {
       if (gateBlocked("timeFilter")) { e.target.value = ""; return; }
       applyTime(e.target.value);
     });
+    /* Le filtre horaire se règle au CADRAN, comme toutes les heures de l'app.
+       La case garde son format « HH:MM » — c'est celui que `applyTime` lit —
+       et l'événement `input` est relancé, donc rien ne change en aval. Pas de
+       « Clear » dans le cadran : le bouton × Clear est juste à côté. */
+    ckdBindField($("#htime"), {
+      title: "Time filter",
+      blocked: () => gateBlocked("timeFilter"),
+      read: () => ($("#htime").value || "").replace(":", ""),
+      write: v => {
+        $("#htime").value = v ? v.slice(0, 2) + ":" + v.slice(2) : "";
+        $("#htime").dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
     $("#now").onclick = () => {
       if (gateBlocked("timeFilter")) return;
       const d = new Date();
@@ -22883,6 +23051,208 @@ window.addEventListener("scroll", hidePop, true);
     }
 
     /* ============================================================
+       LE CADRAN À AIGUILLE (2026-09-04) — le SEUL choix d'heure de l'app.
+       Toutes les cases d'heure l'ouvrent : les trois heures du vol sur
+       l'accueil, le filtre horaire des NOTAM, les deux heures de la page
+       Turbulence. Aucune ne se tape plus au clavier ni ne descend le
+       sélecteur du système — un rouleau de chiffres sur téléphone, une liste
+       déroulante sur ordinateur, et deux dessins différents pour le même
+       geste. Ici c'est une horloge, la même partout.
+
+       Les 24 heures sur un seul disque : 00–11 sur l'anneau extérieur, 12–23
+       sur l'intérieur — c'est le rayon du doigt qui tranche, donc pas d'AM/PM
+       à choisir. On règle l'heure, le cadran bascule aux minutes, l'aiguille
+       suit le doigt, rien n'est appliqué avant OK.
+
+       DEUXIÈME COPIE du cadran de minima.html (`CLOCK`, l'heure d'évaluation
+       des phases) : même géométrie, mêmes classes, même dessin — deux copies
+       à garder synchrones, comme RTDB. Ce qui diffère ici : le cadran n'est
+       pas rendu DANS la page mais ouvert en surcouche au-dessus du champ
+       touché, ce qui lui permet de servir n'importe quel champ.
+
+       Le champ, lui, ne change pas de nature : il reste l'`<input>` que la
+       page connaît, simplement `readonly`. Le cadran y réécrit la valeur et
+       relance l'événement que la page écoutait déjà (`change` ou `input`) :
+       aucune logique de lecture d'heure n'a eu à bouger. */
+    const CKD = (() => {
+      const CK = { c: 120, rOut: 96, rIn: 62 };
+      const p2 = n => String(n).padStart(2, "0");
+      const polar = (r, deg) => [CK.c + r * Math.sin(deg * Math.PI / 180),
+                                 CK.c - r * Math.cos(deg * Math.PI / 180)];
+      let S = null;                       // le cadran ouvert, ou rien
+
+      function handXY() {
+        return S.mode === "h"
+          ? polar(S.h < 12 ? CK.rOut : CK.rIn, (S.h % 12) * 30)
+          : polar(CK.rOut, S.m * 6);
+      }
+      function faceHtml() {
+        const isH = S.mode === "h";
+        let marks = "";
+        if (isH) {
+          for (let h = 0; h < 24; h++) {
+            const [x, y] = polar(h < 12 ? CK.rOut : CK.rIn, (h % 12) * 30);
+            marks += `<text class="cn${h < 12 ? "" : " sm"}${S.h === h ? " on" : ""}" data-v="${h}" x="${x}" y="${y}">${p2(h)}</text>`;
+          }
+        } else {
+          for (let m = 0; m < 60; m++) {
+            const [x, y] = polar(CK.rOut, m * 6);
+            marks += m % 5
+              ? `<circle class="ct" cx="${x}" cy="${y}" r="1.6"/>`
+              : `<text class="cn${S.m === m ? " on" : ""}" data-v="${m}" x="${x}" y="${y}">${p2(m)}</text>`;
+          }
+        }
+        const [hx, hy] = handXY();
+        return `<svg class="clock" viewBox="0 0 240 240" role="img"
+                     aria-label="${isH ? "Pick the hour" : "Pick the minutes"}">
+          <circle class="cface" cx="120" cy="120" r="112"/>
+          <line class="chand" x1="120" y1="120" x2="${hx}" y2="${hy}"/>
+          <circle class="cknob" cx="${hx}" cy="${hy}" r="17"/>
+          <circle class="ccent" cx="120" cy="120" r="4"/>
+          ${marks}
+        </svg>`;
+      }
+      /* Position du doigt -> heure ou minute. En mode heure, c'est la distance
+         au centre qui désigne l'anneau, donc la plage 00–11 ou 12–23. */
+      function pick(wrap, ev) {
+        const r = wrap.getBoundingClientRect();
+        const x = (ev.clientX - r.left) / r.width * 240 - CK.c;
+        const y = (ev.clientY - r.top) / r.height * 240 - CK.c;
+        let deg = Math.atan2(x, -y) * 180 / Math.PI;
+        if (deg < 0) deg += 360;
+        if (S.mode === "h") {
+          let h = Math.round(deg / 30) % 12;
+          if (Math.hypot(x, y) < (CK.rOut + CK.rIn) / 2) h += 12;
+          S.h = h;
+        } else S.m = Math.round(deg / 6) % 60;
+      }
+      /* Mise à jour sans reconstruire le cadran : pendant le glissement,
+         remplacer le SVG couperait la capture du pointeur et le geste
+         s'arrêterait net. */
+      function refresh() {
+        const [hx, hy] = handXY();
+        const hand = S.pop.querySelector(".chand"), knob = S.pop.querySelector(".cknob");
+        hand.setAttribute("x2", hx); hand.setAttribute("y2", hy);
+        knob.setAttribute("cx", hx); knob.setAttribute("cy", hy);
+        const cur = S.mode === "h" ? S.h : S.m;
+        S.pop.querySelectorAll(".cn").forEach(t => t.classList.toggle("on", +t.dataset.v === cur));
+        const rd = S.pop.querySelectorAll(".cr");
+        rd[0].textContent = p2(S.h); rd[1].textContent = p2(S.m);
+      }
+      /* Sous le champ quand la place y est, au-dessus sinon, et au CENTRE de
+         l'écran quand ni l'un ni l'autre ne tient — le cas du téléphone, où
+         un cadran ancré sortirait de l'écran par le bas. */
+      function place() {
+        const a = S.anchor && S.anchor.getBoundingClientRect();
+        const pop = S.pop, w = pop.offsetWidth, h = pop.offsetHeight;
+        if (!a || innerWidth < w + 32 || innerHeight < h + 32) {
+          pop.style.position = "relative"; pop.style.left = pop.style.top = "";
+          return;
+        }
+        pop.style.position = "absolute";
+        pop.style.left = Math.min(Math.max(8, a.left), innerWidth - w - 8) + "px";
+        let top = a.bottom + 8;
+        if (top + h > innerHeight - 8) top = Math.max(8, a.top - h - 8);
+        pop.style.top = top + "px";
+      }
+      function close() {
+        if (!S) return;
+        S.back.remove();
+        removeEventListener("keydown", S.esc, true);
+        S = null;
+      }
+      /* `value` : "HHMM" de départ, ou rien — le cadran s'ouvre alors sur
+         l'heure qu'il est. `onClear` n'est posé que là où vider a un sens :
+         les heures du vol, qui retombent alors sur celle de la route. */
+      function open(anchor, opt) {
+        close();
+        const o = opt || {};
+        const v = /^\d{4}$/.test(o.value || "") ? o.value : null;
+        const now = new Date();
+        S = { anchor, mode: "h",
+              h: v ? +v.slice(0, 2) : now.getUTCHours(),
+              m: v ? +v.slice(2) : now.getUTCMinutes(),
+              onOk: o.onOk, onClear: o.onClear };
+        const back = document.createElement("div");
+        back.className = "clock-back";
+        back.innerHTML = `<div class="clock-pop" role="dialog" aria-modal="true"
+             aria-label="${o.title || "Set the time"} — UTC">
+          ${o.title ? `<div class="clock-title">${o.title}</div>` : ""}
+          <div class="clock-read">
+            <button class="cr on" type="button" data-mode="h" aria-label="Hours">${p2(S.h)}</button>
+            <span class="cs">:</span>
+            <button class="cr" type="button" data-mode="m" aria-label="Minutes">${p2(S.m)}</button>
+            <span class="cz">UTC</span>
+          </div>
+          <div class="clock-wrap">${faceHtml()}</div>
+          <div class="clock-act">
+            ${o.onClear ? `<button class="ckb clr" type="button" data-act="clear">Clear</button>` : ""}
+            <button class="ckb" type="button" data-act="cancel">Cancel</button>
+            <button class="ckb pri" type="button" data-act="ok">OK</button>
+          </div>
+        </div>`;
+        document.body.appendChild(back);
+        S.back = back; S.pop = back.querySelector(".clock-pop");
+        place();
+
+        const wrap = S.pop.querySelector(".clock-wrap");
+        const rebuild = () => {
+          wrap.innerHTML = faceHtml();
+          S.pop.querySelectorAll(".cr").forEach(b => b.classList.toggle("on", b.dataset.mode === S.mode));
+        };
+        S.pop.querySelectorAll(".cr").forEach(b => b.onclick = () => { S.mode = b.dataset.mode; rebuild(); });
+        S.pop.querySelector('[data-act="cancel"]').onclick = close;
+        const clr = S.pop.querySelector('[data-act="clear"]');
+        if (clr) clr.onclick = () => { const f = S.onClear; close(); if (f) f(); };
+        S.pop.querySelector('[data-act="ok"]').onclick = () => {
+          const f = S.onOk, val = p2(S.h) + p2(S.m);
+          close(); if (f) f(val);
+        };
+        /* Le voile ferme, mais SEULEMENT lui : un clic qui part du cadran et
+           finit sur le voile — la fin d'un glissement — ne doit rien fermer. */
+        back.addEventListener("pointerdown", e => { if (e.target === back) close(); });
+        /* En capture, et l'événement s'arrête là : la page ferme ses propres
+           panneaux sur Échap, elle n'a pas à les fermer avec le cadran. */
+        S.esc = e => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+        addEventListener("keydown", S.esc, true);
+
+        let drag = false;
+        wrap.addEventListener("pointerdown", e => {
+          drag = true;
+          try { wrap.setPointerCapture(e.pointerId); } catch (_) { }
+          pick(wrap, e); refresh(); e.preventDefault();
+        });
+        wrap.addEventListener("pointermove", e => { if (drag) { pick(wrap, e); refresh(); } });
+        wrap.addEventListener("pointerup", e => {
+          if (!drag) return;
+          drag = false;
+          try { wrap.releasePointerCapture(e.pointerId); } catch (_) { }
+          /* L'heure choisie, on enchaîne sur les minutes — c'est la suite
+             attendue, et l'heure reste accessible par le grand affichage. */
+          if (S.mode === "h") { S.mode = "m"; rebuild(); }
+        });
+      }
+      return { open, close, isOpen: () => !!S };
+    })();
+    /* Poser le cadran sur un champ existant : la valeur lue et réécrite au
+       format du champ, et l'événement que la page écoutait déjà relancé
+       après coup. `read` rend "HHMM" ou "", `write` reçoit "HHMM" ou "". */
+    function ckdBindField(el, opt) {
+      if (!el) return;
+      el.readOnly = true;
+      el.addEventListener("click", e => {
+        if (opt.blocked && opt.blocked()) return;
+        e.preventDefault();
+        CKD.open(el, {
+          title: opt.title,
+          value: opt.read(),
+          onOk: v => opt.write(v),
+          onClear: opt.clearable ? () => opt.write("") : null
+        });
+      });
+    }
+
+    /* ============================================================
        LES HEURES DU VOL (2026-09-03) — sous les trois cases de l'accueil.
        Le décollage se pose à maintenant + 1 h dès que le départ est saisi
        (une fois : il ne glisse pas avec l'horloge) ; l'arrivée et le
@@ -22949,7 +23319,6 @@ window.addEventListener("scroll", hidePop, true);
       });
       return routesSeedP;
     }
-    const hhmmOk = d => /^\d{4}$/.test(d) && +d.slice(0, 2) < 24 && +d.slice(2) < 60;
     function hhmmPlus(h, min) {
       const t = ((+h.slice(0, 2)) * 60 + (+h.slice(2)) + Math.round(min)) % 1440;
       return P(Math.floor(t / 60)) + P(t % 60);
@@ -23012,43 +23381,33 @@ window.addEventListener("scroll", hidePop, true);
       timesSave();
       wxApplyTimes();
     }
-    /* Deux champs par heure : celui qu'on LIT (« 0857Z », la case visible) et
-       celui qu'on TOUCHE (le champ `time` natif, transparent par-dessus, qui
-       ouvre l'horloge du système). Les deux disent la même heure — le second
-       en « HH:MM », seule écriture qu'un champ `time` accepte. */
     function renderHomeTimes() {
       [HT.tko, HT.eta, HT.altt].forEach((t, i) => {
-        const el = $("#hTime" + i), pk = $("#hPick" + i);
-        if (!el || !pk) return;
-        const off = !HOME_FIELDS.map(homeFieldCode)[i];
+        const el = $("#hTime" + i);
+        if (!el) return;
         el.value = t ? t.h + "Z" : "";
         el.classList.toggle("mine", !!(t && t.mine));
-        el.disabled = off;
-        /* La case visible se réécrit toujours — c'est elle qu'on lit, elle ne
-           doit jamais retarder sur l'heure retenue. Le champ natif, lui, se
-           laisse tranquille tant qu'il a la main : on n'écrase pas une frappe
-           en cours. */
-        if (document.activeElement !== pk) pk.value = t ? t.h.slice(0, 2) + ":" + t.h.slice(2) : "";
-        pk.disabled = off;
+        el.disabled = !HOME_FIELDS.map(homeFieldCode)[i];
       });
     }
+    /* Les trois cases s'ouvrent au CADRAN : la case ne se tape pas, elle se
+       touche. « Clear » y rend l'heure à la route — l'ancien geste, qui était
+       de vider la case au clavier. */
     ["tko", "eta", "altt"].forEach((key, i) => {
-      const pk = $("#hPick" + i);
-      pk.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pk.blur(); } });
-      /* Sur téléphone, le champ natif ouvre son cadran de lui-même ; sur
-         ordinateur il n'ouvre l'horloge que sur son icône — invisible ici,
-         puisque le champ l'est. On la demande donc à la main : le doigt (ou
-         le clic) tombe n'importe où sur la case, l'horloge s'ouvre. */
-      pk.addEventListener("click", () => { try { pk.showPicker && pk.showPicker(); } catch (e) { } });
-      pk.addEventListener("change", () => {
-        const d = pk.value.replace(/[^0-9]/g, "");
-        if (!pk.value) HT[key] = null;
-        else if (hhmmOk(d)) HT[key] = { h: d, mine: true };
-        /* L'arrivée réglée à la main emporte le dégagement posé par la route,
-           le décollage réglé emporte les deux : ils se recalculent. */
-        if (key === "tko") { if (HT.eta && !HT.eta.mine) HT.eta = null; if (HT.altt && !HT.altt.mine) HT.altt = null; }
-        if (key === "eta" && HT.altt && !HT.altt.mine) HT.altt = null;
-        homeTimesSync();
+      const el = $("#hTime" + i);
+      const LBL = { tko: "Take-off", eta: "Arrival", altt: "Alternate" };
+      ckdBindField(el, {
+        title: LBL[key],
+        clearable: true,
+        read: () => (HT[key] ? HT[key].h : ""),
+        write: v => {
+          HT[key] = v ? { h: v, mine: true } : null;
+          /* L'arrivée réglée à la main emporte le dégagement posé par la
+             route, le décollage réglé emporte les deux : ils se recalculent. */
+          if (key === "tko") { if (HT.eta && !HT.eta.mine) HT.eta = null; if (HT.altt && !HT.altt.mine) HT.altt = null; }
+          if (key === "eta" && HT.altt && !HT.altt.mine) HT.altt = null;
+          homeTimesSync();
+        }
       });
     });
     /* Les heures dans l'adresse de Minima : celles qui sont posées — le
@@ -25265,6 +25624,21 @@ function dtsAUnQfu(icao){
       if (turbCfg.t1 - turbCfg.t0 < 15 * 60e3) turbCfg.t1 = turbCfg.t0 + 15 * 60e3;
       turbRenderForm(); turbSchedule();
     };
+    /* Les deux heures de la page Turbulence passent au cadran comme les
+       autres. Elles gardent leur `type=time` — c'est ce que `turbReadTime`
+       lit, et le « Z » posé à côté vient de la page — et leur `change` est
+       relancé : le temps de vol, la barre et le calcul suivent comme avant.
+       Pas de « Clear » : une heure vide n'a pas de sens pour un vol. */
+    [["#turbDepTime", "Departure"], ["#turbArrTime", "Arrival"]].forEach(([sel, title]) => {
+      ckdBindField($(sel), {
+        title,
+        read: () => ($(sel).value || "").replace(":", "").slice(0, 4),
+        write: v => {
+          $(sel).value = v.slice(0, 2) + ":" + v.slice(2);
+          $(sel).dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      });
+    });
     $("#turbFl").onchange = () => {
       const v = Math.round(+$("#turbFl").value / 10) * 10;
       if (v >= 30 && v <= 500) { turbCfg.fl = v; turbRenderForm(); turbSchedule(); }

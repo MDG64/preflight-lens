@@ -706,8 +706,41 @@ body.light .preset[aria-pressed="true"]{background:#eef4fd}
    pas celle du texte — cyan clair la nuit, bleu soutenu le jour. */
 .cn.on{fill:#0b1116;font-weight:700}
 body.light .cn.on{fill:#fff}
-.clock-act{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.clock-act{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}
 @media(max-width:640px){.clock-pop{width:244px}}
+
+/* ---------- le même cadran, ouvert en SURCOUCHE ----------
+   L'heure d'évaluation des phases ancre son cadran sous son champ, et il est
+   rendu AVEC la scène. Les trois heures du vol, elles, sont ailleurs dans la
+   page : leur cadran s'ouvre par-dessus tout, sur un voile qui le referme.
+   Même dessin, même géométrie, mêmes classes — c'est le même cadran, posé
+   autrement (voir clockFree*). `free` défait l'ancrage : la surcouche place
+   la boîte elle-même, sous le champ ou au centre de l'écran. */
+/* z-index 80 : au-dessus du bilan de vol (75), d'où les trois heures
+   s'ouvrent, et sous la page « ? » (90) et le résumé météo (95), d'où elles ne
+   s'ouvrent pas. C'est le rang laissé libre par la carte METAR. */
+.clock-back{
+  position:fixed;inset:0;z-index:80;background:rgba(3,7,11,.5);
+  display:flex;align-items:center;justify-content:center;
+}
+body.light .clock-back{background:rgba(20,40,60,.26)}
+.clock-pop.free{position:relative;top:auto;left:auto;transform:none}
+.clock-title{
+  font:500 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);text-align:center;margin-bottom:9px;
+}
+.ckb{
+  border:1px solid var(--line2);background:transparent;color:var(--muted);
+  font:600 12px/1 var(--sans);letter-spacing:.06em;padding:9px 14px;
+  border-radius:8px;cursor:pointer;
+}
+.ckb:hover{color:var(--text);border-color:var(--cyan)}
+.ckb:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.ckb.pri{border-color:var(--cyan);background:var(--cyan);color:var(--bg)}
+body.light .ckb.pri{color:#fff}
+/* « Clear » rend l'heure à la route : un geste d'un autre ordre que OK /
+   Cancel, il se tient à l'autre bout de la ligne. */
+.ckb.clr{margin-right:auto}
 
 /* ---------- scène ---------- */
 .stage{
@@ -2455,7 +2488,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
   font:600 10.5px/1.2 var(--sans);letter-spacing:.06em;color:var(--muted);
   text-transform:uppercase;margin-bottom:4px;
 }
-.rt-times input{font-size:13px;padding:7px 8px;color:var(--muted)}
+.rt-times input{font-size:13px;padding:7px 8px;color:var(--muted);cursor:pointer}
 .rt-times input.mine{color:var(--text)}
 /* Pas de bilan d'ensemble au-dessus des cartes : aucun verdict de VOL n'est
    agrégé — chaque terrain répond de sa phase, la décision reste au pilote et
@@ -3107,18 +3140,21 @@ body.light .rt-role{color:var(--text)}
       <div class="rt-form rt-times">
         <div class="rt-field">
           <label for="rtTime0">Take-off · UTC</label>
-          <input id="rtTime0" class="rt-time" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
-                 spellcheck="false" autocomplete="off" aria-label="Take-off time, UTC — HHMM, posed at now + 1 h when the departure is set">
+          <input id="rtTime0" class="rt-time" placeholder="HHMMZ" readonly
+                 spellcheck="false" autocomplete="off"
+                 aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set; tap to set it on the clock">
         </div>
         <div class="rt-field">
           <label for="rtTime1">Arrival · UTC</label>
-          <input id="rtTime1" class="rt-time" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
-                 spellcheck="false" autocomplete="off" aria-label="Arrival time, UTC — HHMM, posed from the route flight time">
+          <input id="rtTime1" class="rt-time" placeholder="HHMMZ" readonly
+                 spellcheck="false" autocomplete="off"
+                 aria-label="Arrival time, UTC — posed from the route flight time; tap to set it on the clock">
         </div>
         <div class="rt-field">
           <label for="rtTime2">Alternate · UTC</label>
-          <input id="rtTime2" class="rt-time" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
-                 spellcheck="false" autocomplete="off" aria-label="Alternate arrival time, UTC — HHMM, posed from the diversion time">
+          <input id="rtTime2" class="rt-time" placeholder="HHMMZ" readonly
+                 spellcheck="false" autocomplete="off"
+                 aria-label="Alternate arrival time, UTC — posed from the diversion time; tap to set it on the clock">
         </div>
       </div>
       <div class="rt-cards" id="rtCards"></div>
@@ -10241,6 +10277,101 @@ function clockRefresh(pop){
   rd[0].textContent = pad2(CLOCK.h); rd[1].textContent = pad2(CLOCK.m);
 }
 
+/* ------------------ le même cadran, ouvert en surcouche ------------------
+   L'heure d'évaluation des phases ancre son cadran sous son champ et le rend
+   AVEC la scène (clockPopHtml, bindClock). Les trois heures du vol, elles,
+   vivent dans la carte de route, loin de là : leur cadran s'ouvre par-dessus
+   la page, sur un voile qui le referme. Le DESSIN et la GÉOMÉTRIE ne sont pas
+   refaits — clockFaceHtml, clockHandXY, clockPick et clockRefresh sont ceux
+   du dessus, et l'état CLOCK aussi : il n'y a qu'un cadran dans cette page.
+   `CLOCK.open` reste FAUX pendant ce temps : c'est lui qui dit à la scène
+   d'afficher SON cadran, et le voile empêche déjà d'en ouvrir un second.
+
+   Même surcouche que celle de notam-filter.html (CKD) : deux copies à garder
+   synchrones, comme RTDB. */
+let clockFreeBack = null, clockFreeEsc = null;
+function clockFreeClose(){
+  if (!clockFreeBack) return;
+  clockFreeBack.remove(); clockFreeBack = null;
+  window.removeEventListener("keydown", clockFreeEsc, true); clockFreeEsc = null;
+}
+/* `value` : "HHMM" de départ, ou rien — le cadran s'ouvre alors sur l'heure
+   qu'il est. `onClear` n'est posé que là où vider a un sens : les heures du
+   vol, qui retombent alors sur celle de la route. */
+function clockFreeOpen(anchor, opt){
+  clockFreeClose();
+  const v = /^\d{4}$/.test(opt.value||"") ? opt.value : null;
+  const now = new Date();
+  CLOCK.mode = "h";
+  CLOCK.h = v ? +v.slice(0,2) : now.getUTCHours();
+  CLOCK.m = v ? +v.slice(2)  : now.getUTCMinutes();
+
+  const back = document.createElement("div");
+  back.className = "clock-back";
+  back.innerHTML = `<div class="clock-pop free" role="dialog" aria-modal="true"
+       aria-label="${opt.title||"Set the time"} — UTC">
+    ${opt.title ? `<div class="clock-title">${opt.title}</div>` : ""}
+    <div class="clock-read">
+      <button class="cr on" type="button" data-mode="h" aria-label="Hours">${pad2(CLOCK.h)}</button>
+      <span class="cs">:</span>
+      <button class="cr" type="button" data-mode="m" aria-label="Minutes">${pad2(CLOCK.m)}</button>
+      <span class="cz">UTC</span>
+    </div>
+    <div class="clock-wrap">${clockFaceHtml()}</div>
+    <div class="clock-act">
+      ${opt.onClear ? `<button class="ckb clr" type="button" data-act="clear">Clear</button>` : ""}
+      <button class="ckb" type="button" data-act="cancel">Cancel</button>
+      <button class="ckb pri" type="button" data-act="ok">OK</button>
+    </div>
+  </div>`;
+  document.body.appendChild(back);
+  clockFreeBack = back;
+  const pop = back.querySelector(".clock-pop");
+
+  /* Sous le champ quand la place y est, au-dessus sinon, et au CENTRE de
+     l'écran quand ni l'un ni l'autre ne tient — le cas du téléphone. */
+  const a = anchor && anchor.getBoundingClientRect();
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  if (a && innerWidth >= w + 32 && innerHeight >= h + 32){
+    pop.style.position = "absolute";
+    pop.style.left = Math.min(Math.max(8, a.left), innerWidth - w - 8) + "px";
+    let top = a.bottom + 8;
+    if (top + h > innerHeight - 8) top = Math.max(8, a.top - h - 8);
+    pop.style.top = top + "px";
+  }
+
+  const wrap = pop.querySelector(".clock-wrap");
+  const rebuild = ()=>{ wrap.innerHTML = clockFaceHtml();
+    pop.querySelectorAll(".cr").forEach(b=>b.classList.toggle("on", b.dataset.mode===CLOCK.mode)); };
+  pop.querySelectorAll(".cr").forEach(b=>b.onclick=()=>{ CLOCK.mode=b.dataset.mode; rebuild(); });
+  pop.querySelector('[data-act="cancel"]').onclick = clockFreeClose;
+  const clr = pop.querySelector('[data-act="clear"]');
+  if (clr) clr.onclick = ()=>{ clockFreeClose(); opt.onClear(); };
+  pop.querySelector('[data-act="ok"]').onclick = ()=>{
+    const val = pad2(CLOCK.h)+pad2(CLOCK.m);
+    clockFreeClose(); opt.onOk(val);
+  };
+  /* Le voile ferme, mais SEULEMENT lui : un geste qui part du cadran et finit
+     sur le voile — la fin d'un glissement — ne doit rien fermer. */
+  back.addEventListener("pointerdown", e=>{ if (e.target===back) clockFreeClose(); });
+  clockFreeEsc = e=>{ if (e.key==="Escape"){ e.stopPropagation(); clockFreeClose(); } };
+  window.addEventListener("keydown", clockFreeEsc, true);
+
+  let dragging = false;
+  wrap.addEventListener("pointerdown", e=>{
+    dragging = true;
+    try { wrap.setPointerCapture(e.pointerId); } catch(_){}
+    clockPick(wrap, e); clockRefresh(pop); e.preventDefault();
+  });
+  wrap.addEventListener("pointermove", e=>{ if (dragging){ clockPick(wrap, e); clockRefresh(pop); } });
+  wrap.addEventListener("pointerup", e=>{
+    if (!dragging) return;
+    dragging = false;
+    try { wrap.releasePointerCapture(e.pointerId); } catch(_){}
+    if (CLOCK.mode==="h"){ CLOCK.mode="m"; rebuild(); }
+  });
+}
+
 /* `qOpt` : juger une phase pour un QFU DONNE plutot que pour le sien — c'est
    ce qui permet au choix automatique de sonder chaque extremite avant d'en
    retenir une. Voir probeTab. */
@@ -15315,14 +15446,28 @@ window.RTV = (()=>{
       el.classList.toggle("mine", AUTO[role]===false);
     });
   }
-  /* Saisie d'une heure : quatre chiffres HHMM (le Z est toléré) prennent la
-     phase, comme sur son onglet ; une case vidée rend l'heure à la route. Toute
-     autre frappe est ignorée et la case réaffiche l'heure en vigueur. */
+  /* Une heure se choisit AU CADRAN — le même que celui des phases, ouvert en
+     surcouche au-dessus de la case (clockFreeOpen). La case ne se tape plus :
+     elle affiche, elle ouvre, et « Clear » y rend l'heure à la route. Le
+     `change` qu'écrit le cadran est celui que la case écoutait déjà, donc
+     rien n'a changé de ce qui suit — phases, cartes, stockage partagé. */
+  const RT_TITLE = ["Take-off", "Arrival", "Alternate"];
   function bindTimeFields(){
     ROLE_OF.forEach((role,i)=>{
       const el = document.getElementById("rtTime"+i);
       if (!el) return;
-      el.addEventListener("keydown", e=>{ if (e.key==="Enter"){ e.preventDefault(); el.blur(); } });
+      el.readOnly = true;
+      el.addEventListener("click", e=>{
+        if (el.disabled) return;
+        e.preventDefault();
+        const set = v=>{ el.value = v; el.dispatchEvent(new Event("change", {bubbles:true})); };
+        clockFreeOpen(el, {
+          title: RT_TITLE[i],
+          value: (el.value||"").replace(/[^0-9]/g,"").slice(0,4),
+          onOk: v=>set(v+"Z"),
+          onClear: ()=>set("")
+        });
+      });
       el.addEventListener("change", ()=>{
         const d = el.value.replace(/[^0-9]/g,"");
         const ok = /^\d{4}$/.test(d) && +d.slice(0,2)<24 && +d.slice(2)<60;
