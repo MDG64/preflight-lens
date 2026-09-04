@@ -14,6 +14,13 @@ on:
   schedule:
     - cron: "20 4,10,16,22 * * *"
   workflow_dispatch:
+  # Le script ou ce fichier changent : on republie tout de suite, pour que
+  # l'app en ligne lise le nouveau format sans attendre le prochain cycle.
+  push:
+    branches: [main]
+    paths:
+      - "tools/turb/**"
+      - ".github/workflows/turb.yml"
 
 permissions:
   contents: write
@@ -33,8 +40,10 @@ jobs:
           python-version: "3.12"
       - run: pip install --quiet numpy eccodes
       - run: python3 tools/turb/build_turb.py --selftest
+      # Maille native 0,25° (pas de regroupement) : un octet par point en PNG
+      # gris, ~100 Ko par fichier — le client lisse entre les points.
       - name: Build the grid (GFS 0.25, hours 3-36)
-        run: python3 tools/turb/build_turb.py --out out --hours 3-36 --bbox=-180,-90,180,90 --pool 2
+        run: python3 tools/turb/build_turb.py --out out --hours 3-36 --bbox=-180,-90,180,90
       - name: Publish to the turb-data branch
         run: |
           cd out

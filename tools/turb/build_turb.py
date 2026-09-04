@@ -10,23 +10,34 @@ index .idx qui permet de ne télécharger que les champs utiles par Range HTTP.
 Indice : Ellrod TI1 = cisaillement vertical × déformation horizontale
 (Ellrod & Knapp 1992). Seuils, en 10^-7 s^-2 : light 4–8, moderate 8–12,
 severe ≥ 12. C'est un indice d'air clair ; un masque convectif relève la
-classe là où le modèle FAIT de la convection (pluie convective instantanée
+valeur là où le modèle FAIT de la convection (pluie convective instantanée
 CPRAT > 0) selon l'énergie disponible (CAPE), et sous les cellules que sa
 réflectivité simulée (REFC) donne pour violentes.
 
-Maille : calcul à 0,25° (celle du GFS), puis, avec --pool 2, regroupement
-2×2 en gardant la PIRE classe — 0,5°, quatre fois moins lourd, et un monde
-entier tient en ~20 Ko gzippés par fichier.
+Ce qui est publié n'est plus une classe par point mais la VALEUR de
+l'indice, en un octet : TI1 en 10^-7 s^-2 × 16, au pas de 4 (0,25 × 10^-7),
+plafonné à 252, mis à zéro sous 2 × 10^-7 (le calme n'a pas de nuance à
+montrer, et il ne pèse alors rien). light = 64, moderate = 128,
+severe = 192 ; le relèvement convectif pose la nuance FORTE de sa classe
+(96, 160, 224). Le client lit la classe avec ces seuils (dans l'index) et
+peint la nappe en interpolant la valeur entre les points : des contours
+lisses, là où des classes seules ne donnaient que des rectangles.
+
+Maille : celle du GFS, 0,25° — le monde entier tient dans un PNG 8 bits
+gris (les filtres PNG et zlib font mieux que du RLE : le calme est à zéro
+sur la plus grande part du globe). --pool n regroupe encore n×n points en
+gardant la pire valeur si un jour il faut alléger.
 
 Sortie (arborescence statique, à servir telle quelle sous /api/turb/) :
-  OUT/index.json               run, échéances, niveaux, description de la grille
-  OUT/FL340/h006.json          une classe 0..3 par point, en RLE ligne par ligne
+  OUT/index.json               run, échéances, niveaux, grille, encodage
+  OUT/FL340/h006.png           un octet par point, du nord au sud, de l'ouest
+                               à l'est ; sa grille dans un chunk tEXt « turb »
 
-Lancer :  python3 tools/turb/build_turb.py --out /var/turb --hours 3-36 --bbox=-180,-90,180,90 --pool 2
+Lancer :  python3 tools/turb/build_turb.py --out /var/turb --hours 3-36 --bbox=-180,-90,180,90
           python3 tools/turb/build_turb.py --selftest      (aucun réseau)
 Dépendances : numpy, eccodes (pip install numpy eccodes).
 """
-import argparse, datetime as dt, json, os, re, sys, urllib.request
+import argparse, datetime as dt, json, os, re, struct, sys, urllib.request, zlib
 
 import numpy as np
 
@@ -43,6 +54,12 @@ R_EARTH = 6371000.0
 # de la convection (CPRAT, kg/m²/s > 0), réflectivité simulée (REFC, dBZ).
 TI_LIGHT, TI_MOD, TI_SEV = 4.0, 8.0, 12.0
 CAPE_LIGHT, CAPE_MOD = 1000.0, 2000.0
+# L'octet publié : TI1 (×1e-7) × BYTE_PER_E7, arrondi au pas BYTE_STEP,
+# plafonné à 252, mis à zéro sous BYTE_FLOOR. Les seuils de classe en
+# octets (LEVELS) et la nuance forte que pose le relèvement convectif.
+BYTE_PER_E7, BYTE_STEP, BYTE_FLOOR = 16, 4, 32
+LEVELS = (int(TI_LIGHT * BYTE_PER_E7), int(TI_MOD * BYTE_PER_E7), int(TI_SEV * BYTE_PER_E7))   # 64, 128, 192
+CONV_BYTES = tuple(l + 32 for l in LEVELS)                                                      # 96, 160, 224
 CPRAT_MIN = 1e-5                                   # ≈ 0,04 mm/h : la cellule existe dans le modèle
 REFC_SEV = 40.0                                    # dBZ : cellule violente, quel que soit le CAPE
 CAPE_MAX_FL = 390                                  # au-dessus, le proxy convectif ne s'applique plus
@@ -162,37 +179,47 @@ def ellrod_ti1(u_lo, v_lo, u_hi, v_hi, z_lo, z_hi, u, v, lat_deg, dlat, dlon):
     return vws * np.hypot(dsh, dst)
 
 
-def classify_ti(ti):
-    t = ti * 1e7
-    cls = np.zeros(t.shape, dtype=np.uint8)
-    cls[t >= TI_LIGHT] = 1
-    cls[t >= TI_MOD] = 2
-    cls[t >= TI_SEV] = 3
+def quantize_ti(ti):
+    """TI1 (s^-2) -> un octet par point : ×1e7 ×16, au pas de 4, plafonné à
+    252, zéro sous BYTE_FLOOR. Les seuils tombent sur 64/128/192."""
+    q = np.rint(ti * 1e7 * BYTE_PER_E7 / BYTE_STEP)
+    q = np.clip(q, 0, 255 // BYTE_STEP) * BYTE_STEP
+    b = q.astype(np.uint8)
+    b[b < BYTE_FLOOR] = 0
+    return b
+
+
+def classify_bytes(val):
+    """L'octet -> la classe 0..3, avec les seuils publiés dans l'index."""
+    cls = np.zeros(val.shape, dtype=np.uint8)
+    for k, lv in enumerate(LEVELS):
+        cls[val >= lv] = k + 1
     return cls
 
 
-def apply_convective(cls, cape, cprat, refc, fl):
-    """Relève la classe sous la convection du modèle, jusqu'à CAPE_MAX_FL.
+def apply_convective(val, cape, cprat, refc, fl):
+    """Relève la valeur sous la convection du modèle, jusqu'à CAPE_MAX_FL :
+    la nuance FORTE de light, de moderate, de severe (96, 160, 224).
     Le CAPE seul ne suffit pas : les tropiques en ont en permanence sans
     orage partout. On exige de la pluie convective instantanée (CPRAT), qui
     dit qu'une cellule existe bel et bien à cet endroit et cette heure."""
     if cape is None or fl > CAPE_MAX_FL:
-        return cls
-    out = cls.copy()
+        return val
     active = (cprat >= CPRAT_MIN) if cprat is not None else np.ones(cape.shape, dtype=bool)
-    out[active & (cape >= CAPE_LIGHT) & (out < 1)] = 1
-    out[active & (cape >= CAPE_MOD) & (out < 2)] = 2
+    lift = np.zeros(val.shape, dtype=np.uint8)
+    lift[active & (cape >= CAPE_LIGHT)] = CONV_BYTES[0]
+    lift[active & (cape >= CAPE_MOD)] = CONV_BYTES[1]
     if refc is not None:
-        out[(refc >= REFC_SEV) & (out < 3)] = 3
-    return out
+        lift[refc >= REFC_SEV] = CONV_BYTES[2]
+    return np.maximum(val, lift)
 
 
-def pool_max(cls, n):
-    """Regroupe n×n cases en gardant la pire classe (bords incomplets ignorés)."""
+def pool_max(val, n):
+    """Regroupe n×n cases en gardant la pire valeur (bords incomplets ignorés)."""
     if n <= 1:
-        return cls
-    h, w = (cls.shape[0] // n) * n, (cls.shape[1] // n) * n
-    return cls[:h, :w].reshape(h // n, n, w // n, n).max(axis=(1, 3))
+        return val
+    h, w = (val.shape[0] // n) * n, (val.shape[1] // n) * n
+    return val[:h, :w].reshape(h // n, n, w // n, n).max(axis=(1, 3))
 
 
 def pool_grid(grid, n):
@@ -203,18 +230,85 @@ def pool_grid(grid, n):
     return (N + dlat * (n - 1) / 2, lon0 + dlon * (n - 1) / 2, dlat * n, dlon * n, nlat // n, nlon // n)
 
 
-def rle(cls):
-    """Classes ligne par ligne, du nord au sud : [cls, longueur, cls, longueur, …]."""
-    flat = cls.ravel()
-    out = []
-    if flat.size == 0:
-        return out
-    edges = np.flatnonzero(np.diff(flat)) + 1
-    starts = np.concatenate(([0], edges))
-    ends = np.concatenate((edges, [flat.size]))
-    for s, e in zip(starts, ends):
-        out.append(int(flat[s])); out.append(int(e - s))
-    return out
+# ------------------------------------------------------------------- PNG ---
+# Un PNG 8 bits gris écrit à la main : pas de Pillow à installer, et le
+# format est simple — une signature, IHDR, des tEXt, un IDAT zlib, IEND. Le
+# filtre est choisi ligne par ligne parmi les cinq de la spécification
+# (None, Sub, Up, Average, Paeth) par l'heuristique de libpng : la plus
+# petite somme des octets filtrés vus comme signés. Ça compte : sur un
+# champ lisse, Paeth ou Up divisent l'IDAT par deux.
+def _paeth(a, b, c):
+    a, b, c = a.astype(np.int16), b.astype(np.int16), c.astype(np.int16)
+    p = a + b - c
+    pa, pb, pc = np.abs(p - a), np.abs(p - b), np.abs(p - c)
+    return np.where((pa <= pb) & (pa <= pc), a, np.where(pb <= pc, b, c))
+
+
+def _chunk(tag, data):
+    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)
+
+
+def png_gray8(arr, text=None):
+    """Tableau uint8 (h, w) -> octets d'un PNG gris 8 bits, avec des chunks
+    tEXt {clé: valeur} (Latin-1) avant l'image."""
+    a = np.ascontiguousarray(arr, dtype=np.uint8)
+    h, w = a.shape
+    prev = np.zeros(w, dtype=np.uint8)
+    rows = []
+    for y in range(h):
+        cur = a[y]
+        left = np.concatenate(([0], cur[:-1])).astype(np.uint8)
+        upl = np.concatenate(([0], prev[:-1])).astype(np.uint8)
+        c16 = cur.astype(np.int16)
+        cands = (cur,
+                 (c16 - left) & 255,
+                 (c16 - prev) & 255,
+                 (c16 - ((left.astype(np.int16) + prev) >> 1)) & 255,
+                 (c16 - _paeth(left, prev, upl)) & 255)
+        best = min(range(5), key=lambda k: int(np.abs(cands[k].astype(np.uint8).astype(np.int8)).sum()))
+        rows.append(bytes((best,)) + cands[best].astype(np.uint8).tobytes())
+        prev = cur
+    out = [b"\x89PNG\r\n\x1a\n", _chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0))]
+    for k, v in (text or {}).items():
+        out.append(_chunk(b"tEXt", k.encode("latin-1") + b"\0" + v.encode("latin-1")))
+    out.append(_chunk(b"IDAT", zlib.compress(b"".join(rows), 9)))
+    out.append(_chunk(b"IEND", b""))
+    return b"".join(out)
+
+
+def png_read_gray8(data):
+    """Le décodeur du même format, pour l'autotest (lent : boucle Python) :
+    rend (tableau uint8, {clé: valeur} des tEXt)."""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "signature PNG"
+    pos, idat, w, h, text = 8, [], 0, 0, {}
+    while pos + 8 <= len(data):
+        n, = struct.unpack(">I", data[pos:pos + 4]); tag = data[pos + 4:pos + 8]; body = data[pos + 8:pos + 8 + n]
+        pos += 12 + n
+        if tag == b"IHDR":
+            w, h, depth, ctype = struct.unpack(">IIBB", body[:10])
+            assert depth == 8 and ctype == 0, (depth, ctype)
+        elif tag == b"IDAT":
+            idat.append(body)
+        elif tag == b"tEXt":
+            k, v = body.split(b"\0", 1); text[k.decode("latin-1")] = v.decode("latin-1")
+    raw = zlib.decompress(b"".join(idat))
+    out = np.zeros((h, w), dtype=np.uint8)
+    prev = [0] * w
+    for y in range(h):
+        f = raw[y * (w + 1)]; line = raw[y * (w + 1) + 1:(y + 1) * (w + 1)]
+        cur = [0] * w
+        for x in range(w):
+            a = cur[x - 1] if x else 0; b = prev[x]; c = prev[x - 1] if x else 0
+            if f == 0: pr = 0
+            elif f == 1: pr = a
+            elif f == 2: pr = b
+            elif f == 3: pr = (a + b) >> 1
+            else:
+                p = a + b - c; pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                pr = a if pa <= pb and pa <= pc else (b if pb <= pc else c)
+            cur[x] = (line[x] + pr) & 255
+        out[y] = cur; prev = cur
+    return out, text
 
 
 def build_hour(fields, bbox, pool=1):
@@ -233,12 +327,12 @@ def build_hour(fields, bbox, pool=1):
         lo, hi = levels[max(i - 1, 0)], levels[min(i + 1, len(levels) - 1)]
         ti = ellrod_ti1(sub[("UGRD", lo)], sub[("VGRD", lo)], sub[("UGRD", hi)], sub[("VGRD", hi)],
                         sub[("HGT", lo)], sub[("HGT", hi)], sub[("UGRD", p)], sub[("VGRD", p)], lats, dlat, dlon)
-        cls = apply_convective(classify_ti(ti), cape, cprat, refc, fl)
+        val = apply_convective(quantize_ti(ti), cape, cprat, refc, fl)
         # Au-delà de 85° de latitude, dx tend vers zéro et la déformation
         # explose : des bandes rouges autour du pôle qui ne disent rien. Rien
         # n'y vole à ces niveaux de toute façon.
-        cls[np.abs(lats) > POLE_LAT] = 0
-        result[fl] = pool_max(cls, pool)
+        val[np.abs(lats) > POLE_LAT] = 0
+        result[fl] = pool_max(val, pool)
     return result, pool_grid(out_grid, pool)
 
 
@@ -266,20 +360,26 @@ def write_out(out_dir, run, hours, grids, grid):
         "source": "gfs-0p25-ellrod-ti1", "classes": ["nil", "light", "moderate", "severe"],
         "thresholds": {"ti1_e7": [TI_LIGHT, TI_MOD, TI_SEV], "cape": [CAPE_LIGHT, CAPE_MOD],
                        "cprat_min": CPRAT_MIN, "refc_sev": REFC_SEV},
+        # Le format des fichiers : un PNG gris 8 bits par (FL, échéance), et
+        # ce que vaut l'octet — le client lit ses seuils ICI, pas en dur.
+        "files": "png",
+        "encoding": {"type": "png8", "byte_per_e7": BYTE_PER_E7, "step": BYTE_STEP, "floor": BYTE_FLOOR,
+                     "levels": list(LEVELS), "conv": list(CONV_BYTES)},
     }
     os.makedirs(out_dir, exist_ok=True)
     for fh, per_fl in grids.items():
         valid = run + dt.timedelta(hours=fh)
-        for fl, cls in per_fl.items():
+        for fl, val in per_fl.items():
             d = os.path.join(out_dir, "FL%03d" % fl)
             os.makedirs(d, exist_ok=True)
-            with open(os.path.join(d, "h%03d.json" % fh), "w") as f:
-                # La grille est répétée dans CHAQUE fichier : index et fichiers
-                # traversent un cache de bord qui ne les rafraîchit pas ensemble,
-                # et le client doit pouvoir lire un fichier sur sa propre grille.
-                json.dump({"run": index["run"], "valid": valid.strftime("%Y-%m-%dT%H:00Z"), "fl": fl,
-                           "hour": fh, "nlat": nlat, "nlon": nlon, "grid": index["grid"],
-                           "rle": rle(cls)}, f, separators=(",", ":"))
+            # La grille est répétée dans CHAQUE fichier (chunk tEXt « turb ») :
+            # index et fichiers traversent un cache de bord qui ne les
+            # rafraîchit pas ensemble, et le client doit pouvoir lire un
+            # fichier sur sa propre grille.
+            meta = {"run": index["run"], "valid": valid.strftime("%Y-%m-%dT%H:00Z"), "fl": fl, "hour": fh,
+                    "grid": index["grid"], "levels": list(LEVELS)}
+            with open(os.path.join(d, "h%03d.png" % fh), "wb") as f:
+                f.write(png_gray8(val, {"turb": json.dumps(meta, separators=(",", ":"))}))
     # L'index s'écrit EN DERNIER : un client qui le lit trouve toutes les heures.
     with open(os.path.join(out_dir, "index.json"), "w") as f:
         json.dump(index, f, separators=(",", ":"))
@@ -304,23 +404,37 @@ def selftest():
     u_lo = u_p * 0.5; u_hi = u_p * 1.5                   # cisaillement vertical fort
     z_lo = np.full_like(u_p, 9000.0); z_hi = np.full_like(u_p, 11000.0)
     ti = ellrod_ti1(u_lo, v_p, u_hi, v_p, z_lo, z_hi, u_p, v_p, lats, -0.25, 0.25)
-    cls = classify_ti(ti)
+    val = quantize_ti(ti); cls = classify_bytes(val)
     assert cls[:, :20].max() == 0, "zone calme classée turbulente"
     assert cls[:, 25:35].max() >= 1, "zone de gradient non détectée"
+    # La quantification : seuils exacts, pas de 4, plancher, plafond.
+    q = quantize_ti(np.array([0.0, 1.8e-7, 2.0e-7, 4.0e-7, 4.1e-7, 8.0e-7, 12.0e-7, 40e-7]))
+    assert q.tolist() == [0, 0, 32, 64, 64, 128, 192, 252], q.tolist()
+    assert classify_bytes(q).tolist() == [0, 0, 0, 1, 1, 2, 3, 3]
     cape = np.zeros_like(u_p); cape[5, 5] = 2500; cape[6, 6] = 2500
     cprat = np.zeros_like(u_p); cprat[5, 5] = 1e-4                # il pleut en (5,5), pas en (6,6)
     refc = np.zeros_like(u_p); refc[7, 7] = 45.0
-    c2 = apply_convective(cls, cape, cprat, refc, 300)
-    assert c2[5, 5] == 2, "CAPE + pluie convective -> moderate"
+    c2 = apply_convective(val, cape, cprat, refc, 300)
+    assert c2[5, 5] == 160 and classify_bytes(c2)[5, 5] == 2, "CAPE + pluie convective -> moderate (nuance forte)"
     assert c2[6, 6] == 0, "CAPE sans pluie convective -> rien"
-    assert c2[7, 7] == 3, "réflectivité 45 dBZ -> severe"
-    assert apply_convective(cls, cape, cprat, refc, 450)[5, 5] == 0, "au-dessus de FL390, rien"
-    pooled = pool_max(np.array([[0, 1, 0], [2, 0, 3], [1, 1, 1]], dtype=np.uint8), 2)
-    assert pooled.shape == (1, 1) and pooled[0, 0] == 2, pooled
+    assert c2[7, 7] == 224 and classify_bytes(c2)[7, 7] == 3, "réflectivité 45 dBZ -> severe"
+    assert apply_convective(val, cape, cprat, refc, 450)[5, 5] == 0, "au-dessus de FL390, rien"
+    assert apply_convective(np.full_like(val, 200), cape, cprat, refc, 300)[5, 5] == 200, "un severe déjà là n'est pas abaissé"
+    pooled = pool_max(np.array([[0, 64, 0], [128, 0, 192], [64, 64, 64]], dtype=np.uint8), 2)
+    assert pooled.shape == (1, 1) and pooled[0, 0] == 128, pooled
     g2 = pool_grid((90.0, -180.0, -0.25, 0.25, 721, 1440), 2)
     assert g2 == (89.875, -179.875, -0.5, 0.5, 360, 720), g2
-    r = rle(np.array([[0, 0, 1, 1, 1], [2, 0, 0, 0, 0]], dtype=np.uint8))
-    assert r == [0, 2, 1, 3, 2, 1, 0, 4], r
+    # PNG : aller-retour exact sur du bruit (tous les filtres y passent), sur
+    # un champ lisse, avec le texte ; et un fichier écrit vaut un fichier lu.
+    rng = np.random.default_rng(7)
+    noise = rng.integers(0, 256, size=(23, 37), dtype=np.uint8)
+    back, text = png_read_gray8(png_gray8(noise, {"turb": '{"a":1}', "k": "v"}))
+    assert np.array_equal(back, noise) and text == {"turb": '{"a":1}', "k": "v"}, "PNG bruit"
+    yy, xx = np.mgrid[0:40, 0:60]
+    smooth = ((np.sin(xx / 5.0) + np.cos(yy / 7.0) + 2) * 60).astype(np.uint8)
+    png = png_gray8(smooth)
+    assert np.array_equal(png_read_gray8(png)[0], smooth), "PNG lisse"
+    assert len(png) < smooth.size, "un champ lisse se compresse"
     # Sous-grille : lon 0→359.75 découpée sur -10..10 doit ressortir triée d'ouest en est.
     world = np.tile(np.arange(1440, dtype=float), (721, 1))
     sub, g = subset(world, (90.0, 0.0, 0.25, 0.25, 721, 1440), (-10, 40, 10, 50))
@@ -334,11 +448,18 @@ def main():
     ap.add_argument("--hours", default="3-36", help="échéances GFS, ex. 3-36 ou 6,12,24")
     ap.add_argument("--run", help="cycle YYYYMMDDHH ; sinon le dernier complet")
     ap.add_argument("--bbox", default=",".join(str(x) for x in DEFAULT_BBOX), help="W,S,E,N")
-    ap.add_argument("--pool", type=int, default=1, help="regroupe n×n cases en gardant la pire classe (2 -> 0,5°)")
+    ap.add_argument("--pool", type=int, default=1, help="regroupe n×n cases en gardant la pire valeur (2 -> 0,5°)")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--fixture", help="écrit un PNG déterministe (37×23, pixel = (7x + 13y) mod 256) pour test/turb-grid.test.mjs")
     a = ap.parse_args()
     if a.selftest:
         return selftest()
+    if a.fixture:
+        yy, xx = np.mgrid[0:23, 0:37]
+        meta = {"fixture": 1, "grid": {"lat0": 50.0, "lon0": -10.0, "dlat": -0.25, "dlon": 0.25, "nlat": 23, "nlon": 37}}
+        with open(a.fixture, "wb") as f:
+            f.write(png_gray8(((7 * xx + 13 * yy) % 256).astype(np.uint8), {"turb": json.dumps(meta, separators=(",", ":"))}))
+        return print("fixture écrite dans", a.fixture, file=sys.stderr)
     hours = parse_hours(a.hours)
     bbox = tuple(float(x) for x in a.bbox.split(","))
     run = (dt.datetime.strptime(a.run, "%Y%m%d%H").replace(tzinfo=dt.timezone.utc) if a.run

@@ -309,7 +309,7 @@ self.addEventListener("fetch", e => {
   //    turb-data sur raw.githubusercontent.com) : réseau d'abord ET dépôt, pour
   //    la même raison que la couche météo mondiale — la dernière grille lue
   //    reste ce qu'on a de mieux hors ligne, et le cartouche en affiche le
-  //    cycle. Une entrée par (FL, échéance) consultée, ~20 Ko chacune ; l'app
+  //    cycle. Une entrée par (FL, échéance) consultée, un PNG gris de quelques dizaines de Ko chacune (2026-09-04, maille 0,25°) ; l'app
   //    lit le cycle dans le corps et signale elle-même un run trop vieux.
   if (url.includes("/api/turb/") || url.includes("/preflight-lens/turb-data/")) {
     e.respondWith(

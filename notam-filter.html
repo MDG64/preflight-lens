@@ -4077,9 +4077,12 @@
       border: 1px solid var(--line2);
     }
 
-    .mleg .sq.t1 { background: rgba(240, 200, 40, .55) }
-    .mleg .sq.t2 { background: rgba(240, 130, 30, .6) }
-    .mleg .sq.t3 { background: rgba(229, 72, 77, .65) }
+    /* Deux nuances par classe, comme sur la nappe : la seconde, plus
+       soutenue, vaut la moitié haute de la bande — et la convection du
+       modèle, qui pose toujours cette nuance-là. */
+    .mleg .sq.t1 { background: linear-gradient(90deg, rgba(255, 230, 80, .8) 50%, rgba(255, 198, 0, .85) 50%) }
+    .mleg .sq.t2 { background: linear-gradient(90deg, rgba(255, 140, 0, .85) 50%, rgba(255, 88, 0, .9) 50%) }
+    .mleg .sq.t3 { background: linear-gradient(90deg, rgba(236, 32, 44, .9) 50%, rgba(190, 0, 122, .92) 50%) }
 
     #mapOv:not(.turb-on) .map-turb-ctl,
     #mapOv.notam-mode .map-turb-ctl,
@@ -4183,9 +4186,9 @@
     }
 
     .tprof .tp-bar .c0 { background: rgba(52, 211, 154, .22) }
-    .tprof .tp-bar .c1 { background: rgba(240, 200, 40, .75) }
-    .tprof .tp-bar .c2 { background: rgba(240, 130, 30, .85) }
-    .tprof .tp-bar .c3 { background: rgba(229, 72, 77, .9) }
+    .tprof .tp-bar .c1 { background: rgba(255, 198, 0, .85) }
+    .tprof .tp-bar .c2 { background: rgba(255, 110, 0, .9) }
+    .tprof .tp-bar .c3 { background: rgba(230, 30, 44, .92) }
     .tprof .tp-bar .cl { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line2) 3px 4px) }
     .tprof .tp-bar .cn { background: var(--line2) }
 
@@ -7103,9 +7106,9 @@ body.light .turb-time input { color-scheme: light }
 /* Un morceau par événement du rejeu, large comme sa durée (style width). */
 .turb-seg { flex: 0 0 auto; position: relative; cursor: pointer; background: var(--grey-bg); min-width: 0; box-sizing: border-box }
 .turb-seg.c0 { background: var(--green) }
-.turb-seg.c1 { background: var(--gold) }
-.turb-seg.c2 { background: #ef8a2c }
-.turb-seg.c3 { background: var(--red) }
+.turb-seg.c1 { background: #ffc600 }
+.turb-seg.c2 { background: #ff6e00 }
+.turb-seg.c3 { background: #e61e2c }
 .turb-seg.cl { background: var(--steel-dim) }         /* sous FL100 : la grille ne dit rien */
 .turb-seg.cn { background: var(--grey-bg) }           /* hors grille */
 .turb-seg.on { outline: 2px solid var(--text); outline-offset: -2px; z-index: 1 }
@@ -7673,8 +7676,8 @@ body.light .turb-time input { color-scheme: light }
         <div class="turb-ticks" id="turbTicks"></div>
       </div>
       <div class="turb-legend">
-        <span style="--k:var(--green)">Smooth</span><span style="--k:var(--gold)">Light</span><span
-          style="--k:#ef8a2c">Moderate</span><span style="--k:var(--red)">Severe</span><span
+        <span style="--k:var(--green)">Smooth</span><span style="--k:#ffc600">Light</span><span
+          style="--k:#ff6e00">Moderate</span><span style="--k:#e61e2c">Severe</span><span
           style="--k:var(--steel-dim)">Below FL100 — grid silent</span><span
           style="--k:var(--grey-bg)">No data</span>
       </div>
@@ -7682,7 +7685,7 @@ body.light .turb-time input { color-scheme: light }
       <div class="turb-list" id="turbList"></div>
       <div class="turb-status" id="turbStatus"></div>
       <div class="wx-src">Estimate: the Ellrod clear-air turbulence index and a convective proxy computed on the NOAA/NCEP
-        GFS model winds, on ~50 km cells — the same grid as the Turbulence layer of the map, read minute by minute along
+        GFS model winds, on its ~25 km grid — the same field as the Turbulence layer of the map, read minute by minute along
         the great circle with a generic medium-jet profile. Decision support only — not the WAFS forecast, blind to
         mountain waves, and it does not replace the SIGWX charts of your official briefing.</div>
     </div>
@@ -7809,7 +7812,7 @@ body.light .turb-time input { color-scheme: light }
           <span class="mleg wx tb"><i class="sq t1"></i>Light turbulence at the chosen FL</span>
           <span class="mleg wx tb"><i class="sq t2"></i>Moderate turbulence</span>
           <span class="mleg wx tb"><i class="sq t3"></i>Severe turbulence</span>
-          <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), ~50 km cells — not an official aviation product</span>
+          <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), smoothed between its ~25 km grid points; darker shade = stronger — not an official aviation product</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgold"></i>NOTAM downloaded — readable offline</span>
@@ -8246,7 +8249,7 @@ body.light .turb-time input { color-scheme: light }
         <div class="hd-note">
           <b>Turbulence zones and Turbulence page</b> — computed from the <a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/"
             target="_blank" rel="noopener">NOAA GFS 0.25° model winds</a> (public domain) with the Ellrod
-          clear-air turbulence index and a convective proxy (CAPE, convective rain, simulated reflectivity). A model index on ~50 km cells,
+          clear-air turbulence index and a convective proxy (CAPE, convective rain, simulated reflectivity). A model index on ~25 km cells, drawn smoothed between grid points,
           <b>not the official WAFS turbulence forecast</b> and <b>not an aviation weather product</b>. The
           Turbulence page reads the same grid along the flight, minute by minute.
         </div>
@@ -19501,27 +19504,24 @@ function renderInfo(icao) {
 
       // --- zones de turbulence (vue Weather, interrupteur TURBULENCE) ---
       // Sous tout le reste : une nappe qui se lit à travers les terrains, les
-      // flèches et la route, jamais par-dessus. L'image de la grille
-      // (turbImage) est tirée ligne par ligne : chaque ligne de cases va de
-      // sa latitude nord à sa latitude sud à l'écran, et d'un bord à l'autre
-      // de la grille en x. Seules les lignes visibles sont tirées.
+      // flèches et la route, jamais par-dessus. La nappe est un RASTER
+      // (turbRasterFor) : le champ de la grille rééchantillonné en bicubique
+      // à la demi-résolution de l'écran, coloré pixel par pixel, gardé pour
+      // la vue courante et une marge autour. L'écran étant une fonction
+      // affine de l'espace du raster (Mercator sous MapLibre, lon/lat
+      // sinon), une seule drawImage le pose ; au zoom il s'étire un instant
+      // avant d'être refait, comme le fond.
       if (mapTurbOn && mapMode === "wx" && mapTurbEnt) {
-        const g = mapTurbEnt.grid, img = turbImage(mapTurbEnt, g, light);
-        const hLat = Math.abs(g.dlat) / 2, hLon = g.dlon / 2, H = cv.height;
-        const x0 = X(g.lon0 - hLon), x1 = X(g.lon0 + (g.nlon - 1) * g.dlon + hLon);
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;         // des cases nettes, pas un dégradé
-        for (let j = 0; j < g.nlat; j++) {
-          const lat = g.lat0 + j * g.dlat;
-          // Bords ARRONDIS au pixel, et le bas d'une bande est exactement le
-          // haut de la suivante : ni fil clair entre deux bandes (un bord
-          // fractionnaire laissait passer le fond), ni double épaisseur là où
-          // elles se recouvriraient (la transparence s'y additionnerait).
-          const y0 = Math.round(Y(lat + hLat)), y1 = Math.round(Y(lat - hLat));
-          if (y1 <= 0 || y0 >= H || y1 <= y0) continue;
-          ctx.drawImage(img, 0, j, g.nlon, 1, x0, y0, x1 - x0, y1 - y0);
+        const R = turbRasterFor(cv, A, v, kx, dpr, light);
+        if (R) {
+          const ux = A ? (u => (A.ox + u * A.kx) * dpr) : (u => (cv.width / (2 * dpr) + (u - v.cx) * kx * v.scale) * dpr);
+          const vy = A ? (w => (A.oy + w * A.ky) * dpr) : (w => (cv.height / (2 * dpr) + (w + v.cy) * v.scale) * dpr);
+          const x0 = ux(R.u0), x1 = ux(R.u1), y0 = vy(R.v0), y1 = vy(R.v1);
+          ctx.save();
+          ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(R.canvas, x0, y0, x1 - x0, y1 - y0);
+          ctx.restore();
         }
-        ctx.restore();
       }
 
       // --- couche mondiale des aérodromes (sous la route) ---
@@ -19976,7 +19976,7 @@ function renderInfo(icao) {
       // minute de vol par point ; les minutes contiguës de même classe font
       // un seul trait. Entre le halo et le trait fin : la route se lit dessus.
       if (mapTurbOn && mapMode === "wx" && mapTurbProf && mapTurbProf.pts.length > 1) {
-        const PPAL = ["rgba(240,200,40,.85)", "rgba(240,130,30,.9)", "rgba(229,72,77,.92)"];
+        const PPAL = ["rgba(255,198,0,.9)", "rgba(255,110,0,.92)", "rgba(230,30,44,.94)"];
         const P = mapTurbProf.pts;
         ctx.save();
         ctx.lineCap = "round"; ctx.lineWidth = 6 * dpr;
@@ -20102,16 +20102,21 @@ function renderInfo(icao) {
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
     let mapWindHour = 0;
     /* ---------- Turbulence prévue au niveau de vol choisi ----------
-       Le serveur publie, à chaque cycle GFS, une grille de classes 0..3
-       (nil, light, moderate, severe) par niveau de vol et par échéance
-       horaire, en RLE ligne par ligne (tools/turb/build_turb.py). Le client
-       ne calcule rien : il choisit un fichier (FL, échéance), le décode en
-       rectangles et les peint sous les terrains. Tout vit ici :
+       Le serveur publie, à chaque cycle GFS, la VALEUR de l'indice de
+       turbulence — un octet par point, en PNG gris 8 bits — par niveau de
+       vol et par échéance horaire, sur la maille du modèle, 0,25°
+       (tools/turb/build_turb.py) ; les seuils de classe sont dans l'index.
+       Le client choisit un fichier (FL, échéance), le décode, en tire les
+       classes pour le rejeu du profil, et peint la nappe LISSÉE sous les
+       terrains : le champ rééchantillonné en bicubique au pixel, coloré
+       comme un radar de précipitations. L'ancien format (classes 0..3 en
+       RLE JSON) reste lu. Tout vit ici :
          mapTurbOn      interrupteur
          mapTurbFlIdx   index dans TURB_FLS (curseur)
          mapTurbHour    horizon en heures : 0 = maintenant, 3, 6, 12
-         mapTurbIndex   index.json du serveur (cycle, échéances, grille)
-         mapTurbEnt     grille décodée du fichier affiché, et son image
+         mapTurbIndex   index.json du serveur (cycle, échéances, grille, seuils)
+         mapTurbEnt     fichier affiché : { val, cls, grid }
+         mapTurbRas     raster de la nappe pour la vue courante
        Les fichiers déjà lus restent en mémoire par (FL, échéance) : bouger
        le curseur d'avant en arrière ne redemande rien au réseau. */
     /* Deux sources, dans l'ordre : le backend s'il sert /api/turb/, sinon la
@@ -20128,7 +20133,7 @@ function renderInfo(icao) {
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
     let mapTurbOn = false, mapTurbFlIdx = 6, mapTurbHour = 0;
     let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbEnt = null, mapTurbShown = null, mapTurbSeq = 0, mapTurbStamp = null;
-    const mapTurbCache = new Map();        // "FL340/h006" -> { cls, img } : grille décodée et son image
+    const mapTurbCache = new Map();        // "FL340/h006" -> { val, cls, grid } : le fichier décodé
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que
     // les retouches tactiles du plan (media query, boutons de zoom agrandis) :
     // les flèches de vent y plafonnent plus haut au zoom.
@@ -20491,6 +20496,14 @@ function renderInfo(icao) {
       };
     });
     // [turb-decode] — section évaluée seule par test/turb-grid.test.mjs.
+    /* Deux formats de fichier, une seule entrée { val, cls, grid }.
+       Le NOUVEAU (index.files === "png") : un PNG gris 8 bits, un octet par
+       point — l'indice Ellrod en 1e-7 s^-2 × 16, plafonné à 252, zéro sous
+       2e-7 —, ses seuils de classe dans l'index (encoding.levels : 64, 128,
+       192 pour light, moderate, severe) et sa grille dans un chunk tEXt
+       « turb ». L'ANCIEN : du JSON, une classe 0..3 par point en RLE.
+       `val` sert la nappe lissée, `cls` le rejeu du profil. */
+    const TURB_LEVELS = [64, 128, 192];
     /* RLE serveur -> classes. `rle` alterne classe et longueur, du nord au
        sud puis d'ouest en est ; la somme des longueurs doit couvrir la
        grille, sinon le fichier est tronqué et on le refuse. */
@@ -20505,26 +20518,103 @@ function renderInfo(icao) {
       if (k !== n) throw new Error("turb: grille " + k + " ≠ " + n);
       return cls;
     }
-    /* Classes -> rectangles à peindre. Une case du modèle est centrée sur son
-       point de grille ; les cases voisines d'une même ligne et d'une même
-       classe fusionnent en un seul rectangle, ce qui divise par dix ce que
-       drawMap() a à tracer à chaque image. Sortie plate, cinq nombres par
-       rectangle : latN, latS, lonW, lonE, classe. */
-    function turbRuns(g, cls) {
-      const out = [], hLat = Math.abs(g.dlat) / 2, hLon = g.dlon / 2;
-      for (let j = 0; j < g.nlat; j++) {
-        const lat = g.lat0 + j * g.dlat, latN = lat + hLat, latS = lat - hLat, row = j * g.nlon;
-        let i = 0;
-        while (i < g.nlon) {
-          const c = cls[row + i];
-          if (!c) { i++; continue; }
-          let e = i;
-          while (e + 1 < g.nlon && cls[row + e + 1] === c) e++;
-          out.push(latN, latS, g.lon0 + i * g.dlon - hLon, g.lon0 + e * g.dlon + hLon, c);
-          i = e + 1;
+    /* Classes -> octets : une classe seule n'a pas de nuance, elle prend la
+       valeur FORTE de sa bande (celle que pose le relèvement convectif), et
+       l'ancien format se peint comme le nouveau. Octets -> classes : aux
+       seuils de l'index. */
+    function turbValFromCls(cls) {
+      const V = [0, 96, 160, 224], out = new Uint8Array(cls.length);
+      for (let i = 0; i < cls.length; i++) out[i] = V[cls[i] & 3];
+      return out;
+    }
+    function turbClsFromVal(val, levels) {
+      const L = levels || TURB_LEVELS, l1 = L[0], l2 = L[1], l3 = L[2], out = new Uint8Array(val.length);
+      for (let i = 0; i < val.length; i++) { const v = val[i]; out[i] = v >= l3 ? 3 : v >= l2 ? 2 : v >= l1 ? 1 : 0; }
+      return out;
+    }
+    /* Un PNG lu à la main — gris 8 bits, c'est cinquante lignes, et les
+       pixels sortent EXACTS, sans passer par un canvas et sa gestion des
+       couleurs. turbPngParse : les chunks (IHDR, tEXt, les IDAT mis bout à
+       bout) ; turbPngUnfilter : les lignes défiltrées, les cinq filtres de
+       la spécification ; turbInflate : zlib par DecompressionStream. */
+    function turbPngParse(buf) {
+      const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+      if (b.length < 8 || dv.getUint32(0) !== 0x89504e47 || dv.getUint32(4) !== 0x0d0a1a0a) throw new Error("turb: pas un PNG");
+      let pos = 8, w = 0, h = 0, depth = 0, ctype = 0, len = 0;
+      const idat = [], text = {};
+      while (pos + 8 <= b.length) {
+        const n = dv.getUint32(pos), tag = String.fromCharCode(b[pos + 4], b[pos + 5], b[pos + 6], b[pos + 7]);
+        const s = pos + 8, e = s + n;
+        if (e > b.length) throw new Error("turb: PNG tronqué");
+        if (tag === "IHDR") { w = dv.getUint32(s); h = dv.getUint32(s + 4); depth = b[s + 8]; ctype = b[s + 9]; }
+        else if (tag === "IDAT") { idat.push(b.subarray(s, e)); len += n; }
+        else if (tag === "tEXt") {
+          const z = b.indexOf(0, s);
+          if (z > s && z < e) {
+            let k = "", v = "";
+            for (let i = s; i < z; i++) k += String.fromCharCode(b[i]);
+            for (let i = z + 1; i < e; i++) v += String.fromCharCode(b[i]);
+            text[k] = v;
+          }
+        }
+        else if (tag === "IEND") break;
+        pos = e + 4;                                  // + CRC
+      }
+      if (!w || !h) throw new Error("turb: PNG sans IHDR");
+      if (depth !== 8 || ctype !== 0) throw new Error("turb: PNG attendu en gris 8 bits");
+      const zdata = new Uint8Array(len);
+      let o = 0;
+      for (const p of idat) { zdata.set(p, o); o += p.length; }
+      return { w, h, text, zdata };
+    }
+    function turbPngUnfilter(raw, w, h) {
+      const stride = w + 1, out = new Uint8Array(w * h);
+      if (raw.length < stride * h) throw new Error("turb: PNG incomplet");
+      for (let y = 0; y < h; y++) {
+        const f = raw[y * stride], srcOff = y * stride + 1, dst = y * w, up = dst - w;
+        if (f > 4) throw new Error("turb: filtre PNG " + f);
+        for (let x = 0; x < w; x++) {
+          const a = x ? out[dst + x - 1] : 0, b = y ? out[up + x] : 0, c = (x && y) ? out[up + x - 1] : 0;
+          let p = 0;
+          if (f === 1) p = a;
+          else if (f === 2) p = b;
+          else if (f === 3) p = (a + b) >> 1;
+          else if (f === 4) { const q = a + b - c, pa = Math.abs(q - a), pb = Math.abs(q - b), pc = Math.abs(q - c); p = pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+          out[dst + x] = (raw[srcOff + x] + p) & 255;
         }
       }
-      return Float64Array.from(out);
+      return out;
+    }
+    async function turbInflate(zdata) {
+      if (typeof DecompressionStream !== "function") return null;
+      const ds = new DecompressionStream("deflate");
+      const wr = ds.writable.getWriter();
+      wr.write(zdata); wr.close();
+      return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+    }
+    /* Un fichier PNG entier -> { val, w, h, meta } ; meta est le JSON du
+       chunk tEXt « turb » (cycle, validité, grille), ou null. Sans
+       DecompressionStream (vieux navigateur), l'image passe par un canvas :
+       pour un PNG gris sans profil de couleur, les pixels y sont exacts. */
+    async function turbPngDecode(buf) {
+      const p = turbPngParse(buf);
+      let val = null;
+      const z = await turbInflate(p.zdata);
+      if (z) val = turbPngUnfilter(z, p.w, p.h);
+      else if (typeof createImageBitmap === "function") {
+        const bm = await createImageBitmap(new Blob([buf], { type: "image/png" }));
+        const c = document.createElement("canvas");
+        c.width = p.w; c.height = p.h;
+        const g = c.getContext("2d", { willReadFrequently: true });
+        g.drawImage(bm, 0, 0);
+        const px = g.getImageData(0, 0, p.w, p.h).data;
+        val = new Uint8Array(p.w * p.h);
+        for (let i = 0; i < val.length; i++) val[i] = px[i * 4];
+      } else throw new Error("turb: PNG indécodable ici");
+      let meta = null;
+      try { meta = p.text.turb ? JSON.parse(p.text.turb) : null; } catch (_) { meta = null; }
+      return { val, w: p.w, h: p.h, meta };
     }
     /* Échéance à afficher : l'heure de prévision la plus proche de
        « maintenant + horizon », bornée aux échéances publiées. */
@@ -20534,6 +20624,103 @@ function renderInfo(icao) {
       let best = index.hours[0];
       for (const h of index.hours) if (Math.abs(h - want) < Math.abs(best - want)) best = h;
       return best;
+    }
+    /* La nappe LISSÉE. La grille est un champ scalaire (l'octet par point) :
+       on le rééchantillonne au pixel par une interpolation bicubique de
+       Catmull-Rom — elle passe EXACTEMENT par les valeurs des points de
+       grille (une case severe reste severe en son centre) et arrondit
+       entre eux — puis chaque pixel prend la couleur de sa valeur. Entre
+       deux cases de classes différentes, le contour passe à mi-chemin, là
+       où le bord des anciens rectangles était, mais sans marche d'escalier ;
+       une case isolée devient une tache ronde, cœur à sa classe, halo plus
+       clair autour.
+       spec : { W, H, u0, u1, v0, v1, lonOfU, latOfV } — le raster couvre
+       [u0,u1]×[v0,v1] d'un espace où l'écran est linéaire (Mercator, ou
+       lon/lat), lonOfU/latOfV le ramènent en degrés. x étant linéaire en
+       longitude dans les deux, les poids des colonnes se calculent une
+       fois ; chaque ligne de grille est interpolée en x à la demande et
+       gardée, et il ne reste que quatre produits par pixel. Sur une grille
+       mondiale, les colonnes bouclent à l'antiméridien. Rend Float32Array(W×H). */
+    function turbCatmull(t) {
+      const t2 = t * t, t3 = t2 * t;
+      return [-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1, -1.5 * t3 + 2 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2];
+    }
+    function turbResample(grid, val, spec) {
+      const W = spec.W, H = spec.H, nlat = grid.nlat, nlon = grid.nlon, dlat = Math.abs(grid.dlat), dlon = grid.dlon;
+      const world = nlon * dlon >= 359.9;
+      const ci = new Int32Array(W * 4), cw = new Float32Array(W * 4);
+      for (let c = 0; c < W; c++) {
+        let lon = spec.lonOfU(spec.u0 + (c + 0.5) / W * (spec.u1 - spec.u0));
+        lon = ((lon + 180) % 360 + 360) % 360 - 180;
+        const f = (lon - grid.lon0) / dlon, i0 = Math.floor(f), w = turbCatmull(f - i0);
+        for (let k = 0; k < 4; k++) {
+          let i = i0 - 1 + k;
+          if (world) i = ((i % nlon) + nlon) % nlon;
+          else if (i < 0 || i >= nlon) i = -1;
+          ci[c * 4 + k] = i; cw[c * 4 + k] = w[k];
+        }
+      }
+      const rows = new Map();
+      const rowAt = j => {
+        let r = rows.get(j);
+        if (r) return r;
+        r = new Float32Array(W);
+        if (j >= 0 && j < nlat) {
+          const base = j * nlon;
+          for (let c = 0; c < W; c++) {
+            let s = 0;
+            for (let k = 0; k < 4; k++) { const i = ci[c * 4 + k]; if (i >= 0) s += cw[c * 4 + k] * val[base + i]; }
+            r[c] = s;
+          }
+        }
+        rows.set(j, r);
+        return r;
+      };
+      const out = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) {
+        const lat = spec.latOfV(spec.v0 + (y + 0.5) / H * (spec.v1 - spec.v0));
+        const f = (grid.lat0 - lat) / dlat, j0 = Math.floor(f);
+        if (j0 < -2 || j0 > nlat) continue;           // au-delà des pôles de la grille : rien
+        const w = turbCatmull(f - j0), r0 = rowAt(j0 - 1), r1 = rowAt(j0), r2 = rowAt(j0 + 1), r3 = rowAt(j0 + 2), o = y * W;
+        const w0 = w[0], w1 = w[1], w2 = w[2], w3 = w[3];
+        for (let c = 0; c < W; c++) out[o + c] = w0 * r0[c] + w1 * r1[c] + w2 * r2[c] + w3 * r3[c];
+      }
+      return out;
+    }
+    /* Latitude d'un y Mercator normalisé [0,1] (l'inverse de mercY). */
+    function turbMercLat(v) {
+      return Math.asin(Math.tanh((0.5 - v) * 2 * Math.PI)) * 180 / Math.PI;
+    }
+    /* Valeur -> couleur : une table de 256 entrées. Transparent sous light,
+       puis deux nuances par classe, la seconde à mi-bande — les couleurs
+       pleines d'un radar de précipitations, du jaune à l'orange, au rouge,
+       au magenta, assez opaques pour se lire sur le fond, assez claires
+       pour laisser voir la route et les terrains à travers. Le thème jour
+       les fonce un peu : sur un fond pâle, le jaune s'efface vite. */
+    function turbLut(levels, light) {
+      const L = levels || TURB_LEVELS, l1 = L[0], l2 = L[1], l3 = L[2];
+      const m1 = (l1 + l2) >> 1, m2 = (l2 + l3) >> 1, m3 = (l3 + 256) >> 1;
+      const stops = light
+        ? [[l1, 250, 215, 40, 150], [m1, 245, 178, 0, 172], [l2, 245, 122, 0, 188], [m2, 238, 78, 0, 204], [l3, 220, 26, 36, 214], [m3, 168, 0, 110, 224]]
+        : [[l1, 255, 230, 80, 140], [m1, 255, 198, 0, 166], [l2, 255, 140, 0, 184], [m2, 255, 88, 0, 200], [l3, 236, 32, 44, 210], [m3, 190, 0, 122, 220]];
+      const lut = new Uint8ClampedArray(256 * 4);
+      for (let v = 0; v < 256; v++) {
+        let s = null;
+        for (const st of stops) if (v >= st[0]) s = st;
+        if (!s) continue;
+        lut[v * 4] = s[1]; lut[v * 4 + 1] = s[2]; lut[v * 4 + 2] = s[3]; lut[v * 4 + 3] = s[4];
+      }
+      return lut;
+    }
+    /* Les valeurs rééchantillonnées -> les pixels RGBA (px, déjà à zéro). Le
+       Catmull-Rom déborde un peu au-delà des valeurs voisines : on borne. */
+    function turbColorize(vals, lut, px) {
+      for (let i = 0, n = vals.length; i < n; i++) {
+        const v = vals[i];
+        if (!(v >= 0.5)) continue;
+        const k = (v >= 255 ? 255 : Math.round(v)) * 4, o = i * 4;
+        px[o] = lut[k]; px[o + 1] = lut[k + 1]; px[o + 2] = lut[k + 2]; px[o + 3] = lut[k + 3];
+      }
     }
     // [/turb-decode]
 
@@ -20650,11 +20837,27 @@ function renderInfo(icao) {
       for (const f of fls) if (Math.abs(f - fl) < Math.abs(best - fl)) best = f;
       return best;
     }
-    /* Classe de la case qui contient (lat, lon), ou -2 hors grille. */
+    /* Classe autour de (lat, lon) : la case qui contient le point et, sur
+       une grille fine (pas ≤ 0,3°), ses huit voisines — la pire l'emporte.
+       C'est le regard latéral qu'avait le regroupement 2×2 de l'ancienne
+       grille à 0,5° : une zone de CAT se trompe de 50 à 100 NM en position,
+       le rejeu ne doit pas passer entre deux cases. -2 hors grille. */
     function turbCellClass(grid, cls, lat, lon) {
       const j = Math.round((lat - grid.lat0) / grid.dlat), i = Math.round((lon - grid.lon0) / grid.dlon);
       if (j < 0 || j >= grid.nlat || i < 0 || i >= grid.nlon) return -2;
-      return cls[j * grid.nlon + i];
+      const R = Math.abs(grid.dlat) <= 0.3 ? 1 : 0;
+      let best = 0;
+      for (let dj = -R; dj <= R; dj++) {
+        const jj = j + dj;
+        if (jj < 0 || jj >= grid.nlat) continue;
+        for (let di = -R; di <= R; di++) {
+          const ii = i + di;
+          if (ii < 0 || ii >= grid.nlon) continue;
+          const c = cls[jj * grid.nlon + ii];
+          if (c > best) best = c;
+        }
+      }
+      return best;
     }
     /* Le rejeu : pour chaque minute, position sur l'orthodromie, FL le plus
        proche, pire classe des deux échéances encadrant l'heure. Sous
@@ -20725,7 +20928,7 @@ function renderInfo(icao) {
           // On les oublie ; l'affichage courant est relu depuis la nouvelle
           // source par l'appelant.
           const stamp = base + "|" + (d.generated || d.run) + "|" + JSON.stringify(d.grid);
-          if (stamp !== mapTurbStamp) { mapTurbCache.clear(); mapTurbEnt = null; mapTurbStamp = stamp; }
+          if (stamp !== mapTurbStamp) { mapTurbCache.clear(); mapTurbEnt = null; mapTurbRas = null; mapTurbStamp = stamp; }
           turbBase = base; mapTurbIndex = d; mapTurbIndexAt = Date.now();
           return d;
         } catch (e) { last = e; }
@@ -20751,6 +20954,7 @@ function renderInfo(icao) {
         const hh = d => String(d.getUTCHours()).padStart(2, "0");
         const stale = Date.now() - runMs > TURB_STALE_MS;
         mapTurbNote("GFS " + hh(new Date(runMs)) + "Z run · valid " + hh(valid) + "Z (+" + fh + " h)"
+          + (index.grid && index.grid.dlon ? " · " + index.grid.dlon + "° grid" : "")
           + (stale ? " · OLD RUN" : ""), stale);
         mapTurbProfile(index, seq);        // le profil H+x suit, sans retenir la carte
       } catch (e) {
@@ -20760,52 +20964,91 @@ function renderInfo(icao) {
       drawMap();
     }
     const turbKey = (fl, fh) => "FL" + String(fl).padStart(3, "0") + "/h" + String(fh).padStart(3, "0");
+    /* Les seuils de classe, lus dans l'index (encoding.levels) ; à défaut,
+       ceux du format d'origine. */
+    function mapTurbLevels(index) {
+      const e = (index || mapTurbIndex || {}).encoding, l = e && e.levels;
+      return Array.isArray(l) && l.length === 3 && l.every(x => x > 0 && x < 256) ? l.map(Number) : TURB_LEVELS;
+    }
     /* Un fichier (FL, échéance) : mémoire d'abord, sinon le serveur. L'entrée
-       garde la grille décodée (le profil la lit case par case) et, une fois
-       peinte, son image (turbImage). */
+       garde les valeurs (la nappe) et les classes (le profil, case par case),
+       sur la grille du fichier. */
     async function mapTurbFile(index, fl, fh) {
       const key = turbKey(fl, fh);
       let ent = mapTurbCache.get(key);
       if (ent) return ent;
-      const r = await fetch(turbBase + "/" + key + ".json");
+      const png = index.files === "png";
+      const r = await fetch(turbBase + "/" + key + (png ? ".png" : ".json"));
       if (!r.ok) throw new Error("HTTP " + r.status);
-      const d = await r.json();
       // Chaque fichier porte SA grille : l'index et les fichiers passent par
       // un cache de bord (raw.githubusercontent.com, 5 min) qui ne les
       // rafraîchit pas au même instant, et pendant ce laps un index d'un
       // cycle peut accompagner des fichiers du suivant. Un fichier sans
-      // grille (ancien format) hérite de celle de l'index.
-      const grid = d.grid || index.grid, cls = turbDecode(d);
-      if (cls.length !== grid.nlat * grid.nlon) throw new Error("turb: fichier et grille en désaccord");
-      ent = { cls, grid, img: {} };
+      // grille hérite de celle de l'index.
+      let grid, val, cls;
+      if (png) {
+        const d = await turbPngDecode(await r.arrayBuffer());
+        grid = (d.meta && d.meta.grid) || index.grid;
+        if (d.w !== grid.nlon || d.h !== grid.nlat) throw new Error("turb: image et grille en désaccord");
+        val = d.val; cls = turbClsFromVal(val, mapTurbLevels(index));
+      } else {
+        const d = await r.json();
+        grid = d.grid || index.grid; cls = turbDecode(d);
+        if (cls.length !== grid.nlat * grid.nlon) throw new Error("turb: fichier et grille en désaccord");
+        val = turbValFromCls(cls);
+      }
+      ent = { val, cls, grid };
       mapTurbCache.set(key, ent);
       return ent;
     }
-    /* La nappe en une IMAGE d'un pixel par case, construite une fois par
-       grille et par thème. Le monde entier à 0,5° fait 720 × 360 cases :
-       peindre 40 000 rectangles par image de la carte, c'est trop pour un
-       téléphone ; tirer 360 bandes d'une ligne chacune (drawMap), non. La
-       ligne est la bonne unité : x est linéaire en longitude dans les deux
-       projections de la carte, seule la latitude se déforme, et une bande
-       d'une ligne de grille n'a qu'une latitude. */
-    function turbImage(ent, grid, light) {
-      const k = light ? "l" : "d";
-      if (ent.img[k]) return ent.img[k];
-      const PAL = light
-        ? [[0, 0, 0, 0], [240, 200, 40, 87], [240, 130, 30, 102], [229, 72, 77, 117]]
-        : [[0, 0, 0, 0], [246, 201, 69, 77], [246, 140, 50, 92], [255, 93, 108, 107]];
-      const c = document.createElement("canvas");
-      c.width = grid.nlon; c.height = grid.nlat;
-      const g = c.getContext("2d"), im = g.createImageData(grid.nlon, grid.nlat), px = im.data, cls = ent.cls;
-      for (let i = 0, n = cls.length; i < n; i++) {
-        const v = cls[i];
-        if (!v) continue;
-        const p = PAL[v], o = i * 4;
-        px[o] = p[0]; px[o + 1] = p[1]; px[o + 2] = p[2]; px[o + 3] = p[3];
+    /* Le raster de la nappe pour la vue courante. Il couvre la fenêtre et
+       une marge de 30 % de chaque côté, à la résolution CSS de l'écran
+       (un pixel de raster par pixel CSS, quel que soit le devicePixelRatio,
+       et jamais plus fin que la moitié du canvas) — le champ est lisse, le
+       navigateur remonte cette résolution sans marche visible, et c'est
+       quatre à neuf fois moins de pixels à calculer : ~40 ms sur un
+       téléphone pour un écran plein, 40 ms ici pour 2,4 Mpx. Il est refait
+       tout de suite quand rien n'existe ou que la fenêtre sort de la marge
+       (glissement), et 130 ms après le dernier cran de zoom — entre-temps
+       l'ancien s'étire, comme le fond. Un autre fichier, un autre thème ou
+       une autre projection le rendent caduc. */
+    let mapTurbRas = null, mapTurbRasTimer = null;
+    function turbRasterFor(cv, A, v, kx, dpr, light) {
+      const ent = mapTurbEnt, merc = !!A;
+      let u0, u1, v0, v1, pu, pv;                  // fenêtre en (u, v), et pixels par unité
+      if (merc) {
+        pu = A.kx * dpr; pv = A.ky * dpr;
+        u0 = -A.ox / A.kx; u1 = (cv.width / dpr - A.ox) / A.kx;
+        v0 = -A.oy / A.ky; v1 = (cv.height / dpr - A.oy) / A.ky;
+      } else {
+        const cw = cv.width / dpr, ch = cv.height / dpr;
+        pu = kx * v.scale * dpr; pv = v.scale * dpr;
+        u0 = v.cx - cw / 2 / (kx * v.scale); u1 = v.cx + cw / 2 / (kx * v.scale);
+        v0 = -v.cy - ch / 2 / v.scale; v1 = -v.cy + ch / 2 / v.scale;
       }
-      g.putImageData(im, 0, 0);
-      ent.img[k] = c;
-      return c;
+      if (!(pu > 0 && pv > 0) || !(u1 > u0) || !(v1 > v0)) return null;
+      const R = mapTurbRas, same = R && R.ent === ent && R.light === light && R.merc === merc;
+      if (same && (Math.abs(R.pu - pu) > 1e-6 * pu || Math.abs(R.pv - pv) > 1e-6 * pv)) {
+        clearTimeout(mapTurbRasTimer);
+        mapTurbRasTimer = setTimeout(() => { mapTurbRas = null; drawMap(); }, 130);
+        return R;
+      }
+      if (same && u0 >= R.u0 && u1 <= R.u1 && v0 >= R.v0 && v1 <= R.v1) return R;
+      const M = 0.3, du = (u1 - u0) * M, dv = (v1 - v0) * M;
+      const spec = { u0: u0 - du, u1: u1 + du, v0: v0 - dv, v1: v1 + dv };
+      const sub = Math.max(2, dpr || 1);
+      spec.W = Math.min(4096, Math.max(1, Math.round((spec.u1 - spec.u0) * pu / sub)));
+      spec.H = Math.min(4096, Math.max(1, Math.round((spec.v1 - spec.v0) * pv / sub)));
+      spec.lonOfU = merc ? (u => u * 360 - 180) : (u => u);
+      spec.latOfV = merc ? turbMercLat : (w => -w);
+      const vals = turbResample(ent.grid, ent.val, spec);
+      const c = document.createElement("canvas");
+      c.width = spec.W; c.height = spec.H;
+      const im = new ImageData(spec.W, spec.H);
+      turbColorize(vals, turbLut(mapTurbLevels(), light), im.data);
+      c.getContext("2d").putImageData(im, 0, 0);
+      mapTurbRas = { ent, light, merc, pu, pv, u0: spec.u0, u1: spec.u1, v0: spec.v0, v1: spec.v1, canvas: c };
+      return mapTurbRas;
     }
     /* Profil H+x : dep → dest de la route courante, décollage à l'horizon
        choisi, croisière au FL du curseur. Lit d'abord tous les fichiers que

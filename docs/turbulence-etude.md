@@ -390,20 +390,29 @@ sous `/api/turb/` :
 
 ```
 index.json          { run, generated, hours:[…], fls:[100,…,450],
-                      grid:{lat0,lon0,dlat,dlon,nlat,nlon}, thresholds }
-FL340/h006.json     { run, valid, fl, hour, nlat, nlon, rle:[cls,len,cls,len,…] }
+                      grid:{lat0,lon0,dlat,dlon,nlat,nlon}, thresholds,
+                      files:"png", encoding:{ levels:[64,128,192], … } }
+FL340/h006.png      PNG gris 8 bits, un octet par point, du nord au sud et
+                    d'ouest en est ; sa grille dans un chunk tEXt « turb »
 ```
 
-La grille couvre le **monde entier à 0,5°** (720 × 360 cases) : calcul à
-0,25°, puis regroupement 2 × 2 en gardant la pire classe (`--pool 2`). Un
-fichier pèse ~160 Ko brut, ~30 Ko gzippés sur le fil. Le masque convectif
-n'est plus le CAPE seul (les tropiques en ont en permanence) : il exige de
-la pluie convective instantanée du modèle (CPRAT) et relève en severe sous
-les cellules dont la réflectivité simulée (REFC) dépasse 40 dBZ. Le client
-peint la grille comme une image d'un pixel par case, tirée ligne par ligne
-(x est linéaire en longitude dans les deux projections), au lieu de
-40 000 rectangles par image. L'index s'écrit en dernier, pour qu'un client
-qui le lit trouve toutes les échéances annoncées.
+**Depuis le 2026-09-04, le fichier porte la VALEUR de l'indice, plus une
+classe** : l'octet vaut TI1 (en 10⁻⁷ s⁻²) × 16, au pas de 4 (0,25 × 10⁻⁷),
+plafonné à 252 et mis à zéro sous 2 × 10⁻⁷ ; light = 64, moderate = 128,
+severe = 192, seuils publiés dans l'index (`encoding.levels`) et relus par
+le client — rien en dur. Le relèvement convectif pose la nuance FORTE de sa
+classe (96, 160, 224). La grille est celle du modèle, **le monde entier à
+0,25°** (1 440 × 720 points), sans regroupement : c'est ce champ continu
+que le client lisse entre les points. Le PNG est écrit à la main (filtres
+adaptatifs None/Sub/Up/Average/Paeth à la manière de libpng, zlib 9) — pas
+de Pillow à installer — et vaut de l'ordre de 100 Ko par fichier, le calme
+étant à zéro sur la plus grande part du globe. Le masque convectif n'est
+pas le CAPE seul (les tropiques en ont en permanence) : il exige de la
+pluie convective instantanée du modèle (CPRAT) et relève en severe sous
+les cellules dont la réflectivité simulée (REFC) dépasse 40 dBZ. L'index
+s'écrit en dernier, pour qu'un client qui le lit trouve toutes les
+échéances annoncées. L'ancien format (classes 0..3 en RLE JSON, grille
+regroupée à 0,5°) reste lu par le client, pour la transition.
 
 **Publication — `.github/workflows/turb.yml`.** Toutes les 6 h (HH+4 h 20 après
 chaque cycle GFS) et à la demande, GitHub Actions lance le script et pousse
@@ -414,20 +423,42 @@ essaie `/api/turb/` sur le backend, puis cette branche.
 **Client — `notam-filter.html`, carte de route, vue Weather.** Un
 interrupteur **Turbulence** sous **Wind** ; allumé, il déplie un cartouche
 avec le **curseur FL** (neuf niveaux, FL100 à FL450), l'horizon
-**now / +3 h / +6 h / +12 h** et la ligne « GFS 00Z run · valid 06Z (+6 h) »,
-qui passe en ambre avec la mention OLD RUN si le cycle a plus de 18 h. Le
-client décode le RLE, fusionne les cases voisines d'une ligne en rectangles
-(`turbRuns`) et les peint sur le canvas sous les terrains, la route et les
-flèches ; les fichiers lus restent en mémoire par (FL, échéance), et le
-service worker garde le dernier pour le hors ligne (`sw.js`, règle 3 ter).
-Trois lignes de légende et une note « indice modèle, pas un produit aéro »
-apparaissent avec l'interrupteur ; l'aide et Data sources portent le crédit
-NOAA GFS et la même réserve.
+**now / +3 h / +6 h / +12 h** et la ligne « GFS 00Z run · valid 06Z (+6 h) ·
+0.25° grid », qui passe en ambre avec la mention OLD RUN si le cycle a plus
+de 18 h. Le client décode le PNG lui-même (`turbPngParse`,
+`turbPngUnfilter`, zlib par `DecompressionStream` ; un canvas en repli) —
+les pixels sortent exacts, sans gestion des couleurs —, lit la grille dans
+le chunk tEXt, tire les classes aux seuils de l'index pour le rejeu, et
+peint la **nappe lissée** : le champ est rééchantillonné au pixel par une
+interpolation bicubique de Catmull-Rom (`turbResample` — elle passe
+exactement par les valeurs des points, une case severe reste severe en son
+centre ; les colonnes bouclent à l'antiméridien), puis chaque pixel prend
+la couleur de sa valeur par une table de 256 entrées (`turbLut`) — la
+palette d'un radar de précipitations, deux nuances par classe (jaune pâle,
+jaune ; orange, orange foncé ; rouge, magenta), transparent sous light,
+plus soutenue sur le thème jour. Le raster (`turbRasterFor`) couvre la vue
+et 30 % de marge à la demi-résolution de l'écran, une seule `drawImage`
+le pose (l'écran est affine dans l'espace Mercator sous MapLibre, en
+lon/lat sinon) ; il est refait quand la vue sort de la marge, 130 ms après
+le dernier cran de zoom, ou quand le fichier, le thème ou la projection
+changent. Le rejeu du profil, lui, ne lisse rien : sur une grille fine
+(≤ 0,3°) il lit la pire des neuf cases autour du point (`turbCellClass`),
+le regard latéral qu'avait le regroupement 2 × 2 d'avant. Les fichiers
+lus restent en mémoire par (FL, échéance), et le service worker garde le
+dernier pour le hors ligne (`sw.js`, règle 3 ter). Trois lignes de légende
+(deux nuances par pastille) et une note « indice modèle, pas un produit
+aéro » apparaissent avec l'interrupteur ; l'aide et Data sources portent le
+crédit NOAA GFS et la même réserve.
 
 **Tests — `test/turb-grid.test.mjs`** : décodage RLE, refus d'une grille
-tronquée, fusion des rectangles, choix de l'échéance. Le pipeline Python a
-son autotest (`--selftest`) et a été exécuté sur le cycle réel du
-2026-09-03 00Z.
+tronquée, classes ↔ valeurs, lecture PNG (les cinq filtres, IDAT en
+morceaux, tEXt, et `test/turb-fixture.png` écrit par le pipeline Python
+avec `--fixture` — l'encodeur du serveur lu par le décodeur du client),
+choix de l'échéance, rééchantillonnage (exact aux centres, rond entre les
+cases, bouclage à l'antiméridien), inverse du Mercator, palette, regard
+latéral du rejeu. Le pipeline Python a son autotest (`--selftest`, avec
+l'aller-retour PNG sur du bruit) ; le workflow se relance aussi à chaque
+push qui touche `tools/turb/` ou son fichier.
 
 **Publication sans serveur — `.github/workflows/turb.yml`.** Toutes les 6 h
 (HH+4 h 20), GitHub Actions lance le script et pousse son dossier de sortie
