@@ -5406,6 +5406,116 @@ body.light .stat.on {
         width: 244px
       }
     }
+
+    /* ---------- la bande des niveaux de vol (page Turbulence) ------------
+       Le FL de croisière ne se tape plus : la case l'ouvre, et les niveaux
+       défilent à la verticale. Celui du MILIEU est le choisi — la fenêtre
+       cyan le dit, les voisins pâlissent, les lointains s'effacent sous les
+       dégradés de bord. Même surcouche, même ancrage et mêmes boutons que le
+       cadran ci-dessus : ce sont les deux mêmes gestes, pour l'heure et pour
+       l'altitude.
+
+       Le calage vient d'une seule hauteur de ligne : la fenêtre en fait une,
+       le rembourrage de la bande en fait deux — ce qu'il faut pour que le
+       premier et le dernier niveau atteignent le centre. */
+    .flr-pop {
+      width: 208px
+    }
+
+    .flr-wrap {
+      position: relative
+    }
+
+    /* Les dégradés mangent le haut et le bas de la bande : on voit que la
+       liste continue sans qu'un niveau lointain se lise comme un choix. */
+    .flr-wrap::before,
+    .flr-wrap::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 62px;
+      pointer-events: none;
+      z-index: 2
+    }
+
+    .flr-wrap::before {
+      top: 0;
+      background: linear-gradient(var(--panel), transparent)
+    }
+
+    .flr-wrap::after {
+      bottom: 0;
+      background: linear-gradient(transparent, var(--panel))
+    }
+
+    /* overscroll-behavior: contain — la bande arrivée en butée ne passe pas
+       le geste à la page derrière. */
+    .flr-roll {
+      height: 200px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 80px 0
+    }
+
+    .flr-roll::-webkit-scrollbar {
+      display: none
+    }
+
+    .flr-roll:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+      border-radius: 8px
+    }
+
+    .flr-item {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      scroll-snap-align: center;
+      cursor: pointer;
+      color: var(--muted2);
+      font: 600 16px/1 var(--mono);
+      letter-spacing: .06em;
+      font-variant-numeric: tabular-nums
+    }
+
+    .flr-item.near {
+      color: var(--muted)
+    }
+
+    .flr-item.on {
+      color: var(--text);
+      font-size: 21px
+    }
+
+    .flr-win {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      top: 80px;
+      height: 40px;
+      border-radius: 7px;
+      border: 1px solid var(--cyan);
+      background: color-mix(in srgb, var(--cyan) 12%, transparent);
+      pointer-events: none;
+      z-index: 1
+    }
+
+    /* Une seule ligne, et elle ne parle que quand elle a quelque chose à
+       dire : sous FL100 la grille de turbulence est muette. */
+    .flr-note {
+      min-height: 13px;
+      margin-top: 8px;
+      text-align: center;
+      font: 500 10px/1.3 var(--sans);
+      color: var(--muted2)
+    }
+
     .wx-ap-time {
       font: 600 12px/1 var(--mono);
       letter-spacing: .06em;
@@ -7099,6 +7209,9 @@ body.light .turb-time input { color-scheme: light }
 }
 .turb-opts input::-webkit-outer-spin-button, .turb-opts input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0 }
 .turb-opts input:focus { border-bottom-color: var(--cyan) }
+/* La case s'ouvre au doigt (la bande des niveaux), elle ne se tape pas :
+   le curseur le dit, comme les cases d'heure. */
+.turb-opts input[readonly] { cursor: pointer }
 .turb-opts .btn { margin-left: auto }
 .turb-bar-wrap { margin-top: 18px }
 .turb-bar { display: flex; height: 36px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line2); background: var(--panel2) }
@@ -7667,7 +7780,7 @@ body.light .turb-time input { color-scheme: light }
         </div>
       </div>
       <div class="turb-opts">
-        <label title="Cruise flight level — the altitude at which the index is read">Cruise FL <input id="turbFl" type="number" min="30" max="500" step="10" inputmode="numeric" aria-label="Cruise flight level"></label>
+        <label title="Cruise flight level — the altitude at which the index is read. Tap it: the levels roll past, the one in the middle is the chosen one.">Cruise FL <input id="turbFl" type="number" min="30" max="500" step="10" inputmode="numeric" aria-label="Cruise flight level" title="Tap to pick the level from the band"></label>
         <span id="turbDist"></span>
         <button class="btn" id="turbGo" type="button" title="Compute again">↻ Update</button>
       </div>
@@ -23318,6 +23431,25 @@ window.addEventListener("scroll", hidePop, true);
        page connaît, simplement `readonly`. Le cadran y réécrit la valeur et
        relance l'événement que la page écoutait déjà (`change` ou `input`) :
        aucune logique de lecture d'heure n'a eu à bouger. */
+    /* Sous le champ quand la place y est, au-dessus sinon, et au CENTRE de
+       l'écran quand ni l'un ni l'autre ne tient — le cas du téléphone, où une
+       surcouche ancrée sortirait de l'écran par le bas. Le cadran à aiguille
+       et la bande des niveaux de vol s'y posent tous les deux : une seule
+       règle de placement pour toutes les surcouches de champ. */
+    function popPlace(pop, anchor) {
+      const a = anchor && anchor.getBoundingClientRect();
+      const w = pop.offsetWidth, h = pop.offsetHeight;
+      if (!a || innerWidth < w + 32 || innerHeight < h + 32) {
+        pop.style.position = "relative"; pop.style.left = pop.style.top = "";
+        return;
+      }
+      pop.style.position = "absolute";
+      pop.style.left = Math.min(Math.max(8, a.left), innerWidth - w - 8) + "px";
+      let top = a.bottom + 8;
+      if (top + h > innerHeight - 8) top = Math.max(8, a.top - h - 8);
+      pop.style.top = top + "px";
+    }
+
     const CKD = (() => {
       const CK = { c: 120, rOut: 96, rIn: 62 };
       const p2 = n => String(n).padStart(2, "0");
@@ -23383,22 +23515,7 @@ window.addEventListener("scroll", hidePop, true);
         const rd = S.pop.querySelectorAll(".cr");
         rd[0].textContent = p2(S.h); rd[1].textContent = p2(S.m);
       }
-      /* Sous le champ quand la place y est, au-dessus sinon, et au CENTRE de
-         l'écran quand ni l'un ni l'autre ne tient — le cas du téléphone, où
-         un cadran ancré sortirait de l'écran par le bas. */
-      function place() {
-        const a = S.anchor && S.anchor.getBoundingClientRect();
-        const pop = S.pop, w = pop.offsetWidth, h = pop.offsetHeight;
-        if (!a || innerWidth < w + 32 || innerHeight < h + 32) {
-          pop.style.position = "relative"; pop.style.left = pop.style.top = "";
-          return;
-        }
-        pop.style.position = "absolute";
-        pop.style.left = Math.min(Math.max(8, a.left), innerWidth - w - 8) + "px";
-        let top = a.bottom + 8;
-        if (top + h > innerHeight - 8) top = Math.max(8, a.top - h - 8);
-        pop.style.top = top + "px";
-      }
+      function place() { popPlace(S.pop, S.anchor); }
       function close() {
         if (!S) return;
         S.back.remove();
@@ -23542,6 +23659,135 @@ window.addEventListener("scroll", hidePop, true);
           value: opt.read(),
           onOk: v => opt.write(v),
           onClear: opt.clearable ? () => opt.write("") : null
+        });
+      });
+    }
+
+    /* ============================================================
+       LA BANDE DES NIVEAUX DE VOL (2026-09-04) — le choix du FL de
+       croisière sur la page Turbulence. Un clic sur la case ouvre une bande
+       verticale de niveaux ; elle défile au doigt, à la molette ou aux
+       flèches, et c'est celui du MILIEU qui est retenu. Toucher un niveau le
+       prend directement, sans passer par OK.
+
+       Même surcouche que le cadran à aiguille — `clock-back`, `clock-pop`,
+       les boutons `ckb`, le placement de `popPlace` — parce que c'est le
+       même geste : la case ne se tape pas, elle s'ouvre.
+
+       Comme le cadran, la bande ne change pas la nature du champ : l'`<input>`
+       reste celui que la page connaît, simplement `readonly`, et la valeur y
+       est réécrite avec l'événement `change` que la page écoutait déjà. */
+    const FLR = (() => {
+      const H = 40, VIS = 5;              // hauteur d'une ligne, lignes visibles
+      let S = null;
+      const lbl = fl => "FL" + String(fl).padStart(3, "0");
+      /* Le niveau centré s'allume, ses deux voisins restent lisibles, le
+         reste s'estompe — la profondeur d'un rouleau, sans image. */
+      function paint() {
+        S.items.forEach((el, k) => {
+          const d = Math.abs(k - S.i);
+          el.classList.toggle("on", d === 0);
+          el.classList.toggle("near", d === 1);
+          el.setAttribute("aria-selected", d === 0 ? "true" : "false");
+        });
+        S.note.textContent = S.fls[S.i] < 100 ? "Below FL100 — the grid says nothing" : "";
+      }
+      /* `move` : recaler la bande sur le niveau (les flèches), plutôt que la
+         suivre (le doigt). On POSE `scrollTop` d'un coup — la bande est alors
+         là où le surlignage la dit, sans dépendre d'une animation que le
+         moteur peut abréger ; une bande en retard sur son surlignage
+         désignerait un niveau qui n'est pas celui qu'on lit. */
+      function setIdx(i, move) {
+        i = Math.max(0, Math.min(S.fls.length - 1, i));
+        if (i !== S.i) { S.i = i; paint(); }
+        if (move) S.roll.scrollTop = i * H;
+      }
+      function close() {
+        if (!S) return;
+        S.back.remove();
+        removeEventListener("keydown", S.key, true);
+        S = null;
+      }
+      /* `value` : le niveau de départ. Hors liste, la bande s'ouvre sur le
+         plus proche — elle ne refuse pas une valeur, elle la ramène. */
+      function open(anchor, opt) {
+        close();
+        const o = opt || {}, fls = o.levels.slice();
+        const v = +o.value;
+        let i0 = 0;
+        fls.forEach((f, k) => { if (Math.abs(f - v) < Math.abs(fls[i0] - v)) i0 = k; });
+
+        const back = document.createElement("div");
+        back.className = "clock-back";
+        back.innerHTML = `<div class="clock-pop flr-pop" role="dialog" aria-modal="true"
+             aria-label="${o.title || "Flight level"}">
+          <div class="clock-title">${o.title || "Flight level"}</div>
+          <div class="flr-wrap">
+            <div class="flr-win" aria-hidden="true"></div>
+            <div class="flr-roll" tabindex="0" role="listbox" aria-label="${o.title || "Flight level"}">
+              ${fls.map((f, k) => `<div class="flr-item" role="option" data-i="${k}" aria-selected="${k === i0}">${lbl(f)}</div>`).join("")}
+            </div>
+          </div>
+          <div class="flr-note"></div>
+          <div class="clock-act">
+            <button class="ckb" type="button" data-act="cancel">Cancel</button>
+            <button class="ckb pri" type="button" data-act="ok">OK</button>
+          </div>
+        </div>`;
+        document.body.appendChild(back);
+        S = { back, pop: back.querySelector(".clock-pop"), fls, i: i0, onOk: o.onOk };
+        S.roll = S.pop.querySelector(".flr-roll");
+        S.note = S.pop.querySelector(".flr-note");
+        S.items = Array.from(S.pop.querySelectorAll(".flr-item"));
+        popPlace(S.pop, anchor);
+        S.roll.scrollTop = i0 * H;         // sans animation : la bande s'ouvre déjà calée
+        paint();
+
+        const ok = () => { const f = S.onOk, val = S.fls[S.i]; close(); if (f) f(val); };
+        /* Le défilement décide seul du niveau courant : l'accrochage (scroll
+           snap) le pose au centre, l'arrondi le lit. */
+        S.roll.addEventListener("scroll", () => { if (S) setIdx(Math.round(S.roll.scrollTop / H), null); });
+        S.items.forEach(el => el.addEventListener("click", () => { setIdx(+el.dataset.i, null); ok(); }));
+        S.pop.querySelector('[data-act="cancel"]').onclick = close;
+        const okb = S.pop.querySelector('[data-act="ok"]');
+        okb.onclick = ok;
+        /* Le voile ferme, mais SEULEMENT lui : un geste parti de la bande et
+           fini sur le voile ne doit rien fermer. */
+        back.addEventListener("pointerdown", e => { if (e.target === back) close(); });
+
+        /* En capture, et l'événement s'arrête là : la page écoute Échap et
+           des raccourcis à la lettre, elle n'a rien à faire des touches tant
+           que la bande est ouverte. */
+        S.key = e => {
+          const k = e.key, act = document.activeElement;
+          const onBtn = !!(act && act.classList && act.classList.contains("ckb"));
+          const stop = () => { e.stopPropagation(); e.preventDefault(); };
+          if (k === "Escape") { stop(); close(); }
+          else if (k === "Enter") { stop(); if (onBtn) act.click(); else ok(); }
+          else if (k === "ArrowUp" || k === "ArrowDown") { stop(); setIdx(S.i + (k === "ArrowUp" ? -1 : 1), true); }
+          else if (k === "PageUp" || k === "PageDown") { stop(); setIdx(S.i + (k === "PageUp" ? -VIS : VIS), true); }
+          else if (k === "Home") { stop(); setIdx(0, true); }
+          else if (k === "End") { stop(); setIdx(S.fls.length - 1, true); }
+        };
+        addEventListener("keydown", S.key, true);
+        S.roll.focus({ preventScroll: true });
+      }
+      return { open, close, isOpen: () => !!S };
+    })();
+    /* Poser la bande sur un champ existant, comme `ckdBindField` pour le
+       cadran : le champ passe en lecture seule, sa valeur est lue et
+       réécrite dans son format, et l'événement que la page écoutait déjà est
+       relancé après coup. */
+    function flrBindField(el, opt) {
+      if (!el) return;
+      el.readOnly = true;
+      el.addEventListener("click", e => {
+        e.preventDefault();
+        FLR.open(el, {
+          title: opt.title,
+          levels: opt.levels,
+          value: opt.read(),
+          onOk: v => opt.write(v)
         });
       });
     }
@@ -25938,6 +26184,21 @@ function dtsAUnQfu(icao){
       if (v >= 30 && v <= 500) { turbCfg.fl = v; turbRenderForm(); turbSchedule(); }
       else $("#turbFl").value = turbCfg.fl;
     };
+    /* Le niveau de croisière se choisit à la bande, plus au clavier : la case
+       reste celle que la page connaît — son `change` ci-dessus valide et
+       relance le calcul —, la bande y écrit. Les niveaux offerts sont la
+       plage que la case acceptait déjà, de FL030 à FL500 de dix en dix : la
+       bande n'enlève ni n'ajoute rien, elle change le geste. */
+    const TURB_FL_STEPS = Array.from({ length: 48 }, (_, i) => 30 + i * 10);
+    flrBindField($("#turbFl"), {
+      title: "Cruise FL",
+      levels: TURB_FL_STEPS,
+      read: () => turbCfg.fl,
+      write: v => {
+        $("#turbFl").value = v;
+        $("#turbFl").dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
     // Retour à la première page. L'accueil vit DERRIÈRE la page météo (z 50
     // contre 52), donc la masquer suffirait à le redécouvrir — on appelle
     // quand même openHome() : il rafraîchit favoris, étoiles et miroir de
