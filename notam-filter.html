@@ -25577,7 +25577,9 @@ function dtsAUnQfu(icao){
        ligne, il se relit daté. */
     const TURB_KEY = "notam_turb";
     let turbToken = 0, turbTimer = null;
-    const turbCfg = { dep: "", arr: "", fl: null, t0: null, t1: null };
+    // flSet : le FL a été tapé par le pilote — il survit alors aux changements
+    // de terrain, quand le FL posé d'office suit la distance.
+    const turbCfg = { dep: "", arr: "", fl: null, flSet: false, t0: null, t1: null };
 
     const turbP2 = n => String(n).padStart(2, "0"), turbP3 = n => String(n).padStart(3, "0");
     const turbHM = ms => { const d = new Date(ms); return `${turbP2(d.getUTCHours())}:${turbP2(d.getUTCMinutes())}`; };
@@ -25603,15 +25605,25 @@ function dtsAUnQfu(icao){
       return t;
     }
     function turbDefaultFl(dist) { return dist < 150 ? 150 : dist < 300 ? 240 : dist < 600 ? 320 : dist < 1200 ? 360 : 380; }
-    /* Les terrains changent : FL et temps de vol se recalculent, l'heure de
-       départ reste (c'est celle du pilote, pas celle de la route). */
-    function turbSetRoute(dep, arr, resetAll) {
+    /* Trois façons de poser la route :
+       - "new"   : un autre vol, tout repart — FL selon la distance, départ
+                   dans 30 min, arrivée selon le profil ;
+       - "keep"  : le même vol qu'à la dernière visite, ses heures et son FL
+                   tels quels (turbCfg vient d'être rempli depuis le stockage) ;
+       - "route" : les terrains changent sous le pilote — FL et temps de vol
+                   se recalculent, l'heure de départ reste (c'est celle du
+                   pilote, pas celle de la route). Un FL tapé par le pilote
+                   (flSet) reste aussi : il l'a choisi, la distance non.
+       Avant, une page ouverte sans route posait FL150 (distance nulle) et le
+       gardait quand les deux codes arrivaient : LFPO → KLAX à FL150. */
+    function turbSetRoute(dep, arr, mode) {
       turbCfg.dep = dep; turbCfg.arr = arr;
       const A = GEO && GEO[dep], B = GEO && GEO[arr];
       const dist = A && B ? gcDist(A, B) : 0;
-      if (resetAll || !turbCfg.fl) turbCfg.fl = turbDefaultFl(dist);
-      if (resetAll || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
-      if (resetAll || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
+      if (mode === "new") turbCfg.flSet = false;
+      if (mode === "new" || !turbCfg.fl || (mode === "route" && !turbCfg.flSet)) turbCfg.fl = turbDefaultFl(dist);
+      if (mode === "new" || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
+      if (mode !== "keep" || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
       turbRenderForm();
       turbSchedule();
     }
@@ -25791,7 +25803,7 @@ function dtsAUnQfu(icao){
       // loin derrière : on reprend ses heures et son FL tels quels.
       const same = saved && saved.cfg && saved.cfg.dep === dep && saved.cfg.arr === arr && saved.cfg.t0 > Date.now() - 6 * 3600e3;
       if (same) Object.assign(turbCfg, saved.cfg);
-      turbSetRoute(dep, arr, !same);
+      turbSetRoute(dep, arr, same ? "keep" : "new");
     }
     function closeTurb() {
       clearTimeout(turbTimer);
@@ -25808,7 +25820,7 @@ function dtsAUnQfu(icao){
         el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
         const other = sel === "#turbDep" ? turbCfg.arr : turbCfg.dep;
         if (sel === "#turbDep") turbCfg.dep = el.value; else turbCfg.arr = el.value;
-        if (el.value.length === 4 && GEO && GEO[el.value] && GEO[other]) turbSetRoute(turbCfg.dep, turbCfg.arr, false);
+        if (el.value.length === 4 && GEO && GEO[el.value] && GEO[other]) turbSetRoute(turbCfg.dep, turbCfg.arr, "route");
         else turbRenderForm();
       };
       el.onkeydown = e => { if (e.key === "Enter") el.blur(); };
@@ -25844,7 +25856,7 @@ function dtsAUnQfu(icao){
     });
     $("#turbFl").onchange = () => {
       const v = Math.round(+$("#turbFl").value / 10) * 10;
-      if (v >= 30 && v <= 500) { turbCfg.fl = v; turbRenderForm(); turbSchedule(); }
+      if (v >= 30 && v <= 500) { turbCfg.fl = v; turbCfg.flSet = true; turbRenderForm(); turbSchedule(); }
       else $("#turbFl").value = turbCfg.fl;
     };
     // Retour à la première page. L'accueil vit DERRIÈRE la page météo (z 50
