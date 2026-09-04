@@ -356,21 +356,25 @@ La route reste l'orthodromie déjà dessinée par la carte ; la trace du vol
 précédent (§2) n'est pas intégrée pour l'instant.
 
 **Profil H+x (§4) — implémenté sur l'orthodromie.** Dès qu'une route est
-entrée, le cartouche Turbulence ajoute le rejeu dep → dest : montée par
+entrée, la couche Turbulence de la carte rejoue dep → dest : montée par
 paliers de performance d'un jet moyen (2 400 ft/min et 250 kt sous FL100,
 1 800 ft/min et 330 kt jusqu'à FL240, 1 200 ft/min et 420 kt au-dessus),
 croisière à 450 kt au FL du curseur, descente symétrique ; une étape trop
 courte plafonne là où montée et descente se rejoignent. Décollage à
 l'horizon choisi (now, +3, +6, +12 h). Chaque minute est lue dans la grille
 au FL le plus proche, avec la pire des deux échéances qui encadrent l'heure ;
-sous 9 000 ft la grille ne dit rien. À l'écran : un ruban de la durée du vol
-coloré par classe, l'échelle TKO/+1h/LDG, la liste des épisodes de
-turbulence — plages continues, pire classe, durée, niveaux, distance
-(« H+1h45 · severe · for 132 min · FL340 · 753 NM from LFPG », huit au
-plus, un tap recentre la carte sur le point le plus dur ; les light de
-moins de trois minutes restent sur le ruban seulement)
-et l'orthodromie surlignée en jaune/orange/rouge là où le rejeu rencontre
-de la turbulence. Fonctions pures entre les marqueurs `[turb-profile]`,
+sous 9 000 ft la grille ne dit rien. Sur la carte, ce rejeu ne se voit que
+sur la route : l'orthodromie surlignée en jaune/orange/rouge là où il
+rencontre de la turbulence — le cartouche ne porte plus le détail du vol.
+Ce détail vit sur la page Turbulence (troisième onglet de Weather), qui
+refait le même rejeu sur les heures saisies par le pilote : la ligne de
+résumé (« LFPG → KJFK · 3 150 NM · 7 h 40 · TKO 11:26Z · FL340 · worst
+severe »), le ruban de la durée du vol coloré par classe, l'échelle
+H+/heure Z, la liste des épisodes de turbulence — plages continues, pire
+classe, durée, niveaux, distance (« H+1:45 · 13:11Z · severe · for 132 min ·
+FL340 · 753 NM from LFPG » ; les light de moins de trois minutes restent
+sur le ruban seulement), un tap sur un morceau ou une ligne ouvrant son
+cartouche. Fonctions pures entre les marqueurs `[turb-profile]`,
 testées dans `test/turb-grid.test.mjs` (distance et point d'orthodromie,
 profil long et court, encadrement des échéances, échantillonnage).
 
