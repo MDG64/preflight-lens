@@ -7780,7 +7780,7 @@ body.light .turb-time input { color-scheme: light }
         </div>
       </div>
       <div class="turb-opts">
-        <label title="Cruise flight level — the altitude at which the index is read. Tap it: the levels roll past, the one in the middle is the chosen one.">Cruise FL <input id="turbFl" type="number" min="30" max="500" step="10" inputmode="numeric" aria-label="Cruise flight level" title="Tap to pick the level from the band"></label>
+        <label title="Cruise flight level — the altitude at which the index is read. Tap it: the levels roll past, the one in the middle is the chosen one.">Cruise FL <input id="turbFl" type="number" min="90" max="500" step="10" inputmode="numeric" aria-label="Cruise flight level" title="Tap to pick the level from the band"></label>
         <span id="turbDist"></span>
         <button class="btn" id="turbGo" type="button" title="Compute again">↻ Update</button>
       </div>
@@ -25968,6 +25968,9 @@ function dtsAUnQfu(icao){
       const A = GEO && GEO[dep], B = GEO && GEO[arr];
       const dist = A && B ? gcDist(A, B) : 0;
       if (resetAll || !turbCfg.fl) turbCfg.fl = turbDefaultFl(dist);
+      // Une visite d'avant la bande a pu laisser un FL sous son premier cran :
+      // on le remonte, sinon la case et la bande ne diraient pas la même chose.
+      turbCfg.fl = Math.max(90, Math.min(500, Math.round(turbCfg.fl / 10) * 10));
       if (resetAll || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
       if (resetAll || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
       turbRenderForm();
@@ -26181,15 +26184,17 @@ function dtsAUnQfu(icao){
     });
     $("#turbFl").onchange = () => {
       const v = Math.round(+$("#turbFl").value / 10) * 10;
-      if (v >= 30 && v <= 500) { turbCfg.fl = v; turbRenderForm(); turbSchedule(); }
+      if (v >= 90 && v <= 500) { turbCfg.fl = v; turbRenderForm(); turbSchedule(); }
       else $("#turbFl").value = turbCfg.fl;
     };
     /* Le niveau de croisière se choisit à la bande, plus au clavier : la case
        reste celle que la page connaît — son `change` ci-dessus valide et
-       relance le calcul —, la bande y écrit. Les niveaux offerts sont la
-       plage que la case acceptait déjà, de FL030 à FL500 de dix en dix : la
-       bande n'enlève ni n'ajoute rien, elle change le geste. */
-    const TURB_FL_STEPS = Array.from({ length: 48 }, (_, i) => 30 + i * 10);
+       relance le calcul —, la bande y écrit. Elle commence à FL090 : la
+       grille de turbulence ne dit rien sous FL100, et faire défiler six crans
+       muets avant d'arriver au premier niveau utile n'avait pas de sens. Le
+       cran de FL090 reste, lui, parce qu'il est le voisin immédiat du seuil.
+       De là jusqu'à FL500, de dix en dix. */
+    const TURB_FL_STEPS = Array.from({ length: 42 }, (_, i) => 90 + i * 10);
     flrBindField($("#turbFl"), {
       title: "Cruise FL",
       levels: TURB_FL_STEPS,
