@@ -2490,16 +2490,33 @@ body.mobile #rtOv:not([hidden]){display:flex}
 }
 .rt-times input{font-size:13px;padding:7px 8px;color:var(--muted);cursor:pointer}
 .rt-times input.mine{color:var(--text)}
-/* L'heure locale, sous l'heure Z : elle n'apparaît que quand la route change
-   de fuseau — sinon elle répéterait trois fois le même décalage. Toujours
-   plus discrète que l'heure Z : c'est le plan de vol qui est en Z, l'heure
-   locale ne fait que dire à quoi ressemblera la journée au sol. */
+/* L'heure locale, DANS la case et à droite de l'heure Z : elle n'apparaît que
+   quand la route change de fuseau — sinon elle répéterait trois fois le même
+   décalage. Le décalage du terrain, lui, est dans l'infobulle de la case :
+   il n'aurait pas tenu sur la colonne du téléphone.
+   La case en dur, c'est l'ENVELOPPE : c'est elle qui porte le cadre et le
+   fond, le champ à l'intérieur n'est plus qu'un texte. Sans quoi l'heure
+   locale serait tombée hors du cadre, ou par-dessus l'heure Z sur la colonne
+   étroite du téléphone. Le champ ne contient TOUJOURS que l'heure Z — c'est
+   cette valeur-là que le cadran relit et que le stockage partagé recopie —
+   et se réduit alors à ses cinq caractères, les deux heures se rangeant
+   ensemble au milieu de la case. Un clic n'importe où dans l'enveloppe ouvre
+   le cadran (bindTimeFields), l'heure locale ne faisant pas écran. */
+.rt-times .rt-tw{
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  border:1px solid var(--line2);border-radius:7px;background:var(--field);
+  cursor:pointer;
+}
+.rt-times .rt-tw:focus-within{border-color:var(--cyan)}
+.rt-times .rt-tw input{border:0;border-radius:0;background:transparent}
+.rt-times.has-loc .rt-tw input{
+  flex:0 0 auto;width:5ch;padding-left:0;padding-right:0;
+}
 .rt-loc{
-  margin-top:4px;font:600 10.5px/1.35 var(--mono);letter-spacing:.03em;
-  color:var(--muted2);text-align:center;
+  font:600 11px/1 var(--mono);letter-spacing:.02em;color:var(--muted2);
+  white-space:nowrap;pointer-events:none;
 }
 .rt-loc[hidden]{display:none}
-.rt-loc .rt-loc-off{font-weight:500;opacity:.8}
 /* Pas de bilan d'ensemble au-dessus des cartes : aucun verdict de VOL n'est
    agrégé — chaque terrain répond de sa phase, la décision reste au pilote et
    l'outil ne s'engage pas à sa place. */
@@ -3004,11 +3021,12 @@ body.light .rt-role{color:var(--text)}
         is estimated from its distance, and the card says which. Each box can be corrected — HHMM — and is the
         same time as the phase tab's: a time you set is kept and shown in full ink, a cleared box or a changed
         aerodrome lets the route time back in. The same flight time feeds the no-alternate criterion.</p>
-      <p class="hd-p muted">When the route crosses time zones, each box also carries the <b>local time at
-        its own aerodrome</b> and that aerodrome's offset — <span class="hd-chip">1807 LT UTC+9</span>,
-        with <span class="hd-chip">+1</span> when the local date is the next day. It appears only when the
-        aerodromes of the route are not all on the same offset; the flight is planned in UTC, the local
-        time only says what the day will look like on the ground.</p>
+      <p class="hd-p muted">When the route crosses time zones, each box also carries, to the right of the
+        Z time, the <b>local time at its own aerodrome</b> — <span class="hd-chip">1807L</span>, with
+        <span class="hd-chip">+1</span> when the local date is the next day; the aerodrome's offset is in
+        the box's tooltip. It appears only when the aerodromes of the route are not all on the same
+        offset; the flight is planned in UTC, the local time only says what the day will look like on the
+        ground.</p>
 
       <div class="hd-sec">Reading a card</div>
       <div class="hd-row">
@@ -3152,27 +3170,33 @@ body.light .rt-role{color:var(--text)}
            reste jugée sur le relevé), l'arrivée et le dégagement suivent par
            le temps de vol de la route et sont les heures des onglets 04 et 05.
            Chacune se corrige ici. -->
-      <div class="rt-form rt-times">
+      <div class="rt-form rt-times" id="rtTimes">
         <div class="rt-field">
           <label for="rtTime0">Take-off · UTC</label>
-          <input id="rtTime0" class="rt-time" placeholder="HHMMZ" readonly
-                 spellcheck="false" autocomplete="off"
-                 aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set; tap to set it on the clock">
-          <div class="rt-loc" id="rtLoc0" hidden></div>
+          <div class="rt-tw">
+            <input id="rtTime0" class="rt-time" placeholder="HHMMZ" readonly
+                   spellcheck="false" autocomplete="off"
+                   aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set; tap to set it on the clock">
+            <span class="rt-loc" id="rtLoc0" hidden></span>
+          </div>
         </div>
         <div class="rt-field">
           <label for="rtTime1">Arrival · UTC</label>
-          <input id="rtTime1" class="rt-time" placeholder="HHMMZ" readonly
-                 spellcheck="false" autocomplete="off"
-                 aria-label="Arrival time, UTC — posed from the route flight time; tap to set it on the clock">
-          <div class="rt-loc" id="rtLoc1" hidden></div>
+          <div class="rt-tw">
+            <input id="rtTime1" class="rt-time" placeholder="HHMMZ" readonly
+                   spellcheck="false" autocomplete="off"
+                   aria-label="Arrival time, UTC — posed from the route flight time; tap to set it on the clock">
+            <span class="rt-loc" id="rtLoc1" hidden></span>
+          </div>
         </div>
         <div class="rt-field">
           <label for="rtTime2">Alternate · UTC</label>
-          <input id="rtTime2" class="rt-time" placeholder="HHMMZ" readonly
-                 spellcheck="false" autocomplete="off"
-                 aria-label="Alternate arrival time, UTC — posed from the diversion time; tap to set it on the clock">
-          <div class="rt-loc" id="rtLoc2" hidden></div>
+          <div class="rt-tw">
+            <input id="rtTime2" class="rt-time" placeholder="HHMMZ" readonly
+                   spellcheck="false" autocomplete="off"
+                   aria-label="Alternate arrival time, UTC — posed from the diversion time; tap to set it on the clock">
+            <span class="rt-loc" id="rtLoc2" hidden></span>
+          </div>
         </div>
       </div>
       <div class="rt-cards" id="rtCards"></div>
@@ -15569,15 +15593,24 @@ window.RTV = (()=>{
     /* Toute la route au même décalage : l'heure locale n'apprend rien. */
     const known = loc.filter(Boolean);
     const split = known.length > 1 && known.some(l => l.off !== known[0].off);
+    const row = document.getElementById("rtTimes");
+    if (row) row.classList.toggle("has-loc", split);
     loc.forEach((l,i)=>{
       const box = document.getElementById("rtLoc"+i);
       if (!box) return;
       const show = split && !!l;
       box.hidden = !show;
-      box.innerHTML = show
-        ? `${l.hhmm}${l.day ? (l.day>0 ? "+" : "") + l.day : ""} LT `
-          + `<span class="rt-loc-off">${offLabel(l.off)}</span>`
+      /* « 1807L », « 0000L+1 » quand le quantième local est celui du
+         lendemain. Le décalage n'entre pas dans la case — il est dans
+         l'infobulle, avec le terrain dont c'est l'heure. */
+      box.textContent = show
+        ? l.hhmm + "L" + (l.day ? (l.day>0 ? "+" : "") + l.day : "")
         : "";
+      const el = document.getElementById("rtTime"+i);
+      if (el){
+        if (show) el.title = `${RT.icaos[i]} local time ${box.textContent} · ${offLabel(l.off)}`;
+        else el.removeAttribute("title");
+      }
     });
   }
   /* Une heure se choisit AU CADRAN — le même que celui des phases, ouvert en
@@ -15591,6 +15624,11 @@ window.RTV = (()=>{
       const el = document.getElementById("rtTime"+i);
       if (!el) return;
       el.readOnly = true;
+      /* Le cadre est sur l'enveloppe : c'est elle qu'on vise, et le champ ne
+         couvre plus toute la case dès que l'heure locale est là. */
+      const tw = el.parentElement;
+      if (tw && tw.classList.contains("rt-tw"))
+        tw.addEventListener("click", e=>{ if (e.target!==el) el.click(); });
       el.addEventListener("click", e=>{
         if (el.disabled) return;
         e.preventDefault();
