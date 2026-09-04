@@ -20908,6 +20908,36 @@ function renderInfo(icao) {
     }
     // [/turb-profile]
 
+    // [turb-ticks] — section évaluée seule par test/turb-ticks.test.mjs.
+    /* Les minutes rondes où poser un repère entre le départ et l'arrivée :
+       le pas le plus fin qui en laisse `max` au plus sur `total` minutes.
+       L'arrivée n'en fait pas partie — elle a son repère à elle —, ni une
+       minute qui la dépasserait. */
+    function turbTickMinutes(total, max) {
+      const step = [5, 10, 15, 20, 30, 60, 90, 120, 180, 240, 360].find(s => total / s <= max) || 480;
+      const out = [];
+      for (let m = step; m < total; m += step) out.push(m);
+      return out;
+    }
+    /* Des libellés posés sur une ligne — leurs boîtes [gauche, droite] en
+       pixels, dans l'ordre —, lesquels garder pour qu'aucun n'en chevauche
+       un autre : le premier et le dernier toujours ; entre eux, chacun qui
+       laisse `gap` pixels de jour après le dernier gardé et avant celui de
+       la fin. Rend les index gardés. */
+    function turbTickKeep(boxes, gap) {
+      const n = boxes.length;
+      if (n < 3) return boxes.map((_, i) => i);
+      const keep = [0], lim = boxes[n - 1][0] - gap;
+      let edge = boxes[0][1] + gap;
+      for (let i = 1; i < n - 1; i++) {
+        const [l, r] = boxes[i];
+        if (l >= edge && r <= lim) { keep.push(i); edge = r + gap; }
+      }
+      keep.push(n - 1);
+      return keep;
+    }
+    // [/turb-ticks]
+
     function mapTurbNote(text, warn) {
       const el = $("#mapTurbInfo");
       if (!el) return;
@@ -25692,7 +25722,9 @@ function dtsAUnQfu(icao){
     const turbCfg = { dep: "", arr: "", fl: null, t0: null, t1: null };
 
     const turbP2 = n => String(n).padStart(2, "0"), turbP3 = n => String(n).padStart(3, "0");
-    const turbHM = ms => { const d = new Date(ms); return `${turbP2(d.getUTCHours())}:${turbP2(d.getUTCMinutes())}`; };
+    // À la minute la plus proche, comme turbHPlus : un vol de 69,999 min finit
+    // à 05:00Z sous « H+1:10 », pas à 04:59Z.
+    const turbHM = ms => { const d = new Date(Math.round(ms / 60e3) * 60e3); return `${turbP2(d.getUTCHours())}:${turbP2(d.getUTCMinutes())}`; };
     const turbDateLbl = ms => new Date(ms).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
     const turbDur = min => { min = Math.round(min); return `${Math.floor(min / 60)} h ${turbP2(min % 60)}`; };
     const turbHPlus = min => { min = Math.round(min); return min < 60 ? `H+${min}` : `H+${Math.floor(min / 60)}:${turbP2(min % 60)}`; };
@@ -25750,34 +25782,48 @@ function dtsAUnQfu(icao){
       turbTimer = setTimeout(turbCompute, 350);
     }
     /* La barre : un morceau par ÉVÉNEMENT du rejeu — chaque changement de
-       classe —, large comme sa durée ; les repères H+ / heure Z dessous, à
-       des minutes rondes, six au plus. Sans résultat encore (squelette), un
-       seul morceau gris et muet. Un morceau touché s'explique dans le
-       cartouche ; la liste des épisodes suit, comme sous la carte. */
+       classe —, large comme sa durée ; les repères H+ / heure Z dessous
+       (turbRenderTicks). Sans résultat encore (squelette), un seul morceau
+       gris et muet. Un morceau touché s'explique dans le cartouche ; la
+       liste des épisodes suit, comme sous la carte. */
     function turbRenderBar(res, skeleton) {
-      const bar = $("#turbBar"), ticks = $("#turbTicks");
+      const bar = $("#turbBar");
       $("#turbDetail").innerHTML = ""; $("#turbList").innerHTML = "";
-      if (!res) { bar.innerHTML = ""; ticks.innerHTML = ""; return; }
+      if (!res) { bar.innerHTML = ""; turbRenderTicks(null); return; }
       const total = Math.max(res.total, 1), t0 = res.cfg.t0;
       bar.innerHTML = res.events.map((e, i) => {
         const end = i + 1 < res.events.length ? res.events[i + 1].t : res.total;
         const k = skeleton ? "" : e.cls === -1 ? " cl" : e.cls === -2 ? " cn" : " c" + e.cls;
         return `<div class="turb-seg${k}" data-i="${i}" style="width:${((end - e.t) / total * 100).toFixed(2)}%" title="${turbHPlus(e.t)} · ${turbHM(t0 + e.t * 60e3)}Z${skeleton ? "" : " · " + (TURB_NAMES[e.cls] || "")}"></div>`;
       }).join("");
-      // Repères à des minutes rondes : le pas le plus fin qui en laisse six au
-      // plus (quatre sur un écran étroit), et le dernier s'efface s'il
-      // collerait à l'arrivée.
-      const maxTicks = bar.clientWidth && bar.clientWidth < 480 ? 4 : 6;
-      const step = [5, 10, 15, 20, 30, 60, 90, 120, 180, 240, 360].find(s => total / s <= maxTicks) || 480;
-      let html = `<div class="turb-tick first"><b>H+0</b><br>${turbHM(t0)}Z</div>`;
-      for (let m = step; m < total - step * 0.45; m += step) {
-        html += `<div class="turb-tick" style="left:${(m / total * 100).toFixed(2)}%"><b>${turbHPlus(m)}</b><br>${turbHM(t0 + m * 60e3)}Z</div>`;
-      }
-      html += `<div class="turb-tick last" style="left:100%"><b>${turbHPlus(res.total)}</b><br>${turbHM(t0 + res.total * 60e3)}Z</div>`;
-      ticks.innerHTML = html;
+      turbRenderTicks(res);
       if (skeleton) return;
       bar.querySelectorAll(".turb-seg").forEach(el => { el.onclick = () => turbShowDetail(res, +el.dataset.i); });
       turbRenderList(res);
+    }
+    /* Les repères sous la barre : H+ et heure Z à des minutes rondes, le
+       premier calé à gauche, le dernier à droite, ceux du milieu centrés sur
+       leur minute — six au plus, quatre sur un écran étroit (turbTickMinutes).
+       Mais c'est la MESURE qui tranche : deux libellés qui se chevauchent ne
+       se lisent pas, et celui de l'arrivée, calé à droite, mordait sur le
+       dernier du milieu dès que la barre était étroite (« H+1:00 » sous
+       « H+1:10 » sur un vol de 70 min). Une fois posés, les repères sont
+       mesurés et ceux qui mordent s'effacent (turbTickKeep) ; la largeur
+       venant à changer, on recommence (écouteur resize plus bas). */
+    let turbTicksRes = null;
+    function turbRenderTicks(res) {
+      const box = $("#turbTicks");
+      turbTicksRes = res;
+      if (!res) { box.innerHTML = ""; return; }
+      const total = Math.max(res.total, 1), t0 = res.cfg.t0, w = box.clientWidth;
+      const tick = (m, cls, at) => `<div class="turb-tick${cls}" style="left:${at}%"><b>${turbHPlus(m)}</b><br>${turbHM(t0 + m * 60e3)}Z</div>`;
+      box.innerHTML = tick(0, " first", 0)
+        + turbTickMinutes(total, w && w < 480 ? 4 : 6).map(m => tick(m, "", (m / total * 100).toFixed(2))).join("")
+        + tick(res.total, " last", 100);
+      if (!w) return;   // pas de mise en page (écran caché) : rien à mesurer
+      const els = [...box.children];
+      const keep = new Set(turbTickKeep(els.map(el => { const r = el.getBoundingClientRect(); return [r.left, r.right]; }), 8));
+      els.forEach((el, i) => { if (!keep.has(i)) el.remove(); });
     }
     const turbClsLbl = c => (TURB_NAMES[c] || "no data").replace(/^./, ch => ch.toUpperCase());
     function turbShowDetail(res, i) {
@@ -25893,6 +25939,8 @@ function dtsAUnQfu(icao){
     $("#turbHome").onclick = () => { closeTurb(); closeWx(); };
     $("#turbThemeBtn").onclick = () => $("#themeBtn").click();
     $("#turbGo").onclick = () => turbCompute();
+    // La largeur change (rotation, fenêtre) : les repères se remesurent.
+    addEventListener("resize", () => { if (!$("#turbScreen").hidden && turbTicksRes) turbRenderTicks(turbTicksRes); });
     ["#turbDep", "#turbArr"].forEach(sel => {
       const el = $(sel);
       el.oninput = () => {

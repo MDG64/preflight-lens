@@ -464,6 +464,16 @@ latéral du rejeu. Le pipeline Python a son autotest (`--selftest`, avec
 l'aller-retour PNG sur du bruit) ; le workflow se relance aussi à chaque
 push qui touche `tools/turb/` ou son fichier.
 
+**Tests — `test/turb-ticks.test.mjs`** : les repères H+ / heure Z sous la
+barre de la page Turbulence (onglet de Weather), fonctions pures entre les
+marqueurs `[turb-ticks]`. Le pas est celui des minutes rondes qui en laisse
+six au plus (quatre sur un écran étroit) ; puis les libellés, une fois
+posés, sont MESURÉS et ceux qui mordraient sur un voisin s'effacent — le
+premier et le dernier restent toujours, et c'est le dernier du milieu qui
+cède devant l'arrivée, calée à droite (« H+1:00 » sous « H+1:10 » sur un
+vol de 70 min, écran de téléphone). La largeur venant à changer, on
+remesure.
+
 **Publication sans serveur — `.github/workflows/turb.yml`.** Toutes les 6 h
 (HH+4 h 20), GitHub Actions lance le script et pousse son dossier de sortie
 en un seul commit sur la branche orpheline `turb-data`, écrasée à chaque
