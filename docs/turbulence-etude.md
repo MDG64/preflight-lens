@@ -397,16 +397,20 @@ FL340/h006.png      PNG gris 8 bits, un octet par point, du nord au sud et
 ```
 
 **Depuis le 2026-09-04, le fichier porte la VALEUR de l'indice, plus une
-classe** : l'octet vaut TI1 (en 10⁻⁷ s⁻²) × 16, au pas de 4 (0,25 × 10⁻⁷),
-plafonné à 252 et mis à zéro sous 2 × 10⁻⁷ ; light = 64, moderate = 128,
-severe = 192, seuils publiés dans l'index (`encoding.levels`) et relus par
-le client — rien en dur. Le relèvement convectif pose la nuance FORTE de sa
-classe (96, 160, 224). La grille est celle du modèle, **le monde entier à
-0,25°** (1 440 × 720 points), sans regroupement : c'est ce champ continu
-que le client lisse entre les points. Le PNG est écrit à la main (filtres
-adaptatifs None/Sub/Up/Average/Paeth à la manière de libpng, zlib 9) — pas
-de Pillow à installer — et vaut de l'ordre de 100 Ko par fichier, le calme
-étant à zéro sur la plus grande part du globe. Le masque convectif n'est
+classe** : l'octet vaut TI1 (en 10⁻⁷ s⁻²) × 16, tronqué au pas de 16
+(1 × 10⁻⁷ : seize niveaux, quatre par classe), plafonné à 240 et mis à
+zéro sous light ; light = 64, moderate = 128, severe = 192 — tronqué, pas
+arrondi, donc exactement TI1 ≥ 4, 8, 12 —, seuils publiés dans l'index
+(`encoding.levels`, avec `step` et `floor`) et relus par le client — rien
+en dur. Le relèvement convectif pose la nuance FORTE de sa classe (96,
+160, 224). La grille est celle du modèle, **le monde entier à 0,25°**
+(1 440 × 721 points), sans regroupement : c'est ce champ que le client
+lisse entre les points. Le PNG est écrit à la main (filtres adaptatifs
+None/Sub/Up/Average/Paeth à la manière de libpng, zlib 9) — pas de Pillow
+à installer — et pèse 90 à 130 Ko par fichier (mesuré le 2026-09-04 :
+au pas de 4 et avec les valeurs sous light, c'était 235 à 363 Ko, et la
+page Turbulence en charge une quinzaine ; `--pool 2` diviserait encore
+par quatre en revenant à 0,5°). Le masque convectif n'est
 pas le CAPE seul (les tropiques en ont en permanence) : il exige de la
 pluie convective instantanée du modèle (CPRAT) et relève en severe sous
 les cellules dont la réflectivité simulée (REFC) dépasse 40 dBZ. L'index

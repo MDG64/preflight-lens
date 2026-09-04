@@ -20498,9 +20498,10 @@ function renderInfo(icao) {
     // [turb-decode] — section évaluée seule par test/turb-grid.test.mjs.
     /* Deux formats de fichier, une seule entrée { val, cls, grid }.
        Le NOUVEAU (index.files === "png") : un PNG gris 8 bits, un octet par
-       point — l'indice Ellrod en 1e-7 s^-2 × 16, plafonné à 252, zéro sous
-       2e-7 —, ses seuils de classe dans l'index (encoding.levels : 64, 128,
-       192 pour light, moderate, severe) et sa grille dans un chunk tEXt
+       point — l'indice Ellrod en 1e-7 s^-2 × 16, au pas et au plancher que
+       dit l'index (encoding : pas de 16, zéro sous light, plafond 240) —,
+       ses seuils de classe dans l'index (encoding.levels : 64, 128, 192
+       pour light, moderate, severe) et sa grille dans un chunk tEXt
        « turb ». L'ANCIEN : du JSON, une classe 0..3 par point en RLE.
        `val` sert la nappe lissée, `cls` le rejeu du profil. */
     const TURB_LEVELS = [64, 128, 192];

@@ -15,13 +15,18 @@ CPRAT > 0) selon l'énergie disponible (CAPE), et sous les cellules que sa
 réflectivité simulée (REFC) donne pour violentes.
 
 Ce qui est publié n'est plus une classe par point mais la VALEUR de
-l'indice, en un octet : TI1 en 10^-7 s^-2 × 16, au pas de 4 (0,25 × 10^-7),
-plafonné à 252, mis à zéro sous 2 × 10^-7 (le calme n'a pas de nuance à
-montrer, et il ne pèse alors rien). light = 64, moderate = 128,
-severe = 192 ; le relèvement convectif pose la nuance FORTE de sa classe
-(96, 160, 224). Le client lit la classe avec ces seuils (dans l'index) et
-peint la nappe en interpolant la valeur entre les points : des contours
-lisses, là où des classes seules ne donnaient que des rectangles.
+l'indice, en un octet : TI1 en 10^-7 s^-2 × 16, tronqué au pas de 16
+(1 × 10^-7 : seize niveaux, quatre par classe — deux nuances à l'écran n'en
+demandent pas plus, et chaque niveau de plus doublait presque le fichier),
+plafonné à 240, mis à zéro sous light (le calme et le presque-calme n'ont
+pas de nuance à montrer, et ils ne pèsent alors rien : 90 à 130 Ko par
+fichier au lieu de 235 à 363 avec un pas de 4 et les valeurs sous light).
+Tronqué, pas arrondi : light = 64 vaut exactement TI1 ≥ 4, moderate = 128
+TI1 ≥ 8, severe = 192 TI1 ≥ 12 ; le relèvement convectif pose la nuance
+FORTE de sa classe (96, 160, 224). Le client lit la classe avec ces seuils
+(dans l'index) et peint la nappe en interpolant la valeur entre les
+points : des contours lisses, là où des classes seules ne donnaient que
+des rectangles.
 
 Maille : celle du GFS, 0,25° — le monde entier tient dans un PNG 8 bits
 gris (les filtres PNG et zlib font mieux que du RLE : le calme est à zéro
@@ -54,11 +59,11 @@ R_EARTH = 6371000.0
 # de la convection (CPRAT, kg/m²/s > 0), réflectivité simulée (REFC, dBZ).
 TI_LIGHT, TI_MOD, TI_SEV = 4.0, 8.0, 12.0
 CAPE_LIGHT, CAPE_MOD = 1000.0, 2000.0
-# L'octet publié : TI1 (×1e-7) × BYTE_PER_E7, arrondi au pas BYTE_STEP,
-# plafonné à 252, mis à zéro sous BYTE_FLOOR. Les seuils de classe en
-# octets (BYTE_LEVELS — pas LEVELS, qui sont les hPa lus dans le GRIB) et
-# la nuance forte que pose le relèvement convectif.
-BYTE_PER_E7, BYTE_STEP, BYTE_FLOOR = 16, 4, 32
+# L'octet publié : TI1 (×1e-7) × BYTE_PER_E7, tronqué au pas BYTE_STEP,
+# plafonné au dernier multiple du pas sous 256, mis à zéro sous BYTE_FLOOR.
+# Les seuils de classe en octets (BYTE_LEVELS — pas LEVELS, qui sont les
+# hPa lus dans le GRIB) et la nuance forte que pose le relèvement convectif.
+BYTE_PER_E7, BYTE_STEP, BYTE_FLOOR = 16, 16, 64
 BYTE_LEVELS = (int(TI_LIGHT * BYTE_PER_E7), int(TI_MOD * BYTE_PER_E7), int(TI_SEV * BYTE_PER_E7))   # 64, 128, 192
 CONV_BYTES = tuple(l + 32 for l in BYTE_LEVELS)                                                      # 96, 160, 224
 CPRAT_MIN = 1e-5                                   # ≈ 0,04 mm/h : la cellule existe dans le modèle
@@ -181,9 +186,10 @@ def ellrod_ti1(u_lo, v_lo, u_hi, v_hi, z_lo, z_hi, u, v, lat_deg, dlat, dlon):
 
 
 def quantize_ti(ti):
-    """TI1 (s^-2) -> un octet par point : ×1e7 ×16, au pas de 4, plafonné à
-    252, zéro sous BYTE_FLOOR. Les seuils tombent sur 64/128/192."""
-    q = np.rint(ti * 1e7 * BYTE_PER_E7 / BYTE_STEP)
+    """TI1 (s^-2) -> un octet par point : ×1e7 ×16, tronqué au pas de 16,
+    plafonné à 240, zéro sous BYTE_FLOOR. Tronqué : les seuils 64/128/192
+    valent exactement TI1 ≥ 4, 8, 12 (×1e-7)."""
+    q = np.floor(np.nan_to_num(ti, nan=0.0, posinf=0.0, neginf=0.0) * 1e7 * BYTE_PER_E7 / BYTE_STEP)
     q = np.clip(q, 0, 255 // BYTE_STEP) * BYTE_STEP
     b = q.astype(np.uint8)
     b[b < BYTE_FLOOR] = 0
@@ -408,10 +414,11 @@ def selftest():
     val = quantize_ti(ti); cls = classify_bytes(val)
     assert cls[:, :20].max() == 0, "zone calme classée turbulente"
     assert cls[:, 25:35].max() >= 1, "zone de gradient non détectée"
-    # La quantification : seuils exacts, pas de 4, plancher, plafond.
-    q = quantize_ti(np.array([0.0, 1.8e-7, 2.0e-7, 4.0e-7, 4.1e-7, 8.0e-7, 12.0e-7, 40e-7]))
-    assert q.tolist() == [0, 0, 32, 64, 64, 128, 192, 252], q.tolist()
-    assert classify_bytes(q).tolist() == [0, 0, 0, 1, 1, 2, 3, 3]
+    # La quantification : seuils exacts (tronqué, pas arrondi), pas de 16,
+    # zéro sous light, plafond 240, NaN -> zéro.
+    q = quantize_ti(np.array([0.0, 3.99e-7, 4.0e-7, 4.9e-7, 5.0e-7, 8.0e-7, 12.0e-7, 15.9e-7, 40e-7, np.nan]))
+    assert q.tolist() == [0, 0, 64, 64, 80, 128, 192, 240, 240, 0], q.tolist()
+    assert classify_bytes(q).tolist() == [0, 0, 1, 1, 1, 2, 3, 3, 3, 0]
     cape = np.zeros_like(u_p); cape[5, 5] = 2500; cape[6, 6] = 2500
     cprat = np.zeros_like(u_p); cprat[5, 5] = 1e-4                # il pleut en (5,5), pas en (6,6)
     refc = np.zeros_like(u_p); refc[7, 7] = 45.0
