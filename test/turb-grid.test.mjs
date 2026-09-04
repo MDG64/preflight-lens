@@ -29,7 +29,7 @@ async function chargerTurb() {
   const src = html.slice(a, b) + "\n" + html.slice(c, d)
     + "\nexport { turbDecode, turbValFromCls, turbClsFromVal, turbPngParse, turbPngUnfilter, turbPngDecode, turbPickHour,"
     + " turbCatmull, turbResample, turbMercLat, turbLut, turbColorize,"
-    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbCellClass, turbSampleProfile, turbEpisodes };";
+    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbFlOf, turbCellClass, turbSampleProfile, turbEpisodes };";
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 
@@ -290,19 +290,49 @@ test("turbSampleProfile : la pire des deux échéances, sous FL100 rien, transit
   void LFBO;
 });
 
-test("turbEpisodes regroupe les transitions en plages continues de turbulence", async () => {
+test("turbEpisodes regroupe les transitions en plages continues de turbulence, aux niveaux du VOL", async () => {
   const { turbEpisodes } = await chargerTurb();
+  // `fl` est le niveau LU (le plus proche dans la grille), `alt` l'altitude
+  // volée : FL320 tapé, lu au FL300, affiché FL320. Un morceau qui change
+  // d'altitude porte ses extrêmes (altMin, altMax).
   const P = { total: 100, dist: 700, events: [
-    { t: 0, d: 0, fl: null, cls: -1, lat: 0, lon: 0 },
-    { t: 4, d: 17, fl: 100, cls: 0, lat: 0, lon: 0 },
-    { t: 20, d: 120, fl: 340, cls: 1, lat: 1, lon: 1 },
-    { t: 25, d: 160, fl: 340, cls: 3, lat: 2, lon: 2 },     // même épisode, pire classe
-    { t: 30, d: 200, fl: 340, cls: 1, lat: 3, lon: 3 },
-    { t: 40, d: 280, fl: 340, cls: 0, lat: 0, lon: 0 },     // fin du premier
-    { t: 80, d: 600, fl: 240, cls: 2, lat: 4, lon: 4 },     // second, jusqu'à l'atterrissage
+    { t: 0, d: 0, fl: null, alt: 0, cls: -1, lat: 0, lon: 0 },
+    { t: 4, d: 17, fl: 100, alt: 9600, cls: 0, lat: 0, lon: 0 },
+    { t: 20, d: 120, fl: 300, alt: 32000, cls: 1, lat: 1, lon: 1 },
+    { t: 25, d: 160, fl: 300, alt: 32000, cls: 3, lat: 2, lon: 2 },     // même épisode, pire classe
+    { t: 30, d: 200, fl: 300, alt: 32000, cls: 1, lat: 3, lon: 3 },
+    { t: 40, d: 280, fl: 300, alt: 32000, cls: 0, lat: 0, lon: 0 },     // fin du premier
+    { t: 80, d: 600, fl: 240, alt: 24000, altMin: 15200, altMax: 24000, cls: 2, lat: 4, lon: 4 },   // second, en descente, jusqu'à l'atterrissage
   ] };
   const eps = turbEpisodes(P);
   assert.equal(eps.length, 2);
   assert.deepEqual([eps[0].t0, eps[0].t1, eps[0].cls, eps[0].d0, eps[0].d1, eps[0].lat], [20, 40, 3, 120, 280, 2]);
-  assert.deepEqual([eps[1].t0, eps[1].t1, eps[1].cls, eps[1].d1, eps[1].flMin], [80, 100, 2, 700, 240]);
+  assert.deepEqual([eps[0].flMin, eps[0].flMax], [320, 320], "le FL320 volé, pas le FL300 lu");
+  assert.deepEqual([eps[1].t0, eps[1].t1, eps[1].cls, eps[1].d1, eps[1].flMin, eps[1].flMax], [80, 100, 2, 700, 150, 240], "les altitudes extrêmes du morceau");
+});
+
+test("FL320 tapé : la grille est lue au FL300, les cartes disent FL320", async () => {
+  const { turbSampleProfile, turbProfile, turbEpisodes, turbFlOf, turbNearestFl } = await chargerTurb();
+  const fls = [100, 140, 180, 240, 270, 300, 340, 390, 450];
+  assert.equal(turbNearestFl(fls, 32000), 300); assert.equal(turbNearestFl(fls, 36000), 340);
+  assert.deepEqual([turbFlOf(32000), turbFlOf(36000), turbFlOf(15250), turbFlOf(9600)], [320, 360, 150, 100], "niveau volé, à la dizaine");
+  const grid = { lat0: 50, lon0: 0, dlat: -1, dlon: 1, nlat: 8, nlon: 9 };
+  const index = { run: "2026-09-03T00:00Z", hours: [3, 6, 9, 12], grid, fls };
+  const light = new Uint8Array(72).fill(1), zero = new Uint8Array(72);
+  // Seul le fichier du FL300 est marqué : light dès que le rejeu le lit —
+  // fin de montée (≈ 29 000 ft), croisière à 32 000 ft, début de descente.
+  const prof = turbProfile(372, 32000);
+  assert.equal(prof.top, 32000);
+  const P = turbSampleProfile(prof, LFPG, LFMN, index, Date.parse("2026-09-03T06:00Z"), fls, fl => fl === 300 ? light : zero);
+  const cruise = P.pts.find(p => p.alt === 32000);
+  assert.equal(cruise.fl, 300, "lu au niveau le plus proche de la grille");
+  assert.equal(cruise.cls, 1);
+  const ev = P.events.find(e => e.cls === 1);
+  assert.ok(ev.alt < 32000 && ev.alt > 28500, "l'épisode s'ouvre en fin de montée : " + ev.alt);
+  assert.deepEqual([ev.fl, ev.altMax], [300, 32000], "le morceau garde le niveau lu et l'altitude de croisière");
+  assert.ok(ev.altMin <= ev.alt, "altMin ≤ altitude d'ouverture");
+  const eps = turbEpisodes(P);
+  assert.equal(eps.length, 1, JSON.stringify(eps));
+  assert.equal(eps[0].flMax, 320, "la carte dit le FL320 volé, pas le FL300 lu");
+  assert.equal(eps[0].flMin, 290, "entamé en fin de montée : FL290–320");
 });
