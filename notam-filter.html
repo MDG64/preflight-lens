@@ -5067,11 +5067,33 @@ body.light .stat.on {
       color: var(--gold)
     }
 
+    /* `--code-h` est la HAUTEUR d'une case de code, posée une fois pour
+       toutes : le rond d'inversion et l'étoile de la route s'y calent au
+       pixel près, sur la LIGNE DES CODES, au lieu de deviner ce qu'un moteur
+       donne à un <input> ou de se centrer sur toute la colonne — heures
+       comprises, où ils flottaient jusqu'ici. */
     .home-route {
+      --code-h: 46px;
       display: flex;
       gap: 10px;
       align-items: flex-start;
       flex-wrap: wrap
+    }
+
+    /* La case prend la hauteur annoncée ; le code reste centré dedans
+       (`align-items: center` de `.scratch`). */
+    .home-route .scratch {
+      height: var(--code-h)
+    }
+
+    /* Tout ce qui doit s'aligner sur les codes sans en être un — le rond
+       d'inversion, l'étoile de la route et sa flèche — vit dans cette boîte :
+       la hauteur d'une case, et son contenu centré. */
+    .home-code-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: var(--code-h)
     }
 
     /* La ligne du Clear ne compte pas comme une section de l'accueil : la
@@ -5152,6 +5174,41 @@ body.light .stat.on {
       overflow: hidden;
       text-overflow: ellipsis
     }
+    /* L'HORLOGE sur la case de l'heure : un champ `time` natif, transparent,
+       posé PAR-DESSUS la case. On garde ainsi l'affichage maison — « 0857Z »,
+       en chiffres de la fonte à chasse fixe, encre atténuée ou pleine selon
+       qui a posé l'heure — et le doigt tombe quand même sur le sélecteur du
+       système : cadran sur téléphone, horloge déroulante sur ordinateur. Le
+       champ natif accepte aussi la frappe (2203), donc rien n'est perdu de la
+       saisie au clavier ; c'est lui qui porte l'étiquette et le focus, la case
+       visible passe en `readonly` et sort du parcours de tabulation. */
+    .home-time-wrap {
+      position: relative
+    }
+
+    .home-time-pick {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      opacity: 0;
+      cursor: pointer
+    }
+
+    .home-time-pick:disabled {
+      cursor: default
+    }
+
+    /* Le liseré du focus se voit sur la case du dessous, puisque c'est elle
+       qu'on regarde. */
+    .home-time-wrap:focus-within .home-time {
+      border-color: var(--cyan)
+    }
+
     .home-time {
       width: 100%;
       box-sizing: border-box;
@@ -5223,19 +5280,24 @@ body.light .stat.on {
     /* Bouton d'INVERSION, entre Departure et Destination : le meme pastille
        ronde que la double fleche de la page Route (.swapbtn), en un peu plus
        gros, avec les deux fleches EMPILEES — celle du haut vers la droite,
-       celle du bas vers la gauche : le dessin dit le geste. Le rond se pose au
-       bas de sa colonne pour se centrer sur les cases, pas sur l'etiquette,
-       et s'ecarte de ses voisines pour ne pas coller aux codes. */
+       celle du bas vers la gauche : le dessin dit le geste. Il se tient ENTRE
+       LES DEUX CODES qu'il echange, a leur hauteur : il vit dans une
+       `.home-code-row`, comme s'il etait une quatrieme case. Il se centrait
+       autrefois sur la colonne entiere, heures comprises, et tombait donc
+       entre les HEURES — deux cases plus bas que ce qu'il inverse. */
     .home-field-swap {
-      align-self: stretch
+      align-self: flex-start
     }
 
+    /* `align-self` et `margin-top` remis à zéro : ils viennent du rond de la
+       page Route, qui se cale sous une étiquette INTERNE à la case. Ici, c'est
+       la `.home-code-row` qui centre. */
     .swapbtn.home-swap {
       width: 46px;
       height: 46px;
       flex: none;
       align-self: center;
-      margin: auto 5px 1px;
+      margin: 0 5px;
       flex-direction: column;
       gap: 1px
     }
@@ -5248,13 +5310,11 @@ body.light .stat.on {
     }
 
     /* Étoile de la ROUTE : même glyphe que celles des cases, mais elle
-       répond des trois codes à la fois. Elle se cale sur la hauteur d'une
-       case (46 px) pour ne pas flotter au-dessus de la ligne. */
-    /* La colonne s'étire sur la hauteur de la ligne (`align-items: flex-start`
-       du parent ne s'applique plus), et l'étoile prend tout ce qui reste sous
-       l'étiquette : sa cible fait la hauteur d'une case, comme les trois
-       autres étoiles. La hauteur exacte d'un <input> varie d'un moteur à
-       l'autre — on la recopie au lieu de la deviner. */
+       répond des trois codes à la fois. Elle est UNE CASE DE PLUS au bout de
+       la ligne des codes — même hauteur qu'elles (`--code-h`), juste à droite
+       du dernier code, et rien en dessous : elle descendait autrefois jusque
+       sous les heures, et une étoile de trois centimètres de haut se lisait
+       comme un panneau, pas comme un bouton. */
     /* La colonne du bout NE PREND QUE CE QU'IL LUI FAUT — l'étoile à son
        plancher, la flèche à sa taille — et tout le reste va aux codes. Elle
        s'élargissait autrefois jusqu'au bord ; c'est maintenant l'inverse,
@@ -5262,7 +5322,7 @@ body.light .stat.on {
        s'étirent, et la colonne du bout qui tient sa place au bout, sur la
        même ligne, à toutes les largeurs. */
     .home-field-route {
-      align-self: stretch;
+      align-self: flex-start;
       flex: none
     }
 
@@ -5271,7 +5331,8 @@ body.light .stat.on {
        voie comme une case, et qu'elle se vise au doigt sans viser le glyphe. */
     .route-star {
       font-size: 20px;
-      flex: 1;
+      flex: none;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -5300,24 +5361,18 @@ body.light .stat.on {
       cursor: default
     }
 
-    /* Étoile et flèche partagent la colonne du bout de ligne. L'étoile prend
-       toute la hauteur d'une case — même cible au doigt que les trois étoiles
-       des cases ; la flèche garde sa taille de bouton, celle qu'elle a dans
-       la case des favoris, et se centre sur la ligne. Elle s'éteint tant
-       qu'aucune case ne porte de code complet. */
+    /* Étoile et flèche partagent la LIGNE DES CODES, côte à côte, au bout de
+       la route : l'étoile fait la hauteur d'une case — même cible au doigt
+       que les trois étoiles des cases ; la flèche garde sa taille de bouton,
+       celle qu'elle a dans la case des favoris, et se centre à côté d'elle.
+       Elle s'éteint tant qu'aucune case ne porte de code complet. */
     .route-acts {
-      display: flex;
       align-items: stretch;
-      gap: 6px;
-      flex: 1
+      gap: 6px
     }
 
-    /* La flèche descend au bas de la colonne au lieu de se centrer sur la
-       case : deux gestes opposés — retenir la route, ou en ouvrir le résumé —
-       se ratent l'un pour l'autre quand ils sont à la même hauteur. Elle
-       s'aligne sur le bas des cases, l'étoile garde le haut. */
     .fav-arrow.route-arrow {
-      align-self: flex-end;
+      align-self: center;
       flex: none
     }
 
@@ -5801,7 +5856,7 @@ body.light .stat.on {
       }
 
       .swapbtn.home-swap {
-        margin: auto 2px 1px
+        margin: 0 2px
       }
     }
 
@@ -5823,6 +5878,7 @@ body.light .stat.on {
          maigrit d'autant — cases, écart, étoiles — pour que les trois codes,
          le rond d'inversion, l'étoile et la flèche tiennent à 360 px. */
       .home-route {
+        --code-h: 44px;
         gap: 4px
       }
 
@@ -5843,8 +5899,7 @@ body.light .stat.on {
 
       /* Aucune largeur minimale sur téléphone : à 360 px la ligne est pleine
          à deux pixels près, et un plancher la ferait passer à la ligne. La
-         case prend la place restante quand il y en a (`flex: 1` plus haut),
-         et rien de plus quand il n'y en a pas. */
+         case ne prend plus que son glyphe et ses marges. */
       .route-star {
         font-size: 17px;
         min-width: 0;
@@ -5877,7 +5932,7 @@ body.light .stat.on {
       .swapbtn.home-swap {
         width: 30px;
         height: 30px;
-        margin: auto 0 8px
+        margin: 0
       }
 
       .swap-ico {
@@ -7149,9 +7204,13 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hFromSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hTime0">Take-off · UTC</label>
-          <input class="home-time" id="hTime0" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
-            autocomplete="off" spellcheck="false" aria-label="Take-off time, UTC — HHMM, posed at now + 1 h when the departure is set">
+          <label class="home-field-label home-time-label" for="hPick0">Take-off · UTC</label>
+          <div class="home-time-wrap">
+            <input class="home-time" id="hTime0" placeholder="HHMMZ" readonly tabindex="-1" aria-hidden="true"
+              autocomplete="off" spellcheck="false">
+            <input class="home-time-pick" id="hPick0" type="time"
+              aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set">
+          </div>
         </div>
         <!-- Inverser la route d'un geste : la fleche du haut part a droite, celle
              du bas revient a gauche. Le degagement, choisi pour l'ancienne
@@ -7159,15 +7218,17 @@ body.light .turb-time input { color-scheme: light }
              il s'efface plutot que de mentir. -->
         <div class="home-field home-field-swap">
           <span class="home-field-label" aria-hidden="true">&nbsp;</span>
-          <button class="swapbtn home-swap" id="hSwap" type="button"
-            aria-label="Swap departure and destination"
-            title="Swap departure and destination — the alternate is cleared">
-            <svg class="swap-ico" viewBox="0 0 22 20" aria-hidden="true" fill="none"
-              stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3.5 5h13.5M13 1.6 16.9 5 13 8.4" />
-              <path d="M18.5 15H5M9 11.6 5.1 15 9 18.4" />
-            </svg>
-          </button>
+          <div class="home-code-row">
+            <button class="swapbtn home-swap" id="hSwap" type="button"
+              aria-label="Swap departure and destination"
+              title="Swap departure and destination — the alternate is cleared">
+              <svg class="swap-ico" viewBox="0 0 22 20" aria-hidden="true" fill="none"
+                stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3.5 5h13.5M13 1.6 16.9 5 13 8.4" />
+                <path d="M18.5 15H5M9 11.6 5.1 15 9 18.4" />
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="home-field home-field-code">
           <label class="home-field-label" for="hTo">Destination</label>
@@ -7178,9 +7239,13 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hToSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hTime1">Arrival · UTC</label>
-          <input class="home-time" id="hTime1" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
-            autocomplete="off" spellcheck="false" aria-label="Arrival time, UTC — HHMM, posed from the route flight time">
+          <label class="home-field-label home-time-label" for="hPick1">Arrival · UTC</label>
+          <div class="home-time-wrap">
+            <input class="home-time" id="hTime1" placeholder="HHMMZ" readonly tabindex="-1" aria-hidden="true"
+              autocomplete="off" spellcheck="false">
+            <input class="home-time-pick" id="hPick1" type="time"
+              aria-label="Arrival time, UTC — posed from the route flight time">
+          </div>
         </div>
         <div class="home-field home-field-code">
           <label class="home-field-label" for="hAlt">Alternate</label>
@@ -7191,20 +7256,25 @@ body.light .turb-time input { color-scheme: light }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hAltSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hTime2">Alternate · UTC</label>
-          <input class="home-time" id="hTime2" maxlength="5" inputmode="numeric" placeholder="HHMMZ"
-            autocomplete="off" spellcheck="false" aria-label="Alternate arrival time, UTC — HHMM, posed from the diversion time">
+          <label class="home-field-label home-time-label" for="hPick2">Alternate · UTC</label>
+          <div class="home-time-wrap">
+            <input class="home-time" id="hTime2" placeholder="HHMMZ" readonly tabindex="-1" aria-hidden="true"
+              autocomplete="off" spellcheck="false">
+            <input class="home-time-pick" id="hPick2" type="time"
+              aria-label="Alternate arrival time, UTC — posed from the diversion time">
+          </div>
         </div>
         <!-- L'étoile de la ROUTE, au bout de la file : les trois cases
              portent chacune la leur, celle-ci prend les trois d'un coup. Elle
-             s'aligne sur les cases grâce à une étiquette vide de même hauteur. -->
+             se tient SUR LA LIGNE DES CODES, à droite du dernier — même
+             hauteur qu'une case, rien sous elle : l'étiquette vide la cale en
+             haut, la `.home-code-row` lui donne la hauteur d'une case. -->
         <div class="home-field home-field-route">
           <span class="home-field-label" aria-hidden="true">&nbsp;</span>
           <!-- Deux gestes sur la même route, côte à côte : l'étoile la retient,
                la flèche — celle de la case des favoris — en ouvre le résumé
-               météo, sur les terrains TAPÉS dans les trois cases. Sur téléphone
-               ils s'empilent : les trois codes gardent leur ligne. -->
-          <div class="route-acts">
+               météo, sur les terrains TAPÉS dans les trois cases. -->
+          <div class="home-code-row route-acts">
             <button class="starbtn route-star" id="hRouteStar" type="button" aria-pressed="false"
               aria-label="Add this route to favorites" title="Add / remove this route from favorites"
               disabled>☆</button>
@@ -22942,27 +23012,42 @@ window.addEventListener("scroll", hidePop, true);
       timesSave();
       wxApplyTimes();
     }
+    /* Deux champs par heure : celui qu'on LIT (« 0857Z », la case visible) et
+       celui qu'on TOUCHE (le champ `time` natif, transparent par-dessus, qui
+       ouvre l'horloge du système). Les deux disent la même heure — le second
+       en « HH:MM », seule écriture qu'un champ `time` accepte. */
     function renderHomeTimes() {
       [HT.tko, HT.eta, HT.altt].forEach((t, i) => {
-        const el = $("#hTime" + i);
-        if (!el || document.activeElement === el) return;
+        const el = $("#hTime" + i), pk = $("#hPick" + i);
+        if (!el || !pk) return;
+        const off = !HOME_FIELDS.map(homeFieldCode)[i];
         el.value = t ? t.h + "Z" : "";
         el.classList.toggle("mine", !!(t && t.mine));
-        el.disabled = !HOME_FIELDS.map(homeFieldCode)[i];
+        el.disabled = off;
+        /* La case visible se réécrit toujours — c'est elle qu'on lit, elle ne
+           doit jamais retarder sur l'heure retenue. Le champ natif, lui, se
+           laisse tranquille tant qu'il a la main : on n'écrase pas une frappe
+           en cours. */
+        if (document.activeElement !== pk) pk.value = t ? t.h.slice(0, 2) + ":" + t.h.slice(2) : "";
+        pk.disabled = off;
       });
     }
     ["tko", "eta", "altt"].forEach((key, i) => {
-      const el = $("#hTime" + i);
-      el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
-      el.addEventListener("change", () => {
-        const d = el.value.replace(/[^0-9]/g, "");
-        if (!d && el.value.trim() === "") HT[key] = null;
+      const pk = $("#hPick" + i);
+      pk.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pk.blur(); } });
+      /* Sur téléphone, le champ natif ouvre son cadran de lui-même ; sur
+         ordinateur il n'ouvre l'horloge que sur son icône — invisible ici,
+         puisque le champ l'est. On la demande donc à la main : le doigt (ou
+         le clic) tombe n'importe où sur la case, l'horloge s'ouvre. */
+      pk.addEventListener("click", () => { try { pk.showPicker && pk.showPicker(); } catch (e) { } });
+      pk.addEventListener("change", () => {
+        const d = pk.value.replace(/[^0-9]/g, "");
+        if (!pk.value) HT[key] = null;
         else if (hhmmOk(d)) HT[key] = { h: d, mine: true };
         /* L'arrivée réglée à la main emporte le dégagement posé par la route,
            le décollage réglé emporte les deux : ils se recalculent. */
         if (key === "tko") { if (HT.eta && !HT.eta.mine) HT.eta = null; if (HT.altt && !HT.altt.mine) HT.altt = null; }
         if (key === "eta" && HT.altt && !HT.altt.mine) HT.altt = null;
-        el.blur();
         homeTimesSync();
       });
     });
