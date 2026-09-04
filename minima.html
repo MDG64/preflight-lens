@@ -10312,9 +10312,11 @@ function clockFreeOpen(anchor, opt){
        aria-label="${opt.title||"Set the time"} — UTC">
     ${opt.title ? `<div class="clock-title">${opt.title}</div>` : ""}
     <div class="clock-read">
-      <button class="cr on" type="button" data-mode="h" aria-label="Hours">${pad2(CLOCK.h)}</button>
+      <button class="cr on" type="button" data-mode="h" aria-label="Hours"
+        title="Hours — type the digits, or use the up and down arrows">${pad2(CLOCK.h)}</button>
       <span class="cs">:</span>
-      <button class="cr" type="button" data-mode="m" aria-label="Minutes">${pad2(CLOCK.m)}</button>
+      <button class="cr" type="button" data-mode="m" aria-label="Minutes"
+        title="Minutes — type the digits, or use the up and down arrows">${pad2(CLOCK.m)}</button>
       <span class="cz">UTC</span>
     </div>
     <div class="clock-wrap">${clockFaceHtml()}</div>
@@ -10343,23 +10345,71 @@ function clockFreeOpen(anchor, opt){
   const wrap = pop.querySelector(".clock-wrap");
   const rebuild = ()=>{ wrap.innerHTML = clockFaceHtml();
     pop.querySelectorAll(".cr").forEach(b=>b.classList.toggle("on", b.dataset.mode===CLOCK.mode)); };
-  pop.querySelectorAll(".cr").forEach(b=>b.onclick=()=>{ CLOCK.mode=b.dataset.mode; rebuild(); });
+  /* Les chiffres déjà tapés dans le segment allumé. Vidé dès que le segment
+     change ou que le doigt reprend la main : le clavier et le cadran disent la
+     même heure, ils ne se disputent pas. */
+  let buf = "";
+  const setMode = m=>{ if (CLOCK.mode===m) return; CLOCK.mode=m; buf=""; rebuild(); clockRefresh(pop); };
+  pop.querySelectorAll(".cr").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
   pop.querySelector('[data-act="cancel"]').onclick = clockFreeClose;
   const clr = pop.querySelector('[data-act="clear"]');
   if (clr) clr.onclick = ()=>{ clockFreeClose(); opt.onClear(); };
-  pop.querySelector('[data-act="ok"]').onclick = ()=>{
+  const okb = pop.querySelector('[data-act="ok"]');
+  okb.onclick = ()=>{
     const val = pad2(CLOCK.h)+pad2(CLOCK.m);
     clockFreeClose(); opt.onOk(val);
   };
   /* Le voile ferme, mais SEULEMENT lui : un geste qui part du cadran et finit
      sur le voile — la fin d'un glissement — ne doit rien fermer. */
   back.addEventListener("pointerdown", e=>{ if (e.target===back) clockFreeClose(); });
-  clockFreeEsc = e=>{ if (e.key==="Escape"){ e.stopPropagation(); clockFreeClose(); } };
+
+  /* ---- la saisie au CLAVIER, dans le grand affichage ----
+     Le chiffre tombe dans le segment allumé. Le segment se remplit et passe
+     la main dès qu'il est plein : deux chiffres, ou un premier qu'aucun second
+     ne pourrait suivre — « 7 » en heures, « 6 » en minutes n'ont pas de suite
+     valide. Un couple impossible (25) repart du dernier chiffre plutôt que de
+     refuser la frappe : on tape 2, 5, on obtient 05, et non un champ qui ne
+     bouge plus. */
+  function typeDigit(d){
+    const isH = CLOCK.mode==="h", max = isH ? 23 : 59;
+    let n = +(buf + d);
+    if (buf==="" || n>max){ n = +d; buf = d; } else buf += d;
+    if (isH) CLOCK.h = n; else CLOCK.m = n;
+    const full = buf.length===2 || n*10 > max;
+    if (full) buf = "";
+    if (full && isH){ CLOCK.mode = "m"; rebuild(); }
+    clockRefresh(pop);
+  }
+  const bump = k=>{
+    buf = "";
+    if (CLOCK.mode==="h") CLOCK.h = (CLOCK.h + k + 24) % 24; else CLOCK.m = (CLOCK.m + k + 60) % 60;
+    clockRefresh(pop);
+  };
+  /* En capture, et l'événement s'arrête là : la page ferme ses propres panneaux
+     sur Échap, elle n'a rien à faire des touches tant que le cadran est
+     ouvert. Entrée vaut OK, SAUF quand c'est un bouton qui a la main — sinon
+     « Cancel » au clavier vaudrait « OK ». On le fait à la main plutôt que de
+     laisser le navigateur activer le bouton : le geste ne dépend alors plus de
+     ce que le moteur veut bien faire d'une touche par défaut. */
+  clockFreeEsc = e=>{
+    const k = e.key, act = document.activeElement;
+    const onBtn = !!(act && act.classList && act.classList.contains("ckb"));
+    const stop = ()=>{ e.stopPropagation(); e.preventDefault(); };
+    if (k==="Escape"){ stop(); clockFreeClose(); }
+    else if (k==="Enter"){ stop(); (onBtn ? act : okb).click(); }
+    else if (/^[0-9]$/.test(k)){ stop(); typeDigit(k); }
+    else if (k==="Backspace"){ stop(); buf = ""; }
+    else if (k==="ArrowUp" || k==="ArrowDown"){ stop(); bump(k==="ArrowUp" ? 1 : -1); }
+    else if (k==="ArrowLeft" || k==="ArrowRight"){ stop(); setMode(k==="ArrowLeft" ? "h" : "m"); }
+  };
   window.addEventListener("keydown", clockFreeEsc, true);
+  /* Les heures prennent la main à l'ouverture : le clavier tape tout de suite,
+     et le liseré du focus dit dans quel segment. */
+  pop.querySelector(".cr").focus();
 
   let dragging = false;
   wrap.addEventListener("pointerdown", e=>{
-    dragging = true;
+    dragging = true; buf = "";
     try { wrap.setPointerCapture(e.pointerId); } catch(_){}
     clockPick(wrap, e); clockRefresh(pop); e.preventDefault();
   });
