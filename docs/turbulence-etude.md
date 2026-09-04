@@ -374,7 +374,9 @@ H+/heure Z, la liste des épisodes de turbulence — plages continues, pire
 classe, durée, niveaux, distance (« H+1:45 · 13:11Z · severe · for 132 min ·
 FL340 · 753 NM from LFPG » ; les light de moins de trois minutes restent
 sur le ruban seulement), un tap sur un morceau ou une ligne ouvrant son
-cartouche. Fonctions pures entre les marqueurs `[turb-profile]`,
+cartouche. Le mot « Flight profile » du cartouche de la carte ouvre cette
+page sur le vol surligné — FL du curseur, décollage à l'horizon choisi.
+Fonctions pures entre les marqueurs `[turb-profile]`,
 testées dans `test/turb-grid.test.mjs` (distance et point d'orthodromie,
 profil long et court, encadrement des échéances, échantillonnage).
 

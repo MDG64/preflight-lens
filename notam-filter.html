@@ -4153,6 +4153,31 @@
       color: var(--amber);
     }
 
+    /* Le mot vers la page Turbulence, en bas du cartouche : le cyan des mots
+       d'en-tête (ROUTE, WEATHER…), en plus petit — il ouvre une page, il
+       n'en est pas une. Noir en jour, comme eux. */
+    .map-turb-ctl .tgo {
+      align-self: flex-start;
+      background: none;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      font: 600 11px/1.3 var(--sans);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      cursor: pointer;
+    }
+
+    .map-turb-ctl .tgo:hover {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    body.light .map-turb-ctl .tgo {
+      color: #10161b;
+    }
+
     .mleg .wda {
       font: 700 12px/1 var(--mono);
       font-style: normal;
@@ -7712,12 +7737,17 @@ body.light .turb-time input { color-scheme: light }
           </div>
           <!-- Cycle et heure de validité de la grille affichée : une prévision
                sans son heure ne se juge pas. Rempli par mapTurbNote(). Le
-               cartouche s'arrête là : le détail du vol — résumé, ruban,
-               heures, épisodes — ne s'y lit plus, il est sur la page
-               Turbulence (onglet de Weather). La carte garde seulement
-               l'orthodromie surlignée là où le rejeu rencontre de la
-               turbulence, dessinée par drawMap(). -->
+               détail du vol — résumé, ruban, heures, épisodes — ne se lit
+               plus dans le cartouche : il est sur la page Turbulence, que le
+               mot ci-dessous ouvre. La carte garde seulement l'orthodromie
+               surlignée là où le rejeu rencontre de la turbulence, dessinée
+               par drawMap(). -->
           <div class="tinfo" id="mapTurbInfo" aria-live="polite">Turbulence — loading…</div>
+          <!-- Le mot qui mène au détail : la page Turbulence, ouverte sur le
+               vol que la carte surligne — mêmes terrains, croisière au FL du
+               curseur, décollage à l'horizon choisi. Voir mapOpenTurb(). -->
+          <button type="button" class="tgo" id="mapTurbGo"
+                  title="Open the Turbulence page on this flight — departure to arrival replayed minute by minute against this grid, cruising at the FL of the slider and taking off at the chosen time: summary line, ribbon, hours and the list of the episodes.">Flight profile →</button>
         </div>
         <!-- Le bandeau LEGEND coiffe le cartouche ; son œil le replie et le
              fait revenir — la carte se lit alors sans légende, le bandeau seul
@@ -7916,7 +7946,8 @@ body.light .turb-time input { color-scheme: light }
             destination is <b>highlighted</b> — yellow, orange or red — where a flight taking off at the chosen
             time and cruising at the slider FL would meet turbulence. The detail of that flight — its summary
             line, the ribbon, the hours and the list of the episodes (<b>H+51 · FL140 · light · 332 NM</b>)
-            — is on the <b>Turbulence page</b>, the third tab of the weather page.
+            — is on the <b>Turbulence page</b>: the cartouche's <b>Flight profile</b> word opens it on that very
+            flight, same FL and same take-off time; it is also the third tab of the weather page.
             Wherever a code is written, <b>every runway QFU</b> of that aerodrome
             is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
             together to a side free of the wind arrows and the ⚡; where they cannot travel together the code
@@ -21040,6 +21071,30 @@ function renderInfo(icao) {
       b.onclick = () => { setMapTurbHour(+b.dataset.h); mapTurbRefresh(); };
     });
     setMapTurbFl(mapTurbFlIdx);
+    /* Le mot du cartouche : la page Turbulence, sur le vol que la carte
+       surligne — les terrains de la route, la croisière au FL du curseur, le
+       décollage à l'horizon choisi (NOW, +3, +6, +12 h). La carte se referme
+       (elle couvre tout, z 60) ; la page météo s'ouvre derrière si elle ne
+       l'est pas déjà — le mot WEATHER de la page Turbulence y ramène, il
+       doit mener quelque part. Sans route sur la carte, la page part des
+       cases de l'accueil, comme depuis son onglet. */
+    function mapOpenTurb() {
+      const r = curRoute && curRoute.ok && curRoute.dep && curRoute.arr ? curRoute : null;
+      $("#mapOv").hidden = true;
+      if ($("#wxScreen").hidden) {
+        // Les trois terrains de la route seulement — pas les dégagements en
+        // route que curRoute.airports porte par dizaines pour la carte.
+        const codes = r ? [{ icao: r.dep, role: "dep" }, { icao: r.arr, role: "arr" }, ...(r.alt ? [{ icao: r.alt, role: "alt" }] : [])] : homeRouteCodes();
+        openWx(codes.length === 1 ? [{ icao: codes[0].icao }] : codes);
+      }
+      const fls = mapTurbIndex && Array.isArray(mapTurbIndex.fls) && mapTurbIndex.fls.length ? mapTurbIndex.fls : TURB_FLS;
+      openTurb({
+        dep: r ? r.dep : "", arr: r ? r.arr : "",
+        fl: fls[Math.min(mapTurbFlIdx, fls.length - 1)],
+        t0: Math.ceil((Date.now() + mapTurbHour * 3600e3) / 60e3) * 60e3
+      });
+    }
+    $("#mapTurbGo").onclick = mapOpenTurb;
     // Une carte laissée ouverte avec la turbulence allumée suit les cycles :
     // l'index est redemandé au pas de la minuterie météo, la grille ne
     // change de fichier que si le cycle ou l'échéance « now » a bougé.
@@ -25615,15 +25670,19 @@ function dtsAUnQfu(icao){
                    pilote, pas celle de la route). Un FL tapé par le pilote
                    (flSet) reste aussi : il l'a choisi, la distance non.
        Avant, une page ouverte sans route posait FL150 (distance nulle) et le
-       gardait quand les deux codes arrivaient : LFPO → KLAX à FL150. */
-    function turbSetRoute(dep, arr, mode) {
+       gardait quand les deux codes arrivaient : LFPO → KLAX à FL150.
+       `pref` (venue de la carte, mapOpenTurb) impose le FL du curseur et le
+       décollage à l'horizon choisi ; l'arrivée en découle. */
+    function turbSetRoute(dep, arr, mode, pref) {
       turbCfg.dep = dep; turbCfg.arr = arr;
       const A = GEO && GEO[dep], B = GEO && GEO[arr];
       const dist = A && B ? gcDist(A, B) : 0;
       if (mode === "new") turbCfg.flSet = false;
-      if (mode === "new" || !turbCfg.fl || (mode === "route" && !turbCfg.flSet)) turbCfg.fl = turbDefaultFl(dist);
-      if (mode === "new" || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
-      if (mode !== "keep" || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
+      if (pref && pref.fl) { turbCfg.fl = pref.fl; turbCfg.flSet = true; }
+      else if (mode === "new" || !turbCfg.fl || (mode === "route" && !turbCfg.flSet)) turbCfg.fl = turbDefaultFl(dist);
+      if (pref && pref.t0) turbCfg.t0 = pref.t0;
+      else if (mode === "new" || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
+      if (mode !== "keep" || pref || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
       turbRenderForm();
       turbSchedule();
     }
@@ -25788,12 +25847,14 @@ function dtsAUnQfu(icao){
         }
       }
     }
-    async function openTurb() {
+    /* `pref` : la page s'ouvre depuis la carte (mapOpenTurb) — ses terrains,
+       son FL et son heure de décollage priment sur tout le reste. */
+    async function openTurb(pref) {
       try { await loadGeoData(); } catch (e) { }
       wxCloseFavTab();
       $("#turbScreen").hidden = false;
       const byRole = r => (wxList.find(a => a.role === r) || {}).icao || "";
-      let dep = byRole("dep"), arr = byRole("arr");
+      let dep = (pref && pref.dep) || byRole("dep"), arr = (pref && pref.arr) || byRole("arr");
       if (!dep && !arr && wxList.length >= 2) { dep = wxList[0].icao; arr = wxList[1].icao; }
       if (!dep) dep = rVal("#hFrom");
       if (!arr) arr = rVal("#hTo");
@@ -25803,7 +25864,7 @@ function dtsAUnQfu(icao){
       // loin derrière : on reprend ses heures et son FL tels quels.
       const same = saved && saved.cfg && saved.cfg.dep === dep && saved.cfg.arr === arr && saved.cfg.t0 > Date.now() - 6 * 3600e3;
       if (same) Object.assign(turbCfg, saved.cfg);
-      turbSetRoute(dep, arr, same ? "keep" : "new");
+      turbSetRoute(dep, arr, same ? "keep" : "new", pref);
     }
     function closeTurb() {
       clearTimeout(turbTimer);
