@@ -24825,7 +24825,7 @@ window.addEventListener("scroll", hidePop, true);
       const toMin = h => (+h.slice(0, 2)) * 60 + (+h.slice(2));
       const dur = ((toMin(HT.eta.h) - toMin(HT.tko.h)) % 1440 + 1440) % 1440;
       el.hidden = false;
-      el.textContent = "Flight time " + Math.floor(dur / 60) + "h" + P(dur % 60);
+      el.textContent = Math.floor(dur / 60) + "h" + P(dur % 60);
     }
     /* Les trois cases s'ouvrent au CADRAN : la case ne se tape pas, elle se
        touche. « Clear » y rend l'heure à la route — l'ancien geste, qui était
