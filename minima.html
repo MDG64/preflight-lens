@@ -2499,7 +2499,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
    locale serait tombée hors du cadre, ou par-dessus l'heure Z sur la colonne
    étroite du téléphone. Le champ ne contient TOUJOURS que l'heure Z — c'est
    cette valeur-là que le cadran relit et que le stockage partagé recopie —
-   et se réduit alors à ses cinq caractères, les deux heures se rangeant
+   et se réduit alors à ses six caractères, les deux heures se rangeant
    ensemble au milieu de la case. Un clic n'importe où dans l'enveloppe ouvre
    le cadran (bindTimeFields), l'heure locale ne faisant pas écran. */
 .rt-times .rt-tw{
@@ -2510,7 +2510,7 @@ body.mobile #rtOv:not([hidden]){display:flex}
 .rt-times .rt-tw:focus-within{border-color:var(--cyan)}
 .rt-times .rt-tw input{border:0;border-radius:0;background:transparent}
 .rt-times.has-loc .rt-tw input{
-  flex:0 0 auto;width:5ch;padding-left:0;padding-right:0;
+  flex:0 0 auto;width:6.5ch;padding-left:0;padding-right:0;
 }
 .rt-loc{
   font:600 11px/1 var(--mono);letter-spacing:.02em;color:var(--muted2);
@@ -3172,27 +3172,27 @@ body.light .rt-role{color:var(--text)}
            Chacune se corrige ici. -->
       <div class="rt-form rt-times" id="rtTimes">
         <div class="rt-field">
-          <label for="rtTime0">Take-off · UTC</label>
+          <label for="rtTime0">Take-off</label>
           <div class="rt-tw">
-            <input id="rtTime0" class="rt-time" placeholder="HHMMZ" readonly
+            <input id="rtTime0" class="rt-time" placeholder="HH:MMZ" readonly
                    spellcheck="false" autocomplete="off"
                    aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set; tap to set it on the clock">
             <span class="rt-loc" id="rtLoc0" hidden></span>
           </div>
         </div>
         <div class="rt-field">
-          <label for="rtTime1">Arrival · UTC</label>
+          <label for="rtTime1">Arrival</label>
           <div class="rt-tw">
-            <input id="rtTime1" class="rt-time" placeholder="HHMMZ" readonly
+            <input id="rtTime1" class="rt-time" placeholder="HH:MMZ" readonly
                    spellcheck="false" autocomplete="off"
                    aria-label="Arrival time, UTC — posed from the route flight time; tap to set it on the clock">
             <span class="rt-loc" id="rtLoc1" hidden></span>
           </div>
         </div>
         <div class="rt-field">
-          <label for="rtTime2">Alternate · UTC</label>
+          <label for="rtTime2">Alternate</label>
           <div class="rt-tw">
-            <input id="rtTime2" class="rt-time" placeholder="HHMMZ" readonly
+            <input id="rtTime2" class="rt-time" placeholder="HH:MMZ" readonly
                    spellcheck="false" autocomplete="off"
                    aria-label="Alternate arrival time, UTC — posed from the diversion time; tap to set it on the clock">
             <span class="rt-loc" id="rtLoc2" hidden></span>
@@ -15572,6 +15572,10 @@ window.RTV = (()=>{
     const a = Math.abs(off);
     return "UTC" + (off<0 ? "-" : "+") + Math.floor(a/60) + (a%60 ? ":"+pad2(a%60) : "");
   };
+  /* L'heure telle qu'elle s'AFFICHE dans les trois cases : « 15:20Z ». Le
+     deux-points ne sert qu'à l'œil — tout ce qui relit la case (le cadran, le
+     `change`, le stockage partagé) ne garde que les chiffres. */
+  const withColon = v => /^\d{4}/.test(v || "") ? v.slice(0, 2) + ":" + v.slice(2) : (v || "");
   /* Les trois cases d'heure montrent l'heure en vigueur de leur phase — celle
      que le pilote a réglée, sinon celle de la route, sinon rien tant que le
      créneau est vide. Une case en cours de frappe n'est pas réécrite. */
@@ -15583,11 +15587,11 @@ window.RTV = (()=>{
       const el = document.getElementById("rtTime"+i);
       if (!el || document.activeElement===el) return;
       if (i===0){
-        el.value = TKO ? TKO.h + "Z" : "";
+        el.value = TKO ? withColon(TKO.h + "Z") : "";
         el.classList.toggle("mine", !!(TKO && TKO.mine));
         return;
       }
-      el.value = RT.icaos[i] ? fmtTimeInput(etaDate(role)) : "";
+      el.value = RT.icaos[i] ? withColon(fmtTimeInput(etaDate(role))) : "";
       el.classList.toggle("mine", AUTO[role]===false);
     });
     /* Toute la route au même décalage : l'heure locale n'apprend rien. */
@@ -15600,11 +15604,11 @@ window.RTV = (()=>{
       if (!box) return;
       const show = split && !!l;
       box.hidden = !show;
-      /* « 1807L », « 0000L+1 » quand le quantième local est celui du
+      /* « 18:07L », « 00:00L+1 » quand le quantième local est celui du
          lendemain. Le décalage n'entre pas dans la case — il est dans
          l'infobulle, avec le terrain dont c'est l'heure. */
       box.textContent = show
-        ? l.hhmm + "L" + (l.day ? (l.day>0 ? "+" : "") + l.day : "")
+        ? withColon(l.hhmm) + "L" + (l.day ? (l.day>0 ? "+" : "") + l.day : "")
         : "";
       const el = document.getElementById("rtTime"+i);
       if (el){
@@ -15636,7 +15640,7 @@ window.RTV = (()=>{
         clockFreeOpen(el, {
           title: RT_TITLE[i],
           value: (el.value||"").replace(/[^0-9]/g,"").slice(0,4),
-          onOk: v=>set(v+"Z"),
+          onOk: v=>set(withColon(v+"Z")),
           onClear: ()=>set("")
         });
       });
