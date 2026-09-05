@@ -4567,9 +4567,9 @@
        propre fond, et la seule sortie de la carte disparaissait sous lui.
        6 la place au-dessus du canvas (2), de l'attribution (3) et du toast (5). */
     /* Les trois pastilles de la barre noire. Elles ne flottent plus sur la
-       carte : elles sont posées dans le flux de la barre, la maison à gauche,
-       le soleil et le « ? » à droite — d'où l'absence de tout positionnement
-       ici, c'est la barre qui les range. */
+       carte : elles sont posées dans le flux de la barre, la maison juste
+       avant le « ? », le soleil au bout — d'où l'absence de tout
+       positionnement ici, c'est la barre qui les range. */
     .map-x {
       flex: none;
       width: 36px;
@@ -7922,14 +7922,13 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
   <!-- ================= OVERLAY CARTE ================= -->
   <div class="map-ov" id="mapOv" hidden>
     <!-- Barre noire de la carte. Elle porte les couches, une seule allumée à
-         la fois : la maison à gauche, les quatre couches au milieu, le thème
-         et le mode d'emploi à droite. AUCUNE couche allumée est un état à
+         la fois : les quatre couches à gauche, puis la maison juste avant le
+         mode d'emploi, et le thème à droite. AUCUNE couche allumée est un état à
          part entière — c'est celui de l'ouverture : les terrains aux couleurs
          du METAR/TAF, rien d'autre. Recliquer la couche allumée y ramène.
          Les pastilles rondes ne flottent plus sur la carte : elles vivent
          dans la barre, qui est le seul bandeau de commande de l'écran. -->
     <div class="map-bar">
-      <button class="map-x" id="mapClose" aria-label="Back" title="Back"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
       <div class="map-tabs" id="mapTabs" role="group" aria-label="Map layer">
         <button type="button" class="mtab" data-layer="wind" aria-pressed="false"
                 title="Keep the METAR/TAF colours and add the surface wind at each station — one arrow per 10 kt, strongest wind announced (gusts and TEMPO included). The legend opens folded.">Wind</button>
@@ -7940,6 +7939,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <button type="button" class="mtab" data-layer="radar" aria-pressed="false"
                 title="The METAR/TAF map plus the rain as seen now — weather radar over Europe, North America and Japan, satellite rain estimate everywhere else — and the thunderstorm SIGMETs in force.">Radar</button>
       </div>
+      <button class="map-x" id="mapClose" aria-label="Back" title="Back"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
       <button class="map-x map-help" id="mapHelpBtn" aria-label="Information" title="Information">?</button>
       <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
     </div>
