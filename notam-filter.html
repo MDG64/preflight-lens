@@ -7654,6 +7654,11 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
               </svg>
             </button>
           </div>
+          <span class="home-field-label home-time-label" aria-hidden="true">&nbsp;</span>
+          <!-- Durée du vol (2026-09-05) : décollage → arrivée, lue sur les
+               deux heures affichées — la route posée ou une heure réglée à
+               la main donnent toutes deux une durée juste. -->
+          <div class="home-duration" id="hDuration" hidden></div>
         </div>
         <div class="home-field home-field-code">
           <label class="home-field-label" for="hTo">Destination</label>
@@ -7706,11 +7711,6 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           </div>
         </div>
       </div>
-
-      <!-- Durée du vol (2026-09-05) : décollage → arrivée, lue sur les deux
-           heures affichées — la route posée ou une heure réglée à la main
-           donnent toutes deux une durée juste. -->
-      <div class="home-duration" id="hDuration" hidden></div>
 
       <div>
         <!-- Deux onglets sur la même liste : les terrains un à un, ou les
