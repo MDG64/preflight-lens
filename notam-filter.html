@@ -7967,12 +7967,13 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           <div class="tinfo" id="mapTurbInfo" aria-live="polite">Turbulence — loading…</div>
         </div>
         <!-- Couche STORM : la dernière image de pluie, datée source par
-             source, un interrupteur pour l'éteindre. Visible seulement la
-             couche allumée. Rempli par mapStormNote(). -->
+             source, et les SIGMET d'orage — un interrupteur chacun, indépendants.
+             Visible seulement la couche allumée. Rempli par mapStormNote(). -->
         <div class="map-mode map-storm-ctl" id="mapStormCtl">
-          <div class="map-wind-hours storm-sw" role="group" aria-label="Storm layer images"
-               title="Rain — weather radar where a public service publishes it freely (Europe, North America, Japan), satellite rain estimate everywhere else between 60°S and 70°N.">
+          <div class="map-wind-hours storm-sw" role="group" aria-label="Storm layer switches"
+               title="Rain — weather radar where a public service publishes it freely (Europe, North America, Japan), satellite rain estimate everywhere else between 60°S and 70°N. SIGMET — the thunderstorm bulletins in force, outlined and hatched over the rain; switch them off to read the image alone, their count stays in the cartouche.">
             <button type="button" class="wh on" id="mapStormRadar" aria-pressed="true" aria-label="Rain: weather radar, satellite estimate elsewhere"><i class="c" aria-hidden="true"></i>Rain</button>
+            <button type="button" class="wh on" id="mapStormSig" aria-pressed="true" aria-label="Thunderstorm SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
           </div>
           <div class="tinfo" id="mapStormInfo" aria-live="polite">Storm — loading…</div>
         </div>
@@ -19781,7 +19782,7 @@ function renderInfo(icao) {
       if (mapTurbOn && mapMode === "wx" && mapTurbShown && sigCache.list) {
         const ms = Date.parse(mapTurbShown.run) + mapTurbShown.fh * 3600e3;
         vus = sigForLevel(sigCache.list, mapTurbShown.fl * 100, ms);
-      } else if (mapStormOn && mapMode === "wx" && sigConvCache.list) {
+      } else if (mapStormOn && mapMode === "wx" && mapStormSigOn && sigConvCache.list) {
         // Couche STORM : les SIGMET d'orage en vigueur MAINTENANT, tous
         // niveaux — un orage n'a pas de tranche qu'on choisirait au curseur,
         // et l'image qu'ils coiffent est celle de l'instant.
@@ -20452,6 +20453,10 @@ function renderInfo(icao) {
     // L'image de la couche orage et ses carreaux — déclarés ici pour la
     // même raison ; le reste de la couche vit à la section STORM.
     let mapStormRadarOn = true;
+    // L'interrupteur des SIGMET d'orage : les zones officielles s'effacent de
+    // la carte sans emporter la pluie — leur COMPTE reste écrit au cartouche,
+    // une zone cachée n'est pas une zone absente.
+    let mapStormSigOn = true;
     const mapStormTiles = new Map();
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
     let mapWindHour = 0;
@@ -21999,7 +22004,9 @@ function renderInfo(icao) {
       // chargement dit « loading ».
       const radar = (st.radar || []).map(s => nom(s) + " " + (s.valid ? stormHM(s.valid) : s.loading ? "loading" : "?"));
       if (mapStormRadarOn) parts.push("Rain " + (radar.length ? radar.join(", ") : "none"));
-      parts.push(nSig < 0 ? "SIGMET unavailable" : nSig ? nSig + " SIGMET TS in force" : "no SIGMET TS in force");
+      parts.push(nSig < 0 ? "SIGMET unavailable"
+        : nSig ? nSig + " SIGMET TS in force" + (mapStormSigOn ? "" : " (hidden)")
+        : "no SIGMET TS in force");
       const errs = (st.radar || []).filter(s => s.err && !s.valid).map(s => nom(s));
       if (errs.length) warns.push(errs.join(", ") + " unreachable");
       if (Date.now() - mapStormStatusAt > 2 * STORM_STATUS_TTL) warns.push("network lost, last images kept");
@@ -22016,6 +22023,7 @@ function renderInfo(icao) {
       b.setAttribute("aria-pressed", on ? "true" : "false");
     }
     $("#mapStormRadar").onclick = () => { mapStormRadarOn = !mapStormRadarOn; setStormToggle("#mapStormRadar", mapStormRadarOn); mapStormRefresh(); };
+    $("#mapStormSig").onclick = () => { mapStormSigOn = !mapStormSigOn; setStormToggle("#mapStormSig", mapStormSigOn); mapStormRefresh(); };
     setInterval(() => {
       if (document.hidden || $("#mapOv").hidden || mapMode !== "wx" || !mapStormOn) return;
       mapStormRefresh(true);
