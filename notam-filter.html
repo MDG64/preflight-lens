@@ -7170,6 +7170,14 @@ body.light .turb-chart .tint { fill-opacity: .12 }
 .turb-chart .cur.off { display: none }
 .turb-chart .cursor { stroke: var(--text); stroke-width: 1; stroke-opacity: .7; shape-rendering: crispEdges }
 .turb-chart .cursor-dot { stroke: var(--panel); stroke-width: 2 }
+/* La voie des SIGMET, au-dessus du cadre : une barre pleine par plage
+   traversée, ses bornes descendues dans le graphique, et la teinte de fond
+   des minutes concernées. */
+.turb-chart .sig-lane-lbl { fill: var(--muted); font-size: 10px; letter-spacing: .12em }
+.turb-chart .sig-bar-txt { fill: #fff; font-size: 10px; letter-spacing: .04em }
+.turb-chart .sig-edge { stroke-width: 1; stroke-opacity: .45; shape-rendering: crispEdges }
+.turb-chart .sig-tint { fill-opacity: .1 }
+body.light .turb-chart .sig-tint { fill-opacity: .13 }
 .turb-list { margin-top: 12px; display: grid; gap: 6px }
 .turb-ev {
   display: grid; grid-template-columns: auto auto 1fr; gap: 0 12px; align-items: baseline;
@@ -7182,6 +7190,11 @@ body.light .turb-chart .tint { fill-opacity: .12 }
 .turb-ev.k2 .k { color: #ef8a2c }
 .turb-ev.k3 .k { color: var(--red) }
 .turb-ev.on { border-color: var(--text) }
+/* Une ligne de SIGMET se distingue d'un épisode calculé : un liseré de sa
+   couleur à gauche, comme la barre de sa voie sur le graphique. */
+.turb-ev.sig { border-left-width: 3px }
+.turb-ev.sig.k2 { border-left-color: #ff6e00 }
+.turb-ev.sig.k3 { border-left-color: #e61e2c }
 .turb-none { font: 500 12px/1.4 var(--sans); color: var(--muted); margin-top: 10px }
 @media (max-width: 480px) { .turb-ev { grid-template-columns: auto 1fr } .turb-ev span:last-child { grid-column: 1 / -1 } }
 /* La bulle de lecture d'une minute (survol, tap, clavier) : la valeur
@@ -7758,8 +7771,9 @@ body.light .turb-chart .tint { fill-opacity: .12 }
         lognormal calibration of the GTG forecasts (Sharman &amp; Pearson 2017), plus a convective proxy under model
         storms; thresholds for a medium jet (A320/B737): light 0.15, moderate 0.22, severe 0.34. The same field as the
         Turbulence layer of the map, read minute by minute along the great circle with a generic medium-jet profile.
-        Decision support only — not the WAFS forecast, blind to mountain waves, and it does not replace the SIGWX
-        charts of your official briefing.</div>
+        Above the curve, in its own lane, the turbulence SIGMETs in force (NOAA/NWS Aviation Weather Center): official
+        bulletins, never merged into the computed index. Decision support only — not the WAFS forecast, blind to
+        mountain waves, and it does not replace the SIGWX charts of your official briefing.</div>
     </div>
   </div>
 
@@ -8325,7 +8339,14 @@ body.light .turb-chart .tint { fill-opacity: .12 }
           simulated reflectivity). Thresholds for a medium jet: light 0.15, moderate 0.22, severe 0.34. A model estimate
           on ~25 km cells, drawn smoothed between grid points,
           <b>not the official WAFS turbulence forecast</b> and <b>not an aviation weather product</b>. The
-          Turbulence page reads the same grid along the flight, minute by minute.
+          Turbulence page reads the same grid along the flight, minute by minute.</div>
+        <div class="hd-note">
+          <b>SIGMET TURB</b> — international and US turbulence SIGMETs from the <a href="https://aviationweather.gov/data/api/"
+            target="_blank" rel="noopener">NOAA/NWS Aviation Weather Center</a> (public domain), refreshed every few minutes.
+          On the Turbulence page they get <b>their own lane above the curve</b>: a SIGMET is a forecaster's bulletin, and it
+          is never averaged into the computed index — the flight is marked where it enters the polygon, between the
+          bulletin's own levels, during its validity. AIRMETs are deliberately left out: they cover whole regions for hours
+          and would light up every flight. An empty lane means no SIGMET crosses the flight, not that the air is smooth.
         </div>
         <div class="hd-note">
           <b>FIR boundaries</b> — <a href="https://github.com/vatsimnetwork/vatspy-data-project"
@@ -21030,6 +21051,75 @@ function renderInfo(icao) {
     }
     // [/turb-profile]
 
+    // [turb-sigmet] — section évaluée seule par test/turb-grid.test.mjs.
+    /* Les SIGMET TURB, posés PAR-DESSUS la courbe. Un SIGMET est le bulletin
+       d'un centre de veille météorologique — un humain qui engage un service
+       officiel ; l'indice, lui, est un calcul sur des vents de modèle. Les
+       deux ne se moyennent pas et ne se remplacent pas : la courbe garde sa
+       valeur, le SIGMET prend sa propre voie au-dessus d'elle, avec son nom,
+       ses niveaux et sa validité. C'est au pilote de faire la somme.
+
+       Trois conditions pour qu'un SIGMET concerne une minute de vol : le
+       point est dans le polygone, l'altitude est entre la base et le sommet,
+       l'instant est dans la validité. Rien n'est élargi — un SIGMET donne
+       ses limites, on les lit telles quelles (au contraire de la grille, où
+       le voisinage fait une enveloppe : là, l'incertitude est celle du
+       modèle ; ici, la zone est celle qu'un service a tracée).
+
+       Le backend (/api/sigmet/turb) sert la liste normalisée : coordonnées
+       [lat, lon], altitudes en pieds (null = le sol pour la base, sans
+       limite pour le sommet), `from`/`to` en millisecondes, `sev` MOD ou
+       SEV. */
+    /* Longitude ramenée auprès d'une référence : un polygone océanique peut
+       enjamber l'antiméridien (Anchorage, Auckland, Nadi), où −179 et +179
+       sont voisins de deux degrés, pas éloignés de trois cent cinquante-huit. */
+    function sigUnwrap(lon, ref) {
+      let d = (lon - ref) % 360;
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      return ref + d;
+    }
+    /* Lancer de rayon : le point est dedans si une demi-droite vers l'ouest
+       coupe les côtés un nombre impair de fois. Toutes les longitudes sont
+       déroulées auprès du premier sommet. */
+    function sigPointIn(poly, lat, lon) {
+      if (!Array.isArray(poly) || poly.length < 3) return false;
+      const ref = poly[0][1], x = sigUnwrap(lon, ref);
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const yi = poly[i][0], xi = sigUnwrap(poly[i][1], ref);
+        const yj = poly[j][0], xj = sigUnwrap(poly[j][1], ref);
+        if ((yi > lat) !== (yj > lat) && x < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    }
+    function sigCovers(s, lat, lon, altFt, ms) {
+      if (!s || !(ms >= s.from && ms <= s.to)) return false;
+      if (s.base != null && altFt < s.base) return false;
+      if (s.top != null && altFt > s.top) return false;
+      return sigPointIn(s.coords, lat, lon);
+    }
+    /* Le balayage du vol : pour chaque SIGMET, les PLAGES continues de
+       minutes qu'il couvre — c'est ce que le graphique dessine et ce que la
+       liste énumère. Une plage d'une seule minute compte : un vol coupe le
+       coin d'un polygone en deux minutes, et l'avoir traversé est un fait.
+       Rendu trié par heure de début. */
+    function sigScan(sigs, pts, tkoMs) {
+      const runs = [];
+      if (!Array.isArray(sigs) || !Array.isArray(pts)) return runs;
+      for (let k = 0; k < sigs.length; k++) {
+        let start = -1;
+        for (let i = 0; i <= pts.length; i++) {
+          const p = pts[i];
+          const on = !!p && sigCovers(sigs[k], p.lat, p.lon, p.alt, tkoMs + p.t * 60e3);
+          if (on && start < 0) start = i;
+          if (!on && start >= 0) { runs.push({ k, i0: start, i1: i - 1, t0: pts[start].t, t1: pts[i - 1].t }); start = -1; }
+        }
+      }
+      return runs.sort((a, b) => a.t0 - b.t0 || a.k - b.k);
+    }
+    // [/turb-sigmet]
+
     function mapTurbNote(text, warn) {
       const el = $("#mapTurbInfo");
       if (!el) return;
@@ -25988,7 +26078,41 @@ function dtsAUnQfu(icao){
        estompée le temps du recalcul. Le dessin de turbli, en couleurs. */
     const TURB_COL = { 0: "var(--steel)", 1: "#ffc600", 2: "#ff6e00", 3: "#e61e2c" };
     const TURB_PLANE = "M0-6.2 1.3-1.7 6 1.3v1.2L1.3 1.2 1 4.4l2.2 1.3v.9L0 5.9l-3.2.7v-.9L-1 4.4l-.3-3.2L-6 2.5V1.3l4.7-3z";
+    const SIG_LANE = 22;                   // hauteur ajoutée au-dessus du cadre pour la voie des SIGMET
     let turbLastRes = null, turbCursorI = -1;
+    /* Les SIGMET TURB en vigueur, par le backend (l'AWC n'émet pas de CORS,
+       et la politique de sécurité de la page ne laisserait pas passer un
+       appel direct). Un cache mémoire de 5 min : la page recalcule à chaque
+       frappe. Un échec ne casse pas le graphique — la courbe du modèle
+       reste —, mais il est DIT : un silence qui passerait pour un ciel sans
+       SIGMET serait pire que pas de couche du tout. */
+    const SIG_TTL_MS = 5 * 60e3;
+    let sigCache = { at: 0, list: null, err: "not fetched yet" };
+    async function sigFetch() {
+      if (sigCache.list && Date.now() - sigCache.at < SIG_TTL_MS) return sigCache;
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/sigmet/turb`);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+        if (!d || !Array.isArray(d.sigmets)) throw new Error("unexpected response");
+        sigCache = { at: Date.now(), list: d.sigmets, err: null, srcAt: Date.parse(d.at) || Date.now() };
+      } catch (e) {
+        sigCache = { at: Date.now(), list: null, err: e.message || String(e) };
+      }
+      return sigCache;
+    }
+    /* Les mots d'un SIGMET à l'écran : ses niveaux (le sol, un FL, ou rien —
+       « and above » quand le bulletin ne pose pas de sommet), son nom (FIR et
+       série, comme il se cite lui-même : « LFFF B3 »), et son intensité. */
+    const sigFl = v => v == null || v <= 0 ? "SFC" : "FL" + turbP3(Math.round(v / 100));
+    function sigBand(s) {
+      const b = s.base == null || s.base <= 0 ? "SFC" : sigFl(s.base);
+      if (s.top == null) return b === "SFC" ? "all levels" : b + " and above";
+      return `${b}–${sigFl(s.top)}`;
+    }
+    const sigName = s => [s.fir || s.icao || "", s.series || ""].filter(Boolean).join(" ") || "SIGMET";
+    const sigTitle = s => `${s.sev ? s.sev + " " : ""}TURB`;
+    const sigCol = s => s && s.sev === "MOD" ? TURB_COL[2] : TURB_COL[3];
     /* Octet du fichier -> EDR (m^2/3 s^-1) : ÷ 100 quand l'index le dit
        (unit "edr100") ; un ancien fichier (indice × 16, ou classes seules)
        se lit par ses seuils, ramenés linéairement sur ceux de l'EDR — la
@@ -26022,8 +26146,10 @@ function dtsAUnQfu(icao){
       const L = res && res.levels, n = k => Math.round(turbY(L[k], res));
       const items = [[0, L ? `Smooth < ${n(0)}` : "Smooth"], [1, L ? `Light ${n(0)}–${n(1)}` : "Light"],
                      [2, L ? `Moderate ${n(1)}–${n(2)}` : "Moderate"], [3, L ? `Severe ≥ ${n(2)}` : "Severe"]];
+      const sigs = (res && Array.isArray(res.sigRuns) && res.sigRuns.length) ? res.sigRuns : null;
       $("#turbLegend").innerHTML = items.map(([c, t]) => `<span style="--k:${TURB_COL[c]}">${t}</span>`).join("")
         + `<span class="band">Grey band: worst neighbouring cell, other forecast hour</span><span class="hatch">Hatched: below FL100, grid silent</span>`
+        + (sigs ? `<span style="--k:${sigCol(res.sig && res.sig[sigs[0].k])}">SIGMET TURB — official bulletin, in its own lane above</span>` : "")
         + (L ? `<span class="unit">EDR × 100, medium jet</span>` : "");
     }
     function turbRenderChart(res, skeleton) {
@@ -26038,8 +26164,12 @@ function dtsAUnQfu(icao){
       const route = res.cfg.dep + res.cfg.arr;
       if (skeleton && box.dataset.route === route && box.querySelector("svg")) { box.classList.add("loading"); return; }
       box.classList.remove("loading"); box.dataset.route = route;
-      const W = Math.max(320, Math.round(box.clientWidth) || 640), H = W < 480 ? 250 : 300;
-      const L = 44, R = 14, T = 26, B = 48, PW = W - L - R, PH = H - T - B;
+      // Les SIGMET traversés ajoutent une voie AU-DESSUS du cadre : le
+      // graphique grandit d'autant, la courbe garde sa hauteur.
+      const runs = (!skeleton && Array.isArray(res.sigRuns) && res.sigRuns) || [];
+      const lane = runs.length ? SIG_LANE : 0;
+      const W = Math.max(320, Math.round(box.clientWidth) || 640), H = (W < 480 ? 250 : 300) + lane;
+      const L = 44, R = 14, T = 26 + lane, B = 48, PW = W - L - R, PH = H - T - B;
       const total = Math.max(res.total, 1), t0 = res.cfg.t0, S = res.ser || [];
       const lv = (res.levels || TURB_LEVELS).map(l => turbY(l, res));
       let ymax = 60;
@@ -26061,6 +26191,13 @@ function dtsAUnQfu(icao){
         g += `<rect class="tint" x="${L}" y="${F(y1)}" width="${PW}" height="${F(y2 - y1)}" style="fill:${TURB_COL[k + 1]}"/>`;
         g += `<rect class="strip" x="${L}" y="${F(y1)}" width="5" height="${F(y2 - y1)}" style="fill:${TURB_COL[k + 1]}"/>`;
         if (y2 - y1 >= 13) g += `<text class="cls-lbl" x="${W - R - 4}" y="${F(y1 + 10)}" text-anchor="end">${names[k]}</text>`;
+      }
+      // Les minutes sous SIGMET, teintées sur toute la hauteur : le fond
+      // seulement — la courbe et sa bande passent par-dessus, rien n'est
+      // masqué.
+      for (const r of runs) {
+        const x1 = X(r.t0), x2 = Math.max(X(r.t1), x1 + 2);
+        g += `<rect class="sig-tint" x="${F(x1)}" y="${T}" width="${F(x2 - x1)}" height="${PH}" style="fill:${sigCol(res.sig && res.sig[r.k])}"/>`;
       }
       // La grille : un trait fin tous les 10, le chiffre à gauche ; les
       // seuils dans leur couleur.
@@ -26107,6 +26244,32 @@ function dtsAUnQfu(icao){
           const x = X(pk[0]), y = Y(turbY(pk[4], res)), c = Math.max(0, pk[7]), left = x > L + PW * 0.62;
           g += `<circle class="peak" cx="${F(x)}" cy="${F(y)}" r="4" style="fill:${TURB_COL[c]}"/>`;
           g += `<text class="ax strong" x="${F(x + (left ? -9 : 9))}" y="${F(Math.max(T + 10, y - 9))}" text-anchor="${left ? "end" : "start"}">EDR ${turbEdrLabel(pk[4], res)} · ${TURB_NAMES[c]}</text>`;
+        }
+      }
+      // La voie des SIGMET, au-dessus du cadre : un bulletin officiel ne se
+      // mélange pas à l'indice calculé — il a sa voie, son nom et ses bornes,
+      // qui descendent dans le graphique en traits fins. Le nom ne s'écrit
+      // dans la barre que s'il y tient : sinon il est dans la liste, dans la
+      // bulle, et jamais coupé.
+      if (lane) {
+        // La voie occupe le HAUT de l'image, au-dessus de l'unité de l'axe :
+        // les deux étiquettes ne se serrent pas l'une contre l'autre.
+        const ly = 5, lh = 12;
+        // Au bord GAUCHE de l'image, pas contre l'axe : espacé comme il est,
+        // le mot est plus large que la marge, et il y perdait son S.
+        g += `<text class="sig-lane-lbl" x="1" y="${F(ly + 9.5)}" text-anchor="start">SIGMET</text>`;
+        for (const r of runs) {
+          const s = (res.sig && res.sig[r.k]) || {}, c = sigCol(s);
+          const x1 = X(r.t0), x2 = Math.max(X(r.t1), x1 + 4);
+          g += `<line class="sig-edge" x1="${F(x1)}" x2="${F(x1)}" y1="${T}" y2="${T + PH}" style="stroke:${c}"/>`;
+          if (x2 - x1 > 6) g += `<line class="sig-edge" x1="${F(x2)}" x2="${F(x2)}" y1="${T}" y2="${T + PH}" style="stroke:${c}"/>`;
+          g += `<rect class="sig-bar" x="${F(x1)}" y="${F(ly)}" width="${F(x2 - x1)}" height="${lh}" rx="3" style="fill:${c}"/>`;
+          // Le nom entier s'il tient, l'intensité seule sinon, rien du tout
+          // si la barre est trop courte : jamais un mot coupé — la liste et
+          // la bulle disent tout, elles.
+          const long = `${sigTitle(s)} · ${sigName(s)}`, court = sigTitle(s);
+          const txt = x2 - x1 > long.length * 6.4 + 14 ? long : x2 - x1 > court.length * 6.4 + 12 ? court : null;
+          if (txt) g += `<text class="sig-bar-txt" x="${F(x1 + 6)}" y="${F(ly + 9.5)}">${esc(txt)}</text>`;
         }
       }
       // L'axe des heures de vol : des repères à des minutes rondes, six au
@@ -26188,6 +26351,13 @@ function dtsAUnQfu(icao){
         const ch = turbClassOf(p[6], res.levels);
         if (ch > c || hi - e >= 0.05) line(`Nearby up to ${turbEdrLabel(p[6], res)} (${TURB_NAMES[ch]}) — a neighbouring cell or the other forecast hour`);
       }
+      // Les SIGMET qui couvrent cette minute, chacun sa ligne, dans sa
+      // couleur : ce sont eux qu'on lit en premier après la valeur.
+      for (const r of (res.sigRuns || [])) {
+        if (i < r.i0 || i > r.i1) continue;
+        const s = (res.sig && res.sig[r.k]) || {};
+        line(`SIGMET ${sigName(s)} · ${sigTitle(s)} · ${sigBand(s)} · valid ${turbHM(s.from)}–${turbHM(s.to)}Z`).style.color = sigCol(s);
+      }
       const A = GEO && GEO[res.cfg.dep], B = GEO && GEO[res.cfg.arr];
       if (A && B && res.dist) { const q = gcPoint(A, B, Math.min(1, p[1] / res.dist)); line(`${Math.abs(q.lat).toFixed(1)}°${q.lat >= 0 ? "N" : "S"} ${Math.abs(q.lon).toFixed(1)}°${q.lon >= 0 ? "E" : "W"} · ${Math.round(p[1])} NM from ${res.cfg.dep}`); }
       if (p[8] != null && res.run) line(`GFS ${turbP2(new Date(Date.parse(res.run)).getUTCHours())}Z run · forecast ${p[9] == null || p[9] === p[8] ? "+" + p[8] + " h" : "+" + p[8] + " to +" + p[9] + " h"}`);
@@ -26204,18 +26374,31 @@ function dtsAUnQfu(icao){
       const box = $("#turbList"), t0 = res.cfg.t0, S = res.ser || [];
       const eps = turbEpisodes({ events: res.events, total: res.total, dist: res.dist, pts: S.map(p => ({ t: p[0], v: p[4] })) })
         .filter(e => e.cls >= 2 || e.t1 - e.t0 >= 3);
+      // Les SIGMET d'abord, et à part : un bulletin officiel passe avant un
+      // épisode calculé, et il se lit autrement — son nom, ses niveaux, sa
+      // validité, jamais une valeur d'indice.
+      const runs = res.sigRuns || [];
+      const sigHtml = runs.map((r, j) => {
+        const s = (res.sig && res.sig[r.k]) || {};
+        return `<div class="turb-ev sig ${s.sev === "MOD" ? "k2" : "k3"}" data-sig="${j}"><span class="t">${turbHPlus(r.t0)} · ${turbHM(t0 + r.t0 * 60e3)}Z</span><span class="k">SIGMET${s.sev ? " " + esc(s.sev) : ""}</span><span>${esc(sigName(s))} · ${esc(sigBand(s))} · for ${Math.round(r.t1 - r.t0) + 1} min · valid ${turbHM(s.from)}–${turbHM(s.to)}Z</span></div>`;
+      }).join("");
       if (!eps.length) {
-        box.innerHTML = `<div class="turb-none">${res.max === 0 ? "Smooth all along at this level and time." : res.max === -1 ? "The whole flight stays below FL100: the grid says nothing." : res.max === -2 ? "No grid data along this route (outside the covered area)." : "Only brushes of light turbulence, none longer than three minutes."}</div>`;
-        return;
+        box.innerHTML = sigHtml + `<div class="turb-none">${res.max === 0 ? "Smooth all along at this level and time." : res.max === -1 ? "The whole flight stays below FL100: the grid says nothing." : res.max === -2 ? "No grid data along this route (outside the covered area)." : "Only brushes of light turbulence, none longer than three minutes."}`
+          + `${runs.length ? " That is the model index; the SIGMET above is a forecaster's bulletin and stands on its own." : ""}</div>`;
+      } else {
+        box.innerHTML = sigHtml + eps.map((e, i) => `<div class="turb-ev k${e.cls}" data-i="${i}"><span class="t">${turbHPlus(e.t0)} · ${turbHM(t0 + e.t0 * 60e3)}Z</span><span class="k">${TURB_NAMES[e.cls]}</span><span>${e.vMax >= 0 ? `EDR up to ${turbEdrLabel(e.vMax, res)} · ` : ""}${e.t1 - e.t0 >= 1.5 ? `for ${Math.round(e.t1 - e.t0)} min · ` : ""}FL${e.flMin}${e.flMax !== e.flMin ? `–${e.flMax}` : ""} · ${Math.round(e.d0)} NM from ${esc(res.cfg.dep)}</span></div>`).join("");
       }
-      box.innerHTML = eps.map((e, i) => `<div class="turb-ev k${e.cls}" data-i="${i}"><span class="t">${turbHPlus(e.t0)} · ${turbHM(t0 + e.t0 * 60e3)}Z</span><span class="k">${TURB_NAMES[e.cls]}</span><span>${e.vMax >= 0 ? `EDR up to ${turbEdrLabel(e.vMax, res)} · ` : ""}${e.t1 - e.t0 >= 1.5 ? `for ${Math.round(e.t1 - e.t0)} min · ` : ""}FL${e.flMin}${e.flMax !== e.flMin ? `–${e.flMax}` : ""} · ${Math.round(e.d0)} NM from ${esc(res.cfg.dep)}</span></div>`).join("");
-      // Une ligne touchée pose le curseur sur le pic de son épisode.
+      // Une ligne touchée épingle sa minute : le pic pour un épisode du
+      // modèle, l'entrée dans la zone pour un SIGMET.
       box.querySelectorAll(".turb-ev").forEach(row => {
         row.onclick = () => {
-          const e = eps[+row.dataset.i];
           box.querySelectorAll(".turb-ev").forEach(r => r.classList.toggle("on", r === row));
           let best = -1;
-          S.forEach((p, i) => { if (p[0] >= e.t0 && p[0] < e.t1 && p[4] >= 0 && (best < 0 || p[4] > S[best][4])) best = i; });
+          if (row.dataset.sig != null) best = runs[+row.dataset.sig].i0;
+          else {
+            const e = eps[+row.dataset.i];
+            S.forEach((p, i) => { if (p[0] >= e.t0 && p[0] < e.t1 && p[4] >= 0 && (best < 0 || p[4] > S[best][4])) best = i; });
+          }
           if (best >= 0) { turbPinned = best; turbTipAt(best, true); }
         };
       });
@@ -26239,6 +26422,9 @@ function dtsAUnQfu(icao){
                         levels: mapTurbIndex ? mapTurbLevels(mapTurbIndex) : null,
                         enc: mapTurbIndex && mapTurbIndex.encoding ? { unit: mapTurbIndex.encoding.unit, per_edr: mapTurbIndex.encoding.per_edr, floor: mapTurbIndex.encoding.floor } : null }, true);
       st.textContent = "Loading the turbulence grid…";
+      // Les SIGMET partent en même temps que la grille : ils ne dépendent
+      // pas d'elle, et leur échec ne doit pas retenir la courbe.
+      const sigP = sigFetch();
       try {
         const index = await mapTurbIndexGet();
         const fls = Array.isArray(index.fls) && index.fls.length ? index.fls : TURB_FLS;
@@ -26262,16 +26448,42 @@ function dtsAUnQfu(icao){
         const ser = P.pts.map(p => [Math.round(p.t * 100) / 100, Math.round(p.d * 10) / 10, p.alt, p.fl, r1(p.v), r1(p.lo), r1(p.hi), p.cls,
                                     p.hours ? p.hours[0] : null, p.hours ? p.hours[p.hours.length - 1] : null]);
         const enc = index.encoding ? { unit: index.encoding.unit, per_edr: index.encoding.per_edr, floor: index.encoding.floor } : null;
-        const res = { events: P.events, ser, total: P.total, top: P.top, dist: P.dist, max: P.max, peak: P.peak, levels, enc, cfg, run: index.run, at: Date.now() };
+        // Les SIGMET TURB, par-dessus : la liste réduite à ceux que le vol
+        // traverse vraiment, et les plages traversées. Ce qui est gardé pour
+        // l'écran et le stockage n'est ni le polygone ni le texte brut —
+        // seulement de quoi nommer le bulletin, ses niveaux et sa validité.
+        const sc = await sigP;
+        if (token !== turbToken) return;
+        const runsAll = sigScan(sc.list || [], P.pts, cfg.t0);
+        const used = [...new Set(runsAll.map(r => r.k))];
+        const sig = used.map(k => {
+          const s = sc.list[k];
+          return { id: s.id, icao: s.icao, fir: s.fir, firName: s.firName, series: s.series, sev: s.sev, base: s.base, top: s.top, from: s.from, to: s.to };
+        });
+        const sigRuns = runsAll.map(r => ({ k: used.indexOf(r.k), i0: r.i0, i1: r.i1, t0: r.t0, t1: r.t1 }));
+        const res = { events: P.events, ser, total: P.total, top: P.top, dist: P.dist, max: P.max, peak: P.peak, levels, enc,
+                      sig, sigRuns, sigAt: sc.err ? null : sc.srcAt, sigErr: sc.err || null, cfg, run: index.run, at: Date.now() };
         turbPinned = -1;
         turbRenderChart(res);
         const runMs = Date.parse(index.run), lastMs = runMs + Math.max(...index.hours) * 3600e3;
         const cell = index.grid && index.grid.dlon ? ` · ${index.grid.dlon}° cells` : "";
+        /* Le mot sur les SIGMET. Une absence se dit, et se dit JUSTE : « rien
+           sur cette route » suppose qu'on a regardé et que la fenêtre du vol
+           est couverte. Un SIGMET vit trois à six heures ; pour un départ
+           plus lointain, aucun bulletin ne peut encore exister — ce n'est
+           pas un ciel calme, c'est un horizon. */
+        const sigLast = (sc.list && sc.list.length) ? Math.max(...sc.list.map(s => s.to)) : 0;
+        const sigNote = sc.err ? ` · SIGMET unavailable (${sc.err})`
+          : sigRuns.length ? ` · ${sigRuns.length} SIGMET TURB crossed`
+          : !sc.list.length ? " · no SIGMET TURB in force anywhere right now"
+          : cfg.t0 > sigLast ? " · no SIGMET covers these hours yet — they are issued a few hours ahead"
+          : " · no SIGMET TURB on this route";
         st.textContent = `GFS ${turbP2(new Date(runMs).getUTCHours())}Z run${cell} · forecasts to ${turbHM(lastMs)}Z ${turbDateLbl(lastMs)}`
           + ` · cruise FL${Math.round(P.top / 100)}`
           + (Date.now() - runMs > TURB_STALE_MS ? " · OLD RUN" : "")
           + (cfg.t1 > lastMs + 30 * 60e3 ? " · the flight ends after the last forecast hour, which is reused" : "")
-          + (cfg.t0 < runMs ? " · departure before the run: first hour reused" : "");
+          + (cfg.t0 < runMs ? " · departure before the run: first hour reused" : "")
+          + sigNote;
         store.set(TURB_KEY, { cfg, res });
       } catch (e) {
         if (token !== turbToken) return;

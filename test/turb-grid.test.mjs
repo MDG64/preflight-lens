@@ -26,10 +26,13 @@ async function chargerTurb() {
   assert.ok(a >= 0 && b > a, "marqueurs [turb-decode] introuvables");
   const c = html.indexOf("// [turb-profile]"), d = html.indexOf("// [/turb-profile]");
   assert.ok(c >= 0 && d > c, "marqueurs [turb-profile] introuvables");
-  const src = html.slice(a, b) + "\n" + html.slice(c, d)
+  const e = html.indexOf("// [turb-sigmet]"), f = html.indexOf("// [/turb-sigmet]");
+  assert.ok(e >= 0 && f > e, "marqueurs [turb-sigmet] introuvables");
+  const src = html.slice(a, b) + "\n" + html.slice(c, d) + "\n" + html.slice(e, f)
     + "\nexport { turbDecode, turbValFromCls, turbClassOf, turbPngParse, turbPngUnfilter, turbPngDecode, turbPickHour,"
     + " turbCatmull, turbResample, turbMercLat, turbLut, turbColorize,"
-    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbValueAt, turbValueNear, turbSampleProfile, turbEpisodes };";
+    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbValueAt, turbValueNear, turbSampleProfile, turbEpisodes,"
+    + " sigUnwrap, sigPointIn, sigCovers, sigScan };";
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 
@@ -346,4 +349,109 @@ test("turbEpisodes regroupe les transitions en plages continues de turbulence", 
   // Avec la série : le pic de chaque épisode, les minutes hors épisode ignorées.
   const withPts = turbEpisodes({ ...P, pts: [{ t: 10, v: 90 }, { t: 22, v: 18 }, { t: 27, v: 40 }, { t: 35, v: 16 }, { t: 40, v: 50 }, { t: 85, v: 25 }, { t: 90, v: NaN }] });
   assert.equal(withPts[0].vMax, 40); assert.equal(withPts[1].vMax, 25);
+});
+
+// ---------------------------------------------------------------- SIGMET ---
+// Un carré de 2° sur la Manche, FL200 à FL400, valide de 12:00Z à 16:00Z : la
+// forme que sert /api/sigmet/turb (coords [lat, lon], pieds, millisecondes).
+const T12 = Date.parse("2026-09-05T12:00Z"), T16 = Date.parse("2026-09-05T16:00Z");
+const CARRE = {
+  id: "LFFF-B3", icao: "LFPW", fir: "LFFF", series: "B3", sev: "SEV",
+  base: 20000, top: 40000, from: T12, to: T16,
+  coords: [[51, -1], [51, 1], [49, 1], [49, -1]],
+};
+
+test("sigUnwrap ramène une longitude auprès de sa référence, antiméridien compris", async () => {
+  const { sigUnwrap } = await chargerTurb();
+  assert.equal(sigUnwrap(10, 12), 10, "rien à dérouler");
+  assert.equal(sigUnwrap(-179, 179), 181, "de l'autre côté de l'antiméridien : deux degrés plus loin");
+  assert.equal(sigUnwrap(179, -179), -181);
+  assert.equal(sigUnwrap(-170, 170), 190);
+  assert.equal(sigUnwrap(0, 0), 0);
+});
+
+test("sigPointIn : dedans, dehors, et un polygone qui enjambe l'antiméridien", async () => {
+  const { sigPointIn } = await chargerTurb();
+  assert.equal(sigPointIn(CARRE.coords, 50, 0), true, "au centre");
+  assert.equal(sigPointIn(CARRE.coords, 50, 2), false, "à l'est du carré");
+  assert.equal(sigPointIn(CARRE.coords, 52, 0), false, "au nord du carré");
+  assert.equal(sigPointIn(CARRE.coords, 50, -1.5), false, "à l'ouest");
+  assert.equal(sigPointIn([[1, 1], [2, 2]], 1.5, 1.5), false, "moins de trois sommets : rien");
+  assert.equal(sigPointIn(null, 1, 1), false);
+  // Zone océanique de 178E à 178W : le point à 179E et celui à 179W sont dedans,
+  // celui à 170E dehors — sans déroulement, le test aurait échoué sur les deux.
+  const pacifique = [[10, 178], [10, -178], [-10, -178], [-10, 178]];
+  assert.equal(sigPointIn(pacifique, 0, 179), true);
+  assert.equal(sigPointIn(pacifique, 0, -179), true);
+  assert.equal(sigPointIn(pacifique, 0, 179.99), true);
+  assert.equal(sigPointIn(pacifique, 0, 170), false);
+  assert.equal(sigPointIn(pacifique, 0, -170), false);
+  // Sur un bord exact, le lancer de rayon tranche d'un côté : le bord ouest
+  // compte dedans, le bord est dehors. C'est l'asymétrie classique de la
+  // méthode — celle qui fait que deux polygones jointifs ne comptent pas un
+  // point deux fois. Écrit ici pour qu'un changement se voie ; à l'échelle
+  // d'un SIGMET, un dixième de mille ne se discute pas.
+  assert.equal(sigPointIn(CARRE.coords, 50, -1), true, "bord ouest : dedans");
+  assert.equal(sigPointIn(CARRE.coords, 50, 1), false, "bord est : dehors");
+});
+
+test("sigCovers : le polygone, les niveaux et la validité, sans marge d'aucune sorte", async () => {
+  const { sigCovers } = await chargerTurb();
+  const t = T12 + 3600e3;
+  assert.equal(sigCovers(CARRE, 50, 0, 30000, t), true);
+  assert.equal(sigCovers(CARRE, 50, 0, 19999, t), false, "sous la base");
+  assert.equal(sigCovers(CARRE, 50, 0, 20000, t), true, "juste à la base");
+  assert.equal(sigCovers(CARRE, 50, 0, 40000, t), true, "juste au sommet");
+  assert.equal(sigCovers(CARRE, 50, 0, 40001, t), false, "au-dessus du sommet");
+  assert.equal(sigCovers(CARRE, 50, 0, 30000, T12 - 1), false, "avant la validité");
+  assert.equal(sigCovers(CARRE, 50, 0, 30000, T16 + 1), false, "après la validité");
+  assert.equal(sigCovers(CARRE, 50, 0, 30000, T12), true, "à la seconde d'ouverture");
+  assert.equal(sigCovers(CARRE, 50, 2, 30000, t), false, "hors du polygone");
+  // Base nulle = le sol, sommet nul = sans limite.
+  assert.equal(sigCovers({ ...CARRE, base: null, top: null }, 50, 0, 500, t), true);
+  assert.equal(sigCovers({ ...CARRE, base: null }, 50, 0, 0, t), true);
+  assert.equal(sigCovers({ ...CARRE, top: null }, 50, 0, 51000, t), true);
+  assert.equal(sigCovers(null, 50, 0, 30000, t), false);
+});
+
+test("sigScan rend les plages continues traversées, une par SIGMET, triées", async () => {
+  const { sigScan } = await chargerTurb();
+  // Un vol plein est le long du 50e parallèle, de 2,95°W à 3,05°E, une minute
+  // par dixième de degré, en croisière FL300 ; les points tombent à mi-chemin
+  // des bords du carré (−1 et +1), jamais dessus — sur un bord exact, le
+  // lancer de rayon tranche arbitrairement, et ce n'est pas ce qu'on teste.
+  const tko = T12 + 30 * 60e3;
+  const pts = [];
+  for (let i = 0; i <= 60; i++) pts.push({ t: i, lat: 50, lon: -2.95 + i * 0.1, alt: 30000 });
+  const runs = sigScan([CARRE], pts, tko);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].k, 0);
+  assert.equal(runs[0].i0, 20, "entre à −0,95°, la première minute passé le bord ouest");
+  assert.equal(runs[0].i1, 39, "sort à +0,95°, la dernière minute avant le bord est");
+  assert.equal(runs[0].t0, 20); assert.equal(runs[0].t1, 39);
+  // Trop bas : aucune plage, le carré commence à FL200.
+  assert.equal(sigScan([CARRE], pts.map(p => ({ ...p, alt: 8000 })), tko).length, 0);
+  // Trop tard : le vol part après la fin de validité.
+  assert.equal(sigScan([CARRE], pts, T16 + 60e3).length, 0);
+  // Deux SIGMET, dont un second carré plus à l'est et plus court : deux
+  // plages, rendues dans l'ordre des heures.
+  const est = { ...CARRE, id: "EGTT-A1", fir: "EGTT", series: "A1", sev: "MOD", coords: [[51, 1.5], [51, 2.5], [49, 2.5], [49, 1.5]] };
+  const deux = sigScan([est, CARRE], pts, tko);
+  assert.equal(deux.length, 2);
+  assert.ok(deux[0].t0 < deux[1].t0, "trié par heure de début");
+  assert.equal(deux[0].k, 1, "le carré de la Manche d'abord, et son indice suit sa place dans la liste");
+  assert.equal(deux[1].k, 0);
+  // Un vol qui traverse, sort, et retraverse le MÊME SIGMET : deux plages.
+  const zigzag = [];
+  for (let i = 0; i < 10; i++) zigzag.push({ t: i, lat: 50, lon: [0, 0, 2, 2, 2, 0, 0, 2, 2, 2][i], alt: 30000 });
+  const rz = sigScan([CARRE], zigzag, tko);
+  assert.equal(rz.length, 2);
+  assert.deepEqual([rz[0].i0, rz[0].i1, rz[1].i0, rz[1].i1], [0, 1, 5, 6]);
+  // Une plage encore ouverte à la dernière minute est fermée sur elle.
+  const jusquauBout = [{ t: 0, lat: 50, lon: 0, alt: 30000 }, { t: 1, lat: 50, lon: 0, alt: 30000 }];
+  assert.deepEqual(sigScan([CARRE], jusquauBout, tko).map(r => [r.i0, r.i1]), [[0, 1]]);
+  // Rien à balayer : pas de plage, pas d'exception.
+  assert.deepEqual(sigScan([], pts, tko), []);
+  assert.deepEqual(sigScan(null, pts, tko), []);
+  assert.deepEqual(sigScan([CARRE], null, tko), []);
 });

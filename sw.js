@@ -305,6 +305,25 @@ self.addEventListener("fetch", e => {
     return;
   }
 
+  // 3 quater) SIGMET TURBULENCE (/api/sigmet/turb) : réseau d'abord, copie en
+  //    filet. Une copie ne périme personne — chaque bulletin porte sa validité
+  //    et la page ne pose sur le vol que ceux dont l'heure tombe dedans ; un
+  //    SIGMET expiré gardé en cache ne s'allume donc jamais. Ce qu'on gagne :
+  //    au briefing, sans réseau, la dernière liste connue reste posée sur la
+  //    courbe au lieu de disparaître.
+  if (url.includes("/api/sigmet/")) {
+    e.respondWith(
+      fetch(e.request).then(r => {
+        if (r && r.ok) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }).catch(() => caches.match(e.request))   // hors ligne : la dernière liste
+    );
+    return;
+  }
+
   // 3 ter) ZONES DE TURBULENCE (/api/turb/… sur le backend, ou la branche
   //    turb-data sur raw.githubusercontent.com) : réseau d'abord ET dépôt, pour
   //    la même raison que la couche météo mondiale — la dernière grille lue

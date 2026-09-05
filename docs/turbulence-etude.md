@@ -483,10 +483,10 @@ fois. L'app essaie d'abord `/api/turb/` sur le backend, puis
 les nappes s'affichent. Le backend peut plus tard servir la même
 arborescence pour reprendre la main.
 
-**Reste à faire** : SIGMET TURB en
-surcouche (§1) ; profil par type avion (vitesses et taux depuis
+**Reste à faire** : profil par type avion (vitesses et taux depuis
 `aircraft-db.js`) et heure de décollage libre ; calibration des
-seuils Ellrod contre quelques journées de SIGMET et de retours pilotes.
+seuils contre quelques journées de SIGMET et de retours pilotes. Les
+SIGMET TURB, eux, sont posés sur la courbe depuis le 2026-09-05 (§10).
 
 ## 9. Calibration en EDR et courbe du vol (2026-09-05)
 
@@ -596,9 +596,82 @@ rejeu, épisodes avec pic).
   (léger, lourd) reste à brancher sur `aircraft-db.js`.
 - La bande grise est un étalement (voisinage, heure d'à côté), pas une
   probabilité.
-- SIGMET TURB en surcouche (§1), toujours à poser.
 - Vérification : comparer quelques vols par jour à turbli, et le GTG CONUS
   de l'AWC (public) à notre grille sur les États-Unis.
+
+## 10. SIGMET TURB par-dessus la courbe (2026-09-05)
+
+Ce que le §1 annonçait est posé — sur la courbe du vol, pas encore sur la
+carte.
+
+### 10.1 Le principe : deux canaux, jamais une moyenne
+
+Un SIGMET est le bulletin d'un centre de veille météorologique : un
+prévisionniste engage un service officiel sur une zone, des niveaux et une
+plage horaire. L'indice, lui, est un calcul sur des vents de modèle. Les
+deux ne se moyennent pas et ne se remplacent pas. Le §4.3 de cette étude
+proposait `cls = max(cls, sigmet(...))` ; c'est écarté : depuis la
+calibration (§9), la courbe porte une VALEUR d'EDR, et un SIGMET n'en a
+pas. Il prend donc **sa propre voie au-dessus de la courbe**, avec son nom,
+ses niveaux et sa validité — au pilote de faire la somme.
+
+### 10.2 La source, et ce qui est écarté
+
+`GET /api/sigmet/turb` sur notam-proxy relaie l'AWC (qui n'émet pas de
+CORS, et que la politique de sécurité de la page ne laisserait pas
+joindre) :
+
+- `isigmet?format=json&hazard=turb` — les SIGMET internationaux, le monde
+  entier ; `airsigmet?format=json&hazard=turb` — les SIGMET américains.
+- **Les AIRMET sont écartés** : l'AIRMET Tango couvre en permanence des
+  États entiers pour de la turbulence modérée ; posé sur un vol, il serait
+  allumé du décollage à l'atterrissage et ne dirait plus rien. Les OUTLOOK
+  aussi (une perspective, pas un bulletin en vigueur).
+- Le périmé est jeté à chaque réponse, pas seulement au rafraîchissement :
+  une copie servie faute de réseau amont ne ressuscite aucun bulletin.
+- Cache 5 min (l'AWC annonce 180 s), copie servie jusqu'à 1 h si l'amont
+  tombe, les deux flux indépendants (l'un muet ne prive pas de l'autre).
+- Réponse : `{at, stale, partial, hazard, kinds, source, sigmets:[…]}`,
+  chaque SIGMET en `{id, icao, fir, firName, series, sev, base, top, from,
+  to, dir, spd, coords, raw}` — coordonnées `[lat, lon]` (moitié moins
+  d'octets sur un polygone de quarante sommets), altitudes en pieds
+  (`null` = le sol pour la base, sans limite pour le sommet), heures en
+  millisecondes. Mesuré le 2026-09-05 : 27 SIGMET TURB, 15 Ko, 588 octets
+  par bulletin.
+
+### 10.3 La lecture, et le dessin
+
+Section `[turb-sigmet]` de `notam-filter.html` : `sigPointIn` (lancer de
+rayon, longitudes déroulées auprès du premier sommet — un polygone
+océanique enjambe l'antiméridien), `sigCovers` (polygone ET niveaux ET
+validité, sans marge d'aucune sorte : la grille a une enveloppe parce que
+le modèle se trompe de 50 à 100 NM, un SIGMET a des limites qu'un service
+a tracées), `sigScan` (les plages continues traversées, une par bulletin).
+
+À l'écran : une **voie au-dessus du cadre**, une barre pleine par plage
+(rouge SEV, orange MOD) portant son nom s'il y tient, ses bornes descendues
+dans le graphique en traits fins, et la teinte de fond des minutes
+concernées. La bulle d'une minute couverte porte la ligne du bulletin dans
+sa couleur ; la liste met les SIGMET **avant** les épisodes calculés, avec
+un liseré. Le statut dit ce qui a été trouvé — et une absence se dit juste :
+« aucun SIGMET sur cette route » suppose qu'on a regardé ET que la fenêtre
+du vol est couverte ; pour un départ plus lointain que la dernière validité
+publiée, c'est « aucun SIGMET ne couvre encore ces heures ». Un échec réseau
+n'est jamais un ciel calme : il s'écrit.
+
+Vérifié le 2026-09-05 sur YPPH → FIMP (Perth → Maurice, FL340) : le SIGMET
+YMMM B10 (SEV TURB, FL200–FL400, valide 08:15–12:15Z) est traversé de H+41
+à H+1:33, 52 minutes, pendant que la courbe du modèle y monte à 0,27.
+
+### 10.4 Ce qui reste
+
+- La carte ne porte pas encore les polygones (la couche `fill` hachurée du
+  §3.4) : seule la courbe du vol les lit.
+- `dir`/`spd` (déplacement de la zone) sont servis mais pas exploités : un
+  SIGMET valide quatre heures se déplace, et le vol le croise à un instant.
+- Les SIGMET américains ne sont pris que sous forme SIGMET ; couvrir la
+  turbulence de basse couche aux États-Unis demanderait les AIRMET, avec
+  une présentation qui ne noie pas le vol.
 
 ## Sources
 
