@@ -4192,14 +4192,14 @@
       color: var(--amber);
     }
 
-    /* Couche STORM : même contrat que la turbulence — son cartouche et ses
+    /* Couche RADAR : même contrat que la turbulence — son cartouche et ses
        lignes de légende n'existent que la couche allumée. Son rond n'est pas
        un choix mais un interrupteur : les SIGMET s'éteignent, la pluie reste. */
-    #mapOv:not(.storm-on) .map-storm-ctl {
+    #mapOv:not(.radar-on) .map-radar-ctl {
       display: none
     }
 
-    .map-storm-ctl {
+    .map-radar-ctl {
       flex-direction: column;
       align-items: stretch;
       gap: 8px;
@@ -4207,28 +4207,28 @@
       min-width: 220px;
     }
 
-    #mapOv .map-storm-ctl .storm-sw {
+    #mapOv .map-radar-ctl .radar-sw {
       display: flex;
       background: none;
       border: 0;
       padding: 0;
     }
 
-    .map-storm-ctl .tinfo {
+    .map-radar-ctl .tinfo {
       font: 10.5px/1.3 var(--sans);
       color: var(--muted);
       letter-spacing: .02em;
     }
 
-    .map-storm-ctl .tinfo.warn {
+    .map-radar-ctl .tinfo.warn {
       color: var(--amber);
     }
 
-    .mleg.st {
+    .mleg.rd {
       display: none
     }
 
-    #mapOv.storm-on .mleg.st {
+    #mapOv.radar-on .mleg.rd {
       display: flex
     }
 
@@ -7937,8 +7937,8 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                 title="The route and the forecast turbulence alone — flight level and forecast time of your choosing. The station colours step aside: this layer answers about the air en route, not about the aerodromes.">Turbulence</button>
         <button type="button" class="mtab nt" data-layer="notam" aria-pressed="false"
                 title="The NOTAM map: which aerodromes are downloaded and readable offline.">NOTAM</button>
-        <button type="button" class="mtab" data-layer="storm" aria-pressed="false"
-                title="The METAR/TAF map plus the rain as seen now — weather radar over Europe, North America and Japan, satellite rain estimate everywhere else — and the thunderstorm SIGMETs in force.">Storm</button>
+        <button type="button" class="mtab" data-layer="radar" aria-pressed="false"
+                title="The METAR/TAF map plus the rain as seen now — weather radar over Europe, North America and Japan, satellite rain estimate everywhere else — and the thunderstorm SIGMETs in force.">Radar</button>
       </div>
       <button class="map-x map-help" id="mapHelpBtn" aria-label="Information" title="Information">?</button>
       <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
@@ -8025,17 +8025,17 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           </div>
           <div class="tinfo" id="mapTurbInfo" aria-live="polite">Turbulence — loading…</div>
         </div>
-        <!-- Couche STORM : la dernière image de pluie, datée source par
+        <!-- Couche RADAR : la dernière image de pluie, datée source par
              source, et les SIGMET d'orage. La PLUIE n'a pas d'interrupteur —
              elle EST la couche, l'éteindre ne laissait que la carte nue ; pour
              s'en passer on quitte la couche. Seuls les SIGMET s'effacent.
-             Visible seulement la couche allumée. Rempli par mapStormNote(). -->
-        <div class="map-mode map-storm-ctl" id="mapStormCtl">
-          <div class="map-wind-hours storm-sw" role="group" aria-label="Storm layer switches"
+             Visible seulement la couche allumée. Rempli par mapRadarNote(). -->
+        <div class="map-mode map-radar-ctl" id="mapRadarCtl">
+          <div class="map-wind-hours radar-sw" role="group" aria-label="Radar layer switches"
                title="SIGMET — the thunderstorm bulletins in force, outlined and hatched over the rain; switch them off to read the image alone, their count stays in the cartouche.">
-            <button type="button" class="wh sw on" id="mapStormSig" aria-pressed="true" aria-label="Thunderstorm SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
+            <button type="button" class="wh sw on" id="mapRadarSig" aria-pressed="true" aria-label="Thunderstorm SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
           </div>
-          <div class="tinfo" id="mapStormInfo" aria-live="polite">Storm — loading…</div>
+          <div class="tinfo" id="mapRadarInfo" aria-live="polite">Radar — loading…</div>
         </div>
         <!-- Le bandeau LEGEND coiffe le cartouche ; son œil le replie et le
              fait revenir — la carte se lit alors sans légende, le bandeau seul
@@ -8065,9 +8065,9 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           <span class="mleg wx tb"><i class="sq t3"></i>Severe turbulence</span>
           <span class="mleg wx tb"><i class="sq ts"></i>SIGMET TURB in force at that level and hour — outlined and hatched</span>
           <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), smoothed between its ~25 km grid points; darker shade = stronger — not an official aviation product. The hatched areas are turbulence SIGMETs (NOAA/NWS AWC): forecasters' bulletins, drawn over the index and never merged into it.</span>
-          <span class="mleg wx st"><i class="sq rd"></i>Rain — blue light, green moderate, yellow heavy, red and magenta the convective cores, white hail likely (radar; satellite estimate where no radar)</span>
-          <span class="mleg wx st"><i class="sq ts"></i>SIGMET TS / convective SIGMET in force — outlined and hatched, tap for the bulletin</span>
-          <span class="mleg wx st tbnote">Latest image only, dated in the cartouche. Radar where it is public: NOAA NEXRAD (Iowa Environmental Mesonet) over the contiguous US, DWD (CC BY 4.0) over Germany — no radar drawn elsewhere means no free radar, not clear skies. Satellite: NASA GIBS (GOES-East, GOES-West, Himawari band 13), EUMETSAT Meteosat when served. Guidance, not an official aviation weather product.</span>
+          <span class="mleg wx rd"><i class="sq rd"></i>Rain — blue light, green moderate, yellow heavy, red and magenta the convective cores, white hail likely (radar; satellite estimate where no radar)</span>
+          <span class="mleg wx rd"><i class="sq ts"></i>SIGMET TS / convective SIGMET in force — outlined and hatched, tap for the bulletin</span>
+          <span class="mleg wx rd tbnote">Latest image only, dated in the cartouche. Radar where it is public: NOAA NEXRAD (Iowa Environmental Mesonet) over the contiguous US, DWD (CC BY 4.0) over Germany — no radar drawn elsewhere means no free radar, not clear skies. Satellite: NASA GIBS (GOES-East, GOES-West, Himawari band 13), EUMETSAT Meteosat when served. Guidance, not an official aviation weather product.</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgold"></i>NOTAM downloaded — readable offline</span>
@@ -8229,7 +8229,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             to open its <b>minima</b>. A yellow <b>⚡</b> marks a
             station whose METAR reports a <b>CB</b> or whose TAF announces one.
             The <b>black bar</b> at the top carries four layers &mdash; <b>Wind</b>, <b>Turbulence</b>,
-            <b>NOTAM</b>, <b>Storm</b> &mdash; and lights <b>one at a time</b>; tapping the lit one puts the map
+            <b>NOTAM</b>, <b>Radar</b> &mdash; and lights <b>one at a time</b>; tapping the lit one puts the map
             back to the plain METAR/TAF view it opened on. <b>Wind</b> keeps those colours and adds
             surface-wind arrows — one per 10 kt, gusts and trend groups included; <b>now/+1/+2/+3&nbsp;h</b> shows
             the TAF wind as dashed arrows. <b>Turbulence</b> keeps the <b>route alone</b> &mdash; the station
@@ -8249,9 +8249,9 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
             together to a side free of the wind arrows and the ⚡; where they cannot travel together the code
             keeps its place and the QFU find one of their own, further round the dot. The METAR/TAF map and its
-            <b>Wind</b> and <b>Storm</b> layers show them; <b>NOTAM</b> does not — there, the map answers one
+            <b>Wind</b> and <b>Radar</b> layers show them; <b>NOTAM</b> does not — there, the map answers one
             question only, which aerodromes are downloaded — and neither does <b>Turbulence</b>.
-            <b>Storm</b> keeps the METAR/TAF map and its ⚡ and lays under them the <b>rain as seen now</b>: the
+            <b>Radar</b> keeps the METAR/TAF map and its ⚡ and lays under them the <b>rain as seen now</b>: the
             <b>weather radar</b> where a public service publishes it freely — the European OPERA composite, the North
             American composite of Environment Canada, the Japanese nowcast — and everywhere else between 60°S and 70°N
             the <b>satellite rain estimate</b> of the NOAA (rain deduced from cloud-top temperatures, not measured: it
@@ -8541,7 +8541,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           drawn means no SIGMET at that level and hour, not that the air is smooth.
         </div>
         <div class="hd-note">
-          <b>Storm layer</b> — rain: <a href="https://www.eumetnet.eu/activities/observations-programme/current-activities/opera/"
+          <b>Radar layer</b> — rain: <a href="https://www.eumetnet.eu/activities/observations-programme/current-activities/opera/"
             target="_blank" rel="noopener">OPERA</a> European radar composite © EUMETNET, licensed
           <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; North
           American radar composite — Data Source: Environment and Climate Change Canada
@@ -19823,13 +19823,13 @@ function renderInfo(icao) {
         }
       }
 
-      // --- radar et satellite de la couche STORM (sous tout le reste) ---
+      // --- radar et satellite de la couche RADAR (sous tout le reste) ---
       // Les carreaux se posent comme la nappe : sous les terrains, les
       // éclairs, la route et les SIGMET, la carte se lit au travers.
-      if (mapStormOn && mapMode === "wx") stormDrawTiles(ctx, cv, A, v, kx, dpr, X, Y);
+      if (mapRadarOn && mapMode === "wx") radarDrawTiles(ctx, cv, A, v, kx, dpr, X, Y);
 
       // --- SIGMET de turbulence (même interrupteur, même FL, même heure) ---
-      // — et, couche STORM, les SIGMET d'orage en vigueur maintenant.
+      // — et, couche RADAR, les SIGMET d'orage en vigueur maintenant.
       // Les zones officielles PAR-DESSUS la nappe calculée, jamais fondues
       // dedans : contour plein et hachures, la nappe et la carte se lisent au
       // travers. Ne sont dessinés que les bulletins dont la tranche contient
@@ -19842,8 +19842,8 @@ function renderInfo(icao) {
       if (mapTurbOn && mapMode === "wx" && mapTurbSigOn && mapTurbShown && sigCache.list) {
         const ms = Date.parse(mapTurbShown.run) + mapTurbShown.fh * 3600e3;
         vus = sigForLevel(sigCache.list, mapTurbShown.fl * 100, ms);
-      } else if (mapStormOn && mapMode === "wx" && mapStormSigOn && sigConvCache.list) {
-        // Couche STORM : les SIGMET d'orage en vigueur MAINTENANT, tous
+      } else if (mapRadarOn && mapMode === "wx" && mapRadarSigOn && sigConvCache.list) {
+        // Couche RADAR : les SIGMET d'orage en vigueur MAINTENANT, tous
         // niveaux — un orage n'a pas de tranche qu'on choisirait au curseur,
         // et l'image qu'ils coiffent est celle de l'instant.
         const now = Date.now();
@@ -20085,9 +20085,9 @@ function renderInfo(icao) {
       // (échelle 11.25 = zoom 3 de Weather Lens), mêmes cotes, même écart —
       // les deux apps posent le même éclair au même endroit.
       const CB_R = 16;   // serré au plus près du point, comme sur Minima Lens
-      /* [storm] Repère de la couche ORAGE. L'éclair du CB se pose ici pour
+      /* [radar] Repère de la couche ORAGE. L'éclair du CB se pose ici pour
          TOUTES les couches météo, comme depuis toujours — c'est à côté qu'on
-         posera le rendu TCU/CB propre à la couche storm (mapStormOn), sans
+         posera le rendu TCU/CB propre à la couche radar (mapRadarOn), sans
          retoucher celui-ci : un orage doit rester visible sur la carte de
          base, la couche orage l'ENRICHIT, elle ne le déplace pas. */
       const cbBolt = (icao, x, y) => {
@@ -20509,15 +20509,15 @@ function renderInfo(icao) {
     // déclarés ici, avec les autres états que drawMap() lit, pour qu'aucun
     // dessin ne puisse les rencontrer avant leur initialisation. Le sens des
     // cinq valeurs et la commande qui les pose : voir setMapLayer().
-    let mapLayer = "wx", mapStormOn = false;
+    let mapLayer = "wx", mapRadarOn = false;
     // L'image de la couche orage et ses carreaux — déclarés ici pour la
-    // même raison ; le reste de la couche vit à la section STORM.
+    // même raison ; le reste de la couche vit à la section RADAR.
     // L'interrupteur des SIGMET d'orage : les zones officielles s'effacent de
     // la carte sans emporter la pluie — leur COMPTE reste écrit au cartouche,
     // une zone cachée n'est pas une zone absente. La pluie, elle, est toujours
     // dessinée : elle est la raison d'être de la couche.
-    let mapStormSigOn = true;
-    const mapStormTiles = new Map();
+    let mapRadarSigOn = true;
+    const mapRadarTiles = new Map();
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
     let mapWindHour = 0;
     /* ---------- Turbulence prévue au niveau de vol choisi ----------
@@ -20548,7 +20548,10 @@ function renderInfo(icao) {
                           "https://raw.githubusercontent.com/MDG64/preflight-lens/turb-data"];
     let turbBase = TURB_SOURCES[0];
     // Les mêmes niveaux que le script (FL_TO_HPA) : 320, 360, 410 viennent du pgrb2b depuis le 2026-09-04.
-    const TURB_FLS = [100, 140, 180, 240, 270, 300, 320, 340, 360, 390, 410, 450];
+    // Repli si l'index ne les dit pas. Depuis le 2026-09-05 la grille descend
+    // sous le FL100 : FL030 et FL050 ne portent PAS d'indice d'air clair, mais
+    // la convection et les thermiques — ce qui secoue une montée.
+    const TURB_FLS = [30, 50, 100, 140, 180, 240, 270, 300, 320, 340, 360, 390, 410, 450];
     const TURB_INDEX_TTL = 10 * 60e3;      // l'index change quatre fois par jour
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
     let mapTurbOn = false, mapTurbFlIdx = TURB_FLS.indexOf(340), mapTurbHour = 0;
@@ -20870,10 +20873,10 @@ function renderInfo(icao) {
                  mondiale, ni couleurs météo, ni QFU, ni éclairs : cette
                  couche répond de l'air en route, pas des terrains ;
          notam   la carte NOTAM, gris/jaune, palette qui n'est qu'à elle ;
-         storm   la carte METAR/TAF lue pour la convection. Aujourd'hui elle
-                 montre exactement la carte de base ; la classe storm-on et
-                 mapStormOn existent pour porter la couche TCU/CB à venir —
-                 voir le repère [storm] dans drawMap().
+         radar   la carte METAR/TAF lue pour la convection. Aujourd'hui elle
+                 montre exactement la carte de base ; la classe radar-on et
+                 mapRadarOn existent pour porter la couche TCU/CB à venir —
+                 voir le repère [radar] dans drawMap().
        Les états mutuellement exclusifs remplacent trois interrupteurs qui
        pouvaient se cumuler : la carte ne dit plus qu'une chose à la fois. */
     /* `redraw` : à l'OUVERTURE de la carte, non — openMap() a déjà calculé le
@@ -20888,10 +20891,10 @@ function renderInfo(icao) {
       const ov = $("#mapOv");
       mapWindOn = layer === "wind";
       mapTurbOn = layer === "turb";
-      mapStormOn = layer === "storm";
+      mapRadarOn = layer === "radar";
       ov.classList.toggle("wind-on", mapWindOn);
       ov.classList.toggle("turb-on", mapTurbOn);
-      ov.classList.toggle("storm-on", mapStormOn);
+      ov.classList.toggle("radar-on", mapRadarOn);
       // Éteindre le vent ramène l'horizon sur NOW : au rallumage, la carte
       // repart du vent OBSERVÉ, pas d'une prévision choisie avant.
       if (!mapWindOn) setMapWindHour(0);
@@ -20910,9 +20913,9 @@ function renderInfo(icao) {
       // météo mondial ni aux relevés — seulement la grille et le profil.
       if (mapTurbOn) { mapTurbNote("Turbulence — loading…"); mapTurbRefresh(); }
       else if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); }
-      // La couche STORM garde les points METAR/TAF et leurs éclairs (la ligne
+      // La couche RADAR garde les points METAR/TAF et leurs éclairs (la ligne
       // du dessus) et y ajoute ses images et ses SIGMET d'orage.
-      if (mapStormOn) { mapStormNote("Storm — loading…"); mapStormRefresh(true); } else mapStormStop();
+      if (mapRadarOn) { mapRadarNote("Radar — loading…"); mapRadarRefresh(true); } else mapRadarStop();
       if (redraw) drawMap();
     }
     document.querySelectorAll("#mapTabs .mtab").forEach(b => {
@@ -21584,7 +21587,7 @@ function renderInfo(icao) {
     }
     /* Les SIGMET d'orage — TS à l'international, CONVECTIVE SIGMET aux
        États-Unis — par le même relais (/api/sigmet/conv), même cache de
-       5 min, liste à part : la couche Storm les pose sur le radar, la page
+       5 min, liste à part : la couche Radar les pose sur le radar, la page
        Turbulence ne les lit pas. Même règle sur l'échec : dit, jamais muet. */
     let sigConvCache = { at: 0, list: null, err: "not fetched yet" };
     async function sigFetchConv() {
@@ -21891,7 +21894,7 @@ function renderInfo(icao) {
       mapTurbRefresh();
     }, TURB_INDEX_TTL);
 
-    /* ---------- Couche STORM : la pluie vue maintenant ----------
+    /* ---------- Couche RADAR : la pluie vue maintenant ----------
        Une image posée SOUS les terrains, les éclairs et la route, par le
        relais /api/storm/ du backend (aucun de ces serveurs n'est joignable
        depuis la page, et un carreau demandé par dix équipages ne remonte
@@ -21919,52 +21922,52 @@ function renderInfo(icao) {
        vide et le dit. La pluie arrive peinte : le client la pose telle
        quelle, et demande le niveau de zoom du dessus sur un écran dense
        (dpr ≥ 1,5) pour que le kilomètre du radar reste un kilomètre. */
-    const STORM_STATUS_TTL = 2 * 60e3;         // les images changent toutes les 5 à 15 min
-    const STORM_TILE_MAX = 400;                // carreaux gardés en mémoire (≈ 25 Mo décodés)
-    const STORM_FETCH_MAX = 4;                 // carreaux en vol à la fois, par image
-    const STORM_Z = { radar: [2, 10] };
-    const STORM_ALPHA = { radar: 0.85 };
+    const RADAR_STATUS_TTL = 2 * 60e3;         // les images changent toutes les 5 à 15 min
+    const RADAR_TILE_MAX = 400;                // carreaux gardés en mémoire (≈ 25 Mo décodés)
+    const RADAR_FETCH_MAX = 4;                 // carreaux en vol à la fois, par image
+    const RADAR_Z = { radar: [2, 10] };
+    const RADAR_ALPHA = { radar: 0.85 };
     // Les carreaux : clé kind/z/x/y@stamp -> { st, img, at }. Une image
     // nouvelle (stamp) rend les anciennes clés inutiles ; le plus vieux part
     // quand la mémoire déborde.
-    let mapStormStatus = null, mapStormStatusAt = 0, mapStormStamp = 0, mapStormSeq = 0;
-    const stormInFlight = { radar: 0 };
-    const stormQueue = [];
-    function stormTileKey(kind, z, x, y) { return `${kind}/${z}/${x}/${y}@${mapStormStamp}`; }
-    function stormTileGet(kind, z, x, y) {
-      const key = stormTileKey(kind, z, x, y);
-      let e = mapStormTiles.get(key);
+    let mapRadarStatus = null, mapRadarStatusAt = 0, mapRadarStamp = 0, mapRadarSeq = 0;
+    const radarInFlight = { radar: 0 };
+    const radarQueue = [];
+    function radarTileKey(kind, z, x, y) { return `${kind}/${z}/${x}/${y}@${mapRadarStamp}`; }
+    function radarTileGet(kind, z, x, y) {
+      const key = radarTileKey(kind, z, x, y);
+      let e = mapRadarTiles.get(key);
       if (e) return e;
       e = { st: "queued", img: null, at: Date.now(), kind, z, x, y, key };
-      mapStormTiles.set(key, e);
-      while (mapStormTiles.size > STORM_TILE_MAX) {
-        const k = mapStormTiles.keys().next().value;
-        const v = mapStormTiles.get(k);
+      mapRadarTiles.set(key, e);
+      while (mapRadarTiles.size > RADAR_TILE_MAX) {
+        const k = mapRadarTiles.keys().next().value;
+        const v = mapRadarTiles.get(k);
         if (v && v.img && v.img.close) { try { v.img.close(); } catch (_) { } }
-        mapStormTiles.delete(k);
+        mapRadarTiles.delete(k);
       }
-      stormQueue.push(e);
-      stormPump();
+      radarQueue.push(e);
+      radarPump();
       return e;
     }
     // Une file par image : le satellite (EUMETView rend ses carreaux en
     // plusieurs secondes) ne doit pas faire attendre le radar derrière lui.
-    function stormPump() {
+    function radarPump() {
       for (const kind of ["radar"]) {
-        for (let i = stormQueue.length - 1; i >= 0 && stormInFlight[kind] < STORM_FETCH_MAX; i--) {
-          const e = stormQueue[i];
+        for (let i = radarQueue.length - 1; i >= 0 && radarInFlight[kind] < RADAR_FETCH_MAX; i--) {
+          const e = radarQueue[i];
           if (e.kind !== kind) continue;
-          stormQueue.splice(i, 1);           // le plus récemment demandé d'abord : il est à l'écran
-          if (e.st !== "queued" || !mapStormTiles.has(e.key)) continue;
-          stormInFlight[kind]++;
-          stormTileLoad(e).finally(() => { stormInFlight[kind]--; stormPump(); });
+          radarQueue.splice(i, 1);           // le plus récemment demandé d'abord : il est à l'écran
+          if (e.st !== "queued" || !mapRadarTiles.has(e.key)) continue;
+          radarInFlight[kind]++;
+          radarTileLoad(e).finally(() => { radarInFlight[kind]--; radarPump(); });
         }
       }
     }
-    async function stormTileLoad(e) {
+    async function radarTileLoad(e) {
       e.st = "loading";
       try {
-        const r = await fetch(`${BACKEND_URL}/api/storm/${e.kind}/${e.z}/${e.x}/${e.y}.png?v=${mapStormStamp}`);
+        const r = await fetch(`${BACKEND_URL}/api/storm/${e.kind}/${e.z}/${e.x}/${e.y}.png?v=${mapRadarStamp}`);
         if (r.status === 204) { e.st = "empty"; return; }
         if (!r.ok) throw new Error("HTTP " + r.status);
         e.img = await createImageBitmap(await r.blob());
@@ -21972,7 +21975,7 @@ function renderInfo(icao) {
       } catch (err) {
         e.st = "err"; e.err = err.message || String(err);
       } finally {
-        if (mapStormOn && !$("#mapOv").hidden) scheduleDraw();
+        if (mapRadarOn && !$("#mapOv").hidden) scheduleDraw();
       }
     }
     /* Le dessin : le niveau de zoom des carreaux suit celui de la carte,
@@ -21981,8 +21984,8 @@ function renderInfo(icao) {
        carreau se pose exactement ; sur le fond canvas (équirectangulaire),
        il se pose par ses bords en latitude et longitude — la déformation
        intérieure d'un carreau y est invisible au zoom utile. */
-    function stormDrawTiles(ctx, cv, A, v, kx, dpr, X, Y) {
-      if (!mapStormStamp) return;
+    function radarDrawTiles(ctx, cv, A, v, kx, dpr, X, Y) {
+      if (!mapRadarStamp) return;
       const merc = !!A;
       let u0, u1, w0, w1;                  // fenêtre en Mercator normalisé
       if (merc) {
@@ -22000,7 +22003,7 @@ function renderInfo(icao) {
       ctx.save();
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
       for (const kind of ["radar"]) {
-        const [zmin, zmax] = STORM_Z[kind];
+        const [zmin, zmax] = RADAR_Z[kind];
         // Un écran dense reçoit les carreaux du niveau au-dessus : deux fois
         // plus de pixels de radar par pixel de carte, aucune bouillie.
         const z = Math.max(zmin, Math.min(zmax, Math.round(zMap + (dpr >= 1.5 ? 1 : 0))));
@@ -22011,11 +22014,11 @@ function renderInfo(icao) {
         // monde l'écran montre deux fois le même méridien, pas deux fois plus
         // d'images.
         if (Math.min(x1 - x0 + 1, n) * (y1 - y0 + 1) > 200) continue;
-        ctx.globalAlpha = STORM_ALPHA[kind];
+        ctx.globalAlpha = RADAR_ALPHA[kind];
         for (let xi = x0; xi <= x1; xi++) {
           const xt = ((xi % n) + n) % n;     // l'écran peut montrer deux fois le même méridien
           for (let yi = y0; yi <= y1; yi++) {
-            const e = stormTileGet(kind, z, xt, yi);
+            const e = radarTileGet(kind, z, xt, yi);
             if (e.st !== "ok" || !e.img) continue;
             const px0 = ux(xi / n), px1 = ux((xi + 1) / n), py0 = wy(yi / n), py1 = wy((yi + 1) / n);
             ctx.drawImage(e.img, px0, py0, px1 - px0, py1 - py0);
@@ -22024,42 +22027,42 @@ function renderInfo(icao) {
       }
       ctx.restore();
     }
-    function mapStormNote(text, warn) {
-      const el = $("#mapStormInfo");
+    function mapRadarNote(text, warn) {
+      const el = $("#mapRadarInfo");
       if (!el) return;
       el.textContent = text;
       el.classList.toggle("warn", !!warn);
     }
-    const stormHM = iso => { const t = Date.parse(iso); return Number.isFinite(t) ? turbHM(t) + "Z" : "?"; };
+    const radarHM = iso => { const t = Date.parse(iso); return Number.isFinite(t) ? turbHM(t) + "Z" : "?"; };
     /* Le cartouche : chaque source et son heure — une image sans son heure ne
        se juge pas —, ce qui manque, et les SIGMET d'orage en vigueur. Le
        statut se redemande au pas de la minuterie ; un nouveau `stamp` jette
        les carreaux d'avant. */
-    async function mapStormRefresh(force) {
-      if (!mapStormOn) return;
-      const seq = ++mapStormSeq;
+    async function mapRadarRefresh(force) {
+      if (!mapRadarOn) return;
+      const seq = ++mapRadarSeq;
       const sigP = sigFetchConv();
-      let st = mapStormStatus;
-      if (force || !st || Date.now() - mapStormStatusAt > STORM_STATUS_TTL) {
+      let st = mapRadarStatus;
+      if (force || !st || Date.now() - mapRadarStatusAt > RADAR_STATUS_TTL) {
         try {
           const r = await fetch(`${BACKEND_URL}/api/storm/status`, { cache: "no-cache" });
           if (!r.ok) throw new Error("HTTP " + r.status);
           st = await r.json();
-          if (seq !== mapStormSeq) return;
-          mapStormStatus = st; mapStormStatusAt = Date.now();
-          if (st.stamp && st.stamp !== mapStormStamp) {
-            mapStormStamp = st.stamp;
-            for (const e of mapStormTiles.values()) if (e.img && e.img.close) { try { e.img.close(); } catch (_) { } }
-            mapStormTiles.clear(); stormQueue.length = 0;
+          if (seq !== mapRadarSeq) return;
+          mapRadarStatus = st; mapRadarStatusAt = Date.now();
+          if (st.stamp && st.stamp !== mapRadarStamp) {
+            mapRadarStamp = st.stamp;
+            for (const e of mapRadarTiles.values()) if (e.img && e.img.close) { try { e.img.close(); } catch (_) { } }
+            mapRadarTiles.clear(); radarQueue.length = 0;
           }
         } catch (e) {
-          if (seq !== mapStormSeq) return;
-          if (!mapStormStamp) { mapStormNote(netOnline() ? "Storm — images unavailable" : "Storm — offline: no radar or satellite image", true); drawMap(); return; }
-          st = mapStormStatus;
+          if (seq !== mapRadarSeq) return;
+          if (!mapRadarStamp) { mapRadarNote(netOnline() ? "Radar — images unavailable" : "Radar — offline: no radar or satellite image", true); drawMap(); return; }
+          st = mapRadarStatus;
         }
       }
       const sc = await sigP;
-      if (seq !== mapStormSeq) return;
+      if (seq !== mapRadarSeq) return;
       const now = Date.now();
       const nSig = sc.err ? -1 : sc.list.filter(s => now >= s.from && now <= s.to).length;
       const parts = [], warns = [];
@@ -22068,18 +22071,18 @@ function renderInfo(icao) {
       // La pluie : chaque source et son heure ; une source muette dit « ? »
       // (elle est nommée dans les alertes), une grille en cours de
       // chargement dit « loading ».
-      const radar = (st.radar || []).map(s => nom(s) + " " + (s.valid ? stormHM(s.valid) : s.loading ? "loading" : "?"));
+      const radar = (st.radar || []).map(s => nom(s) + " " + (s.valid ? radarHM(s.valid) : s.loading ? "loading" : "?"));
       parts.push("Rain " + (radar.length ? radar.join(", ") : "none"));
       parts.push(nSig < 0 ? "SIGMET unavailable"
-        : nSig ? nSig + " SIGMET TS in force" + (mapStormSigOn ? "" : " (hidden)")
+        : nSig ? nSig + " SIGMET TS in force" + (mapRadarSigOn ? "" : " (hidden)")
         : "no SIGMET TS in force");
       const errs = (st.radar || []).filter(s => s.err && !s.valid).map(s => nom(s));
       if (errs.length) warns.push(errs.join(", ") + " unreachable");
-      if (Date.now() - mapStormStatusAt > 2 * STORM_STATUS_TTL) warns.push("network lost, last images kept");
-      mapStormNote(parts.join(" · ") + (warns.length ? " · " + warns.join(" · ").toUpperCase() : ""), warns.length > 0);
+      if (Date.now() - mapRadarStatusAt > 2 * RADAR_STATUS_TTL) warns.push("network lost, last images kept");
+      mapRadarNote(parts.join(" · ") + (warns.length ? " · " + warns.join(" · ").toUpperCase() : ""), warns.length > 0);
       drawMap();
     }
-    function mapStormStop() { mapStormSeq++; }
+    function mapRadarStop() { mapRadarSeq++; }
     // L'aspect d'un interrupteur de cartouche — le rond plein ou vide, et ce
     // que la voix de synthèse en dit. Les deux couches s'en servent.
     function setMapToggle(id, on) {
@@ -22088,11 +22091,11 @@ function renderInfo(icao) {
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     }
-    $("#mapStormSig").onclick = () => { mapStormSigOn = !mapStormSigOn; setMapToggle("#mapStormSig", mapStormSigOn); mapStormRefresh(); };
+    $("#mapRadarSig").onclick = () => { mapRadarSigOn = !mapRadarSigOn; setMapToggle("#mapRadarSig", mapRadarSigOn); mapRadarRefresh(); };
     setInterval(() => {
-      if (document.hidden || $("#mapOv").hidden || mapMode !== "wx" || !mapStormOn) return;
-      mapStormRefresh(true);
-    }, STORM_STATUS_TTL);
+      if (document.hidden || $("#mapOv").hidden || mapMode !== "wx" || !mapRadarOn) return;
+      mapRadarRefresh(true);
+    }, RADAR_STATUS_TTL);
 
     // L'œil replie la légende ; il ne touche à rien d'autre.
     $("#mapLegEye").onclick = () => $("#mapOv").classList.toggle("leg-off");
@@ -27146,7 +27149,7 @@ function dtsAUnQfu(icao){
       tip.replaceChildren();
       const line = (txt, cls) => { const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = txt; tip.appendChild(d); return d; };
       line(`${turbHPlus(p[0])} · ${turbHM(res.cfg.t0 + p[0] * 60e3)}Z · ${p[3] ? "FL" + p[3] : Math.round(p[2] / 100) * 100 + " ft"}`, "t");
-      if (c === -1) line("Below FL100 — the grid says nothing here", "v");
+      if (c === -1) line("Below the lowest published level — the grid says nothing here", "v");
       else if (!(e >= 0)) line("No grid data — outside the covered area, or file missing", "v");
       else {
         const v = line("", "v"), dot = document.createElement("span");
