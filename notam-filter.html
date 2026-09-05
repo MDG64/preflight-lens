@@ -3732,9 +3732,84 @@
       color: var(--muted2);
     }
 
-    /* Bas-gauche : le curseur de vue (Weather ⇄ NOTAM) empilé sur la légende
-       qu'il pilote — repris de la carte de Weather Lens : même geste, même
-       code couleur, on bascule et on lit le sens des couleurs au même
+    /* ===== Barre noire de la carte =====
+       Le bandeau de commande de l'écran : la maison, les quatre couches, le
+       thème et l'aide. Noire dans les deux thèmes À DESSEIN — c'est une barre
+       d'instrument, pas une surface de lecture ; elle sépare franchement la
+       commande de la carte, qui garde tout le reste de l'écran.
+       Elle est un ENFANT DU FLUX de l'overlay (qui est une colonne flex) et
+       non une couche flottante : la carte commence sous elle, aucune pastille
+       ne mange le coin d'une nappe ou d'un terrain. */
+    .map-bar {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background: #000;
+      border-bottom: 1px solid var(--line2);
+      z-index: 8;
+    }
+
+    /* Les couches au milieu, la maison et les pastilles de droite aux bords.
+       Sur un écran étroit la rangée défile plutôt que de se replier : quatre
+       couches sur deux lignes feraient une barre qui change de hauteur. */
+    .map-tabs {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .map-tabs::-webkit-scrollbar {
+      display: none
+    }
+
+    .mtab {
+      flex: none;
+      cursor: pointer;
+      background: none;
+      border: 1px solid #2a3238;
+      border-radius: 999px;
+      padding: 6px 13px;
+      font: 600 10.5px/1 var(--sans);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: #8b959d;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+
+    .mtab:hover {
+      color: #e8ebee;
+      border-color: #4a555e;
+    }
+
+    .mtab:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 2px;
+    }
+
+    /* La couche allumée prend la couleur de ce qu'elle montre : le vert de la
+       carte météo pour les trois couches météo, le jaune de la couverture
+       hors ligne pour NOTAM — la commande dit la même chose que les points
+       qu'elle gouverne, comme le faisait le curseur qu'elle remplace. */
+    .mtab.on {
+      color: #0a0f14;
+      background: #34d39a;
+      border-color: #34d39a;
+    }
+
+    .mtab.nt.on {
+      background: #f6c945;
+      border-color: #f6c945;
+    }
+
+    /* Bas-gauche : les réglages de la couche allumée empilés sur la légende
+       qu'ils expliquent — repris de la carte de Weather Lens : même geste,
+       même code couleur, on règle et on lit le sens des couleurs au même
        endroit. Posé au-dessus de l'attribution OSM. */
     .map-tools {
       position: absolute;
@@ -3760,57 +3835,6 @@
       padding: 7px 12px;
     }
 
-    .map-mode input {
-      position: absolute;
-      opacity: 0;
-      width: 0;
-      height: 0
-    }
-
-    /* Le rail à deux positions : le rond glisse du libellé actif vers l'autre.
-       Toujours plein — il dit une position, pas un état allumé/éteint. */
-    .map-mode .rd {
-      position: relative;
-      width: 30px;
-      height: 16px;
-      border-radius: 999px;
-      flex: none;
-      border: 1.5px solid var(--line2);
-    }
-
-    .map-mode .rd::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 1.5px;
-      transform: translate(0, -50%);
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
-      background: var(--green);
-      transition: transform .16s ease;
-    }
-
-    .map-mode input:checked~.rd::after {
-      transform: translate(14px, -50%)
-    }
-
-    /* Le rond du curseur prend la couleur de la vue où il vient d'arriver :
-       vert du côté Weather, jaune du côté NOTAM — la commande dit la même
-       chose que les points qu'elle gouverne. */
-    #mapOv.notam-mode .map-mode .rd::after {
-      background: var(--gold)
-    }
-
-    .map-mode:hover .rd {
-      border-color: var(--muted)
-    }
-
-    .map-mode input:focus-visible~.rd {
-      outline: 2px solid var(--green);
-      outline-offset: 2px
-    }
-
     .map-mode .lb {
       font: 600 10.5px/1 var(--sans);
       letter-spacing: .13em;
@@ -3818,45 +3842,10 @@
       color: var(--muted);
     }
 
-    #mapOv:not(.notam-mode) .map-mode .lb.wx,
-    #mapOv.notam-mode .map-mode .lb.nt {
-      color: var(--text)
-    }
-
-    /* Interrupteur des flèches de vent — un VRAI marche/arrêt, contrairement au
-       curseur de vue à deux positions : rond vide à gauche au repos, plein de
-       vert et glissé à droite quand les flèches sont à l'écran — même langage
-       que l'interrupteur NOTAM de la carte de Weather Lens. Il n'existe qu'en
-       vue Weather : la vue NOTAM n'a pas de vent à montrer. */
-    #mapOv.notam-mode .map-wind {
-      display: none
-    }
-
-    .map-wind .rd::after {
-      background: transparent;
-      border: 1.5px solid var(--line2);
-      transition: transform .16s ease, background .15s, border-color .15s;
-    }
-
-    .map-wind input:checked~.rd {
-      border-color: var(--green)
-    }
-
-    .map-wind input:checked~.rd::after {
-      background: var(--green);
-      border-color: var(--green);
-    }
-
-    #mapOv.wind-on .map-wind .lb {
-      color: var(--text)
-    }
-
     /* Sélecteur d'horizon du vent : quatre ronds à cocher, un seul allumé —
-       le rond se remplit de vert comme le curseur des interrupteurs voisins.
-       Il n'existe à l'écran que quand WIND montre ses flèches, et jamais en
-       vue NOTAM. */
-    #mapOv:not(.wind-on) .map-wind-hours,
-    #mapOv.notam-mode .map-wind-hours {
+       le rond se remplit de vert comme l'onglet allumé de la barre. Il
+       n'existe à l'écran que quand la couche WIND montre ses flèches. */
+    #mapOv:not(.wind-on) .map-wind-hours {
       display: none
     }
 
@@ -4042,24 +4031,23 @@
       margin-top: 3px
     }
 
-    /* Les trois lignes du vent n'expliquent les flèches que quand
-       l'interrupteur WIND les a fait apparaître — et jamais en vue NOTAM. */
+    /* Les lignes du vent n'expliquent les flèches que quand la couche WIND
+       les a fait apparaître. */
     .mleg.wd {
       display: none
     }
 
-    #mapOv.wind-on:not(.notam-mode) .mleg.wd {
+    #mapOv.wind-on .mleg.wd {
       display: flex
     }
 
     /* Même contrat pour la turbulence : ses lignes de légende, son curseur
-       de FL et son horizon n'existent que TURBULENCE allumé, et jamais en
-       vue NOTAM. */
+       de FL et son horizon n'existent que la couche TURBULENCE allumée. */
     .mleg.tb {
       display: none
     }
 
-    #mapOv.turb-on:not(.notam-mode) .mleg.tb {
+    #mapOv.turb-on .mleg.tb {
       display: flex
     }
 
@@ -4090,9 +4078,7 @@
       border-color: #ff2d40;
     }
 
-    #mapOv:not(.turb-on) .map-turb-ctl,
-    #mapOv.notam-mode .map-turb-ctl,
-    #mapOv.notam-mode .map-turb {
+    #mapOv:not(.turb-on) .map-turb-ctl {
       display: none
     }
 
@@ -4114,13 +4100,7 @@
       color: var(--text);
     }
 
-    /* Le curseur est un VRAI champ à l'écran : on défait ce que .map-mode
-       input fait au rail caché des interrupteurs (absolu, invisible, 0×0). */
     .map-turb-ctl input[type=range] {
-      position: static;
-      opacity: 1;
-      height: auto;
-      width: auto;
       flex: 1;
       min-width: 90px;
       accent-color: var(--green);
@@ -4137,7 +4117,8 @@
 
     /* L'horizon reprend la rangée de ronds du vent, mais il vit dans le
        cartouche turbulence : on annule la règle qui cache .map-wind-hours
-       quand WIND est éteint, et l'aspect « carte » du parent suffit. */
+       quand la couche WIND est éteinte, et l'aspect « carte » du parent
+       suffit. */
     #mapOv .map-turb-ctl .turb-hours {
       display: flex;
       background: none;
@@ -4145,7 +4126,7 @@
       padding: 0;
     }
 
-    #mapOv.turb-on:not(.notam-mode) .map-turb-ctl .turb-hours {
+    #mapOv.turb-on .map-turb-ctl .turb-hours {
       display: flex
     }
 
@@ -4201,7 +4182,7 @@
       color: var(--muted)
     }
 
-    /* Chaque vue n'affiche que les lignes qu'elle explique. */
+    /* Chaque couche n'affiche que les lignes qu'elle explique. */
     .mleg.nt {
       display: none
     }
@@ -4211,6 +4192,13 @@
     }
 
     #mapOv.notam-mode .mleg.wx {
+      display: none
+    }
+
+    /* Couche TURBULENCE : la carte ne montre plus que la route et la nappe,
+       la légende non plus — les couleurs de VIS et de plafond n'ont plus un
+       seul point à expliquer, il ne reste que les classes de turbulence. */
+    #mapOv.turb-on .mleg.wx:not(.tb) {
       display: none
     }
 
@@ -4482,11 +4470,12 @@
        sans lui (pas de WebGL2, hors ligne sans archive) le canvas repeint son
        propre fond, et la seule sortie de la carte disparaissait sous lui.
        6 la place au-dessus du canvas (2), de l'attribution (3) et du toast (5). */
+    /* Les trois pastilles de la barre noire. Elles ne flottent plus sur la
+       carte : elles sont posées dans le flux de la barre, la maison à gauche,
+       le soleil et le « ? » à droite — d'où l'absence de tout positionnement
+       ici, c'est la barre qui les range. */
     .map-x {
-      position: absolute;
-      top: 14px;
-      left: 14px;
-      z-index: 6;
+      flex: none;
       width: 36px;
       height: 36px;
       border-radius: 50%;
@@ -4501,14 +4490,13 @@
       box-shadow: 0 2px 10px rgba(0, 0, 0, .25)
     }
 
-    /* Jour/nuit sur la carte : même pastille que le retour, à l'autre bord.
-       La carte est l'écran où le contraste se règle vraiment — plein soleil
-       contre vision nocturne — et y arriver ne doit pas demander de la
-       refermer. Le glyphe est un peu plus petit que la maison voisine, qui est
-       dessinée et mesurée en pourcentage de la pastille, pas en points. */
+    /* Jour/nuit sur la carte : même pastille que le retour, à l'autre bout de
+       la barre. La carte est l'écran où le contraste se règle vraiment —
+       plein soleil contre vision nocturne — et y arriver ne doit pas demander
+       de la refermer. Le glyphe est un peu plus petit que la maison voisine,
+       qui est dessinée et mesurée en pourcentage de la pastille, pas en
+       points. */
     .map-theme {
-      left: auto;
-      right: 14px;
       font-size: 17px
     }
 
@@ -4516,9 +4504,44 @@
        même bord. Le « ? » est une lettre, pas un glyphe — il lui faut sa
        propre graisse pour peser autant que ses voisines. */
     .map-help {
-      left: auto;
-      right: 58px;
       font: 600 17px/1 var(--sans)
+    }
+
+    /* Téléphone : les quatre couches doivent tenir SANS défilement — un onglet
+       à moitié sorti de l'écran ne se voit pas, et personne ne pense à faire
+       glisser une barre de commande. On resserre donc l'interlettrage et les
+       pastilles jusqu'à ce que les quatre mots tiennent d'un bord à l'autre.
+       Le défilement reste en filet de sécurité pour les écrans plus étroits
+       encore. */
+    @media (max-width:560px) {
+      .map-bar {
+        gap: 5px;
+        padding: 6px 7px;
+      }
+
+      .map-x {
+        width: 32px;
+        height: 32px;
+        font-size: 19px;
+      }
+
+      .map-theme {
+        font-size: 15px
+      }
+
+      .map-help {
+        font: 600 15px/1 var(--sans)
+      }
+
+      .map-tabs {
+        gap: 4px
+      }
+
+      .mtab {
+        padding: 5px 8px;
+        letter-spacing: .05em;
+        font-size: 10px;
+      }
     }
 
     @media (max-width:560px) {
@@ -7792,9 +7815,28 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
 
   <!-- ================= OVERLAY CARTE ================= -->
   <div class="map-ov" id="mapOv" hidden>
-    <button class="map-x" id="mapClose" aria-label="Back" title="Back"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
-    <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
-    <button class="map-x map-help" id="mapHelpBtn" aria-label="Information" title="Information">?</button>
+    <!-- Barre noire de la carte. Elle porte les couches, une seule allumée à
+         la fois : la maison à gauche, les quatre couches au milieu, le thème
+         et le mode d'emploi à droite. AUCUNE couche allumée est un état à
+         part entière — c'est celui de l'ouverture : les terrains aux couleurs
+         du METAR/TAF, rien d'autre. Recliquer la couche allumée y ramène.
+         Les pastilles rondes ne flottent plus sur la carte : elles vivent
+         dans la barre, qui est le seul bandeau de commande de l'écran. -->
+    <div class="map-bar">
+      <button class="map-x" id="mapClose" aria-label="Back" title="Back"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M12 2.6 1.5 11.6H4v9.8h16v-9.8h2.5zM9.8 21.4v-6.6h4.4v6.6z"/></svg></button>
+      <div class="map-tabs" id="mapTabs" role="group" aria-label="Map layer">
+        <button type="button" class="mtab" data-layer="wind" aria-pressed="false"
+                title="Keep the METAR/TAF colours and add the surface wind at each station — one arrow per 10 kt, strongest wind announced (gusts and TEMPO included). The legend opens folded.">Wind</button>
+        <button type="button" class="mtab" data-layer="turb" aria-pressed="false"
+                title="The route and the forecast turbulence alone — flight level and forecast time of your choosing. The station colours step aside: this layer answers about the air en route, not about the aerodromes.">Turbulence</button>
+        <button type="button" class="mtab nt" data-layer="notam" aria-pressed="false"
+                title="The NOTAM map: which aerodromes are downloaded and readable offline.">NOTAM</button>
+        <button type="button" class="mtab" data-layer="storm" aria-pressed="false"
+                title="The METAR/TAF map, read for convection.">Storm</button>
+      </div>
+      <button class="map-x map-help" id="mapHelpBtn" aria-label="Information" title="Information">?</button>
+      <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
+    </div>
     <!-- Fond vectoriel MapLibre SOUS le canvas. Le canvas garde tout le dessin
          de l'app (route, terrains, capsules) et laisse passer les gestes vers
          MapLibre, qui gère glisser/zoom/inertie. Si MapLibre ne démarre pas, ce
@@ -7810,11 +7852,14 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <button class="mapwx-x" id="mapWxSideX" aria-label="Close reports" title="Close reports">×</button>
         <div class="mapwx-body" id="mapWxSideBody"></div>
       </aside>
-      <!-- Curseur de vue + légende. Weather : chaque point prend la couleur de
-           la carte de Weather Lens (météo du dernier METAR, route seulement).
-           NOTAM : gris/jaune selon la couverture hors ligne — deux tons qui
-           n'appartiennent qu'à cette vue, pour ne pas la confondre avec la
-           météo. -->
+      <!-- Réglages de la couche allumée + légende. Ce cartouche n'AIGUILLE
+           plus rien : c'est la barre noire qui choisit la couche, et lui qui
+           en porte les réglages — horizon du vent, FL et heure de la
+           turbulence — et la légende de ce qui est à l'écran.
+           METAR/TAF : chaque point prend la couleur de la carte de Weather
+           Lens (météo du dernier METAR, route seulement). NOTAM : gris/jaune
+           selon la couverture hors ligne — deux tons qui n'appartiennent
+           qu'à cette couche, pour ne pas la confondre avec la météo. -->
       <div class="map-tools" id="mapTools">
         <!-- Copie gardée de la couche météo mondiale. La carte garde ses
              couleurs hors ligne — un point gris ne renseigne personne — mais
@@ -7823,21 +7868,10 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              Hors du cartouche de légende À DESSEIN : l'œil replie la légende,
              et un avertissement ne doit pas pouvoir se replier avec elle. -->
         <div class="map-wxold" id="mapWxOld" hidden></div>
-        <label class="map-mode" title="Switch the dots between weather colours and NOTAM download state">
-          <span class="lb wx">Weather</span>
-          <input type="checkbox" id="mapModeChk">
-          <span class="rd" aria-hidden="true"></span>
-          <span class="lb nt">NOTAM</span>
-        </label>
-        <label class="map-mode map-wind" title="Show surface wind at each station — one arrow per 10 kt, strongest wind announced (gusts and TEMPO included), blowing downwind onto the station; a variable-direction gust (VRB in a squall) has no arrow to give, so it raises the warning marker instead">
-          <input type="checkbox" id="mapWindChk">
-          <span class="rd" aria-hidden="true"></span>
-          <span class="lb">Wind</span>
-        </label>
-        <!-- Sélecteur d'horizon du vent, visible seulement quand WIND est
-             allumé : NOW = vent du METAR, +1/+2/+3 h = vent prévu par le TAF à
-             cette heure-là (flèches en pointillés) ; un terrain dont le TAF ne
-             change pas le vent garde celui du METAR. -->
+        <!-- Sélecteur d'horizon du vent, visible seulement quand la couche
+             WIND est allumée : NOW = vent du METAR, +1/+2/+3 h = vent prévu
+             par le TAF à cette heure-là (flèches en pointillés) ; un terrain
+             dont le TAF ne change pas le vent garde celui du METAR. -->
         <div class="map-mode map-wind-hours" id="mapWindHours" role="radiogroup" aria-label="Wind time"
              title="Wind time — NOW shows the METAR wind; +1/+2/+3 h show the TAF forecast wind (dashed arrows). Stations whose TAF gives no wind for that hour keep their METAR wind.">
           <button type="button" class="wh on" data-h="0" aria-label="METAR wind now"><i class="c" aria-hidden="true"></i>now</button>
@@ -7849,14 +7883,9 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              calculée par le serveur depuis les vents du GFS (indice Ellrod
              calibré en EDR, tools/turb/build_turb.py) : ce n'est PAS l'EDR
              officiel du WAFS, qui n'est plus en accès libre — la légende et
-             l'aide le disent. Vue weather seulement, comme le vent. -->
-        <label class="map-mode map-turb" title="Show forecast turbulence zones at the chosen flight level — light, moderate and severe, from a clear-air turbulence index computed on the GFS model winds, with a convective proxy under storms. Model guidance, not an official aviation product.">
-          <input type="checkbox" id="mapTurbChk">
-          <span class="rd" aria-hidden="true"></span>
-          <span class="lb">Turbulence</span>
-        </label>
-        <!-- Curseur de niveau de vol et horizon, visibles seulement quand
-             TURBULENCE est allumé. Neuf niveaux, ceux de la carte WAFS de
+             l'aide le disent.
+             Curseur de niveau de vol et horizon, visibles seulement quand la
+             couche TURBULENCE est allumée. Neuf niveaux, ceux de la carte WAFS de
              l'AWC : à 25 km de maille, un pas de 1 000 ft ne dirait rien de
              plus. L'horizon choisit l'échéance de prévision : NOW = l'heure
              de prévision la plus proche de maintenant, +3/+6/+12 h = celle
@@ -8064,15 +8093,20 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           <div class="hd-vis"><span class="hd-chip">MAP</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Open the <b>map</b> centred on the aerodrome shown. Once a route has been run, the same
-            map draws it. Its switch flips between the <b>NOTAM view</b> and the <b>weather view</b>: one dot per
+            map draws it. It opens on the <b>METAR/TAF map</b>: one dot per
             METAR station, coloured by visibility and ceiling — <b>red</b> from 1&nbsp;000 m or 500 ft, <b>amber</b>
             from 2&nbsp;000 m or 1&nbsp;000 ft. Your <b>favourites</b> carry a dot <b>twice the usual size</b> —
             starred here or in Minima, it is one map for both; the colour does not change, it still says the
             weather (or the NOTAM coverage). Tap a dot to read its METAR and TAF, its wind on each runway, and
             to open its <b>minima</b>. A yellow <b>⚡</b> marks a
-            station whose METAR reports a <b>CB</b> or whose TAF announces one. The <b>Wind</b> switch adds
+            station whose METAR reports a <b>CB</b> or whose TAF announces one.
+            The <b>black bar</b> at the top carries four layers &mdash; <b>Wind</b>, <b>Turbulence</b>,
+            <b>NOTAM</b>, <b>Storm</b> &mdash; and lights <b>one at a time</b>; tapping the lit one puts the map
+            back to the plain METAR/TAF view it opened on. <b>Wind</b> keeps those colours and adds
             surface-wind arrows — one per 10 kt, gusts and trend groups included; <b>now/+1/+2/+3&nbsp;h</b> shows
-            the TAF wind as dashed arrows. The <b>Turbulence</b> switch shades the <b>forecast turbulence
+            the TAF wind as dashed arrows. <b>Turbulence</b> keeps the <b>route alone</b> &mdash; the station
+            colours, the ⚡ and the QFU step aside, this layer answers about the air en route, not about the
+            aerodromes &mdash; and shades the <b>forecast turbulence
             zones</b> at the flight level set by the <b>FL slider</b> — yellow light, orange moderate, red
             severe — for now or <b>+3/+6/+12&nbsp;h</b>; the cartouche names the GFS run and the valid hour.
             It is a clear-air turbulence index computed on the model winds, with a convective proxy under
@@ -8086,9 +8120,10 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             Wherever a code is written, <b>every runway QFU</b> of that aerodrome
             is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
             together to a side free of the wind arrows and the ⚡; where they cannot travel together the code
-            keeps its place and the QFU find one of their own, further round the dot. The <b>weather view</b>
-            shows them; the NOTAM view does not — there, the map answers one question only, which aerodromes are
-            downloaded.</div>
+            keeps its place and the QFU find one of their own, further round the dot. The METAR/TAF map and its
+            <b>Wind</b> and <b>Storm</b> layers show them; <b>NOTAM</b> does not — there, the map answers one
+            question only, which aerodromes are downloaded — and neither does <b>Turbulence</b>.
+            <b>Storm</b> shows the METAR/TAF map read for convection.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div>
@@ -19728,9 +19763,14 @@ function renderInfo(icao) {
       const WXPAL = light
         ? ["#9aa6b0", "#12936a", "#cf7a12", "#e5484d"]    // gris, vert, ambre, rouge — thème jour
         : ["#5e656c", "#34d39a", "#f6b23e", "#ff5d6c"];   // idem, thème nuit — valeurs de Weather Lens
-      const dotCol = icao => mapMode === "wx"
-        ? WXPAL[mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0)]
-        : (savedSet.has(icao) ? NT_ON : NT_OFF);
+      // Couche TURBULENCE : les points de la route perdent leur couleur météo
+      // pour le vert de la route. Cette couche ne répond pas des terrains, et
+      // un disque coloré au milieu d'une nappe ferait lire un jugement de VIS
+      // et de plafond là où il n'est question que de l'air en route.
+      const dotCol = icao => mapLayer === "turb" ? C.alt
+        : mapMode === "wx"
+          ? WXPAL[mapWx.has(icao) ? mapWxCatOf(icao) : (mapWxWorld.get(icao) || 0)]
+          : (savedSet.has(icao) ? NT_ON : NT_OFF);
       // Priorité de dessin quand deux terrains se recouvrent — au dézoom, deux
       // voisins tombent sur le même pixel et c'est le dernier tracé qui reste
       // visible. Sans ordre, c'est l'ordre du fichier qui tranche : Minorque
@@ -19880,8 +19920,14 @@ function renderInfo(icao) {
       // (échelle 11.25 = zoom 3 de Weather Lens), mêmes cotes, même écart —
       // les deux apps posent le même éclair au même endroit.
       const CB_R = 16;   // serré au plus près du point, comme sur Minima Lens
+      /* [storm] Repère de la couche ORAGE. L'éclair du CB se pose ici pour
+         TOUTES les couches météo, comme depuis toujours — c'est à côté qu'on
+         posera le rendu TCU/CB propre à la couche storm (mapStormOn), sans
+         retoucher celui-ci : un orage doit rester visible sur la carte de
+         base, la couche orage l'ENRICHIT, elle ne le déplace pas. */
       const cbBolt = (icao, x, y) => {
-        if (mapMode !== "wx") return;
+        // Pas d'éclair en couche turbulence : elle ne montre que la route.
+        if (mapMode !== "wx" || mapLayer === "turb") return;
         if (v.scale < 11.25) return;
         if (!mapCbOf(icao)) return;
         const cap = mapTouchUI ? 2.2 : 1.6;
@@ -19950,7 +19996,7 @@ function renderInfo(icao) {
       // VUE WEATHER seule : la vue NOTAM se lit terrain par terrain — quels
       // codes sont téléchargés, lesquels ne le sont pas — et trois lignes de
       // pistes sous chaque code y ajoutaient un texte qu'on n'y cherche pas.
-      const showQfu = showLabels && mapMode === "wx" && qfuSeedReady();
+      const showQfu = showLabels && mapMode === "wx" && mapLayer !== "turb" && qfuSeedReady();
       // Même corps que le code OACI : les QFU se lisent d'aussi loin que lui.
       // C'est la COULEUR qui les met au second plan, pas la taille — un ton
       // neutre sous une capsule colorée.
@@ -20028,7 +20074,12 @@ function renderInfo(icao) {
         ctx.restore();
         ctx.textBaseline = "middle"; ctx.textAlign = "start";
       };
-      {
+      // Couche TURBULENCE : aucune couche mondiale. « Juste la route et les
+      // turbulences » — trois cents disques posés sur la nappe ne diraient
+      // rien de l'air en route et couvriraient ce qu'on est venu lire. Les
+      // zones cliquables (mapWorldHits, vidées juste au-dessus) restent donc
+      // vides : un clic hors route ne rappelle aucun relevé.
+      if (mapLayer !== "turb") {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
         const minRwy = v.scale < 6 ? 3000 : v.scale < 11 ? 2400 : v.scale < 18 ? 2000 : 0;
         // Pastilles franches : c'est la couleur du point qui porte la météo (ou
@@ -20206,7 +20257,11 @@ function renderInfo(icao) {
         // En vue NOTAM, la route garde un cran d'avance sur les 4,5 px de la
         // couche mondiale ; en vue Weather elle rentre dans le rang, liseré
         // compris — sans quoi le point resterait plus épais que ses voisins.
-        const wxView = mapMode === "wx";
+        // La couche TURBULENCE range la route du côté NOTAM de cet arbitrage :
+        // son cran d'avance (disque plus gros, code écrit à tout zoom) lui
+        // revient dès qu'elle est seule à l'écran — c'est elle qu'on suit
+        // sous la nappe, et rien d'autre ne lui dispute la place.
+        const wxView = mapMode === "wx" && mapLayer !== "turb";
         // Même règle qu'à la couche mondiale, mais en vue Weather seulement :
         // c'est là que la route rentre dans le rang et partage le rayon
         // commun. En vue NOTAM elle garde son propre cran d'avance, qui dit
@@ -20285,6 +20340,11 @@ function renderInfo(icao) {
     const MAP_WX_MAX_AGE = 210 * 60e3;   // au-delà, l'observation ne décrit plus le présent : gris
     const MAP_WX_TTL = 5 * 60e3;         // fraîcheur d'un relevé déjà chargé — aligné sur le cache du proxy
     let mapMode = "wx", mapWxTargets = [], mapWindOn = false;
+    // Couche allumée dans la barre noire, et drapeau de la couche orage —
+    // déclarés ici, avec les autres états que drawMap() lit, pour qu'aucun
+    // dessin ne puisse les rencontrer avant leur initialisation. Le sens des
+    // cinq valeurs et la commande qui les pose : voir setMapLayer().
+    let mapLayer = "wx", mapStormOn = false;
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
     let mapWindHour = 0;
     /* ---------- Turbulence prévue au niveau de vol choisi ----------
@@ -20611,25 +20671,76 @@ function renderInfo(icao) {
       if (!$("#mapOv").hidden && mapMode === "wx") scheduleDraw();
     }
 
-    // Le curseur : position gauche = vue weather, droite = vue notam. La
-    // légende suit par la classe du conteneur, les couleurs au prochain dessin.
+    // Famille de couleurs des points : "wx" = météo du dernier METAR, "notam"
+    // = couverture hors ligne. Dérivé de la couche allumée (setMapLayer) — la
+    // barre est la seule commande, mapMode n'est plus qu'une conséquence.
     function setMapMode(mode) {
       mapMode = mode;
-      $("#mapModeChk").checked = mode === "notam";
       $("#mapOv").classList.toggle("notam-mode", mode === "notam");
-      // Le fondu du fond ne vaut qu'en vue weather et de jour : le style du
-      // fond change donc avec la vue. Restyler de nuit serait un no-op payé
+      // Le fondu du fond ne vaut qu'en couche météo et de jour : le style du
+      // fond change donc avec elle. Restyler de nuit serait un no-op payé
       // d'un rechargement des couches — on s'en dispense.
       if (GL.map && document.body.classList.contains("light"))
         GL.map.setStyle(glStyle(true, GL.offline, mode === "wx"));
-      mapWxOldNote();              // le bandeau n'appartient qu'à la vue weather
+      mapWxOldNote();              // le bandeau n'appartient qu'aux couches météo
     }
-    $("#mapModeChk").onchange = e => {
-      setMapMode(e.target.checked ? "notam" : "wx");
-      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); if (mapTurbOn) mapTurbRefresh(); }
-      else closeMapWxSide();       // le relevé appartient à la vue weather
-      drawMap();
-    };
+    /* ---------- La barre noire : une couche à la fois ----------
+       Cinq états, quatre onglets. L'état SANS onglet allumé ("wx") est celui
+       de l'ouverture : les terrains aux couleurs du METAR/TAF, rien de plus.
+       Les quatre autres :
+         wind    les mêmes couleurs PLUS les flèches de vent, légende repliée ;
+         turb    la route et la nappe de turbulence SEULES — ni couche
+                 mondiale, ni couleurs météo, ni QFU, ni éclairs : cette
+                 couche répond de l'air en route, pas des terrains ;
+         notam   la carte NOTAM, gris/jaune, palette qui n'est qu'à elle ;
+         storm   la carte METAR/TAF lue pour la convection. Aujourd'hui elle
+                 montre exactement la carte de base ; la classe storm-on et
+                 mapStormOn existent pour porter la couche TCU/CB à venir —
+                 voir le repère [storm] dans drawMap().
+       Les états mutuellement exclusifs remplacent trois interrupteurs qui
+       pouvaient se cumuler : la carte ne dit plus qu'une chose à la fois. */
+    /* `redraw` : à l'OUVERTURE de la carte, non — openMap() a déjà calculé le
+       cadrage dans mapView mais ne l'a pas encore posé sur MapLibre, et
+       drawMap() RECOPIE la caméra MapLibre dans mapView quand le fond
+       vectoriel est actif (voir son entête). Dessiner ici écraserait donc le
+       cadrage qu'on vient de calculer par celui de la visite précédente, et
+       le jumpTo() qui suit l'entérinerait. openMap() dessine lui-même, une
+       fois la caméra posée. */
+    function setMapLayer(layer, redraw = true) {
+      mapLayer = layer;
+      const ov = $("#mapOv");
+      mapWindOn = layer === "wind";
+      mapTurbOn = layer === "turb";
+      mapStormOn = layer === "storm";
+      ov.classList.toggle("wind-on", mapWindOn);
+      ov.classList.toggle("turb-on", mapTurbOn);
+      ov.classList.toggle("storm-on", mapStormOn);
+      // Éteindre le vent ramène l'horizon sur NOW : au rallumage, la carte
+      // repart du vent OBSERVÉ, pas d'une prévision choisie avant.
+      if (!mapWindOn) setMapWindHour(0);
+      document.querySelectorAll("#mapTabs .mtab").forEach(b => {
+        const on = b.dataset.layer === layer;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      // Chaque changement de couche replie la légende : elle change de contenu
+      // et de longueur, la carte se donne d'abord à voir. Le bandeau reste,
+      // l'œil la rappelle.
+      ov.classList.add("leg-off");
+      setMapMode(layer === "notam" ? "notam" : "wx");
+      if (mapMode !== "wx") closeMapWxSide();   // le relevé appartient aux couches météo
+      // La couche turbulence ne dessine aucun point : rien à demander au flux
+      // météo mondial ni aux relevés — seulement la grille et le profil.
+      if (mapTurbOn) { mapTurbNote("Turbulence — loading…"); mapTurbRefresh(); }
+      else if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); }
+      if (redraw) drawMap();
+    }
+    document.querySelectorAll("#mapTabs .mtab").forEach(b => {
+      // Recliquer la couche allumée l'éteint : on revient à la carte
+      // METAR/TAF nue, l'état d'ouverture — sans avoir à chercher un
+      // cinquième bouton qui ne dirait rien de plus.
+      b.onclick = () => setMapLayer(mapLayer === b.dataset.layer ? "wx" : b.dataset.layer);
+    });
     /* Une carte OUVERTE se rafraîchit toute seule — même pas que la carte de
        Minima Lens (60 s). Sans cette minuterie, la couche mondiale et les
        points de la route gardaient les couleurs de l'OUVERTURE : sur un
@@ -20642,7 +20753,10 @@ function renderInfo(icao) {
        déclenchent rien, une vraie absence rafraîchit dans la minute. */
     const MAP_WX_REFRESH_MS = 60e3;
     function mapWxTick(force) {
-      if (document.hidden || $("#mapOv").hidden || mapMode !== "wx") return;
+      // La couche TURBULENCE ne dessine aucun point : la rafraîchir ne
+      // changerait rien à l'écran et coûterait le flux mondial toutes les
+      // minutes. Elle a sa propre minuterie, au pas des cycles GFS.
+      if (document.hidden || $("#mapOv").hidden || mapMode !== "wx" || mapLayer === "turb") return;
       mapWxRefresh();
       mapWxWorldRefresh(force);
       /* L'âge affiché doit VIEILLIR sous les yeux, même quand plus rien
@@ -20652,19 +20766,6 @@ function renderInfo(icao) {
     }
     setInterval(() => mapWxTick(true), MAP_WX_REFRESH_MS);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) mapWxTick(false); });
-    // Interrupteur des flèches de vent : l'état vit dans la classe du
-    // conteneur (pour la légende) et dans mapWindOn (pour le dessin).
-    // L'éteindre ramène l'horizon sur NOW — au rallumage, la carte repart du
-    // vent OBSERVÉ, pas d'une prévision choisie avant.
-    $("#mapWindChk").onchange = e => {
-      mapWindOn = e.target.checked;
-      $("#mapOv").classList.toggle("wind-on", mapWindOn);
-      // Allumer le vent rallonge la légende de six lignes : on la replie du
-      // même geste. Le bandeau reste, l'œil la rappelle.
-      if (mapWindOn) $("#mapOv").classList.add("leg-off");
-      if (!mapWindOn) setMapWindHour(0);
-      drawMap();
-    };
     // Sélecteur d'horizon : un rond s'allume, toutes les flèches se
     // redessinent — pas de nouvelle requête, les vents TAF sont déjà dans le
     // flux de la carte.
@@ -20675,9 +20776,9 @@ function renderInfo(icao) {
     }
     document.querySelectorAll("#mapWindHours .wh").forEach(b => {
       b.onclick = () => {
-        // « now » (h=0) reste gratuit : c'est le vent OBSERVÉ, sans quoi
-        // l'interrupteur de vent n'aurait plus rien à montrer. Seules les
-        // prévisions TAF sont bornées.
+        // « now » (h=0) reste gratuit : c'est le vent OBSERVÉ, sans quoi la
+        // couche WIND n'aurait plus rien à montrer. Seules les prévisions TAF
+        // sont bornées.
         if (+b.dataset.h !== 0 && gateBlocked("windHours")) return;
         setMapWindHour(+b.dataset.h); drawMap();
       };
@@ -21500,13 +21601,6 @@ function renderInfo(icao) {
       document.querySelectorAll("#mapTurbHours .wh").forEach(b =>
         b.classList.toggle("on", +b.dataset.h === h));
     }
-    $("#mapTurbChk").onchange = e => {
-      mapTurbOn = e.target.checked;
-      $("#mapOv").classList.toggle("turb-on", mapTurbOn);
-      // Trois lignes de légende de plus : repliée du même geste, comme le vent.
-      if (mapTurbOn) { $("#mapOv").classList.add("leg-off"); mapTurbNote("Turbulence — loading…"); mapTurbRefresh(); }
-      drawMap();
-    };
     // Le curseur peint pendant le glissement : la lecture est en mémoire dès
     // le deuxième passage, et l'anti-croisement absorbe les autres.
     $("#mapTurbFl").oninput = e => { setMapTurbFl(+e.target.value); mapTurbRefresh(); };
@@ -21582,24 +21676,20 @@ function renderInfo(icao) {
         world = true;
       }
       rebuildSavedSet();          // couleurs vert/rouge à jour à l'ouverture
-      // La carte s'ouvre dans la vue demandée par le bouton d'où l'on vient.
-      // En weather, la météo de la route arrive en asynchrone et recolore les
-      // points au fil des réponses.
-      setMapMode(mode === "notam" ? "notam" : "wx");
-      // Le vent repart toujours ÉTEINT : la carte s'ouvre sur les couleurs
-      // des points, le faisceau ne revient que si on le rallume — le
-      // navigateur peut restaurer la case cochée d'une visite passée, on ne
-      // s'y fie pas.
-      mapWindOn = false;
-      $("#mapWindChk").checked = false;
-      $("#mapOv").classList.remove("wind-on");
-      setMapWindHour(0);
       mapWxTargets = routeOk ? curRoute.airports.map(a => a.icao) : [];
       if (focus && !mapWxTargets.includes(focus.icao)) mapWxTargets.push(focus.icao);
-      // Rien à requêter en vue NOTAM : les couleurs viennent du cache des
-      // NOTAMs, pas du proxy météo. Le curseur basculé sur weather déclenchera
-      // ces mêmes appels.
-      if (mapMode === "wx") { mapWxRefresh(); mapWxWorldRefresh(); if (mapTurbOn) mapTurbRefresh(); }
+      // Les horizons repartent sur NOW : la carte s'ouvre sur le vent OBSERVÉ
+      // et la grille de turbulence la plus proche de maintenant, jamais sur
+      // une prévision choisie lors d'une visite passée.
+      setMapWindHour(0);
+      setMapTurbHour(0);
+      // La carte s'ouvre TOUJOURS sur une couche nette — celle du bouton d'où
+      // l'on vient : METAR/TAF nue, ou NOTAM quand c'est la page NOTAM qui
+      // ouvre la carte. Aucun onglet allumé n'est restauré d'une visite
+      // passée. setMapLayer() se charge des couleurs, des requêtes et du
+      // premier dessin ; en couche météo, les relevés de la route arrivent en
+      // asynchrone et recolorent les points au fil des réponses.
+      setMapLayer(mode === "notam" ? "notam" : "wx", false);
       // MapLibre disponible : c'est LUI qui cadre, mapView suivra au 1er rendu.
       if (GL.active && GL.map) {
         /* La bascule sur l'archive z6 était SANS RETOUR : un trou de réseau
