@@ -4130,6 +4130,16 @@
       display: flex
     }
 
+    /* Les interrupteurs du cartouche turbulence — même rangée de ronds, même
+       annulation de la règle du vent. Un rond n'y est pas un choix parmi
+       plusieurs mais un interrupteur : la couche se lit avec ou sans. */
+    #mapOv .map-turb-ctl .turb-sw {
+      display: flex;
+      background: none;
+      border: 0;
+      padding: 0;
+    }
+
     .map-turb-ctl .tinfo {
       font: 10.5px/1.3 var(--sans);
       color: var(--muted);
@@ -4142,7 +4152,7 @@
 
     /* Couche STORM : même contrat que la turbulence — son cartouche et ses
        lignes de légende n'existent que la couche allumée. Son rond n'est pas
-       un choix mais un interrupteur : la pluie s'éteint, la carte reste. */
+       un choix mais un interrupteur : les SIGMET s'éteignent, la pluie reste. */
     #mapOv:not(.storm-on) .map-storm-ctl {
       display: none
     }
@@ -7964,15 +7974,23 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                Turbulence, troisième onglet de Weather. La carte garde
                seulement l'orthodromie surlignée là où le rejeu rencontre de
                la turbulence, dessinée par drawMap(). -->
+          <!-- Les SIGMET TURB, allumés ou éteints. Ils ne se fondent jamais
+               dans la nappe calculée : cet interrupteur ne touche qu'à leur
+               affichage, et leur compte reste écrit au cartouche. -->
+          <div class="map-wind-hours turb-sw" role="group" aria-label="Turbulence layer switches"
+               title="SIGMET — the turbulence bulletins in force at the chosen level and hour, outlined and hatched over the computed index; switch them off to read the index alone, their count stays in the cartouche.">
+            <button type="button" class="wh on" id="mapTurbSig" aria-pressed="true" aria-label="Turbulence SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
+          </div>
           <div class="tinfo" id="mapTurbInfo" aria-live="polite">Turbulence — loading…</div>
         </div>
         <!-- Couche STORM : la dernière image de pluie, datée source par
-             source, et les SIGMET d'orage — un interrupteur chacun, indépendants.
+             source, et les SIGMET d'orage. La PLUIE n'a pas d'interrupteur —
+             elle EST la couche, l'éteindre ne laissait que la carte nue ; pour
+             s'en passer on quitte la couche. Seuls les SIGMET s'effacent.
              Visible seulement la couche allumée. Rempli par mapStormNote(). -->
         <div class="map-mode map-storm-ctl" id="mapStormCtl">
           <div class="map-wind-hours storm-sw" role="group" aria-label="Storm layer switches"
-               title="Rain — weather radar where a public service publishes it freely (Europe, North America, Japan), satellite rain estimate everywhere else between 60°S and 70°N. SIGMET — the thunderstorm bulletins in force, outlined and hatched over the rain; switch them off to read the image alone, their count stays in the cartouche.">
-            <button type="button" class="wh on" id="mapStormRadar" aria-pressed="true" aria-label="Rain: weather radar, satellite estimate elsewhere"><i class="c" aria-hidden="true"></i>Rain</button>
+               title="SIGMET — the thunderstorm bulletins in force, outlined and hatched over the rain; switch them off to read the image alone, their count stays in the cartouche.">
             <button type="button" class="wh on" id="mapStormSig" aria-pressed="true" aria-label="Thunderstorm SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
           </div>
           <div class="tinfo" id="mapStormInfo" aria-live="polite">Storm — loading…</div>
@@ -19779,7 +19797,7 @@ function renderInfo(icao) {
       // que si sa zone est assez large à l'écran pour le porter.
       mapSigHits = [];
       let vus = [];
-      if (mapTurbOn && mapMode === "wx" && mapTurbShown && sigCache.list) {
+      if (mapTurbOn && mapMode === "wx" && mapTurbSigOn && mapTurbShown && sigCache.list) {
         const ms = Date.parse(mapTurbShown.run) + mapTurbShown.fh * 3600e3;
         vus = sigForLevel(sigCache.list, mapTurbShown.fl * 100, ms);
       } else if (mapStormOn && mapMode === "wx" && mapStormSigOn && sigConvCache.list) {
@@ -20452,10 +20470,10 @@ function renderInfo(icao) {
     let mapLayer = "wx", mapStormOn = false;
     // L'image de la couche orage et ses carreaux — déclarés ici pour la
     // même raison ; le reste de la couche vit à la section STORM.
-    let mapStormRadarOn = true;
     // L'interrupteur des SIGMET d'orage : les zones officielles s'effacent de
     // la carte sans emporter la pluie — leur COMPTE reste écrit au cartouche,
-    // une zone cachée n'est pas une zone absente.
+    // une zone cachée n'est pas une zone absente. La pluie, elle, est toujours
+    // dessinée : elle est la raison d'être de la couche.
     let mapStormSigOn = true;
     const mapStormTiles = new Map();
     // Horizon du sélecteur de vent : 0 = NOW (METAR), 1..3 = TAF à +1/+2/+3 h.
@@ -20492,6 +20510,10 @@ function renderInfo(icao) {
     const TURB_INDEX_TTL = 10 * 60e3;      // l'index change quatre fois par jour
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
     let mapTurbOn = false, mapTurbFlIdx = TURB_FLS.indexOf(340), mapTurbHour = 0;
+    // L'interrupteur des SIGMET TURB : même contrat que ceux de la couche
+    // orage — les zones officielles s'effacent, la nappe calculée reste, et
+    // leur compte reste écrit au cartouche.
+    let mapTurbSigOn = true;
     let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbEnt = null, mapTurbShown = null, mapTurbSeq = 0, mapTurbStamp = null;
     const mapTurbCache = new Map();        // "FL340/h006" -> { val, grid } : le fichier décodé
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que
@@ -21642,7 +21664,9 @@ function renderInfo(icao) {
         mapTurbNote("GFS " + hh(new Date(runMs)) + "Z run · valid " + hh(valid) + "Z (+" + fh + " h)"
           + (index.grid && index.grid.dlon ? " · " + index.grid.dlon + "° grid" : "")
           + (stale ? " · OLD RUN" : "")
-          + (nSig < 0 ? " · SIGMET unavailable" : nSig ? " · " + nSig + " SIGMET TURB here" : " · no SIGMET at this level and hour"), stale);
+          + (nSig < 0 ? " · SIGMET unavailable"
+            : nSig ? " · " + nSig + " SIGMET TURB here" + (mapTurbSigOn ? "" : " (hidden)")
+            : " · no SIGMET at this level and hour"), stale);
         mapTurbProfile(index, seq);        // le profil H+x suit, sans retenir la carte
       } catch (e) {
         if (seq !== mapTurbSeq) return;
@@ -21815,6 +21839,7 @@ function renderInfo(icao) {
     document.querySelectorAll("#mapTurbHours .wh").forEach(b => {
       b.onclick = () => { setMapTurbHour(+b.dataset.h); mapTurbRefresh(); };
     });
+    $("#mapTurbSig").onclick = () => { mapTurbSigOn = !mapTurbSigOn; setMapToggle("#mapTurbSig", mapTurbSigOn); mapTurbRefresh(); };
     setMapTurbFl(mapTurbFlIdx);
     // Une carte laissée ouverte avec la turbulence allumée suit les cycles :
     // l'index est redemandé au pas de la minuterie météo, la grille ne
@@ -21933,7 +21958,6 @@ function renderInfo(icao) {
       ctx.save();
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
       for (const kind of ["radar"]) {
-        if (!mapStormRadarOn) continue;
         const [zmin, zmax] = STORM_Z[kind];
         // Un écran dense reçoit les carreaux du niveau au-dessus : deux fois
         // plus de pixels de radar par pixel de carte, aucune bouillie.
@@ -22003,7 +22027,7 @@ function renderInfo(icao) {
       // (elle est nommée dans les alertes), une grille en cours de
       // chargement dit « loading ».
       const radar = (st.radar || []).map(s => nom(s) + " " + (s.valid ? stormHM(s.valid) : s.loading ? "loading" : "?"));
-      if (mapStormRadarOn) parts.push("Rain " + (radar.length ? radar.join(", ") : "none"));
+      parts.push("Rain " + (radar.length ? radar.join(", ") : "none"));
       parts.push(nSig < 0 ? "SIGMET unavailable"
         : nSig ? nSig + " SIGMET TS in force" + (mapStormSigOn ? "" : " (hidden)")
         : "no SIGMET TS in force");
@@ -22014,16 +22038,15 @@ function renderInfo(icao) {
       drawMap();
     }
     function mapStormStop() { mapStormSeq++; }
-    // L'interrupteur du cartouche : la pluie s'éteint, le reste de la couche
-    // (éclairs, SIGMET) reste.
-    function setStormToggle(id, on) {
+    // L'aspect d'un interrupteur de cartouche — le rond plein ou vide, et ce
+    // que la voix de synthèse en dit. Les deux couches s'en servent.
+    function setMapToggle(id, on) {
       const b = $(id);
       if (!b) return;
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     }
-    $("#mapStormRadar").onclick = () => { mapStormRadarOn = !mapStormRadarOn; setStormToggle("#mapStormRadar", mapStormRadarOn); mapStormRefresh(); };
-    $("#mapStormSig").onclick = () => { mapStormSigOn = !mapStormSigOn; setStormToggle("#mapStormSig", mapStormSigOn); mapStormRefresh(); };
+    $("#mapStormSig").onclick = () => { mapStormSigOn = !mapStormSigOn; setMapToggle("#mapStormSig", mapStormSigOn); mapStormRefresh(); };
     setInterval(() => {
       if (document.hidden || $("#mapOv").hidden || mapMode !== "wx" || !mapStormOn) return;
       mapStormRefresh(true);
