@@ -7730,8 +7730,13 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              Minima, Map. L'ordre du document est aussi l'ordre du clavier :
              la tabulation suit la même route que le doigt. -->
         <button class="home-card" id="homeNotamCard" aria-label="NOTAM — open the NOTAM list of the aerodromes typed">
-          <img src="./home-notam-v10.jpg" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name">NOTAM</span>
+          <!-- Vignette v11 (5 sept. 2026) : le pictogramme porte le mot NOTAM
+               dans l'image elle-même. Le nom sous la case est donc retiré —
+               mais sa LIGNE reste, vide, pour que « FILTERS » tombe à la même
+               hauteur que les sous-titres des trois autres cases. Le nom
+               continue d'être dit à la voix par l'aria-label du bouton. -->
+          <img src="./home-notam-v11.jpg" alt="" aria-hidden="true" decoding="async">
+          <span class="hc-name" aria-hidden="true">&nbsp;</span>
           <span class="hc-sub">FILTERS</span>
         </button>
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
