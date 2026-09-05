@@ -38,7 +38,9 @@ def fetch_file(run, fh, kind):
     fields = {}
     for var, level, s, e, _f in rows:
         vals, grid = grib2mini.decode_first(http_cached(base, (s, e if e is not None else s + 4_000_000)))
-        fields[(var, int(level.split()[0]) if level.endswith(" mb") else "sfc")] = vals
+        # Mêmes clés que build_turb.fetch_file : sans quoi ce banc d'essai ne
+        # mesure pas le pipeline mais une variante à lui.
+        fields[(var, int(level.split()[0])) if level.endswith(" mb") else bt.SURFACE_KEY.get((var, level), (var, "sfc"))] = vals
         fields["_grid"] = grid
     return fields
 

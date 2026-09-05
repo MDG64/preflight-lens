@@ -726,6 +726,95 @@ le 2026-09-05 ne l'a pas, et le dit plutôt que d'ouvrir un cadre vide.
   turbulence de basse couche aux États-Unis demanderait les AIRMET, avec
   une présentation qui ne noie pas le vol.
 
+## 11. Sous le FL100 : le nuage convectif et les thermiques (2026-09-05)
+
+Jusque-là, la grille commençait au FL100 et le rejeu coupait à 9 000 ft : la
+montée et la descente restaient hachurées, « la grille ne dit rien ». C'est
+pourtant là qu'un vol court passe sa vie, et là que les cumulus secouent.
+
+### 11.1 Ce que le GFS donne, et qu'on n'utilisait pas
+
+Le modèle publie la **colonne convective** : pression de la base de son nuage
+convectif, pression de son sommet, couverture de ce nuage. On peut donc
+demander « mon niveau est-il DEDANS », à toute altitude, au lieu de deviner
+depuis le sol comme le faisait l'ancien masque (CAPE + pluie convective, sans
+structure verticale, avec un plafond arbitraire au FL390).
+
+Mesuré sur le cycle 00Z du 2026-09-05, échéance 12 h : une colonne convective
+existe sur 30,7 % du globe ; là où elle existe, la base médiane est à 2 500 ft
+et le sommet médian à 7 000 ft — le cumulus d'alizé —, le 90ᵉ centile des
+sommets à 39 500 ft — le cumulonimbus.
+
+### 11.2 Les trois degrés, choisis par mesure
+
+| Degré | Critère | FL050 | FL340 |
+|---|---|---|---|
+| cumulus | couverture convective ≥ 50 % | 4,2 % | 2,9 % |
+| towering cumulus | réflectivité ≥ 30 dBZ ou CAPE mixte ≥ 2 000 J/kg | 0,89 % | 0,45 % |
+| cumulonimbus | réflectivité ≥ 40 dBZ | 0,037 % | 0,013 % |
+
+Un premier jeu plus large (couverture ≥ 20 %, CAPE ≥ 1 000) allumait à lui
+seul 2,8 % de « fort » au FL340 et faisait **doubler** le moderate de
+croisière, là où la calibration EDR venait d'être validée contre turbli. Le
+CAPE est une propriété de la COLONNE — l'instabilité vue du sol — et non du
+point où l'on vole ; la réflectivité, elle, dit qu'il y a des gouttes ici et
+maintenant. D'où le resserrement.
+
+Chaque degré pose un **EDR fixe** (0,18 / 0,28 / 0,45) et non une valeur
+calibrée : la correspondance log-normale vaut pour l'air clair en croisière,
+pas pour l'intérieur d'un cumulonimbus. On annonce une classe, pas une mesure.
+
+Les **thermiques** s'y ajoutent : sous une couche limite d'au moins 3 000 ft
+(28 % du globe, essentiellement les terres l'après-midi), light. C'est l'autre
+raison pour laquelle une montée est hachée.
+
+### 11.3 Ce qui est publié
+
+- Deux niveaux de plus, **FL030 et FL050**, sans indice d'air clair : à ces
+  altitudes le cisaillement de croisière n'est pas le sujet et un modèle à
+  25 km ne résout ni le relief ni la couche de frottement. L'index les nomme
+  dans `fls_low` pour que le client puisse le dire.
+- **`CONV/hNNN.png`**, une fois par échéance et valable à TOUS les niveaux :
+  base, sommet et vigueur **empilés** dans la même image (trois plans de la
+  hauteur de la grille, une requête, un décodage). 444 Ko mesurés, contre
+  90 à 155 Ko pour un seul niveau dont il y en a quatorze.
+
+Coût amont : cinq champs 2D ajoutés (base et sommet du nuage, couverture
+convective, CAPE mixte, hauteur de couche limite), deux retirés (pluie
+convective et CAPE de surface, que la colonne rend inutiles). Environ +10 %
+par échéance. Le délai du workflow passe de 30 à 45 minutes par sécurité.
+
+Après (cycle 00Z du 05/09, h012, 20-70°N) : FL030 light 29 %, FL050 17,7 %,
+FL340 8,5 % contre 6,7 % avant, moderate au FL340 2,0 % contre 1,74 %. La
+croisière bouge peu, les bas niveaux s'allument.
+
+### 11.4 Côté client
+
+Le rejeu ne coupe plus à 9 000 ft : `turbFloorFt` place le plancher sous le
+premier niveau publié, à mi-chemin du suivant — 2 000 ft avec FL030 en tête.
+La série par minute porte trois champs de plus : degré convectif, base et
+sommet du nuage, lus dans la **case qui contient le point** (`turbCellAt`) —
+ni interpolés, ni élargis aux voisines : ce qui est annoncé « vous êtes
+dedans » doit l'être. Ce qu'il y a à côté reste l'affaire de la bande grise.
+
+À l'écran : une **bande CLOUD** sous le cadre, un morceau par minute dans le
+nuage, teinté par degré ; la bulle dit « In the model's convective cloud —
+towering cumulus, FL040 to FL435 » ; la liste des épisodes ajoute « in
+cumulus ». Le curseur de FL de la carte et la bande de la page descendent
+d'autant.
+
+### 11.5 Ce qui reste
+
+- Le modèle ne résout pas un cumulus : il dit que sa case est convectivement
+  active entre ces niveaux, pas qu'un nuage se tient à cet endroit. Près du
+  terrain, le METAR et le TAF valent mieux — et l'app les a déjà, avec les
+  groupes CB et TCU et leur hauteur de base. C'est la suite naturelle.
+- La courbe est lissée entre les cases, le drapeau du nuage est catégoriel :
+  en bordure de nuage, l'une peut être basse quand l'autre est allumé. Les
+  deux canaux se lisent séparément, comme le SIGMET.
+- Rien pour les ondes orographiques ni pour la turbulence mécanique de basse
+  couche (la rafale au sol est publiée par le GFS, elle n'est pas utilisée).
+
 ## Sources
 
 - Sharman & Pearson 2017, Prediction of Energy Dissipation Rates for Aviation Turbulence, Part I, JAMC 56 : https://doi.org/10.1175/JAMC-D-16-0205.1 (C1 = −2,953, C2 = 0,602 et seuils 0,15/0,22/0,34 cités par Kim et al., AMT 2021, https://amt.copernicus.org/preprints/amt-2021-161/)

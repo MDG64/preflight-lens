@@ -32,7 +32,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45 min depuis le 2026-09-05 : la colonne convective et les deux niveaux
+    # bas ajoutent ~10 % au téléchargement, et les builds tenaient déjà 13 à
+    # 20 min. La marge coûte zéro tant qu'on ne s'en sert pas.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

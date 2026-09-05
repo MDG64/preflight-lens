@@ -7207,6 +7207,10 @@ body.light .turb-chart .tint { fill-opacity: .12 }
 .turb-chart .sig-edge { stroke-width: 1; stroke-opacity: .45; shape-rendering: crispEdges }
 .turb-chart .sig-tint { fill-opacity: .1 }
 body.light .turb-chart .sig-tint { fill-opacity: .13 }
+/* La bande des nuages convectifs, sous le cadre : pleine, elle se lit d'un
+   coup d'œil comme la voie des SIGMET au-dessus. */
+.turb-chart .conv-lbl { fill: var(--muted); font-size: 10px; letter-spacing: .12em }
+.turb-chart .conv-seg { fill-opacity: .9 }
 .turb-list { margin-top: 12px; display: grid; gap: 6px }
 .turb-ev {
   display: grid; grid-template-columns: auto auto 1fr; gap: 0 12px; align-items: baseline;
@@ -7236,6 +7240,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
 .turb-legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; background: var(--k); border: 1px solid var(--line2) }
 .turb-legend span.band::before { background: var(--text); opacity: .18; border-color: transparent }
 .turb-legend span.hatch::before { background: repeating-linear-gradient(45deg, var(--steel-dim) 0 1px, transparent 1px 4px) }
+.turb-legend span.conv::before { background: linear-gradient(90deg, #ffc600 34%, #ff6e00 34% 67%, #e61e2c 67%) }
 .turb-legend span.unit::before { display: none }
 /* Le cartouche où un tap épingle la lecture : mêmes lignes que la bulle. */
 .turb-detail { margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; font: 500 12px/1.55 var(--sans); color: var(--muted) }
@@ -7807,6 +7812,11 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         lognormal calibration of the GTG forecasts (Sharman &amp; Pearson 2017), plus a convective proxy under model
         storms; thresholds for a medium jet (A320/B737): light 0.15, moderate 0.22, severe 0.34. The same field as the
         Turbulence layer of the map, read minute by minute along the great circle with a generic medium-jet profile.
+        Below FL100 the index does not apply and is not computed: the CLOUD band and the values at FL030 and FL050 come
+        from the model's convective cloud (its own base and top, graded cumulus / towering cumulus / cumulonimbus) and
+        from the depth of the convective boundary layer. A 25 km model does not resolve one cumulus: it says its box is
+        convectively active between those levels, not that a cloud stands at that spot — near the aerodrome the METAR and
+        TAF are worth more.
         Above the curve, in its own lane, the turbulence SIGMETs in force (NOAA/NWS Aviation Weather Center): official
         bulletins, never merged into the computed index. Decision support only — not the WAFS forecast, blind to
         mountain waves, and it does not replace the SIGWX charts of your official briefing.</div>
@@ -7893,7 +7903,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <div class="map-mode map-turb-ctl" id="mapTurbCtl">
           <div class="tfl">
             <span class="lb">FL</span>
-            <input type="range" id="mapTurbFl" min="0" max="11" step="1" value="7" aria-label="Flight level of the turbulence layer">
+            <input type="range" id="mapTurbFl" min="0" max="13" step="1" value="9" aria-label="Flight level of the turbulence layer">
             <output class="tfl-out" id="mapTurbFlOut" for="mapTurbFl">FL340</output>
           </div>
           <div class="map-wind-hours turb-hours" id="mapTurbHours" role="radiogroup" aria-label="Turbulence forecast time"
@@ -8384,8 +8394,11 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           <b>Turbulence zones and Turbulence page</b> — computed from the <a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/"
             target="_blank" rel="noopener">NOAA GFS 0.25° model winds</a> (public domain) with the Ellrod
           clear-air turbulence index, converted to EDR (eddy dissipation rate, the ICAO turbulence unit) by the lognormal
-          calibration of the GTG forecasts (Sharman &amp; Pearson 2017), plus a convective proxy (CAPE, convective rain,
-          simulated reflectivity). Thresholds for a medium jet: light 0.15, moderate 0.22, severe 0.34. A model estimate
+          calibration of the GTG forecasts (Sharman &amp; Pearson 2017). Thresholds for a medium jet: light 0.15,
+          moderate 0.22, severe 0.34. On top of the clear air, the model's <b>convective cloud</b> raises the value
+          wherever the chosen level sits between its own base and top, graded cumulus / towering cumulus / cumulonimbus
+          from cloud cover, instability and simulated reflectivity; the depth of the convective boundary layer adds the
+          thermals of a climb-out. FL030 and FL050 carry that alone, with no clear-air index. A model estimate
           on ~25 km cells, drawn smoothed between grid points,
           <b>not the official WAFS turbulence forecast</b> and <b>not an aviation weather product</b>. The
           Turbulence page reads the same grid along the flight, minute by minute.</div>
@@ -21146,6 +21159,19 @@ function renderInfo(icao) {
       const r0 = j0 * nlon, r1 = j1 * nlon;
       return (val[r0 + i0] * (1 - ti) + val[r0 + i1] * ti) * (1 - tj) + (val[r1 + i0] * (1 - ti) + val[r1 + i1] * ti) * tj;
     }
+    /* La valeur de la case qui CONTIENT le point : ni interpolée ni élargie.
+       Pour un champ catégoriel — le degré d'un nuage, sa base, son sommet —
+       une moyenne entre deux cases ne veut rien dire, et le pire des voisins
+       ferait dire « vous êtes dans le nuage » à qui passe à côté. Hors
+       grille : NaN. */
+    function turbCellAt(grid, val, lat, lon) {
+      const nlat = grid.nlat, nlon = grid.nlon, world = nlon * grid.dlon >= 359.9;
+      const j = Math.round((lat - grid.lat0) / grid.dlat);
+      let i = Math.round((((lon - grid.lon0) % 360 + 360) % 360) / grid.dlon);
+      if (world) i %= nlon;
+      if (j < 0 || j >= nlat || i < 0 || i >= nlon) return NaN;
+      return val[j * nlon + i];
+    }
     /* Le pire des neuf points autour (le point de grille le plus proche et
        ses huit voisins, ±0,25°) : ce qu'il y a À CÔTÉ de la route. Une zone
        de CAT se trompe de 50 à 100 NM en position — c'est la bande grise
@@ -21186,13 +21212,25 @@ function renderInfo(icao) {
        seuils de classe de l'index. Les événements ne retiennent que les
        CHANGEMENTS de classe ; `pts` garde chaque minute pour la courbe,
        `peak` l'indice de la minute la plus forte. */
-    function turbSampleProfile(prof, A, B, index, tkoMs, fls, entOf, levels) {
+    /* Plancher du rejeu : la grille ne dit rien sous le premier niveau
+       publié, moins la moitié de l'écart au suivant — le niveau le plus
+       proche cesse d'avoir un sens en dessous. Avec FL030 en tête (depuis le
+       2026-09-05), le rejeu commence à 2 000 ft ; avec l'ancienne grille qui
+       commençait au FL100, il commençait à 9 000 ft, comme avant. */
+    function turbFloorFt(fls) {
+      const L = Array.isArray(fls) && fls.length ? fls : null;
+      if (!L) return 9000;                       // repli : le plancher d'avant, en dur
+      const a = L[0] * 100, b = (L[1] || L[0] + 20) * 100;
+      return Math.max(0, a - (b - a) / 2);
+    }
+    function turbSampleProfile(prof, A, B, index, tkoMs, fls, entOf, levels, convOf) {
       const dist = gcDistNM(A, B), pts = [], events = [], run = Date.parse(index.run);
+      const plancher = turbFloorFt(fls);
       let prev = null, max = -2, peak = -1;
       for (const [t, d, alt] of prof.pts) {
         const p = gcPoint(A, B, dist ? d / dist : 0);
-        let c = -1, fl = null, v = NaN, lo = NaN, hi = NaN, hours = null;
-        if (alt >= 9000) {
+        let c = -1, fl = null, v = NaN, lo = NaN, hi = NaN, hours = null, cvg = 0, cb = 0, ct = 0;
+        if (alt >= plancher) {
           fl = turbNearestFl(fls, alt); c = -2;
           const ms = tkoMs + t * 60e3;
           hours = turbBracketHours(index, ms);
@@ -21213,8 +21251,24 @@ function renderInfo(icao) {
             hi = Math.max(v, ...nears.filter(x => x >= 0));
             c = turbClassOf(v, levels);
           }
+          // La NATURE de ce qui secoue, quand la colonne convective est là :
+          // le niveau est-il dans le nuage du modèle, et de quel degré. Lue à
+          // l'échéance la plus proche — un nuage ne s'interpole pas entre
+          // deux heures, il est là ou il n'y est pas.
+          if (convOf) {
+            const k = convOf(hours[hours.length - 1] === hours[0] ? hours[0]
+              : ((ms - run) / 3600e3 - hours[0] < hours[1] - (ms - run) / 3600e3 ? hours[0] : hours[1]));
+            if (k) {
+              // La case du point, pas la moyenne ni le pire des voisines : ce
+              // qui est annoncé « vous êtes dedans » doit l'être vraiment.
+              // Ce qu'il y a à côté, c'est la bande grise qui le porte.
+              const b = turbCellAt(k.grid, k.base, p.lat, p.lon), tp = turbCellAt(k.grid, k.top, p.lat, p.lon);
+              const g = turbCellAt(k.grid, k.vig, p.lat, p.lon);
+              if (g > 0 && alt >= b * k.step && alt <= tp * k.step) { cvg = g; cb = b * k.step; ct = tp * k.step; }
+            }
+          }
         }
-        const i = pts.push({ t, d, alt, fl, lat: p.lat, lon: p.lon, v, lo, hi, cls: c, hours }) - 1;
+        const i = pts.push({ t, d, alt, fl, lat: p.lat, lon: p.lon, v, lo, hi, cls: c, hours, cvg, cb, ct }) - 1;
         if (c > max) max = c;
         if (v >= 0 && (peak < 0 || v > pts[peak].v)) peak = i;
         if (prev === null || c !== prev) { events.push({ t, d, fl, alt, cls: c, lat: p.lat, lon: p.lon }); prev = c; }
@@ -21424,7 +21478,7 @@ function renderInfo(icao) {
           // On les oublie ; l'affichage courant est relu depuis la nouvelle
           // source par l'appelant.
           const stamp = base + "|" + (d.generated || d.run) + "|" + JSON.stringify(d.grid);
-          if (stamp !== mapTurbStamp) { mapTurbCache.clear(); mapTurbEnt = null; mapTurbRas = null; mapTurbStamp = stamp; }
+          if (stamp !== mapTurbStamp) { mapTurbCache.clear(); mapConvCache.clear(); mapTurbEnt = null; mapTurbRas = null; mapTurbStamp = stamp; }
           turbBase = base; mapTurbIndex = d; mapTurbIndexAt = Date.now();
           return d;
         } catch (e) { last = e; }
@@ -21510,6 +21564,33 @@ function renderInfo(icao) {
       mapTurbCache.set(key, ent);
       return ent;
     }
+    /* La colonne convective d'une échéance : base, sommet et vigueur EMPILÉS
+       dans une seule image (trois plans de la hauteur de la grille), publiés
+       une fois par heure et valables à TOUS les niveaux. C'est elle qui dit la
+       NATURE de ce qui secoue — un cumulus, un towering cumulus, un
+       cumulonimbus — là où la grille ne donne qu'une valeur. Un index d'avant
+       le 2026-09-05 n'en a pas : on s'en passe sans rien casser, la courbe
+       reste juste, elle perd seulement le mot. */
+    const mapConvCache = new Map();
+    const convKey = fh => "CONV/h" + String(fh).padStart(3, "0");
+    async function mapTurbConv(index, fh) {
+      if (!index || !index.conv || !index.conv.path) return null;
+      const key = convKey(fh);
+      if (mapConvCache.has(key)) return mapConvCache.get(key);
+      let ent = null;
+      try {
+        const r = await fetch(turbBase + "/" + key + ".png");
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await turbPngDecode(await r.arrayBuffer());
+        const grid = (d.meta && d.meta.grid) || index.grid;
+        const n = grid.nlat * grid.nlon;
+        if (d.w !== grid.nlon || d.h !== grid.nlat * 3) throw new Error("turb: colonne et grille en désaccord");
+        ent = { grid, step: (d.meta && d.meta.ft_step) || index.conv.ft_step || 500,
+                base: d.val.subarray(0, n), top: d.val.subarray(n, 2 * n), vig: d.val.subarray(2 * n, 3 * n) };
+      } catch (e) { ent = null; }
+      mapConvCache.set(key, ent);
+      return ent;
+    }
     /* Le raster de la nappe pour la vue courante. Il couvre la fenêtre et
        une marge de 30 % de chaque côté, à la résolution CSS de l'écran
        (un pixel de raster par pixel CSS, quel que soit le devicePixelRatio,
@@ -21589,7 +21670,9 @@ function renderInfo(icao) {
       drawMap();
     }
     // Les noms des classes, partagés avec la page Turbulence.
-    const TURB_NAMES = { "-2": "no data", "-1": "below FL100", 0: "smooth", 1: "light", 2: "moderate", 3: "severe" };
+    const TURB_NAMES = { "-2": "no data", "-1": "below the lowest level", 0: "smooth", 1: "light", 2: "moderate", 3: "severe" };
+    // Les degrés de la colonne convective, dans les mots d'un pilote.
+    const CONV_NAMES = { 1: "cumulus", 2: "towering cumulus", 3: "cumulonimbus" };
     function setMapTurbFl(idx) {
       mapTurbFlIdx = Math.max(0, Math.min(TURB_FLS.length - 1, idx));
       const s = $("#mapTurbFl"), o = $("#mapTurbFlOut");
@@ -26412,6 +26495,7 @@ function dtsAUnQfu(icao){
     const TURB_COL = { 0: "var(--steel)", 1: "#ffc600", 2: "#ff6e00", 3: "#e61e2c" };
     const TURB_PLANE = "M0-6.2 1.3-1.7 6 1.3v1.2L1.3 1.2 1 4.4l2.2 1.3v.9L0 5.9l-3.2.7v-.9L-1 4.4l-.3-3.2L-6 2.5V1.3l4.7-3z";
     const SIG_LANE = 22;                   // hauteur ajoutée au-dessus du cadre pour la voie des SIGMET
+    const CONV_BAND = 14;                  // et sous le cadre, pour la bande des nuages convectifs
     let turbLastRes = null, turbCursorI = -1;
     const sigCol = s => s && s.sev === "MOD" ? TURB_COL[2] : TURB_COL[3];
     /* Octet du fichier -> EDR (m^2/3 s^-1) : ÷ 100 quand l'index le dit
@@ -26449,7 +26533,8 @@ function dtsAUnQfu(icao){
                      [2, L ? `Moderate ${n(1)}–${n(2)}` : "Moderate"], [3, L ? `Severe ≥ ${n(2)}` : "Severe"]];
       const sigs = (res && Array.isArray(res.sigRuns) && res.sigRuns.length) ? res.sigRuns : null;
       $("#turbLegend").innerHTML = items.map(([c, t]) => `<span style="--k:${TURB_COL[c]}">${t}</span>`).join("")
-        + `<span class="band">Grey band: worst neighbouring cell, other forecast hour</span><span class="hatch">Hatched: below FL100, grid silent</span>`
+        + `<span class="band">Grey band: worst neighbouring cell, other forecast hour</span><span class="hatch">Hatched: below the lowest level, grid silent</span>`
+        + (res && res.ser && res.ser.some(p => p[10] > 0) ? `<span class="conv">CLOUD band: inside the model's convective cloud (cumulus, towering cumulus, cumulonimbus)</span>` : "")
         + (sigs ? `<span style="--k:${sigCol(res.sig && res.sig[sigs[0].k])}">SIGMET TURB — official bulletin, in its own lane above</span>` : "")
         + (L ? `<span class="unit">EDR × 100, medium jet</span>` : "");
     }
@@ -26469,8 +26554,12 @@ function dtsAUnQfu(icao){
       // graphique grandit d'autant, la courbe garde sa hauteur.
       const runs = (!skeleton && Array.isArray(res.sigRuns) && res.sigRuns) || [];
       const lane = runs.length ? SIG_LANE : 0;
-      const W = Math.max(320, Math.round(box.clientWidth) || 640), H = (W < 480 ? 250 : 300) + lane;
-      const L = 44, R = 14, T = 26 + lane, B = 48, PW = W - L - R, PH = H - T - B;
+      // La bande convective sous le cadre : elle n'apparaît que si le vol
+      // traverse vraiment un nuage du modèle, et elle repousse l'axe d'autant.
+      const S0 = res.ser || [];
+      const convOn = !skeleton && S0.some(p => p[10] > 0) ? CONV_BAND : 0;
+      const W = Math.max(320, Math.round(box.clientWidth) || 640), H = (W < 480 ? 250 : 300) + lane + convOn;
+      const L = 44, R = 14, T = 26 + lane, B = 48 + convOn, PW = W - L - R, PH = H - T - B;
       const total = Math.max(res.total, 1), t0 = res.cfg.t0, S = res.ser || [];
       const lv = (res.levels || TURB_LEVELS).map(l => turbY(l, res));
       let ymax = 60;
@@ -26578,16 +26667,35 @@ function dtsAUnQfu(icao){
       // codes des terrains aux deux bouts.
       const maxTicks = W < 480 ? 4 : 6;
       const step = [5, 10, 15, 20, 30, 60, 90, 120, 180, 240, 360].find(s => total / s <= maxTicks) || 480;
+      // La bande des nuages convectifs, entre le cadre et l'axe : un morceau
+      // par minute dans le nuage du modèle, teinté par degré — cumulus,
+      // towering cumulus, cumulonimbus. C'est ce qui secoue une montée, et ça
+      // ne se lit pas dans une valeur d'EDR seule : on le montre à part.
+      if (convOn) {
+        const cy = T + PH + 6;
+        g += `<text class="conv-lbl" x="1" y="${F(cy + 8)}" text-anchor="start">CLOUD</text>`;
+        for (let i = 0, a = -1; i <= S0.length; i++) {
+          const v = i < S0.length ? S0[i][10] : 0;
+          const prev = a >= 0 ? S0[a][10] : 0;
+          if (v !== prev || i === S0.length) {
+            if (a >= 0 && prev > 0) {
+              const x1 = X(S0[a][0]), x2 = X(S0[Math.min(i, S0.length - 1)][0]);
+              g += `<rect class="conv-seg" x="${F(x1)}" y="${F(cy)}" width="${F(Math.max(1.5, x2 - x1))}" height="9" rx="2" style="fill:${TURB_COL[prev]}"/>`;
+            }
+            a = i;
+          }
+        }
+      }
       const tick = (m, anchor) => {
         const x = X(m);
         g += `<line class="grid" x1="${F(x)}" x2="${F(x)}" y1="${F(Y(0))}" y2="${F(Y(0) + 4)}"/>`;
-        g += `<text class="ax${anchor === "middle" ? "" : " strong"}" x="${F(x)}" y="${T + PH + 16}" text-anchor="${anchor}">${turbHPlus(m)}</text>`;
-        g += `<text class="ax" x="${F(x)}" y="${T + PH + 29}" text-anchor="${anchor}">${turbHM(t0 + m * 60e3)}Z</text>`;
+        g += `<text class="ax${anchor === "middle" ? "" : " strong"}" x="${F(x)}" y="${T + PH + 16 + convOn}" text-anchor="${anchor}">${turbHPlus(m)}</text>`;
+        g += `<text class="ax" x="${F(x)}" y="${T + PH + 29 + convOn}" text-anchor="${anchor}">${turbHM(t0 + m * 60e3)}Z</text>`;
       };
       tick(0, "start");
       for (let m = step; m < total - step * (W < 480 ? 0.7 : 0.45); m += step) tick(m, "middle");
       tick(total, "end");
-      g += `<text class="ax strong" x="${L}" y="${T + PH + 43}" text-anchor="start">${esc(res.cfg.dep)}</text><text class="ax strong" x="${W - R}" y="${T + PH + 43}" text-anchor="end">${esc(res.cfg.arr)}</text>`;
+      g += `<text class="ax strong" x="${L}" y="${T + PH + 43 + convOn}" text-anchor="start">${esc(res.cfg.dep)}</text><text class="ax strong" x="${W - R}" y="${T + PH + 43 + convOn}" text-anchor="end">${esc(res.cfg.arr)}</text>`;
       // Le curseur, caché tant que rien n'est lu, et la zone de saisie.
       g += `<g class="cur off"><line class="cursor" x1="0" x2="0" y1="${T}" y2="${T + PH}"/><circle class="cursor-dot" r="4.5"/></g><rect x="${L}" y="${T}" width="${PW}" height="${PH}" fill="transparent"/></svg>`;
       box.querySelectorAll("svg").forEach(s => s.remove());
@@ -26609,7 +26717,7 @@ function dtsAUnQfu(icao){
       const pk = res.peak >= 0 && res.ser && res.ser[res.peak];
       const worst = skeleton ? `<span class="muted">reading the grid…</span>`
         : pk && pk[4] >= 0 ? `<span class="k${Math.max(0, pk[7])}">peak EDR ${turbEdrLabel(pk[4], res)} · ${TURB_NAMES[Math.max(0, pk[7])]}</span> <span class="muted">at ${turbHPlus(pk[0])}</span>`
-        : res.max === -1 ? `<span class="muted">below FL100 all along</span>`
+        : res.max === -1 ? `<span class="muted">below the lowest published level all along</span>`
         : `<span class="muted">no grid on this route</span>`;
       el.innerHTML = `${esc(c.dep)} → ${esc(c.arr)}${dist != null ? ` · ${Math.round(dist)} NM` : ""} · ${turbDur(res.total)}`
         + ` · TKO ${turbHM(c.t0)}Z · FL${Math.round(top / 100)} · ${worst}`;
@@ -26652,6 +26760,13 @@ function dtsAUnQfu(icao){
         const ch = turbClassOf(p[6], res.levels);
         if (ch > c || hi - e >= 0.05) line(`Nearby up to ${turbEdrLabel(p[6], res)} (${TURB_NAMES[ch]}) — a neighbouring cell or the other forecast hour`);
       }
+      // Dans le nuage du modèle : le dire, avec son degré et son épaisseur.
+      // C'est ce qu'un pilote voit par le hublot, et une valeur seule ne le
+      // dit pas — un cumulus qui secoue n'est pas un cisaillement invisible.
+      if (p[10] > 0) {
+        const d = line(`In the model's convective cloud — ${CONV_NAMES[p[10]] || "convective"}, ${turbFlLbl(p[11])} to ${turbFlLbl(p[12])}`);
+        d.style.color = TURB_COL[p[10]];
+      }
       // Les SIGMET qui couvrent cette minute, chacun sa ligne, dans sa
       // couleur : ce sont eux qu'on lit en premier après la valeur.
       for (const r of (res.sigRuns || [])) {
@@ -26684,10 +26799,21 @@ function dtsAUnQfu(icao){
         return `<div class="turb-ev sig ${s.sev === "MOD" ? "k2" : "k3"}" data-sig="${j}" title="Tap to read the raw bulletin"><span class="t">${turbHPlus(r.t0)} · ${turbHM(t0 + r.t0 * 60e3)}Z</span><span class="k">SIGMET${s.sev ? " " + esc(s.sev) : ""}</span><span>${esc(sigName(s))} · ${esc(sigBand(s))} · for ${Math.round(r.t1 - r.t0) + 1} min · valid ${turbHM(s.from)}–${turbHM(s.to)}Z</span></div>`;
       }).join("");
       if (!eps.length) {
-        box.innerHTML = sigHtml + `<div class="turb-none">${res.max === 0 ? "Smooth all along at this level and time." : res.max === -1 ? "The whole flight stays below FL100: the grid says nothing." : res.max === -2 ? "No grid data along this route (outside the covered area)." : "Only brushes of light turbulence, none longer than three minutes."}`
+        box.innerHTML = sigHtml + `<div class="turb-none">${res.max === 0 ? "Smooth all along at this level and time." : res.max === -1 ? "The whole flight stays below the lowest published level: the grid says nothing." : res.max === -2 ? "No grid data along this route (outside the covered area)." : "Only brushes of light turbulence, none longer than three minutes."}`
           + `${runs.length ? " That is the model index; the SIGMET above is a forecaster's bulletin and stands on its own." : ""}</div>`;
       } else {
-        box.innerHTML = sigHtml + eps.map((e, i) => `<div class="turb-ev k${e.cls}" data-i="${i}"><span class="t">${turbHPlus(e.t0)} · ${turbHM(t0 + e.t0 * 60e3)}Z</span><span class="k">${TURB_NAMES[e.cls]}</span><span>${e.vMax >= 0 ? `EDR up to ${turbEdrLabel(e.vMax, res)} · ` : ""}${e.t1 - e.t0 >= 1.5 ? `for ${Math.round(e.t1 - e.t0)} min · ` : ""}FL${e.flMin}${e.flMax !== e.flMin ? `–${e.flMax}` : ""} · ${Math.round(e.d0)} NM from ${esc(res.cfg.dep)}</span></div>`).join("");
+        // Le degré convectif le plus fort rencontré pendant l'épisode : c'est
+        // la CAUSE, et elle change ce qu'on en fait — un cumulonimbus se
+        // contourne, un cisaillement se traverse.
+        const nuage = e => {
+          let g = 0;
+          for (const p of S) if (p[0] >= e.t0 && p[0] < e.t1 && p[10] > g) g = p[10];
+          return g;
+        };
+        box.innerHTML = sigHtml + eps.map((e, i) => {
+          const g = nuage(e);
+          return `<div class="turb-ev k${e.cls}" data-i="${i}"><span class="t">${turbHPlus(e.t0)} · ${turbHM(t0 + e.t0 * 60e3)}Z</span><span class="k">${TURB_NAMES[e.cls]}</span><span>${e.vMax >= 0 ? `EDR up to ${turbEdrLabel(e.vMax, res)} · ` : ""}${e.t1 - e.t0 >= 1.5 ? `for ${Math.round(e.t1 - e.t0)} min · ` : ""}FL${e.flMin}${e.flMax !== e.flMin ? `–${e.flMax}` : ""} · ${Math.round(e.d0)} NM from ${esc(res.cfg.dep)}${g ? ` · in ${esc(CONV_NAMES[g])}` : ""}</span></div>`;
+        }).join("");
       }
       // Une ligne touchée épingle sa minute : le pic pour un épisode du
       // modèle, l'entrée dans la zone pour un SIGMET.
@@ -26744,22 +26870,27 @@ function dtsAUnQfu(icao){
         // D'abord tous les fichiers que le rejeu va toucher — niveaux de la
         // montée, de la croisière et de la descente, deux échéances par heure
         // traversée —, puis l'échantillonnage, synchrone.
-        const need = new Map();
+        const need = new Map(), besoinConv = new Set();
+        const plancher = turbFloorFt(fls);
         for (const [t, , alt] of prof.pts) {
-          if (alt < 9000) continue;
+          if (alt < plancher) continue;
           const fl = turbNearestFl(fls, alt);
-          for (const fh of turbBracketHours(index, cfg.t0 + t * 60e3)) need.set(turbKey(fl, fh), [fl, fh]);
+          for (const fh of turbBracketHours(index, cfg.t0 + t * 60e3)) { need.set(turbKey(fl, fh), [fl, fh]); besoinConv.add(fh); }
         }
-        await Promise.all([...need.values()].map(([fl, fh]) => mapTurbFile(index, fl, fh).catch(() => null)));
+        await Promise.all([...need.values()].map(([fl, fh]) => mapTurbFile(index, fl, fh).catch(() => null))
+          .concat([...besoinConv].map(fh => mapTurbConv(index, fh).catch(() => null))));
         if (token !== turbToken) return;
         const entOf = (fl, fh) => mapTurbCache.get(turbKey(fl, fh)) || null;
+        const convOf = fh => mapConvCache.get(convKey(fh)) || null;
         const levels = mapTurbLevels(index);
-        const P = turbSampleProfile(prof, A, B, index, cfg.t0, fls, entOf, levels);
+        const P = turbSampleProfile(prof, A, B, index, cfg.t0, fls, entOf, levels, convOf);
         // La série par minute, arrondie, pour la courbe et pour le stockage :
-        // [t min, d NM, alt ft, FL, valeur au centre, lo, hi, classe, h0, h1].
+        // [t min, d NM, alt ft, FL, valeur au centre, lo, hi, classe, h0, h1,
+        //  vigueur convective, base ft, sommet ft].
         const r1 = x => x >= 0 ? Math.round(x * 10) / 10 : NaN;
         const ser = P.pts.map(p => [Math.round(p.t * 100) / 100, Math.round(p.d * 10) / 10, p.alt, p.fl, r1(p.v), r1(p.lo), r1(p.hi), p.cls,
-                                    p.hours ? p.hours[0] : null, p.hours ? p.hours[p.hours.length - 1] : null]);
+                                    p.hours ? p.hours[0] : null, p.hours ? p.hours[p.hours.length - 1] : null,
+                                    p.cvg || 0, Math.round(p.cb || 0), Math.round(p.ct || 0)]);
         const enc = index.encoding ? { unit: index.encoding.unit, per_edr: index.encoding.per_edr, floor: index.encoding.floor } : null;
         // Les SIGMET TURB, par-dessus : la liste réduite à ceux que le vol
         // traverse vraiment, et les plages traversées. Le POLYGONE est laissé
@@ -26914,7 +27045,10 @@ function dtsAUnQfu(icao){
        muets avant d'arriver au premier niveau utile n'avait pas de sens. Le
        cran de FL090 reste, lui, parce qu'il est le voisin immédiat du seuil.
        De là jusqu'à FL500, de dix en dix. */
-    const TURB_FL_STEPS = Array.from({ length: 42 }, (_, i) => 90 + i * 10);
+    // La bande commence à FL020 depuis le 2026-09-05 : la grille dit quelque
+    // chose sous le FL100 (convection et thermiques), et un vol court ne monte
+    // pas plus haut.
+    const TURB_FL_STEPS = Array.from({ length: 49 }, (_, i) => 20 + i * 10);
     flrBindField($("#turbFl"), {
       title: "Cruise FL",
       levels: TURB_FL_STEPS,

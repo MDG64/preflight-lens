@@ -31,7 +31,7 @@ async function chargerTurb() {
   const src = html.slice(a, b) + "\n" + html.slice(c, d) + "\n" + html.slice(e, f)
     + "\nexport { turbDecode, turbValFromCls, turbClassOf, turbPngParse, turbPngUnfilter, turbPngDecode, turbPickHour,"
     + " turbCatmull, turbResample, turbMercLat, turbLut, turbColorize,"
-    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbValueAt, turbValueNear, turbSampleProfile, turbEpisodes,"
+    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbValueAt, turbValueNear, turbCellAt, turbFloorFt, turbSampleProfile, turbEpisodes,"
     + " sigUnwrap, sigPointIn, sigCovers, sigScan, sigRing, sigForLevel };";
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
@@ -488,4 +488,31 @@ test("sigForLevel garde les bulletins dont la tranche et la validité contiennen
   assert.deepEqual(ids(34000, T16 + 1), [], "après la validité, plus rien");
   assert.deepEqual(ids(34000, T12 - 1), [], "avant la validité non plus");
   assert.deepEqual(sigForLevel(null, 34000, t), []);
+});
+
+test("turbCellAt rend la valeur de la case qui contient le point, sans interpoler", async () => {
+  const { turbCellAt } = await chargerTurb();
+  const grid = { lat0: 50, lon0: 0, dlat: -0.25, dlon: 0.25, nlat: 3, nlon: 3 };
+  const val = Uint8Array.from([0, 40, 0, 0, 20, 0, 0, 0, 0]);
+  assert.equal(turbCellAt(grid, val, 50, 0.25), 40, "au point de grille");
+  assert.equal(turbCellAt(grid, val, 49.95, 0.22), 40, "dans la même case : la même valeur, pas une moyenne");
+  assert.equal(turbCellAt(grid, val, 49.75, 0.25), 20);
+  assert.equal(turbCellAt(grid, val, 49.875, 0.25), 20, "à mi-chemin : la case la plus proche tranche, elle ne mélange pas");
+  assert.ok(Number.isNaN(turbCellAt(grid, val, 40, 0.25)), "hors grille : NaN");
+  const world = { lat0: 90, lon0: -180, dlat: -0.25, dlon: 0.25, nlat: 721, nlon: 1440 };
+  const wv = new Uint8Array(721 * 1440); wv[200 * 1440] = 33;
+  assert.equal(turbCellAt(world, wv, 40, -180), 33);
+  assert.equal(turbCellAt(world, wv, 40, 180), 33, "180 E est 180 W");
+});
+
+test("turbFloorFt : le rejeu commence sous le premier niveau publié, à mi-chemin du suivant", async () => {
+  const { turbFloorFt } = await chargerTurb();
+  assert.equal(turbFloorFt([30, 50, 100, 340]), 2000, "FL030 en tête : le rejeu part de 2 000 ft");
+  // Sur une grille qui commence au FL100 (avant le 2026-09-05), le plancher
+  // tombe à 8 000 ft — la moitié de l'écart au FL140 — au lieu des 9 000 ft
+  // écrits en dur autrefois. Deux cents pieds de montée en plus, sans
+  // conséquence : le niveau le plus proche reste le FL100.
+  assert.equal(turbFloorFt([100, 140, 180]), 8000);
+  assert.equal(turbFloorFt([]), 9000, "sans liste : le plancher d'avant, en dur");
+  assert.equal(turbFloorFt([100]), 9000, "un seul niveau : l'écart supposé est de 20 FL");
 });
