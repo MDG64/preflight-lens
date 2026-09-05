@@ -5258,6 +5258,17 @@ body.light .stat.on {
       cursor: pointer
     }
 
+    /* Durée du vol (2026-09-05) : simple lecture décollage → arrivée, sous
+       la ligne des codes — pas une case de plus, rien à toucher. Visible dès
+       que les deux heures sont posées. */
+    .home-duration {
+      margin-top: -4px;
+      font: 500 11px/1 var(--mono);
+      letter-spacing: .08em;
+      color: var(--muted);
+      text-align: center
+    }
+
     /* ---------- cadran à aiguille (toutes les heures de l'app) ------------
        Les 24 heures tiennent sur UN seul cadran : 00–11 sur l'anneau
        extérieur, 12–23 sur l'intérieur — c'est le rayon du doigt qui tranche,
@@ -7656,6 +7667,11 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           </div>
         </div>
       </div>
+
+      <!-- Durée du vol (2026-09-05) : décollage → arrivée, lue sur les deux
+           heures affichées — la route posée ou une heure réglée à la main
+           donnent toutes deux une durée juste. -->
+      <div class="home-duration" id="hDuration" hidden></div>
 
       <div>
         <!-- Deux onglets sur la même liste : les terrains un à un, ou les
@@ -24797,6 +24813,19 @@ window.addEventListener("scroll", hidePop, true);
         el.classList.toggle("mine", !!(t && t.mine));
         el.disabled = !HOME_FIELDS.map(homeFieldCode)[i];
       });
+      renderHomeDuration();
+    }
+    /* Durée du vol : simple différence décollage → arrivée sur les heures
+       affichées, quelle que soit leur origine (route ou réglage manuel) —
+       positive à travers minuit, comme une nuit qui traverse 0000Z. */
+    function renderHomeDuration() {
+      const el = $("#hDuration");
+      if (!el) return;
+      if (!HT.tko || !HT.eta) { el.hidden = true; el.textContent = ""; return; }
+      const toMin = h => (+h.slice(0, 2)) * 60 + (+h.slice(2));
+      const dur = ((toMin(HT.eta.h) - toMin(HT.tko.h)) % 1440 + 1440) % 1440;
+      el.hidden = false;
+      el.textContent = "Flight time " + Math.floor(dur / 60) + "h" + P(dur % 60);
     }
     /* Les trois cases s'ouvrent au CADRAN : la case ne se tape pas, elle se
        touche. « Clear » y rend l'heure à la route — l'ancien geste, qui était
