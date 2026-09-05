@@ -689,12 +689,39 @@ Anchorage) barrerait l'écran d'un bout à l'autre, et resterait invisible sur
 une carte centrée de l'autre côté. Vérifié le 2026-09-05 sur une carte
 centrée à 179°W : le contour NZZC ressort en −188…−187.
 
-### 10.5 Ce qui reste
+### 10.5 Le bulletin brut, au clic (2026-09-05)
 
-- `dir`/`spd` (déplacement de la zone) sont servis mais pas exploités : un
-  SIGMET valide quatre heures se déplace, et le vol le croise à un instant.
-- Rien n'est cliquable sur la carte : le texte brut du bulletin
-  (`raw`, servi par le backend) n'est montré nulle part.
+La zone dessinée dit **où** ; le bulletin dit **quoi**, et lui seul fait
+foi. Il est donc atteignable des deux côtés, sans une ligne de
+reformulation — le texte tel que le centre l'a émis.
+
+**Sur la carte** : `drawMap` remplit `mapSigHits` avec le contour de chaque
+zone **en pixels écran**, tel qu'il vient d'être tracé — ce qui se clique
+est donc exactement ce qui se voit, au niveau et à l'heure affichés.
+`hitSigmet` fait le point-dans-polygone sur ces contours et rend **la plus
+petite** zone quand plusieurs se recouvrent : c'est la plus précise, et la
+grande reste atteignable partout ailleurs. Les terrains passent devant dans
+`clickAt` — ce sont les cibles les plus petites, et une zone couvre des
+centaines de milles où cliquer ailleurs. Le bulletin s'ouvre dans le
+panneau qui sert déjà les METAR/TAF (`openMapSigSide`) : même geste, même
+poignée pour refermer ; en-tête `LTAA 1 / LTAA ANKARA`, ligne
+`SEV TURB · FL200–FL340 · valid 10:36–14:36Z` (avec le déplacement quand le
+bulletin le donne), puis le texte brut. Le curseur devient un doigt au
+survol, sur les deux chemins (canvas et MapLibre).
+
+**Sur la page Turbulence** : une ligne SIGMET de la liste ouvre le même
+texte sous le cartouche de lecture (`.turb-raw`). Pour cela `res.sig` garde
+désormais `raw` (900 caractères au plus) et `dir`/`spd` — le POLYGONE reste
+écarté, quarante sommets par bulletin dont l'écran n'a plus besoin une fois
+les plages calculées. Hors ligne, le texte est tout ce qui reste du
+bulletin : c'est ce qu'un équipage vient lire. Une copie enregistrée avant
+le 2026-09-05 ne l'a pas, et le dit plutôt que d'ouvrir un cadre vide.
+
+### 10.6 Ce qui reste
+
+- `dir`/`spd` sont affichés mais pas exploités : un SIGMET valide quatre
+  heures se déplace, et le vol le croise à un instant — la zone dessinée
+  est celle de l'émission.
 - Les SIGMET américains ne sont pris que sous forme SIGMET ; couvrir la
   turbulence de basse couche aux États-Unis demanderait les AIRMET, avec
   une présentation qui ne noie pas le vol.

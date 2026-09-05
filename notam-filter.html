@@ -7220,6 +7220,13 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
 .turb-detail .t { font: 600 12px/1.4 var(--mono); color: var(--text) }
 .turb-detail .v { font: 600 14px/1.4 var(--mono); color: var(--text); margin: 2px 0 }
 .turb-detail .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px }
+/* Le bulletin brut d'un SIGMET, sous la lecture épinglée : tel qu'il a été
+   émis, retours à la ligne compris, et il défile s'il est long. */
+.turb-detail .turb-raw {
+  margin: 10px 0 0; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 6px; font: 500 11.5px/1.5 var(--mono); color: var(--text);
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 230px; overflow: auto;
+}
 .turb-status { margin-top: 10px; font: 500 12px/1.4 var(--sans); color: var(--muted); min-height: 17px }
 .turb-status.err { color: var(--red) }
 @media (max-width: 480px) {
@@ -18828,6 +18835,9 @@ function renderInfo(icao) {
 
     /* ---- carte (canvas, frontières Natural Earth embarquées) ---- */
     let mapView = null, mapHitboxes = [], mapWorldHits = [];   // hitboxes des terrains de la route + de la couche mondiale, recalculées à chaque drawMap()
+    // Les zones SIGMET dessinées, en pixels écran, pour le clic : { s, ring, aire }.
+    // Refaites à chaque drawMap() comme les autres, vidées quand la couche est éteinte.
+    let mapSigHits = [];
     let routeTracks = [];                 // tracés great-circle en cache (recalculés à l'ouverture, pas à chaque frame)
     // Coalesce les redraws : au plus un drawMap() par frame d'affichage, même si molette/glisser/pincer
     // déclenchent des dizaines d'événements. C'est ce qui rend l'interaction fluide.
@@ -19636,6 +19646,7 @@ function renderInfo(icao) {
       // affichée — le même instant que le cartouche, sinon les deux couches
       // parleraient de deux moments différents. Le nom du bulletin ne s'écrit
       // que si sa zone est assez large à l'écran pour le porter.
+      mapSigHits = [];
       if (mapTurbOn && mapMode === "wx" && mapTurbShown && sigCache.list) {
         const ms = Date.parse(mapTurbShown.run) + mapTurbShown.fh * 3600e3;
         const vus = sigForLevel(sigCache.list, mapTurbShown.fl * 100, ms);
@@ -19647,15 +19658,21 @@ function renderInfo(icao) {
             const ring = sigRing(s.coords, v.cx);
             if (ring.length < 3) continue;
             let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            const ecran = [];
             ctx.beginPath();
             for (let i = 0; i < ring.length; i++) {
               const x = X(ring[i][1]), y = Y(ring[i][0]);
+              ecran.push([x, y]);
               if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
               if (x < x0) x0 = x; if (x > x1) x1 = x;
               if (y < y0) y0 = y; if (y > y1) y1 = y;
             }
             ctx.closePath();
             if (x1 < 0 || y1 < 0 || x0 > cv.width || y0 > cv.height) continue;   // hors écran
+            // Ce qui est dessiné est ce qui se clique : le contour en pixels
+            // écran, et son aire — quand deux zones se recouvrent, c'est la
+            // plus petite qui répond, elle est la plus précise.
+            mapSigHits.push({ s, ring: ecran, aire: (x1 - x0) * (y1 - y0) });
             const col = s.sev === "MOD" ? "#ff8a00" : "#ff2d40";
             ctx.fillStyle = sigHatch(ctx, col, dpr);
             ctx.fill();
@@ -21839,6 +21856,31 @@ function renderInfo(icao) {
         + `${sv ? " · saved copy · " + sv.txt : ""}</h3>`
         + `<div class="dwx">${cells}</div>`;
     }
+    /* Le bulletin d'un SIGMET, dans le panneau qui sert déjà les relevés :
+       même geste pour l'ouvrir, même poignée pour le refermer. Ce que le
+       pilote vient chercher ici est le TEXTE BRUT — la zone dessinée dit où,
+       le bulletin dit quoi, et lui seul fait foi. Rien n'est reformulé ni
+       traduit : il s'affiche tel que le centre l'a émis. */
+    function openMapSigSide(s) {
+      const el = $("#mapWxSide"), body = $("#mapWxSideBody");
+      if (!el || !body || !s) return;
+      mapWxSideSeq++;                  // un relevé encore en vol ne viendra pas écraser ce panneau
+      const mouv = s.dir != null && s.spd ? `moving ${Math.round(s.dir)}° at ${Math.round(s.spd)} kt` : "";
+      body.innerHTML = `<div class="mapwx-head"><span class="mapwx-code">${esc(sigName(s))}</span>`
+        + `<span class="mapwx-name">${esc(s.firName || s.icao || "")}</span></div>`
+        + `<div class="mapwx-note">${esc(sigTitle(s))} · ${esc(sigBand(s))} · valid ${turbHM(s.from)}–${turbHM(s.to)}Z${mouv ? " · " + esc(mouv) : ""}</div>`
+        + `<div class="wx-block"><h3>Raw bulletin</h3><pre class="wx-raw${s.raw ? "" : " empty"}">`
+        + esc(s.raw || "The raw text was not kept with this copy.") + `</pre></div>`
+        + `<p class="mapwx-hint">NOAA/NWS Aviation Weather Center · swipe down to close.</p>`;
+      el.hidden = false;
+      el.style.transform = "";
+      body.scrollTop = 0;
+      fitMapWxSide();
+      // Même précaution que pour un relevé : sans ce calcul de style forcé,
+      // le panneau apparaît d'un coup au lieu d'entrer.
+      void el.offsetWidth;
+      el.classList.add("open");
+    }
     async function openMapWxSide(icao) {
       const el = $("#mapWxSide"), body = $("#mapWxSideBody");
       const seq = ++mapWxSideSeq;
@@ -21995,6 +22037,24 @@ function renderInfo(icao) {
         }
         return null;
       }
+      /* Zone SIGMET sous un point (px device) : le contour TEL QU'IL EST
+         DESSINÉ — mapSigHits est rempli par drawMap, donc ce qui se clique
+         est exactement ce qui se voit, au niveau et à l'heure affichés. Quand
+         plusieurs zones se recouvrent, la plus petite répond : c'est la plus
+         précise, et la grande reste atteignable partout ailleurs. */
+      function hitSigmet(px, py) {
+        let best = null;
+        for (const h of mapSigHits) {
+          const r = h.ring;
+          let dedans = false;
+          for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+            if ((r[i][1] > py) !== (r[j][1] > py)
+              && px < (r[j][0] - r[i][0]) * (py - r[i][1]) / (r[j][1] - r[i][1]) + r[i][0]) dedans = !dedans;
+          }
+          if (dedans && (!best || h.aire < best.aire)) best = h;
+        }
+        return best;
+      }
       // terrain de la couche mondiale sous un point (pastille élargie + label éventuel)
       function hitWorld(px, py) {
         for (let i = mapWorldHits.length - 1; i >= 0; i--) {
@@ -22039,7 +22099,7 @@ function renderInfo(icao) {
           drag = p; scheduleDraw();
         } else {
           const dpr = mapView.dpr, px = p[0] * dpr, py = p[1] * dpr;
-          cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py)) ? "pointer" : "grab";
+          cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py) || hitSigmet(px, py)) ? "pointer" : "grab";
         }
       });
       /* Vue notam : le clic ouvre la PAGE NOTAM du terrain, exactement comme la
@@ -22075,7 +22135,13 @@ function renderInfo(icao) {
            garde son geste d'origine, charger le terrain sur la 1re page. */
         if (mapMode === "wx") {
           const h = a || hitWorld(px, py);
-          if (h) openMapWxSide(h.icao);
+          if (h) { openMapWxSide(h.icao); return; }
+          // Aucun terrain sous le doigt : reste la zone SIGMET, s'il y en a
+          // une — son bulletin s'ouvre dans le même panneau. Les terrains
+          // passent devant : ce sont les cibles les plus petites, et une zone
+          // couvre des centaines de milles où cliquer ailleurs.
+          const sg = hitSigmet(px, py);
+          if (sg) openMapSigSide(sg.s);
           return;
         }
         if (a) { openNotamPage(a.icao); return; }
@@ -22127,7 +22193,7 @@ function renderInfo(icao) {
           if (down) { c.style.cursor = ""; return; }          // en plein glisser : grabbing, pas le doigt
           const r = $("#routeMap").getBoundingClientRect(), dpr = mapView.dpr;
           const px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr;
-          c.style.cursor = (hitAirport(px, py) || hitWorld(px, py)) ? "pointer" : "";
+          c.style.cursor = (hitAirport(px, py) || hitWorld(px, py) || hitSigmet(px, py)) ? "pointer" : "";
         });
       })();
       cv.addEventListener("touchstart", e => {
@@ -26525,7 +26591,7 @@ function dtsAUnQfu(icao){
       const runs = res.sigRuns || [];
       const sigHtml = runs.map((r, j) => {
         const s = (res.sig && res.sig[r.k]) || {};
-        return `<div class="turb-ev sig ${s.sev === "MOD" ? "k2" : "k3"}" data-sig="${j}"><span class="t">${turbHPlus(r.t0)} · ${turbHM(t0 + r.t0 * 60e3)}Z</span><span class="k">SIGMET${s.sev ? " " + esc(s.sev) : ""}</span><span>${esc(sigName(s))} · ${esc(sigBand(s))} · for ${Math.round(r.t1 - r.t0) + 1} min · valid ${turbHM(s.from)}–${turbHM(s.to)}Z</span></div>`;
+        return `<div class="turb-ev sig ${s.sev === "MOD" ? "k2" : "k3"}" data-sig="${j}" title="Tap to read the raw bulletin"><span class="t">${turbHPlus(r.t0)} · ${turbHM(t0 + r.t0 * 60e3)}Z</span><span class="k">SIGMET${s.sev ? " " + esc(s.sev) : ""}</span><span>${esc(sigName(s))} · ${esc(sigBand(s))} · for ${Math.round(r.t1 - r.t0) + 1} min · valid ${turbHM(s.from)}–${turbHM(s.to)}Z</span></div>`;
       }).join("");
       if (!eps.length) {
         box.innerHTML = sigHtml + `<div class="turb-none">${res.max === 0 ? "Smooth all along at this level and time." : res.max === -1 ? "The whole flight stays below FL100: the grid says nothing." : res.max === -2 ? "No grid data along this route (outside the covered area)." : "Only brushes of light turbulence, none longer than three minutes."}`
@@ -26545,6 +26611,18 @@ function dtsAUnQfu(icao){
             S.forEach((p, i) => { if (p[0] >= e.t0 && p[0] < e.t1 && p[4] >= 0 && (best < 0 || p[4] > S[best][4])) best = i; });
           }
           if (best >= 0) { turbPinned = best; turbTipAt(best, true); }
+          // Un SIGMET touché montre son BULLETIN sous le cartouche : la ligne
+          // de la liste dit où et quand, le texte brut dit quoi — et lui seul
+          // fait foi. Il s'affiche tel que le centre l'a émis, sans un mot de
+          // reformulation. Une copie hors ligne d'avant le 2026-09-05 ne l'a
+          // pas : on le dit plutôt que de laisser un cadre vide.
+          if (row.dataset.sig != null) {
+            const s = (res.sig && res.sig[runs[+row.dataset.sig].k]) || {};
+            const pre = document.createElement("pre");
+            pre.className = "turb-raw";
+            pre.textContent = s.raw || "The raw text was not kept with this copy.";
+            $("#turbDetail").appendChild(pre);
+          }
         };
       });
     }
@@ -26594,16 +26672,19 @@ function dtsAUnQfu(icao){
                                     p.hours ? p.hours[0] : null, p.hours ? p.hours[p.hours.length - 1] : null]);
         const enc = index.encoding ? { unit: index.encoding.unit, per_edr: index.encoding.per_edr, floor: index.encoding.floor } : null;
         // Les SIGMET TURB, par-dessus : la liste réduite à ceux que le vol
-        // traverse vraiment, et les plages traversées. Ce qui est gardé pour
-        // l'écran et le stockage n'est ni le polygone ni le texte brut —
-        // seulement de quoi nommer le bulletin, ses niveaux et sa validité.
+        // traverse vraiment, et les plages traversées. Le POLYGONE est laissé
+        // de côté — quarante sommets par bulletin, et l'écran n'en a plus
+        // besoin une fois les plages calculées. Le TEXTE BRUT, lui, est gardé
+        // (900 caractères au plus) : c'est ce qu'un équipage vient lire, et
+        // hors ligne c'est tout ce qui reste du bulletin.
         const sc = await sigP;
         if (token !== turbToken) return;
         const runsAll = sigScan(sc.list || [], P.pts, cfg.t0);
         const used = [...new Set(runsAll.map(r => r.k))];
         const sig = used.map(k => {
           const s = sc.list[k];
-          return { id: s.id, icao: s.icao, fir: s.fir, firName: s.firName, series: s.series, sev: s.sev, base: s.base, top: s.top, from: s.from, to: s.to };
+          return { id: s.id, icao: s.icao, fir: s.fir, firName: s.firName, series: s.series, sev: s.sev,
+                   base: s.base, top: s.top, from: s.from, to: s.to, dir: s.dir, spd: s.spd, raw: s.raw };
         });
         const sigRuns = runsAll.map(r => ({ k: used.indexOf(r.k), i0: r.i0, i1: r.i1, t0: r.t0, t1: r.t1 }));
         const res = { events: P.events, ser, total: P.total, top: P.top, dist: P.dist, max: P.max, peak: P.peak, levels, enc,
