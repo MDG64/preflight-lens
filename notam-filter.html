@@ -4184,7 +4184,7 @@
        prennent une gamme FROIDE (bleu → blanc) qu'aucune image radar
        n'emploie : sur la même carte, l'œil ne confond pas la pluie mesurée
        et le sommet vu d'en haut. */
-    .mleg .sq.rd { background: linear-gradient(90deg, #2fc45f, #f2e12a 40%, #e5484d 72%, #c02cd6) }
+    .mleg .sq.rd { background: linear-gradient(90deg, #63a4ff, #2ec478 30%, #f5e128 52%, #eb3228 75%, #c81eaa 90%, #fff) }
     .mleg .sq.s1 { background: rgba(72, 132, 255, .85) }
     .mleg .sq.s2 { background: rgba(156, 92, 255, .85) }
     .mleg .sq.s3 { background: rgba(255, 64, 214, .85) }
@@ -7892,7 +7892,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <button type="button" class="mtab nt" data-layer="notam" aria-pressed="false"
                 title="The NOTAM map: which aerodromes are downloaded and readable offline.">NOTAM</button>
         <button type="button" class="mtab" data-layer="storm" aria-pressed="false"
-                title="The METAR/TAF map plus the weather radar where a public service publishes it (United States, Germany) and the satellite cold cloud tops everywhere the geostationary satellites look, with the thunderstorm SIGMETs in force — the storms as seen now.">Storm</button>
+                title="The METAR/TAF map plus the rain as seen now — weather radar over Europe, North America and Japan, satellite rain estimate everywhere else — the satellite cold cloud tops, and the thunderstorm SIGMETs in force.">Storm</button>
       </div>
       <button class="map-x map-help" id="mapHelpBtn" aria-label="Information" title="Information">?</button>
       <button class="map-x map-theme theme-mirror" id="mapThemeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
@@ -7979,8 +7979,8 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <div class="map-mode map-storm-ctl" id="mapStormCtl">
           <div class="map-wind-hours storm-sw" role="group" aria-label="Storm layer images"
                title="Radar — reflectivity where a public service publishes it freely (NEXRAD over the contiguous United States, DWD over Germany). Satellite — infrared cloud tops colder than −32 °C from the geostationary satellites, recoloured by temperature.">
-            <button type="button" class="wh on" id="mapStormRadar" aria-pressed="true" aria-label="Weather radar"><i class="c" aria-hidden="true"></i>Radar</button>
-            <button type="button" class="wh on" id="mapStormSat" aria-pressed="true" aria-label="Satellite infrared cold tops"><i class="c" aria-hidden="true"></i>Satellite IR</button>
+            <button type="button" class="wh on" id="mapStormRadar" aria-pressed="true" aria-label="Rain: weather radar, satellite estimate elsewhere"><i class="c" aria-hidden="true"></i>Rain</button>
+            <button type="button" class="wh on" id="mapStormSat" aria-pressed="true" aria-label="Satellite infrared cold tops"><i class="c" aria-hidden="true"></i>Cold tops</button>
           </div>
           <div class="tinfo" id="mapStormInfo" aria-live="polite">Storm — loading…</div>
         </div>
@@ -8012,7 +8012,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           <span class="mleg wx tb"><i class="sq t3"></i>Severe turbulence</span>
           <span class="mleg wx tb"><i class="sq ts"></i>SIGMET TURB in force at that level and hour — outlined and hatched</span>
           <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), smoothed between its ~25 km grid points; darker shade = stronger — not an official aviation product. The hatched areas are turbulence SIGMETs (NOAA/NWS AWC): forecasters' bulletins, drawn over the index and never merged into it.</span>
-          <span class="mleg wx st"><i class="sq rd"></i>Radar reflectivity — green light, yellow moderate, red and magenta heavy: the convective cores</span>
+          <span class="mleg wx st"><i class="sq rd"></i>Rain — blue light, green moderate, yellow heavy, red and magenta the convective cores, white hail likely (radar; satellite estimate where no radar)</span>
           <span class="mleg wx st"><i class="sq s1"></i>Cloud tops −32 to −42 °C (satellite IR)</span>
           <span class="mleg wx st"><i class="sq s2"></i>−42 to −52 °C</span>
           <span class="mleg wx st"><i class="sq s3"></i>−52 to −62 °C</span>
@@ -8202,16 +8202,21 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             keeps its place and the QFU find one of their own, further round the dot. The METAR/TAF map and its
             <b>Wind</b> and <b>Storm</b> layers show them; <b>NOTAM</b> does not — there, the map answers one
             question only, which aerodromes are downloaded — and neither does <b>Turbulence</b>.
-            <b>Storm</b> keeps the METAR/TAF map and its ⚡ and lays under them the <b>weather radar</b> where a
-            public service publishes it freely — NEXRAD over the contiguous United States, DWD over Germany — and the
+            <b>Storm</b> keeps the METAR/TAF map and its ⚡ and lays under them the <b>rain as seen now</b>: the
+            <b>weather radar</b> where a public service publishes it freely — the European OPERA composite, the North
+            American composite of Environment Canada, the Japanese nowcast — and everywhere else between 60°S and 70°N
+            the <b>satellite rain estimate</b> of the NOAA (rain deduced from cloud-top temperatures, not measured: it
+            catches the convective cores and misses the drizzle), all on one scale, blue light to green, yellow, red,
+            magenta and white as it gets heavier; and the
             <b>satellite infrared</b> of the geostationary satellites everywhere they look (GOES-East, GOES-West,
             Himawari; Meteosat once its licence is settled), recoloured by cloud-top temperature: only tops
             <b>colder than −32&nbsp;°C</b> are painted — blue, violet, magenta, then white as they get colder — which is
             where convection shows; a top at −60&nbsp;°C is a cumulonimbus reaching the tropopause. Over them, the
             <b>thunderstorm SIGMETs</b> in force (TS, convective SIGMET), outlined and hatched — tap one for the
-            bulletin. The cartouche dates every image; <b>Radar</b> and <b>Satellite IR</b> switch each picture off.
+            bulletin. The cartouche dates every source; <b>Rain</b> and <b>Cold tops</b> switch each picture off.
             Latest image only, no loop, nothing kept offline. <b>Guidance, not an official aviation weather
-            product</b>: no radar drawn means no free radar there, not clear skies.</div>
+            product</b>: nothing drawn means nothing seen, by a radar or a satellite estimate — not clear skies
+            certified.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn"><svg class="pict" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div>
@@ -8491,11 +8496,14 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           drawn means no SIGMET at that level and hour, not that the air is smooth.
         </div>
         <div class="hd-note">
-          <b>Storm layer</b> — weather radar: <a href="https://mesonet.agron.iastate.edu/docs/nexrad_mosaic/"
-            target="_blank" rel="noopener">NOAA/NWS NEXRAD composite</a> (public domain) served by the Iowa Environmental
-          Mesonet of Iowa State University, contiguous United States; <a href="https://www.dwd.de/EN/ourservices/geoservices/geodienste.html"
-            target="_blank" rel="noopener">Deutscher Wetterdienst</a> radar composite, Germany, licensed
-          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Satellite
+          <b>Storm layer</b> — rain: <a href="https://www.eumetnet.eu/activities/observations-programme/current-activities/opera/"
+            target="_blank" rel="noopener">OPERA</a> European radar composite © EUMETNET, licensed
+          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; North
+          American radar composite — Data Source: Environment and Climate Change Canada
+          (<a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">Data Server
+          End-use Licence</a>); precipitation nowcast — Source: <a href="https://www.jma.go.jp/jma/en/copyright.html"
+            target="_blank" rel="noopener">Japan Meteorological Agency</a>; Enterprise Rain Rate satellite estimate,
+          NOAA/NESDIS. Reflectivities recoloured by us on one common scale. Satellite
           infrared: GOES-East, GOES-West (NOAA) and Himawari (JMA) band 13 imagery through <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api"
             target="_blank" rel="noopener">NASA Global Imagery Browse Services</a>; Meteosat FCI imagery
           © EUMETSAT through EUMETView, where served. Thunderstorm SIGMETs: NOAA/NWS Aviation Weather Center. The cloud-top
@@ -21836,11 +21844,15 @@ function renderInfo(icao) {
        relais /api/storm/ du backend (aucun de ces serveurs n'est joignable
        depuis la page, et un carreau demandé par dix équipages ne remonte
        qu'une fois) :
-         radar   la réflectivité, là où un service public la publie librement
-                 — NEXRAD (NOAA, domaine public) sur les États-Unis contigus,
-                 DWD (CC BY 4.0) sur l'Allemagne. Ailleurs, rien : un carreau
-                 vide (204) n'est pas une panne, c'est l'absence de radar
-                 libre, et le cartouche le dit ;
+         radar   la PLUIE, composée et déjà peinte par le backend
+                 (lib/storm-precip.js) : radar là où un service public le
+                 publie librement — OPERA (EUMETNET) sur l'Europe, le
+                 composite nord-américain d'Environnement Canada, le nowcast
+                 de la JMA sur le Japon — et, partout ailleurs entre 60°S et
+                 70°N, l'estimation satellite « Enterprise Rain Rate » de la
+                 NOAA. Une seule palette, en dBZ ; un carreau vide (204) veut
+                 dire qu'il n'y tombe rien, et le cartouche nomme chaque
+                 source avec son heure ;
          sat     l'infrarouge des satellites géostationnaires (GOES-East,
                  GOES-West, Himawari par la NASA ; Meteosat par EUMETSAT quand
                  le backend le sert), recoloré ICI par température de
@@ -21856,14 +21868,15 @@ function renderInfo(icao) {
        cartouche. Une image d'orage vieille de deux heures ne vaut rien, le
        service worker ne garde donc AUCUN carreau ; hors ligne la couche est
        vide et le dit.
-       Chaque source a sa palette, donc sa table couleur → température,
-       lue dans la légende que le serveur publie (colormap GIBS pour la
-       bande 13 ; rampe du style « 02 » de l'image FCI d'EUMETView). Le
-       carreau annonce la sienne (X-Storm-Lut). */
+       Chaque source SATELLITE a sa palette, donc sa table couleur →
+       température, lue dans la légende que le serveur publie (colormap GIBS
+       pour la bande 13 ; rampe du style « 02 » de l'image FCI d'EUMETView).
+       Le carreau annonce la sienne (X-Storm-Lut). La pluie, elle, arrive
+       peinte : le client la pose telle quelle. */
     const STORM_STATUS_TTL = 2 * 60e3;         // les images changent toutes les 5 à 15 min
     const STORM_TILE_MAX = 400;                // carreaux gardés en mémoire (≈ 25 Mo décodés)
     const STORM_FETCH_MAX = 4;                 // carreaux en vol à la fois, par image
-    const STORM_Z = { radar: [2, 9], sat: [1, 7] };
+    const STORM_Z = { radar: [2, 10], sat: [1, 7] };
     const STORM_ALPHA = { radar: 0.85, sat: 0.8 };
     // Les bandes de sommets froids et leur couleur — froid = profond. Bleu
     // pour les enclumes et cirrus épais, violet et magenta pour les cœurs,
@@ -21933,25 +21946,6 @@ function renderInfo(icao) {
       g.putImageData(im, 0, 0);
       return c;
     }
-    /* Le composite du DWD dessine aussi ce qui n'est PAS de la pluie : un
-       voile gris à demi transparent sur tout ce que ses radars ne voient
-       pas, et le contour magenta de leur portée. Tout cela a une opacité
-       partielle ; les échos, eux, sont pleins. On ne garde que le plein. */
-    function stormCleanRadar(bmp) {
-      const c = document.createElement("canvas");
-      c.width = bmp.width; c.height = bmp.height;
-      const g = c.getContext("2d", { willReadFrequently: true });
-      g.drawImage(bmp, 0, 0);
-      const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
-      for (let i = 0; i < d.length; i += 4) {
-        // Le contour de portée est un magenta pur (250,0,255) qu'aucune
-        // classe de pluie n'emploie (100–150 mm/h est un violet sombre,
-        // ≥ 150 un bleu) ; ses pixels pleins tombent avec les autres.
-        if (d[i + 3] < 250 || (d[i] > 230 && d[i + 1] < 40 && d[i + 2] > 230)) d[i + 3] = 0;
-      }
-      g.putImageData(im, 0, 0);
-      return c;
-    }
     // Les carreaux : clé kind/z/x/y@stamp -> { st, img, at }. Une image
     // nouvelle (stamp) rend les anciennes clés inutiles ; le plus vieux part
     // quand la mémoire déborde.
@@ -21995,9 +21989,9 @@ function renderInfo(icao) {
         const r = await fetch(`${BACKEND_URL}/api/storm/${e.kind}/${e.z}/${e.x}/${e.y}.png?v=${mapStormStamp}`);
         if (r.status === 204) { e.st = "empty"; return; }
         if (!r.ok) throw new Error("HTTP " + r.status);
-        const lut = r.headers.get("x-storm-lut") || "gibs", src = r.headers.get("x-storm-source") || "";
+        const lut = r.headers.get("x-storm-lut") || "gibs";
         const bmp = await createImageBitmap(await r.blob());
-        e.img = e.kind === "sat" ? stormRecolor(bmp, lut) : src === "dwd" ? stormCleanRadar(bmp) : bmp;
+        e.img = e.kind === "sat" ? stormRecolor(bmp, lut) : bmp;
         if (e.img !== bmp && bmp.close) bmp.close();
         e.st = "ok";
       } catch (err) {
@@ -22090,10 +22084,13 @@ function renderInfo(icao) {
       const now = Date.now();
       const nSig = sc.err ? -1 : sc.list.filter(s => now >= s.from && now <= s.to).length;
       const parts = [], warns = [];
-      const NOMS = { nexrad: "NEXRAD", dwd: "DWD", "goes-east": "GOES-E", "goes-west": "GOES-W", himawari: "Himawari", meteosat: "Meteosat" };
+      const NOMS = { opera: "Europe", eccc: "N. America", jma: "Japan", err: "sat. estimate", "goes-east": "GOES-E", "goes-west": "GOES-W", himawari: "Himawari", meteosat: "Meteosat" };
       const nom = s => NOMS[s.id] || s.id;
-      const radar = (st.radar || []).map(s => nom(s) + " " + (s.valid ? stormHM(s.valid) : s.err ? "?" : "live"));
-      if (mapStormRadarOn) parts.push("Radar " + (radar.length ? radar.join(", ") : "none"));
+      // La pluie : chaque source et son heure ; une source muette dit « ? »
+      // (elle est nommée dans les alertes), une grille en cours de
+      // chargement dit « loading ».
+      const radar = (st.radar || []).map(s => nom(s) + " " + (s.valid ? stormHM(s.valid) : s.loading ? "loading" : "?"));
+      if (mapStormRadarOn) parts.push("Rain " + (radar.length ? radar.join(", ") : "none"));
       const sat = (st.sat || []).filter(s => s.valid).map(s => nom(s) + " " + stormHM(s.valid));
       if (mapStormSatOn) parts.push("Sat " + (sat.length ? sat.join(", ") : "none"));
       parts.push(nSig < 0 ? "SIGMET unavailable" : nSig ? nSig + " SIGMET TS in force" : "no SIGMET TS in force");
