@@ -3901,6 +3901,48 @@
       border-radius: 4px;
     }
 
+    /* Les INTERRUPTEURS (classe .sw) ne sont pas des choix parmi plusieurs :
+       leur rond devient un curseur qui glisse. Bouton à DROITE et vert, la
+       chose est affichée ; à GAUCHE et sans couleur, elle est éteinte —
+       l'état se lit à la POSITION autant qu'à la teinte, pour l'œil qui ne
+       distingue pas le vert. Ces règles viennent après celles du rond : à
+       specificité égale, c'est l'ordre qui tranche. */
+    .map-wind-hours .wh.sw .c {
+      width: 24px;
+      height: 13px;
+      border-radius: 7px;
+      position: relative;
+      background: transparent;
+      border: 1.5px solid var(--line2);
+      transition: background .15s, border-color .15s;
+    }
+
+    .map-wind-hours .wh.sw .c::after {
+      content: "";
+      position: absolute;
+      top: 1px;
+      left: 1px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--line2);
+      transition: transform .15s, background .15s;
+    }
+
+    .map-wind-hours .wh.sw:hover .c::after {
+      background: var(--muted);
+    }
+
+    .map-wind-hours .wh.sw.on .c {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .map-wind-hours .wh.sw.on .c::after {
+      background: #fff;
+      transform: translateX(11px);
+    }
+
     /* Le bandeau LEGEND au-dessus du cartouche : même carte que le curseur de
        vue, le mot à gauche, l'œil à droite. Replié, le cartouche disparaît et
        le bandeau reste — c'est lui qui fait revenir la légende. */
@@ -7979,7 +8021,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                affichage, et leur compte reste écrit au cartouche. -->
           <div class="map-wind-hours turb-sw" role="group" aria-label="Turbulence layer switches"
                title="SIGMET — the turbulence bulletins in force at the chosen level and hour, outlined and hatched over the computed index; switch them off to read the index alone, their count stays in the cartouche.">
-            <button type="button" class="wh on" id="mapTurbSig" aria-pressed="true" aria-label="Turbulence SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
+            <button type="button" class="wh sw on" id="mapTurbSig" aria-pressed="true" aria-label="Turbulence SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
           </div>
           <div class="tinfo" id="mapTurbInfo" aria-live="polite">Turbulence — loading…</div>
         </div>
@@ -7991,7 +8033,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <div class="map-mode map-storm-ctl" id="mapStormCtl">
           <div class="map-wind-hours storm-sw" role="group" aria-label="Storm layer switches"
                title="SIGMET — the thunderstorm bulletins in force, outlined and hatched over the rain; switch them off to read the image alone, their count stays in the cartouche.">
-            <button type="button" class="wh on" id="mapStormSig" aria-pressed="true" aria-label="Thunderstorm SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
+            <button type="button" class="wh sw on" id="mapStormSig" aria-pressed="true" aria-label="Thunderstorm SIGMETs in force"><i class="c" aria-hidden="true"></i>SIGMET</button>
           </div>
           <div class="tinfo" id="mapStormInfo" aria-live="polite">Storm — loading…</div>
         </div>
