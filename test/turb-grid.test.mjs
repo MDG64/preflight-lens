@@ -27,9 +27,9 @@ async function chargerTurb() {
   const c = html.indexOf("// [turb-profile]"), d = html.indexOf("// [/turb-profile]");
   assert.ok(c >= 0 && d > c, "marqueurs [turb-profile] introuvables");
   const src = html.slice(a, b) + "\n" + html.slice(c, d)
-    + "\nexport { turbDecode, turbValFromCls, turbClsFromVal, turbPngParse, turbPngUnfilter, turbPngDecode, turbPickHour,"
+    + "\nexport { turbDecode, turbValFromCls, turbClassOf, turbPngParse, turbPngUnfilter, turbPngDecode, turbPickHour,"
     + " turbCatmull, turbResample, turbMercLat, turbLut, turbColorize,"
-    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbCellClass, turbSampleProfile, turbEpisodes };";
+    + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbValueAt, turbValueNear, turbSampleProfile, turbEpisodes };";
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 
@@ -86,13 +86,16 @@ test("turbDecode refuse une grille tronquée", async () => {
 });
 
 test("classes et valeurs : la nuance forte pour une classe seule, les seuils de l'index pour l'octet", async () => {
-  const { turbValFromCls, turbClsFromVal } = await chargerTurb();
+  const { turbValFromCls, turbClassOf } = await chargerTurb();
   assert.deepEqual(Array.from(turbValFromCls(Uint8Array.from([0, 1, 2, 3]))), [0, 96, 160, 224]);
-  const val = Uint8Array.from([0, 63, 64, 96, 127, 128, 191, 192, 252]);
-  assert.deepEqual(Array.from(turbClsFromVal(val)), [0, 0, 1, 1, 1, 2, 2, 3, 3], "seuils par défaut 64/128/192");
-  assert.deepEqual(Array.from(turbClsFromVal(val, [50, 100, 200])), [0, 1, 1, 1, 2, 2, 2, 2, 3], "seuils de l'index");
+  const val = [0, 63, 64, 96, 127, 128, 191, 192, 252];
+  assert.deepEqual(val.map(v => turbClassOf(v)), [0, 0, 1, 1, 1, 2, 2, 3, 3], "seuils par défaut 64/128/192");
+  assert.deepEqual(val.map(v => turbClassOf(v, [50, 100, 200])), [0, 1, 1, 1, 2, 2, 2, 2, 3], "seuils de l'index");
+  // Les seuils EDR × 100 publiés depuis le 2026-09-05 : 15, 22, 34 ; une
+  // valeur absente (NaN) vaut la classe 0.
+  assert.deepEqual([0, 10, 14, 15, 21.9, 22, 33.9, 34, 45, NaN].map(v => turbClassOf(v, [15, 22, 34])), [0, 0, 0, 1, 1, 2, 2, 3, 3, 0]);
   // L'aller-retour d'une classe retombe sur elle.
-  assert.deepEqual(Array.from(turbClsFromVal(turbValFromCls(Uint8Array.from([3, 2, 1, 0])))), [3, 2, 1, 0]);
+  assert.deepEqual(Array.from(turbValFromCls(Uint8Array.from([3, 2, 1, 0]))).map(v => turbClassOf(v)), [3, 2, 1, 0]);
 });
 
 test("PNG : les cinq filtres, l'IDAT en morceaux, le tEXt — pixels exacts", async () => {
@@ -240,54 +243,88 @@ test("turbBracketHours encadre l'instant et se borne aux échéances publiées",
   assert.deepEqual(turbBracketHours(index, Date.parse("2026-09-04T01:00Z")), [12]);
 });
 
-test("turbCellClass : la case du point sur une grille large, la pire des neuf sur une grille fine", async () => {
-  const { turbCellClass } = await chargerTurb();
-  const coarse = { lat0: 50, lon0: 0, dlat: -1, dlon: 1, nlat: 3, nlon: 3 };
-  const cls = Uint8Array.from([0, 3, 0, 0, 1, 0, 0, 0, 0]);
-  assert.equal(turbCellClass(coarse, cls, 49, 1), 1, "à 1°, la case seule — la voisine severe n'est pas lue");
-  assert.equal(turbCellClass(coarse, cls, 49, 7), -2, "hors grille");
-  const fine = { lat0: 50, lon0: 0, dlat: -0.25, dlon: 0.25, nlat: 3, nlon: 3 };
-  assert.equal(turbCellClass(fine, cls, 49.75, 0.25), 3, "à 0,25°, la pire des neuf voisines");
-  assert.equal(turbCellClass(fine, cls, 50, 0), 3, "au coin : les voisines existantes seulement");
-  assert.equal(turbCellClass(fine, cls, 49.5, 0.5), 1, "deux cases plus loin, le severe est hors de portée : seul le light voisin");
-  assert.equal(turbCellClass(fine, new Uint8Array(9), 49.75, 0.25), 0, "rien autour : smooth");
+test("turbValueAt : exact aux points de grille, moyenne à mi-chemin, bouclage à l'antiméridien, NaN hors grille", async () => {
+  const { turbValueAt } = await chargerTurb();
+  const grid = { lat0: 50, lon0: 0, dlat: -0.25, dlon: 0.25, nlat: 3, nlon: 3 };
+  const val = Uint8Array.from([0, 40, 0, 0, 20, 0, 0, 0, 0]);
+  assert.equal(turbValueAt(grid, val, 50, 0.25), 40, "au point de grille : sa valeur");
+  assert.equal(turbValueAt(grid, val, 49.75, 0.25), 20);
+  assert.equal(turbValueAt(grid, val, 49.875, 0.25), 30, "à mi-chemin entre deux points : la moyenne");
+  assert.equal(turbValueAt(grid, val, 50, 0.125), 20, "à mi-chemin en longitude");
+  assert.ok(Number.isNaN(turbValueAt(grid, val, 49, 7)), "hors grille : NaN");
+  assert.ok(Number.isNaN(turbValueAt(grid, val, 51, 0.25)), "au-dessus du premier rang : NaN");
+  assert.ok(Number.isNaN(turbValueAt(grid, val, 49.75, -1)), "à l'ouest de la grille régionale : NaN");
+  // Grille mondiale : la dernière colonne (179,75 E) et la première (180 W) se touchent.
+  const world = { lat0: 90, lon0: -180, dlat: -0.25, dlon: 0.25, nlat: 721, nlon: 1440 };
+  const wv = new Uint8Array(721 * 1440);
+  wv[200 * 1440 + 1439] = 30; wv[200 * 1440] = 10;
+  assert.equal(turbValueAt(world, wv, 40, 179.75), 30);
+  assert.equal(turbValueAt(world, wv, 40, 179.875), 20, "entre 179,75 E et 180 W : la moyenne des deux bouts");
+  assert.equal(turbValueAt(world, wv, 40, -180), 10);
+  assert.equal(turbValueAt(world, wv, 40, 180), 10, "180 E est 180 W");
 });
 
-test("turbSampleProfile : la pire des deux échéances, sous FL100 rien, transitions seules", async () => {
-  const { turbSampleProfile, turbProfile, turbNearestFl } = await chargerTurb();
+test("turbValueNear : le point seul sur une grille large, le pire des neuf sur une grille fine", async () => {
+  const { turbValueNear } = await chargerTurb();
+  const coarse = { lat0: 50, lon0: 0, dlat: -1, dlon: 1, nlat: 3, nlon: 3 };
+  const val = Uint8Array.from([0, 45, 0, 0, 18, 0, 0, 0, 0]);
+  assert.equal(turbValueNear(coarse, val, 49, 1), 18, "à 1°, le point seul — le voisin à 45 n'est pas lu");
+  assert.ok(Number.isNaN(turbValueNear(coarse, val, 49, 7)), "hors grille");
+  const fine = { lat0: 50, lon0: 0, dlat: -0.25, dlon: 0.25, nlat: 3, nlon: 3 };
+  assert.equal(turbValueNear(fine, val, 49.75, 0.25), 45, "à 0,25°, le pire des neuf voisins");
+  assert.equal(turbValueNear(fine, val, 50, 0), 45, "au coin : les voisins existants seulement");
+  assert.equal(turbValueNear(fine, val, 49.5, 0.5), 18, "deux points plus loin, le 45 est hors de portée : seul le 18 voisin");
+  assert.equal(turbValueNear(fine, new Uint8Array(9), 49.75, 0.25), 0, "rien autour : zéro");
+  const world = { lat0: 90, lon0: -180, dlat: -0.25, dlon: 0.25, nlat: 721, nlon: 1440 };
+  const wv = new Uint8Array(721 * 1440); wv[200 * 1440] = 33;
+  assert.equal(turbValueNear(world, wv, 40, 179.75), 33, "le voisin de l'autre côté de l'antiméridien compte");
+});
+
+test("turbSampleProfile : la valeur au centre, linéaire entre les deux échéances ; l'enveloppe à côté ; sous FL100 rien", async () => {
+  const { turbSampleProfile, turbNearestFl } = await chargerTurb();
   assert.equal(turbNearestFl([100, 140, 180, 240, 270, 300, 340, 390, 450], 31000), 300);
-  // Grille 1° sur le sud-est de la France ; toute la case de LFMN à FL340 est "moderate"
-  // à f006 et "severe" à f009 : le rejeu doit retenir severe.
-  const grid = { lat0: 50, lon0: 0, dlat: -1, dlon: 1, nlat: 8, nlon: 9 };
+  // Un vol le long du 45e parallèle, de 0 à 1° E (42 NM), déjà en croisière.
+  // La grille 0,25° porte 20 (EDR × 100 : 0,20) à f006 et 32 à f009 sur les
+  // rangs 44,75–45,25 N, et un point à 40 en 45,25 N 0,5 E — voisin de la
+  // route (0,25° au nord), jamais sous elle.
+  const grid = { lat0: 46, lon0: -1, dlat: -0.25, dlon: 0.25, nlat: 9, nlon: 13 };
   const index = { run: "2026-09-03T00:00Z", hours: [3, 6, 9, 12], grid, fls: [100, 140, 180, 240, 270, 300, 340, 390, 450] };
-  const zero = new Uint8Array(72);
-  const g6 = new Uint8Array(72), g9 = new Uint8Array(72);
   const cell = (lat, lon) => Math.round((lat - grid.lat0) / grid.dlat) * grid.nlon + Math.round((lon - grid.lon0) / grid.dlon);
-  g6[cell(44, 7)] = 2; g9[cell(44, 7)] = 3;
-  // La case est marquée à TOUS les niveaux : la descente sur Nice la traverse
-  // en changeant de FL, et c'est bien là que le rejeu doit la voir.
-  const clsOf = (fl, fh) => fh === 6 ? g6 : fh === 9 ? g9 : zero;
-  const prof = turbProfile(372, 34000);
-  const tko = Date.parse("2026-09-03T06:00Z");
-  const P = turbSampleProfile(prof, LFPG, LFMN, index, tko, index.fls, clsOf);
-  assert.equal(P.pts[0].cls, -1, "au décollage, sous FL100");
-  assert.equal(P.max, 3, "la case de Nice est lue severe (pire des deux échéances)");
-  const sev = P.events.find(e => e.cls === 3);
-  assert.ok(sev && sev.fl <= 340 && sev.d > 280, "l'événement severe est à l'approche de Nice : " + JSON.stringify(sev));
-  // Chaque événement change de classe par rapport au précédent.
-  for (let i = 1; i < P.events.length; i++) assert.notEqual(P.events[i].cls, P.events[i - 1].cls);
-  // Hors grille : LFBO → LFPG passe à l'ouest de lon 0 pour partie ? Non — on force une grille minuscule.
-  const tiny = { ...index, grid: { lat0: 45, lon0: 6, dlat: -1, dlon: 1, nlat: 2, nlon: 2 } };
-  const Q = turbSampleProfile(prof, LFPG, LFMN, tiny, tko, index.fls, () => zero);
-  assert.ok(Q.pts.some(p => p.cls === -2), "hors grille signalé");
-  // Un fichier qui porte sa propre grille est lu dessus, même si l'index en
-  // annonce une autre (cache de bord déphasé) : ici la grille du fichier est
-  // décalée d'un degré, la case de Nice est donc (43,6) dans SES indices.
-  const own = { lat0: 49, lon0: -1, dlat: -1, dlon: 1, nlat: 8, nlon: 9 };
-  const g3 = new Uint8Array(72); g3[Math.round((44 - own.lat0) / own.dlat) * own.nlon + Math.round((7 - own.lon0) / own.dlon)] = 3;
-  const R = turbSampleProfile(prof, LFPG, LFMN, index, tko, index.fls, () => ({ cls: g3, grid: own }));
-  assert.equal(R.max, 3, "lu sur la grille du fichier, pas sur celle de l'index");
-  void LFBO;
+  const zero = new Uint8Array(9 * 13), g6 = new Uint8Array(9 * 13), g9 = new Uint8Array(9 * 13);
+  for (const lat of [44.75, 45, 45.25]) for (let i = 0; i < 13; i++) { g6[cell(lat, -1 + i * 0.25)] = 20; g9[cell(lat, -1 + i * 0.25)] = 32; }
+  g9[cell(45.25, 0.5)] = 40;
+  const A = { lat: 45, lon: 0 }, B = { lat: 45, lon: 1 }, LV = [15, 22, 34];
+  const prof = { total: 10, top: 35000, pts: Array.from({ length: 11 }, (_, m) => [m, m * 4.2, m ? 35000 : 0]) };
+  const entOf = (fl, fh) => ({ val: fh === 6 ? g6 : fh === 9 ? g9 : zero, grid });
+  // Décollage 07:30Z : à H+1 on est 91 minutes après f006, sur 180 jusqu'à f009.
+  const tko = Date.parse("2026-09-03T07:30Z");
+  const P = turbSampleProfile(prof, A, B, index, tko, index.fls, entOf, LV);
+  assert.equal(P.pts[0].cls, -1, "au sol : sous FL100, rien");
+  assert.ok(Number.isNaN(P.pts[0].v));
+  assert.ok(Math.abs(P.pts[1].v - (20 + 12 * (91 / 180))) < 1e-9, "H+1 : 20 + 12 × 91/180 — obtenu " + P.pts[1].v);
+  assert.equal(P.pts[1].cls, 2, "moderate aux seuils 15/22/34");
+  assert.equal(P.pts[1].lo, 20, "lo : la plus basse des deux échéances au centre");
+  assert.equal(P.pts[1].hi, 32, "hi loin du point à 40 : le pire des neuf, ici la valeur de f009");
+  assert.deepEqual(P.pts[1].hours, [6, 9]);
+  const near = P.pts.find(p => Math.abs(p.lon - 0.5) < 0.13);
+  assert.ok(near && near.hi === 40 && near.v < 34, "près de 0,5 E le 40 voisin entre dans l'enveloppe, pas dans la courbe : " + JSON.stringify(near));
+  assert.equal(P.max, 2, "la classe du vol vient de la courbe : moderate, pas severe");
+  assert.equal(P.peak, 10, "le pic est la dernière minute — l'heure avance vers f009");
+  assert.deepEqual(P.events.map(e => e.cls), [-1, 2], "transitions seules : le sol, puis moderate jusqu'au bout");
+  // Une seule des deux échéances disponible : sa valeur telle quelle.
+  const Q = turbSampleProfile(prof, A, B, index, tko, index.fls, (fl, fh) => fh === 6 ? { val: g6, grid } : null, LV);
+  assert.equal(Q.pts[1].v, 20); assert.equal(Q.pts[1].cls, 1); assert.equal(Q.pts[1].hi, 20);
+  // Aucun fichier : -2 (le sol reste -1, donc max -1).
+  const R = turbSampleProfile(prof, A, B, index, tko, index.fls, () => null, LV);
+  assert.equal(R.pts[1].cls, -2); assert.equal(R.max, -1); assert.equal(R.peak, -1);
+  // Après la dernière échéance publiée : elle seule, sans interpolation.
+  const S = turbSampleProfile(prof, A, B, index, Date.parse("2026-09-03T13:00Z"), index.fls, entOf, LV);
+  assert.deepEqual(S.pts[1].hours, [12]); assert.equal(S.pts[1].v, 0); assert.equal(S.pts[1].cls, 0);
+  // Hors grille : -2 partout au-dessus de FL100.
+  const tiny = { ...index, grid: { lat0: 45, lon0: 6, dlat: -0.25, dlon: 0.25, nlat: 2, nlon: 2 } };
+  const T = turbSampleProfile(prof, A, B, tiny, tko, index.fls, () => ({ val: new Uint8Array(4), grid: tiny.grid }), LV);
+  assert.ok(T.pts.slice(1).every(p => p.cls === -2), "hors grille signalé");
+  void LFBO; void LFMN;
 });
 
 test("turbEpisodes regroupe les transitions en plages continues de turbulence", async () => {
@@ -305,4 +342,8 @@ test("turbEpisodes regroupe les transitions en plages continues de turbulence", 
   assert.equal(eps.length, 2);
   assert.deepEqual([eps[0].t0, eps[0].t1, eps[0].cls, eps[0].d0, eps[0].d1, eps[0].lat], [20, 40, 3, 120, 280, 2]);
   assert.deepEqual([eps[1].t0, eps[1].t1, eps[1].cls, eps[1].d1, eps[1].flMin], [80, 100, 2, 700, 240]);
+  assert.ok(Number.isNaN(eps[0].vMax), "sans série par minute, pas de pic");
+  // Avec la série : le pic de chaque épisode, les minutes hors épisode ignorées.
+  const withPts = turbEpisodes({ ...P, pts: [{ t: 10, v: 90 }, { t: 22, v: 18 }, { t: 27, v: 40 }, { t: 35, v: 16 }, { t: 40, v: 50 }, { t: 85, v: 25 }, { t: 90, v: NaN }] });
+  assert.equal(withPts[0].vMax, 40); assert.equal(withPts[1].vMax, 25);
 });

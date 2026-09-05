@@ -8,25 +8,34 @@ inscription). Les vents du GFS, eux, sont publics sur AWS Open Data, avec un
 index .idx qui permet de ne télécharger que les champs utiles par Range HTTP.
 
 Indice : Ellrod TI1 = cisaillement vertical × déformation horizontale
-(Ellrod & Knapp 1992). Seuils, en 10^-7 s^-2 : light 4–8, moderate 8–12,
-severe ≥ 12. C'est un indice d'air clair ; un masque convectif relève la
-valeur là où le modèle FAIT de la convection (pluie convective instantanée
-CPRAT > 0) selon l'énergie disponible (CAPE), et sous les cellules que sa
-réflectivité simulée (REFC) donne pour violentes.
+(Ellrod & Knapp 1992), converti en EDR (eddy dissipation rate, m^2/3 s^-1,
+l'unité OACI de la turbulence) par la calibration log-normale du GTG
+(Sharman & Pearson 2017, reprise par le GTG mondial du WAFS) :
+    ln(EDR) = C1 + C2 · (ln TI1 − <ln TI1>) / SD(ln TI1)
+C1 = −2,953 et C2 = 0,602 sont la moyenne et l'écart-type climatologiques
+de ln(EDR) mesurés in situ par les compagnies américaines au-dessus de
+20 000 ft ; <ln TI1> et SD(ln TI1) sont la climatologie de NOTRE
+diagnostic, sur cette grille, mesurée sur des cycles GFS réels (voir
+TI_LN_UPPER). Pourquoi : les seuils Ellrod de 1992 (4/8/12 × 10^-7 s^-2)
+ont été établis sur un modèle à ~80 km ; à 0,25° les dérivées sont bien
+plus fortes, et ces seuils mettaient 25 % du couloir 20–70°N en light ou
+plus, 9,6 % en moderate, 4,5 % en severe (mesuré le 2026-09-05), là où la
+climatologie EDR donne 4 %, 0,8 % et 0,1 %. L'ancien « severe » (12 × 10^-7)
+vaut un EDR de 0,16 : à peine light. La calibration remet la distribution
+à sa place ; la physique (OÙ ça bouge) reste celle de l'indice.
+C'est un indice d'air clair ; un masque convectif relève la valeur là où
+le modèle FAIT de la convection (pluie convective instantanée CPRAT d'au
+moins 1 mm/h) selon l'énergie disponible (CAPE), et sous les cellules que
+sa réflectivité simulée (REFC) donne pour violentes.
 
-Ce qui est publié n'est plus une classe par point mais la VALEUR de
-l'indice, en un octet : TI1 en 10^-7 s^-2 × 16, tronqué au pas de 16
-(1 × 10^-7 : seize niveaux, quatre par classe — deux nuances à l'écran n'en
-demandent pas plus, et chaque niveau de plus doublait presque le fichier),
-plafonné à 240, mis à zéro sous light (le calme et le presque-calme n'ont
-pas de nuance à montrer, et ils ne pèsent alors rien : 90 à 130 Ko par
-fichier au lieu de 235 à 363 avec un pas de 4 et les valeurs sous light).
-Tronqué, pas arrondi : light = 64 vaut exactement TI1 ≥ 4, moderate = 128
-TI1 ≥ 8, severe = 192 TI1 ≥ 12 ; le relèvement convectif pose la nuance
-FORTE de sa classe (96, 160, 224). Le client lit la classe avec ces seuils
-(dans l'index) et peint la nappe en interpolant la valeur entre les
-points : des contours lisses, là où des classes seules ne donnaient que
-des rectangles.
+Ce qui est publié est la VALEUR, en un octet : EDR × 100 tronqué (15 vaut
+exactement EDR ≥ 0,15), plafonné à 255, mis à zéro sous 0,10 (le calme ne
+pèse alors rien dans le PNG). Seuils d'un avion moyen (Sharman & Pearson
+2017) : light 15, moderate 22, severe 34 — publiés dans l'index, le client
+ne les code pas en dur ; le relèvement convectif pose la nuance FORTE de sa
+classe (18, 28, 45). Le client lit la classe avec ces seuils et peint la
+nappe en interpolant la valeur entre les points ; la page Turbulence trace
+la courbe EDR du vol.
 
 Maille : celle du GFS, 0,25° — le monde entier tient dans un PNG 8 bits
 gris (les filtres PNG et zlib font mieux que du RLE : le calme est à zéro
@@ -64,18 +73,34 @@ GFS_FILES = ("pgrb2", "pgrb2b")
 # Grille de sortie par défaut : le monde, du nord au sud, de l'ouest à l'est.
 DEFAULT_BBOX = (-180.0, -90.0, 180.0, 90.0)       # W, S, E, N
 R_EARTH = 6371000.0
-# Seuils Ellrod (×1e-7 s^-2) et masque convectif : CAPE (J/kg) là où il pleut
-# de la convection (CPRAT, kg/m²/s > 0), réflectivité simulée (REFC, dBZ).
-TI_LIGHT, TI_MOD, TI_SEV = 4.0, 8.0, 12.0
+# Calibration log-normale TI1 -> EDR (Sharman & Pearson 2017) : C1, C2 = moyenne
+# et écart-type climatologiques de ln(EDR) in situ au-dessus de 20 000 ft.
+EDR_C1, EDR_C2 = -2.953, 0.602
+# Climatologie de ln(TI1) sur CETTE grille (0,25°, différences centrées),
+# pondérée par cos(lat), |lat| ≤ 85°, mesurée le 2026-09-05 sur quatre cycles
+# (03/09 06Z f024, 04/09 12Z f012, 05/09 00Z f012 et f030) — d'un cycle à
+# l'autre la moyenne bouge de ±0,02 et l'écart-type de ±0,012 :
+#   FL240–FL450 : −15,82 / 1,169      FL100–FL180 : −16,52 / 1,261
+# Des constantes, pas la statistique du cycle courant : normaliser chaque
+# run effacerait la différence entre un jour calme et un jour agité.
+TI_LN_UPPER, TI_LN_MID, MID_MAX_FL = (-15.82, 1.169), (-16.52, 1.261), 180
+# Seuils EDR (m^2/3 s^-1) d'un avion moyen (A320/B737) : light, moderate, severe.
+EDR_LEVELS = (0.15, 0.22, 0.34)
+# Masque convectif : CAPE (J/kg) là où il pleut de la convection (CPRAT,
+# kg/m²/s > 0), réflectivité simulée (REFC, dBZ).
 CAPE_LIGHT, CAPE_MOD = 1000.0, 2000.0
-# L'octet publié : TI1 (×1e-7) × BYTE_PER_E7, tronqué au pas BYTE_STEP,
-# plafonné au dernier multiple du pas sous 256, mis à zéro sous BYTE_FLOOR.
-# Les seuils de classe en octets (BYTE_LEVELS — pas LEVELS, qui sont les
-# hPa lus dans le GRIB) et la nuance forte que pose le relèvement convectif.
-BYTE_PER_E7, BYTE_STEP, BYTE_FLOOR = 16, 16, 64
-BYTE_LEVELS = (int(TI_LIGHT * BYTE_PER_E7), int(TI_MOD * BYTE_PER_E7), int(TI_SEV * BYTE_PER_E7))   # 64, 128, 192
-CONV_BYTES = tuple(l + 32 for l in BYTE_LEVELS)                                                      # 96, 160, 224
-CPRAT_MIN = 1e-5                                   # ≈ 0,04 mm/h : la cellule existe dans le modèle
+# L'octet publié : EDR × BYTE_PER_EDR tronqué, plafonné à 255, zéro sous
+# BYTE_FLOOR. Les seuils de classe en octets (BYTE_LEVELS — pas LEVELS, qui
+# sont les hPa lus dans le GRIB) et la nuance forte que pose le relèvement
+# convectif (EDR 0,18 / 0,28 / 0,45).
+BYTE_PER_EDR, BYTE_FLOOR = 100, 10
+BYTE_LEVELS = tuple(int(round(l * BYTE_PER_EDR)) for l in EDR_LEVELS)     # 15, 22, 34
+CONV_BYTES = (18, 28, 45)
+# 1 mm/h de pluie convective : la cellule PLEUT dans le modèle. À 0,04 mm/h
+# (1e-5, jusqu'au 2026-09-05) le proxy couvrait 3 à 4 % du couloir 20–70°N —
+# autant que la CAT elle-même — ; à 1 mm/h, 0,7 à 1 %, la taille de vraies
+# cellules (mesuré sur quatre cycles).
+CPRAT_MIN = 2.8e-4
 REFC_SEV = 40.0                                    # dBZ : cellule violente, quel que soit le CAPE
 CAPE_MAX_FL = 390                                  # au-dessus, le proxy convectif ne s'applique plus
 POLE_LAT = 85.0                                    # au-delà, la grille est mise à zéro (dx -> 0)
@@ -205,13 +230,20 @@ def ellrod_ti1(u_lo, v_lo, u_hi, v_hi, z_lo, z_hi, u, v, lat_deg, dlat, dlon):
     return vws * np.hypot(dsh, dst)
 
 
-def quantize_ti(ti):
-    """TI1 (s^-2) -> un octet par point : ×1e7 ×16, tronqué au pas de 16,
-    plafonné à 240, zéro sous BYTE_FLOOR. Tronqué : les seuils 64/128/192
-    valent exactement TI1 ≥ 4, 8, 12 (×1e-7)."""
-    q = np.floor(np.nan_to_num(ti, nan=0.0, posinf=0.0, neginf=0.0) * 1e7 * BYTE_PER_E7 / BYTE_STEP)
-    q = np.clip(q, 0, 255 // BYTE_STEP) * BYTE_STEP
-    b = q.astype(np.uint8)
+def edr_of(ti, fl):
+    """TI1 (s^-2) -> EDR (m^2/3 s^-1) par la calibration log-normale : la
+    distribution de ln(TI1) sur la grille est ramenée sur celle de ln(EDR)
+    in situ. Un TI1 nul (pas de déformation) vaut un calme profond."""
+    mean, sd = TI_LN_MID if fl <= MID_MAX_FL else TI_LN_UPPER
+    ln = np.log(np.maximum(np.nan_to_num(ti, nan=0.0, posinf=0.0, neginf=0.0), 1e-12))
+    return np.exp(EDR_C1 + EDR_C2 * (ln - mean) / sd)
+
+
+def quantize_edr(edr):
+    """EDR -> un octet par point : × 100 tronqué (15 vaut exactement EDR ≥ 0,15),
+    plafonné à 255, zéro sous BYTE_FLOOR."""
+    q = np.floor(np.nan_to_num(edr, nan=0.0, posinf=0.0, neginf=0.0) * BYTE_PER_EDR)
+    b = np.clip(q, 0, 255).astype(np.uint8)
     b[b < BYTE_FLOOR] = 0
     return b
 
@@ -226,10 +258,12 @@ def classify_bytes(val):
 
 def apply_convective(val, cape, cprat, refc, fl):
     """Relève la valeur sous la convection du modèle, jusqu'à CAPE_MAX_FL :
-    la nuance FORTE de light, de moderate, de severe (96, 160, 224).
+    la nuance FORTE de light, de moderate, de severe (18, 28, 45 : EDR 0,18,
+    0,28, 0,45).
     Le CAPE seul ne suffit pas : les tropiques en ont en permanence sans
-    orage partout. On exige de la pluie convective instantanée (CPRAT), qui
-    dit qu'une cellule existe bel et bien à cet endroit et cette heure."""
+    orage partout. On exige de la pluie convective instantanée (CPRAT, au
+    moins 1 mm/h), qui dit qu'une cellule pleut bel et bien à cet endroit
+    et cette heure."""
     if cape is None or fl > CAPE_MAX_FL:
         return val
     active = (cprat >= CPRAT_MIN) if cprat is not None else np.ones(cape.shape, dtype=bool)
@@ -354,7 +388,7 @@ def build_hour(fields, bbox, pool=1):
         lo, hi = levels[max(i - 1, 0)], levels[min(i + 1, len(levels) - 1)]
         ti = ellrod_ti1(sub[("UGRD", lo)], sub[("VGRD", lo)], sub[("UGRD", hi)], sub[("VGRD", hi)],
                         sub[("HGT", lo)], sub[("HGT", hi)], sub[("UGRD", p)], sub[("VGRD", p)], lats, dlat, dlon)
-        val = apply_convective(quantize_ti(ti), cape, cprat, refc, fl)
+        val = apply_convective(quantize_edr(edr_of(ti, fl)), cape, cprat, refc, fl)
         # Au-delà de 85° de latitude, dx tend vers zéro et la déformation
         # explose : des bandes rouges autour du pôle qui ne disent rien. Rien
         # n'y vole à ces niveaux de toute façon.
@@ -385,14 +419,18 @@ def write_out(out_dir, run, hours, grids, grid):
         "hours": hours,
         "fls": sorted(FL_TO_HPA),
         "grid": {"lat0": N, "lon0": float(lon0), "dlat": dlat, "dlon": dlon, "nlat": nlat, "nlon": nlon},
-        "source": "gfs-0p25-ellrod-ti1", "classes": ["nil", "light", "moderate", "severe"],
-        "thresholds": {"ti1_e7": [TI_LIGHT, TI_MOD, TI_SEV], "cape": [CAPE_LIGHT, CAPE_MOD],
+        "source": "gfs-0p25-ellrod-ti1-edr", "classes": ["nil", "light", "moderate", "severe"],
+        "thresholds": {"edr": list(EDR_LEVELS), "aircraft": "medium", "cape": [CAPE_LIGHT, CAPE_MOD],
                        "cprat_min": CPRAT_MIN, "refc_sev": REFC_SEV},
         # Le format des fichiers : un PNG gris 8 bits par (FL, échéance), et
-        # ce que vaut l'octet — le client lit ses seuils ICI, pas en dur.
+        # ce que vaut l'octet — EDR × 100 ; le client lit ses seuils ICI, pas
+        # en dur, et la calibration est publiée pour être vérifiable.
         "files": "png",
-        "encoding": {"type": "png8", "byte_per_e7": BYTE_PER_E7, "step": BYTE_STEP, "floor": BYTE_FLOOR,
-                     "levels": list(BYTE_LEVELS), "conv": list(CONV_BYTES)},
+        "encoding": {"type": "png8", "unit": "edr100", "per_edr": BYTE_PER_EDR, "step": 1, "floor": BYTE_FLOOR,
+                     "levels": list(BYTE_LEVELS), "conv": list(CONV_BYTES),
+                     "calib": {"method": "lognormal-remap", "ref": "Sharman & Pearson 2017, JAMC 56", "c1": EDR_C1, "c2": EDR_C2,
+                               "ti1_ln_mean": {"upper": TI_LN_UPPER[0], "mid": TI_LN_MID[0]},
+                               "ti1_ln_sd": {"upper": TI_LN_UPPER[1], "mid": TI_LN_MID[1]}, "mid_max_fl": MID_MAX_FL}},
     }
     os.makedirs(out_dir, exist_ok=True)
     for fh, per_fl in grids.items():
@@ -432,21 +470,30 @@ def selftest():
     u_lo = u_p * 0.5; u_hi = u_p * 1.5                   # cisaillement vertical fort
     z_lo = np.full_like(u_p, 9000.0); z_hi = np.full_like(u_p, 11000.0)
     ti = ellrod_ti1(u_lo, v_p, u_hi, v_p, z_lo, z_hi, u_p, v_p, lats, -0.25, 0.25)
-    val = quantize_ti(ti); cls = classify_bytes(val)
+    val = quantize_edr(edr_of(ti, 340)); cls = classify_bytes(val)
     assert cls[:, :20].max() == 0, "zone calme classée turbulente"
     assert cls[:, 25:35].max() >= 1, "zone de gradient non détectée"
-    # La quantification : seuils exacts (tronqué, pas arrondi), pas de 16,
-    # zéro sous light, plafond 240, NaN -> zéro.
-    q = quantize_ti(np.array([0.0, 3.99e-7, 4.0e-7, 4.9e-7, 5.0e-7, 8.0e-7, 12.0e-7, 15.9e-7, 40e-7, np.nan]))
-    assert q.tolist() == [0, 0, 64, 64, 80, 128, 192, 240, 240, 0], q.tolist()
-    assert classify_bytes(q).tolist() == [0, 0, 1, 1, 1, 2, 3, 3, 3, 0]
+    # La calibration : monotone, et les seuils EDR tombent là où la
+    # climatologie les met — light à TI1 ≈ 10,5 × 1e-7, moderate ≈ 22,
+    # severe ≈ 51 (l'ancien « severe » de 1992, 12 × 1e-7, vaut EDR 0,16).
+    e = edr_of(np.array([0.0, 1e-7, 4e-7, 1.05e-6, 1.2e-6, 2.2e-6, 5.1e-6, 4e-5, np.nan]), 340)
+    assert all(np.diff(e[:-1]) > 0) and e[-1] < 0.01, e.tolist()
+    assert abs(e[3] - 0.15) < 0.005 and abs(e[4] - 0.16) < 0.01 and abs(e[5] - 0.22) < 0.01 and abs(e[6] - 0.34) < 0.015, e.tolist()
+    assert edr_of(np.array([4e-7]), 140) > edr_of(np.array([4e-7]), 240), "sous FL200 la climatologie du diagnostic est plus basse : même TI1, EDR plus fort"
+    # La quantification : seuils exacts (tronqué, pas arrondi), zéro sous
+    # 0,10, plafond 255, NaN -> zéro.
+    q = quantize_edr(np.array([0.0, 0.099, 0.10, 0.149, 0.15, 0.2199, 0.22, 0.34, 2.9, np.nan]))
+    assert q.tolist() == [0, 0, 10, 14, 15, 21, 22, 34, 255, 0], q.tolist()
+    assert classify_bytes(q).tolist() == [0, 0, 0, 0, 1, 1, 2, 3, 3, 0]
     cape = np.zeros_like(u_p); cape[5, 5] = 2500; cape[6, 6] = 2500
-    cprat = np.zeros_like(u_p); cprat[5, 5] = 1e-4                # il pleut en (5,5), pas en (6,6)
+    cprat = np.zeros_like(u_p); cprat[5, 5] = 1e-3                # il pleut en (5,5) (3,6 mm/h), pas en (6,6)
+    cape[8, 8] = 2500; cprat[8, 8] = 1e-4                          # bruine convective (0,36 mm/h) en (8,8)
     refc = np.zeros_like(u_p); refc[7, 7] = 45.0
     c2 = apply_convective(val, cape, cprat, refc, 300)
-    assert c2[5, 5] == 160 and classify_bytes(c2)[5, 5] == 2, "CAPE + pluie convective -> moderate (nuance forte)"
+    assert c2[5, 5] == 28 and classify_bytes(c2)[5, 5] == 2, "CAPE + pluie convective -> moderate (nuance forte)"
     assert c2[6, 6] == 0, "CAPE sans pluie convective -> rien"
-    assert c2[7, 7] == 224 and classify_bytes(c2)[7, 7] == 3, "réflectivité 45 dBZ -> severe"
+    assert c2[8, 8] == 0, "sous 1 mm/h la cellule ne compte pas"
+    assert c2[7, 7] == 45 and classify_bytes(c2)[7, 7] == 3, "réflectivité 45 dBZ -> severe"
     assert apply_convective(val, cape, cprat, refc, 450)[5, 5] == 0, "au-dessus de FL390, rien"
     assert apply_convective(np.full_like(val, 200), cape, cprat, refc, 300)[5, 5] == 200, "un severe déjà là n'est pas abaissé"
     pooled = pool_max(np.array([[0, 64, 0], [128, 0, 192], [64, 64, 64]], dtype=np.uint8), 2)

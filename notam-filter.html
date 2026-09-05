@@ -7144,18 +7144,32 @@ body.light .turb-time input { color-scheme: light }
 .turb-head .k2 { color: #ef8a2c }
 .turb-head .k3 { color: var(--red) }
 .turb-head .muted { color: var(--muted) }
-.turb-bar { display: flex; height: 36px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line2); background: var(--panel2) }
-.turb-bar:empty { opacity: .5 }
-/* Un morceau par événement du rejeu, large comme sa durée (style width). */
-.turb-seg { flex: 0 0 auto; position: relative; cursor: pointer; background: var(--grey-bg); min-width: 0; box-sizing: border-box }
-.turb-seg.c0 { background: var(--green) }
-.turb-seg.c1 { background: #ffc600 }
-.turb-seg.c2 { background: #ff6e00 }
-.turb-seg.c3 { background: #e61e2c }
-.turb-seg.cl { background: var(--steel-dim) }         /* sous FL100 : la grille ne dit rien */
-.turb-seg.cn { background: var(--grey-bg) }           /* hors grille */
-.turb-seg.on { outline: 2px solid var(--text); outline-offset: -2px; z-index: 1 }
-.turb-seg + .turb-seg { border-left: 1px solid rgba(0, 0, 0, .22) }
+/* Le graphique EDR du vol : un SVG à la largeur du cadre, redessiné au
+   redimensionnement (turbRenderChart). Les couleurs de classe sont celles de
+   la carte et de la légende (jaune, orange, rouge), posées en style sur les
+   marques ; tout le reste — axes, grille, textes, bande grise, hachures —
+   suit le thème par ses variables. */
+.turb-chart { position: relative; margin-top: 4px; border: 1px solid var(--line2); border-radius: 8px; background: var(--panel); outline: none; touch-action: pan-y; cursor: crosshair }
+.turb-chart:focus-visible { border-color: var(--cyan) }
+.turb-chart svg { display: block; width: 100%; height: auto; font: 500 11px var(--mono); font-variant-numeric: tabular-nums }
+.turb-chart.loading svg { opacity: .55 }
+.turb-chart .ax { fill: var(--muted) }
+.turb-chart .ax.strong { fill: var(--text); font-weight: 600 }
+.turb-chart .grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges }
+.turb-chart .lvl { stroke-width: 1; stroke-opacity: .5; shape-rendering: crispEdges }
+.turb-chart .tint { fill-opacity: .09 }
+body.light .turb-chart .tint { fill-opacity: .12 }
+.turb-chart .strip { fill-opacity: .9 }
+.turb-chart .cls-lbl { fill: var(--muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase }
+.turb-chart .band { fill: var(--text); fill-opacity: .1 }
+.turb-chart .curve { fill: none; stroke: var(--steel); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round }
+.turb-chart .hatch-line { stroke: var(--steel-dim); stroke-width: 1.2 }
+.turb-chart .toc { stroke: var(--line2); stroke-width: 1; shape-rendering: crispEdges }
+.turb-chart .plane { fill: var(--muted) }
+.turb-chart .peak { stroke: var(--panel); stroke-width: 2 }
+.turb-chart .cur.off { display: none }
+.turb-chart .cursor { stroke: var(--text); stroke-width: 1; stroke-opacity: .7; shape-rendering: crispEdges }
+.turb-chart .cursor-dot { stroke: var(--panel); stroke-width: 2 }
 .turb-list { margin-top: 12px; display: grid; gap: 6px }
 .turb-ev {
   display: grid; grid-template-columns: auto auto 1fr; gap: 0 12px; align-items: baseline;
@@ -7170,19 +7184,23 @@ body.light .turb-time input { color-scheme: light }
 .turb-ev.on { border-color: var(--text) }
 .turb-none { font: 500 12px/1.4 var(--sans); color: var(--muted); margin-top: 10px }
 @media (max-width: 480px) { .turb-ev { grid-template-columns: auto 1fr } .turb-ev span:last-child { grid-column: 1 / -1 } }
-.turb-ticks { position: relative; height: 42px; margin-top: 6px }
-.turb-tick { position: absolute; top: 0; transform: translateX(-50%); text-align: center; font: 500 11px/1.35 var(--mono); color: var(--muted); white-space: nowrap }
-.turb-tick::before { content: ""; display: block; width: 1px; height: 5px; background: var(--line2); margin: 0 auto 3px }
-.turb-tick.first { transform: none; text-align: left }
-.turb-tick.first::before { margin-left: 0 }
-.turb-tick.last { transform: translateX(-100%); text-align: right }
-.turb-tick.last::before { margin-right: 0 }
-.turb-tick b { color: var(--text); font-weight: 600 }
+/* La bulle de lecture d'une minute (survol, tap, clavier) : la valeur
+   d'abord, en gras, la classe à côté de sa pastille ; le reste en retrait. */
+.turb-tip { position: absolute; top: 8px; z-index: 2; pointer-events: none; max-width: 250px; background: var(--panel2); border: 1px solid var(--line2); border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(0, 0, 0, .25); font: 500 12px/1.45 var(--sans); color: var(--muted) }
+.turb-tip .t { font: 600 12px/1.4 var(--mono); color: var(--text) }
+.turb-tip .v { font: 600 14px/1.4 var(--mono); color: var(--text); margin: 2px 0 }
+.turb-tip .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px }
 .turb-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; font: 500 11px/1.4 var(--sans); color: var(--muted) }
 .turb-legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; background: var(--k); border: 1px solid var(--line2) }
-.turb-detail { margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; font: 500 12px/1.55 var(--sans); color: var(--text) }
+.turb-legend span.band::before { background: var(--text); opacity: .18; border-color: transparent }
+.turb-legend span.hatch::before { background: repeating-linear-gradient(45deg, var(--steel-dim) 0 1px, transparent 1px 4px) }
+.turb-legend span.unit::before { display: none }
+/* Le cartouche où un tap épingle la lecture : mêmes lignes que la bulle. */
+.turb-detail { margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; font: 500 12px/1.55 var(--sans); color: var(--muted) }
 .turb-detail:empty { display: none }
-.turb-detail .muted { color: var(--muted) }
+.turb-detail .t { font: 600 12px/1.4 var(--mono); color: var(--text) }
+.turb-detail .v { font: 600 14px/1.4 var(--mono); color: var(--text); margin: 2px 0 }
+.turb-detail .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px }
 .turb-status { margin-top: 10px; font: 500 12px/1.4 var(--sans); color: var(--muted); min-height: 17px }
 .turb-status.err { color: var(--red) }
 @media (max-width: 480px) {
@@ -7715,27 +7733,33 @@ body.light .turb-time input { color-scheme: light }
         <button class="btn" id="turbGo" type="button" title="Compute again">↻ Update</button>
       </div>
       <div class="turb-bar-wrap">
-        <!-- La ligne de résumé du vol, en tête du ruban — celle que le
+        <!-- La ligne de résumé du vol, en tête du graphique — celle que le
              cartouche de la carte portait : terrains, distance, durée, heure
-             de décollage, niveau de croisière atteint et pire classe
-             rencontrée. Remplie par turbRenderHead(). -->
+             de décollage, niveau de croisière atteint et pic d'EDR
+             rencontré. Remplie par turbRenderHead(). -->
         <div class="turb-head" id="turbHead" aria-live="polite"></div>
-        <div class="turb-bar" id="turbBar" role="img" aria-label="Turbulence along the flight, departure on the left, arrival on the right"></div>
-        <div class="turb-ticks" id="turbTicks"></div>
+        <!-- La courbe EDR du vol (turbRenderChart) : les heures de vol en
+             abscisse, l'EDR × 100 en ordonnée dans ses bandes light /
+             moderate / severe, la bande grise de ce qu'il y a à côté, la
+             montée et la descente. Un survol ou un tap lit la minute ; les
+             flèches du clavier aussi. La légende se remplit avec les seuils
+             de l'index (turbRenderLegend), rien n'est codé en dur ici. -->
+        <div class="turb-chart" id="turbChart" tabindex="0" role="img"
+             aria-label="Turbulence along the flight: EDR against flight time, departure on the left, arrival on the right">
+          <div class="turb-tip" id="turbTip" hidden></div>
+        </div>
       </div>
-      <div class="turb-legend">
-        <span style="--k:var(--green)">Smooth</span><span style="--k:#ffc600">Light</span><span
-          style="--k:#ff6e00">Moderate</span><span style="--k:#e61e2c">Severe</span><span
-          style="--k:var(--steel-dim)">Below FL100 — grid silent</span><span
-          style="--k:var(--grey-bg)">No data</span>
-      </div>
+      <div class="turb-legend" id="turbLegend"></div>
       <div class="turb-detail" id="turbDetail"></div>
       <div class="turb-list" id="turbList"></div>
       <div class="turb-status" id="turbStatus"></div>
-      <div class="wx-src">Estimate: the Ellrod clear-air turbulence index and a convective proxy computed on the NOAA/NCEP
-        GFS model winds, on its ~25 km grid — the same field as the Turbulence layer of the map, read minute by minute along
-        the great circle with a generic medium-jet profile. Decision support only — not the WAFS forecast, blind to
-        mountain waves, and it does not replace the SIGWX charts of your official briefing.</div>
+      <div class="wx-src">Estimate: the Ellrod clear-air turbulence index computed on the NOAA/NCEP GFS model winds
+        (~25 km grid), converted to EDR — eddy dissipation rate, the ICAO unit of turbulence, shown × 100 — with the
+        lognormal calibration of the GTG forecasts (Sharman &amp; Pearson 2017), plus a convective proxy under model
+        storms; thresholds for a medium jet (A320/B737): light 0.15, moderate 0.22, severe 0.34. The same field as the
+        Turbulence layer of the map, read minute by minute along the great circle with a generic medium-jet profile.
+        Decision support only — not the WAFS forecast, blind to mountain waves, and it does not replace the SIGWX
+        charts of your official briefing.</div>
     </div>
   </div>
 
@@ -7795,10 +7819,10 @@ body.light .turb-time input { color-scheme: light }
           <button type="button" class="wh" data-h="3" aria-label="TAF wind in 3 hours"><i class="c" aria-hidden="true"></i>+3h</button>
         </div>
         <!-- Zones de turbulence prévues, au niveau de vol choisi. Grille
-             calculée par le serveur depuis les vents du GFS (indice Ellrod,
-             tools/turb/build_turb.py) : ce n'est PAS l'EDR officiel du WAFS,
-             qui n'est plus en accès libre — la légende et l'aide le disent.
-             Vue weather seulement, comme le vent. -->
+             calculée par le serveur depuis les vents du GFS (indice Ellrod
+             calibré en EDR, tools/turb/build_turb.py) : ce n'est PAS l'EDR
+             officiel du WAFS, qui n'est plus en accès libre — la légende et
+             l'aide le disent. Vue weather seulement, comme le vent. -->
         <label class="map-mode map-turb" title="Show forecast turbulence zones at the chosen flight level — light, moderate and severe, from a clear-air turbulence index computed on the GFS model winds, with a convective proxy under storms. Model guidance, not an official aviation product.">
           <input type="checkbox" id="mapTurbChk">
           <span class="rd" aria-hidden="true"></span>
@@ -8296,7 +8320,10 @@ body.light .turb-time input { color-scheme: light }
         <div class="hd-note">
           <b>Turbulence zones and Turbulence page</b> — computed from the <a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/"
             target="_blank" rel="noopener">NOAA GFS 0.25° model winds</a> (public domain) with the Ellrod
-          clear-air turbulence index and a convective proxy (CAPE, convective rain, simulated reflectivity). A model index on ~25 km cells, drawn smoothed between grid points,
+          clear-air turbulence index, converted to EDR (eddy dissipation rate, the ICAO turbulence unit) by the lognormal
+          calibration of the GTG forecasts (Sharman &amp; Pearson 2017), plus a convective proxy (CAPE, convective rain,
+          simulated reflectivity). Thresholds for a medium jet: light 0.15, moderate 0.22, severe 0.34. A model estimate
+          on ~25 km cells, drawn smoothed between grid points,
           <b>not the official WAFS turbulence forecast</b> and <b>not an aviation weather product</b>. The
           Turbulence page reads the same grid along the flight, minute by minute.
         </div>
@@ -20181,7 +20208,7 @@ function renderInfo(icao) {
     const TURB_STALE_MS = 18 * 3600e3;     // au-delà, le cycle ne décrit plus la journée : on le dit
     let mapTurbOn = false, mapTurbFlIdx = TURB_FLS.indexOf(340), mapTurbHour = 0;
     let mapTurbIndex = null, mapTurbIndexAt = 0, mapTurbEnt = null, mapTurbShown = null, mapTurbSeq = 0, mapTurbStamp = null;
-    const mapTurbCache = new Map();        // "FL340/h006" -> { val, cls, grid } : le fichier décodé
+    const mapTurbCache = new Map();        // "FL340/h006" -> { val, grid } : le fichier décodé
     // Écran tactile — pas de souris, téléphone ou tablette, même critère que
     // les retouches tactiles du plan (media query, boutons de zoom agrandis) :
     // les flèches de vent y plafonnent plus haut au zoom.
@@ -20544,14 +20571,16 @@ function renderInfo(icao) {
       };
     });
     // [turb-decode] — section évaluée seule par test/turb-grid.test.mjs.
-    /* Deux formats de fichier, une seule entrée { val, cls, grid }.
+    /* Deux formats de fichier, une seule entrée { val, grid }.
        Le NOUVEAU (index.files === "png") : un PNG gris 8 bits, un octet par
-       point — l'indice Ellrod en 1e-7 s^-2 × 16, au pas et au plancher que
-       dit l'index (encoding : pas de 16, zéro sous light, plafond 240) —,
-       ses seuils de classe dans l'index (encoding.levels : 64, 128, 192
-       pour light, moderate, severe) et sa grille dans un chunk tEXt
+       point — depuis le 2026-09-05 l'EDR × 100 (encoding.unit "edr100" :
+       l'indice Ellrod calibré en EDR par le serveur, zéro sous 0,10,
+       plafond 255), avant cela l'indice × 16 —, ses seuils de classe dans
+       l'index (encoding.levels : 15, 22, 34 pour light, moderate, severe ;
+       64, 128, 192 pour l'ancien octet) et sa grille dans un chunk tEXt
        « turb ». L'ANCIEN : du JSON, une classe 0..3 par point en RLE.
-       `val` sert la nappe lissée, `cls` le rejeu du profil. */
+       `val` sert la nappe lissée de la carte ET le rejeu du profil, qui lit
+       la valeur au centre (turbValueAt) et la classe aux seuils (turbClassOf). */
     const TURB_LEVELS = [64, 128, 192];
     /* RLE serveur -> classes. `rle` alterne classe et longueur, du nord au
        sud puis d'ouest en est ; la somme des longueurs doit couvrir la
@@ -20569,17 +20598,17 @@ function renderInfo(icao) {
     }
     /* Classes -> octets : une classe seule n'a pas de nuance, elle prend la
        valeur FORTE de sa bande (celle que pose le relèvement convectif), et
-       l'ancien format se peint comme le nouveau. Octets -> classes : aux
-       seuils de l'index. */
+       l'ancien format se peint comme le nouveau. */
     function turbValFromCls(cls) {
       const V = [0, 96, 160, 224], out = new Uint8Array(cls.length);
       for (let i = 0; i < cls.length; i++) out[i] = V[cls[i] & 3];
       return out;
     }
-    function turbClsFromVal(val, levels) {
-      const L = levels || TURB_LEVELS, l1 = L[0], l2 = L[1], l3 = L[2], out = new Uint8Array(val.length);
-      for (let i = 0; i < val.length; i++) { const v = val[i]; out[i] = v >= l3 ? 3 : v >= l2 ? 2 : v >= l1 ? 1 : 0; }
-      return out;
+    /* Octet -> classe 0..3, aux seuils de l'index (light, moderate, severe) ;
+       une valeur absente (NaN, hors grille) vaut 0. */
+    function turbClassOf(v, levels) {
+      const L = levels || TURB_LEVELS;
+      return !(v >= 0) ? 0 : v >= L[2] ? 3 : v >= L[1] ? 2 : v >= L[0] ? 1 : 0;
     }
     /* Un PNG lu à la main — gris 8 bits, c'est cinquante lignes, et les
        pixels sortent EXACTS, sans passer par un canvas et sa gestion des
@@ -20748,7 +20777,7 @@ function renderInfo(icao) {
        les fonce un peu : sur un fond pâle, le jaune s'efface vite. */
     function turbLut(levels, light) {
       const L = levels || TURB_LEVELS, l1 = L[0], l2 = L[1], l3 = L[2];
-      const m1 = (l1 + l2) >> 1, m2 = (l2 + l3) >> 1, m3 = (l3 + 256) >> 1;
+      const m1 = (l1 + l2) >> 1, m2 = (l2 + l3) >> 1, m3 = Math.min(255, l3 + ((l3 - l2) >> 1));
       const stops = light
         ? [[l1, 250, 215, 40, 150], [m1, 245, 178, 0, 172], [l2, 245, 122, 0, 188], [m2, 238, 78, 0, 204], [l3, 220, 26, 36, 214], [m3, 168, 0, 110, 224]]
         : [[l1, 255, 230, 80, 140], [m1, 255, 198, 0, 166], [l2, 255, 140, 0, 184], [m2, 255, 88, 0, 200], [l3, 236, 32, 44, 210], [m3, 190, 0, 122, 220]];
@@ -20886,72 +20915,117 @@ function renderInfo(icao) {
       for (const f of fls) if (Math.abs(f - fl) < Math.abs(best - fl)) best = f;
       return best;
     }
-    /* Classe autour de (lat, lon) : la case qui contient le point et, sur
-       une grille fine (pas ≤ 0,3°), ses huit voisines — la pire l'emporte.
-       C'est le regard latéral qu'avait le regroupement 2×2 de l'ancienne
-       grille à 0,5° : une zone de CAT se trompe de 50 à 100 NM en position,
-       le rejeu ne doit pas passer entre deux cases. -2 hors grille. */
-    function turbCellClass(grid, cls, lat, lon) {
-      const j = Math.round((lat - grid.lat0) / grid.dlat), i = Math.round((lon - grid.lon0) / grid.dlon);
-      if (j < 0 || j >= grid.nlat || i < 0 || i >= grid.nlon) return -2;
+    /* Valeur du champ en (lat, lon), lue AU CENTRE : interpolation bilinéaire
+       entre les quatre points de grille qui entourent le point — la lecture
+       de la courbe EDR, cohérente avec la nappe lissée de la carte. Sur une
+       grille mondiale les colonnes bouclent à l'antiméridien. Hors grille :
+       NaN. */
+    function turbValueAt(grid, val, lat, lon) {
+      const nlat = grid.nlat, nlon = grid.nlon, dlon = grid.dlon, world = nlon * dlon >= 359.9;
+      const east = ((lon - grid.lon0) % 360 + 360) % 360;      // degrés à l'est de la première colonne
+      if (!world && east > (nlon - 1) * dlon + 1e-9) return NaN;
+      const fj = (lat - grid.lat0) / grid.dlat, fi = east / dlon;
+      if (!(fj >= -1e-9) || fj > nlat - 1 + 1e-9) return NaN;
+      const j0 = Math.min(Math.max(Math.floor(fj), 0), nlat - 1), j1 = Math.min(j0 + 1, nlat - 1), tj = Math.min(Math.max(fj - j0, 0), 1);
+      const i0 = Math.min(Math.floor(fi), nlon - 1), ti = Math.min(Math.max(fi - i0, 0), 1);
+      let i1 = i0 + 1;
+      if (i1 >= nlon) i1 = world ? 0 : nlon - 1;
+      const r0 = j0 * nlon, r1 = j1 * nlon;
+      return (val[r0 + i0] * (1 - ti) + val[r0 + i1] * ti) * (1 - tj) + (val[r1 + i0] * (1 - ti) + val[r1 + i1] * ti) * tj;
+    }
+    /* Le pire des neuf points autour (le point de grille le plus proche et
+       ses huit voisins, ±0,25°) : ce qu'il y a À CÔTÉ de la route. Une zone
+       de CAT se trompe de 50 à 100 NM en position — c'est la bande grise
+       du graphique, pas la courbe. Sur une grille large (> 0,3°) le point
+       seul. Hors grille : NaN. */
+    function turbValueNear(grid, val, lat, lon) {
+      const nlat = grid.nlat, nlon = grid.nlon, world = nlon * grid.dlon >= 359.9;
+      const j = Math.round((lat - grid.lat0) / grid.dlat);
+      let i = Math.round((((lon - grid.lon0) % 360 + 360) % 360) / grid.dlon);
+      if (world) i %= nlon;
+      if (j < 0 || j >= nlat || i < 0 || i >= nlon) return NaN;
       const R = Math.abs(grid.dlat) <= 0.3 ? 1 : 0;
       let best = 0;
       for (let dj = -R; dj <= R; dj++) {
         const jj = j + dj;
-        if (jj < 0 || jj >= grid.nlat) continue;
+        if (jj < 0 || jj >= nlat) continue;
         for (let di = -R; di <= R; di++) {
-          const ii = i + di;
-          if (ii < 0 || ii >= grid.nlon) continue;
-          const c = cls[jj * grid.nlon + ii];
-          if (c > best) best = c;
+          let ii = i + di;
+          if (ii < 0 || ii >= nlon) { if (!world) continue; ii = (ii + nlon) % nlon; }
+          const v = val[jj * nlon + ii];
+          if (v > best) best = v;
         }
       }
       return best;
     }
     /* Le rejeu : pour chaque minute, position sur l'orthodromie, FL le plus
-       proche, pire classe des deux échéances encadrant l'heure. Sous
-       9 000 ft la grille ne dit rien (-1). `clsOf(fl, fh)` rend la grille
-       décodée, ou null si elle manque (-2). Les événements ne retiennent que
-       les CHANGEMENTS de classe, avec la minute, le FL et la distance. */
-    function turbSampleProfile(prof, A, B, index, tkoMs, fls, clsOf) {
-      const dist = gcDistNM(A, B), pts = [], events = [];
-      let prev = null, max = -2;
+       proche, et la valeur lue AU CENTRE — bilinéaire en espace, linéaire en
+       temps entre les deux échéances qui encadrent l'heure de passage —,
+       plus l'enveloppe : `lo`, la plus basse des deux échéances au centre ;
+       `hi`, le pire des neuf points autour, aux deux échéances. La classe
+       vient de la valeur centrale : c'est elle que la courbe trace et que
+       la liste des épisodes compte ; le pire d'à côté se lit dans la bande.
+       (Avant le 2026-09-05 : pire des neuf cases ET des deux heures, en
+       classes — sur un transatlantique cette double majoration mettait du
+       severe partout où turbli voyait du light.) Sous 9 000 ft la grille ne
+       dit rien (-1) ; `entOf(fl, fh)` rend { val, grid }, ou null si le
+       fichier manque (-2 quand aucune échéance n'est lue). `levels` : les
+       seuils de classe de l'index. Les événements ne retiennent que les
+       CHANGEMENTS de classe ; `pts` garde chaque minute pour la courbe,
+       `peak` l'indice de la minute la plus forte. */
+    function turbSampleProfile(prof, A, B, index, tkoMs, fls, entOf, levels) {
+      const dist = gcDistNM(A, B), pts = [], events = [], run = Date.parse(index.run);
+      let prev = null, max = -2, peak = -1;
       for (const [t, d, alt] of prof.pts) {
         const p = gcPoint(A, B, dist ? d / dist : 0);
-        let c = -1, fl = null;
+        let c = -1, fl = null, v = NaN, lo = NaN, hi = NaN, hours = null;
         if (alt >= 9000) {
           fl = turbNearestFl(fls, alt); c = -2;
-          for (const fh of turbBracketHours(index, tkoMs + t * 60e3)) {
-            // clsOf rend soit { cls, grid } (le fichier et sa propre grille),
-            // soit la grille de classes nue, lue alors sur la grille de l'index.
-            const e = clsOf(fl, fh);
-            if (!e) continue;
-            const k = e.cls ? turbCellClass(e.grid, e.cls, p.lat, p.lon) : turbCellClass(index.grid, e, p.lat, p.lon);
-            if (k > c) c = k;
+          const ms = tkoMs + t * 60e3;
+          hours = turbBracketHours(index, ms);
+          const vals = [], nears = [];
+          for (const fh of hours) {
+            const e = entOf(fl, fh);
+            if (!e || !e.val) { vals.push(NaN); nears.push(NaN); continue; }
+            vals.push(turbValueAt(e.grid, e.val, p.lat, p.lon));
+            nears.push(turbValueNear(e.grid, e.val, p.lat, p.lon));
+          }
+          const ok = vals.filter(x => x >= 0);
+          if (ok.length) {
+            if (ok.length === 2) {
+              const f = Math.min(1, Math.max(0, ((ms - run) / 3600e3 - hours[0]) / (hours[1] - hours[0])));
+              v = vals[0] + (vals[1] - vals[0]) * f;
+            } else v = ok[0];
+            lo = Math.min(v, ...ok);
+            hi = Math.max(v, ...nears.filter(x => x >= 0));
+            c = turbClassOf(v, levels);
           }
         }
-        pts.push({ t, d, alt, fl, lat: p.lat, lon: p.lon, cls: c });
+        const i = pts.push({ t, d, alt, fl, lat: p.lat, lon: p.lon, v, lo, hi, cls: c, hours }) - 1;
         if (c > max) max = c;
+        if (v >= 0 && (peak < 0 || v > pts[peak].v)) peak = i;
         if (prev === null || c !== prev) { events.push({ t, d, fl, alt, cls: c, lat: p.lat, lon: p.lon }); prev = c; }
       }
-      return { pts, events, total: prof.total, top: prof.top, dist, max };
+      return { pts, events, total: prof.total, top: prof.top, dist, max, peak };
     }
     /* Les événements regroupés en ÉPISODES : une plage continue de classe ≥ 1,
-       avec son début, sa fin, sa pire classe, ses FL et ses distances. Sur un
-       transatlantique, trente transitions light/moderate/light ne se lisent
-       pas ; six épisodes, oui. */
+       avec son début, sa fin, sa pire classe, ses FL, ses distances et — si
+       `pts` est là — le pic de la courbe dedans (`vMax`, en octets de
+       l'index). Sur un transatlantique, trente transitions light/moderate/
+       light ne se lisent pas ; six épisodes, oui. */
     function turbEpisodes(P) {
       const out = [];
       let cur = null;
       for (let i = 0; i < P.events.length; i++) {
         const e = P.events[i], end = i + 1 < P.events.length ? P.events[i + 1].t : P.total;
         if (e.cls >= 1) {
-          if (!cur) cur = { t0: e.t, t1: end, d0: e.d, d1: null, cls: e.cls, flMin: e.fl, flMax: e.fl, lat: e.lat, lon: e.lon };
+          if (!cur) cur = { t0: e.t, t1: end, d0: e.d, d1: null, cls: e.cls, flMin: e.fl, flMax: e.fl, lat: e.lat, lon: e.lon, vMax: NaN };
           else { cur.t1 = end; if (e.cls > cur.cls) { cur.cls = e.cls; cur.lat = e.lat; cur.lon = e.lon; } }
           cur.flMin = Math.min(cur.flMin, e.fl); cur.flMax = Math.max(cur.flMax, e.fl);
         } else if (cur) { cur.d1 = e.d; out.push(cur); cur = null; }
       }
       if (cur) { cur.d1 = P.dist; out.push(cur); }
+      if (P.pts) for (const ep of out) for (const p of P.pts) if (p.t >= ep.t0 && p.t < ep.t1 && p.v >= 0 && !(p.v <= ep.vMax)) ep.vMax = p.v;
       return out;
     }
     // [/turb-profile]
@@ -21020,8 +21094,8 @@ function renderInfo(icao) {
       return Array.isArray(l) && l.length === 3 && l.every(x => x > 0 && x < 256) ? l.map(Number) : TURB_LEVELS;
     }
     /* Un fichier (FL, échéance) : mémoire d'abord, sinon le serveur. L'entrée
-       garde les valeurs (la nappe) et les classes (le profil, case par case),
-       sur la grille du fichier. */
+       garde les valeurs — la nappe et le rejeu lisent le même octet — sur la
+       grille du fichier. */
     async function mapTurbFile(index, fl, fh) {
       const key = turbKey(fl, fh);
       let ent = mapTurbCache.get(key);
@@ -21034,19 +21108,20 @@ function renderInfo(icao) {
       // rafraîchit pas au même instant, et pendant ce laps un index d'un
       // cycle peut accompagner des fichiers du suivant. Un fichier sans
       // grille hérite de celle de l'index.
-      let grid, val, cls;
+      let grid, val;
       if (png) {
         const d = await turbPngDecode(await r.arrayBuffer());
         grid = (d.meta && d.meta.grid) || index.grid;
         if (d.w !== grid.nlon || d.h !== grid.nlat) throw new Error("turb: image et grille en désaccord");
-        val = d.val; cls = turbClsFromVal(val, mapTurbLevels(index));
+        val = d.val;
       } else {
         const d = await r.json();
-        grid = d.grid || index.grid; cls = turbDecode(d);
+        grid = d.grid || index.grid;
+        const cls = turbDecode(d);
         if (cls.length !== grid.nlat * grid.nlon) throw new Error("turb: fichier et grille en désaccord");
         val = turbValFromCls(cls);
       }
-      ent = { val, cls, grid };
+      ent = { val, grid };
       mapTurbCache.set(key, ent);
       return ent;
     }
@@ -21125,7 +21200,7 @@ function renderInfo(icao) {
       await Promise.all([...need.values()].map(([fl, fh]) => mapTurbFile(index, fl, fh).catch(() => null)));
       if (seq !== mapTurbSeq) return;
       const clsOf = (fl, fh) => mapTurbCache.get(turbKey(fl, fh)) || null;
-      mapTurbProf = turbSampleProfile(prof, A, B, index, tko, fls, clsOf);
+      mapTurbProf = turbSampleProfile(prof, A, B, index, tko, fls, clsOf, mapTurbLevels(index));
       drawMap();
     }
     // Les noms des classes, partagés avec la page Turbulence.
@@ -25821,10 +25896,10 @@ function dtsAUnQfu(icao){
        le temps de vol saisi étire ou comprime alors le profil, mêmes
        positions et mêmes niveaux, autres minutes — c'est ce que le vent
        fait à un vol réel. Tout est en UTC. Le dernier rejeu est gardé en
-       localStorage (ses transitions, pas ses minutes : ~2 Ko) — hors
-       ligne, il se relit daté. */
+       localStorage (sa série par minute, arrondie : ~12 Ko pour un
+       transatlantique) — hors ligne, il se relit daté. */
     const TURB_KEY = "notam_turb";
-    let turbToken = 0, turbTimer = null;
+    let turbToken = 0, turbTimer = null, turbPinned = -1, turbResizeT = null;
     // flSet : le FL a été tapé par le pilote — il survit alors aux changements
     // de terrain, quand le FL posé d'office suit la distance.
     const turbCfg = { dep: "", arr: "", fl: null, flSet: false, t0: null, t1: null };
@@ -25900,88 +25975,248 @@ function dtsAUnQfu(icao){
       clearTimeout(turbTimer);
       turbTimer = setTimeout(turbCompute, 350);
     }
-    /* La barre : un morceau par ÉVÉNEMENT du rejeu — chaque changement de
-       classe —, large comme sa durée ; les repères H+ / heure Z dessous, à
-       des minutes rondes, six au plus. Sans résultat encore (squelette), un
-       seul morceau gris et muet. Un morceau touché s'explique dans le
-       cartouche ; la liste des épisodes suit. La ligne de résumé coiffe le
-       tout. */
-    function turbRenderBar(res, skeleton) {
-      const bar = $("#turbBar"), ticks = $("#turbTicks");
-      $("#turbDetail").innerHTML = ""; $("#turbList").innerHTML = "";
-      turbRenderHead(res, skeleton);
-      if (!res) { bar.innerHTML = ""; ticks.innerHTML = ""; return; }
-      const total = Math.max(res.total, 1), t0 = res.cfg.t0;
-      bar.innerHTML = res.events.map((e, i) => {
-        const end = i + 1 < res.events.length ? res.events[i + 1].t : res.total;
-        const k = skeleton ? "" : e.cls === -1 ? " cl" : e.cls === -2 ? " cn" : " c" + e.cls;
-        return `<div class="turb-seg${k}" data-i="${i}" style="width:${((end - e.t) / total * 100).toFixed(2)}%" title="${turbHPlus(e.t)} · ${turbHM(t0 + e.t * 60e3)}Z${skeleton ? "" : " · " + (TURB_NAMES[e.cls] || "")}"></div>`;
-      }).join("");
-      // Repères à des minutes rondes : le pas le plus fin qui en laisse six au
-      // plus (quatre sur un écran étroit), et le dernier s'efface s'il
-      // collerait à l'arrivée.
-      const maxTicks = bar.clientWidth && bar.clientWidth < 480 ? 4 : 6;
-      const step = [5, 10, 15, 20, 30, 60, 90, 120, 180, 240, 360].find(s => total / s <= maxTicks) || 480;
-      let html = `<div class="turb-tick first"><b>H+0</b><br>${turbHM(t0)}Z</div>`;
-      for (let m = step; m < total - step * 0.45; m += step) {
-        html += `<div class="turb-tick" style="left:${(m / total * 100).toFixed(2)}%"><b>${turbHPlus(m)}</b><br>${turbHM(t0 + m * 60e3)}Z</div>`;
-      }
-      html += `<div class="turb-tick last" style="left:100%"><b>${turbHPlus(res.total)}</b><br>${turbHM(t0 + res.total * 60e3)}Z</div>`;
-      ticks.innerHTML = html;
-      if (skeleton) return;
-      bar.querySelectorAll(".turb-seg").forEach(el => { el.onclick = () => turbShowDetail(res, +el.dataset.i); });
-      turbRenderList(res);
+    /* Le graphique : la courbe EDR du vol, minute par minute — les heures de
+       vol en abscisse (H+ et heure Z, départ à gauche, arrivée à droite),
+       l'EDR × 100 en ordonnée dans ses bandes teintées light / moderate /
+       severe, la courbe colorée par la classe qu'elle traverse, la bande
+       grise de l'enveloppe (le pire des points voisins, l'autre échéance),
+       la montée et la descente marquées d'un avion, le pic étiqueté. Sous
+       FL100 et hors grille : hachures, la grille ne dit rien. Un survol, un
+       tap ou les flèches du clavier lisent une minute (turbTipAt) ; le tap
+       l'épingle dans le cartouche. Sans résultat encore (squelette) : axes
+       et bandes seuls — ou, si la même route a déjà sa courbe, celle-ci
+       estompée le temps du recalcul. Le dessin de turbli, en couleurs. */
+    const TURB_COL = { 0: "var(--steel)", 1: "#ffc600", 2: "#ff6e00", 3: "#e61e2c" };
+    const TURB_PLANE = "M0-6.2 1.3-1.7 6 1.3v1.2L1.3 1.2 1 4.4l2.2 1.3v.9L0 5.9l-3.2.7v-.9L-1 4.4l-.3-3.2L-6 2.5V1.3l4.7-3z";
+    let turbLastRes = null, turbCursorI = -1;
+    /* Octet du fichier -> EDR (m^2/3 s^-1) : ÷ 100 quand l'index le dit
+       (unit "edr100") ; un ancien fichier (indice × 16, ou classes seules)
+       se lit par ses seuils, ramenés linéairement sur ceux de l'EDR — la
+       courbe reste juste en classe, approximative en valeur. */
+    function turbEdrOf(v, res) {
+      if (!(v >= 0)) return NaN;
+      const enc = (res && res.enc) || {};
+      if (enc.unit === "edr100") return v / (enc.per_edr || 100);
+      const L = (res && res.levels) || TURB_LEVELS, X = [0, L[0], L[1], L[2], 255], Y = [0, 0.15, 0.22, 0.34, 0.6];
+      for (let k = 1; k < X.length; k++) if (v <= X[k]) return Y[k - 1] + (Y[k] - Y[k - 1]) * (v - X[k - 1]) / (X[k] - X[k - 1]);
+      return Y[Y.length - 1];
     }
-    /* La ligne de résumé au-dessus du ruban — celle que le cartouche de la
-       carte portait : DEP → ARR · distance · durée · TKO hh:mmZ · FL de
-       croisière atteint · pire classe rencontrée, dans sa couleur. Pendant
-       le calcul (squelette) la pire classe n'est pas connue : la ligne
-       s'écrit sans elle. */
+    const turbY = (v, res) => turbEdrOf(v, res) * 100;
+    /* Le texte d'une valeur : « 0.18 », ou « < 0.10 » sous le plancher de
+       publication — l'octet à zéro veut dire « rien à signaler », pas un
+       EDR nul. */
+    function turbEdrLabel(v, res) {
+      const enc = (res && res.enc) || {}, floor = enc.unit === "edr100" && enc.floor > 0 ? enc.floor / (enc.per_edr || 100) : 0;
+      const e = turbEdrOf(v, res);
+      return !(e >= 0) ? "—" : floor && e < floor ? "< " + floor.toFixed(2) : e.toFixed(2);
+    }
+    /* La série relue du stockage porte des null (JSON n'a pas de NaN) : on
+       les ramène en NaN — `null >= 0` est vrai en JavaScript, un zéro
+       fantôme dessinerait une courbe à plat là où rien n'a été lu. */
+    function turbSerFix(res) {
+      if (res && res.ser && !res.serFixed) { for (const p of res.ser) for (let k = 4; k <= 6; k++) if (p[k] == null) p[k] = NaN; res.serFixed = true; }
+      return res;
+    }
+    /* La légende, avec les seuils de l'index en EDR × 100 — rien en dur. */
+    function turbRenderLegend(res) {
+      const L = res && res.levels, n = k => Math.round(turbY(L[k], res));
+      const items = [[0, L ? `Smooth < ${n(0)}` : "Smooth"], [1, L ? `Light ${n(0)}–${n(1)}` : "Light"],
+                     [2, L ? `Moderate ${n(1)}–${n(2)}` : "Moderate"], [3, L ? `Severe ≥ ${n(2)}` : "Severe"]];
+      $("#turbLegend").innerHTML = items.map(([c, t]) => `<span style="--k:${TURB_COL[c]}">${t}</span>`).join("")
+        + `<span class="band">Grey band: worst neighbouring cell, other forecast hour</span><span class="hatch">Hatched: below FL100, grid silent</span>`
+        + (L ? `<span class="unit">EDR × 100, medium jet</span>` : "");
+    }
+    function turbRenderChart(res, skeleton) {
+      const box = $("#turbChart"), tip = $("#turbTip");
+      turbSerFix(res);
+      turbLastRes = res; turbCursorI = -1;
+      $("#turbDetail").replaceChildren(); $("#turbList").innerHTML = "";
+      tip.hidden = true;
+      turbRenderHead(res, skeleton);
+      turbRenderLegend(res);
+      if (!res) { box.querySelectorAll("svg").forEach(s => s.remove()); box.classList.remove("loading"); box.__geo = null; return; }
+      const route = res.cfg.dep + res.cfg.arr;
+      if (skeleton && box.dataset.route === route && box.querySelector("svg")) { box.classList.add("loading"); return; }
+      box.classList.remove("loading"); box.dataset.route = route;
+      const W = Math.max(320, Math.round(box.clientWidth) || 640), H = W < 480 ? 250 : 300;
+      const L = 44, R = 14, T = 26, B = 48, PW = W - L - R, PH = H - T - B;
+      const total = Math.max(res.total, 1), t0 = res.cfg.t0, S = res.ser || [];
+      const lv = (res.levels || TURB_LEVELS).map(l => turbY(l, res));
+      let ymax = 60;
+      for (const p of S) { const y = turbY(p[6], res); if (y > ymax - 6) ymax = Math.min(100, Math.ceil((y + 6) / 10) * 10); }
+      const X = t => L + t / total * PW, Y = y => T + (1 - Math.min(y, ymax) / ymax) * PH, F = n => n.toFixed(1);
+      let g = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><defs><pattern id="turbHatch" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)"><line class="hatch-line" x1="0" y1="0" x2="0" y2="7"/></pattern></defs>`;
+      // Les bandes de classe, teintées, leur nom au bord droit, la réglette
+      // de couleur au bord gauche — le gris du calme dessous. L'avion de la
+      // descente, souvent près du bord droit, descend alors sous le nom.
+      const edges = [lv[0], lv[1], lv[2], ymax], names = ["light", "moderate", "severe"];
+      const top = res.top, iToc = S.findIndex(p => p[2] >= top - 1);
+      let iTod = -1;
+      for (let i = S.length - 1; i >= 0; i--) if (S[i][2] >= top - 1) { iTod = i; break; }
+      const xToc = iToc >= 0 && !skeleton ? X(S[iToc][0]) : -1, xTod = iTod >= 0 && !skeleton ? X(S[iTod][0]) : -1;
+      const planeY = x => x > W - R - 90 ? T + 24 : T + 9;
+      g += `<rect class="strip" x="${L}" y="${F(Y(lv[0]))}" width="5" height="${F(Y(0) - Y(lv[0]))}" style="fill:${TURB_COL[0]};fill-opacity:.45"/>`;
+      for (let k = 0; k < 3 && edges[k] < ymax; k++) {
+        const y1 = Y(Math.min(edges[k + 1], ymax)), y2 = Y(edges[k]);
+        g += `<rect class="tint" x="${L}" y="${F(y1)}" width="${PW}" height="${F(y2 - y1)}" style="fill:${TURB_COL[k + 1]}"/>`;
+        g += `<rect class="strip" x="${L}" y="${F(y1)}" width="5" height="${F(y2 - y1)}" style="fill:${TURB_COL[k + 1]}"/>`;
+        if (y2 - y1 >= 13) g += `<text class="cls-lbl" x="${W - R - 4}" y="${F(y1 + 10)}" text-anchor="end">${names[k]}</text>`;
+      }
+      // La grille : un trait fin tous les 10, le chiffre à gauche ; les
+      // seuils dans leur couleur.
+      for (let y = 0; y <= ymax; y += 10) g += `<line class="grid" x1="${L}" x2="${W - R}" y1="${F(Y(y))}" y2="${F(Y(y))}"/><text class="ax" x="${L - 8}" y="${F(Y(y) + 4)}" text-anchor="end">${y}</text>`;
+      for (let k = 0; k < 3; k++) if (lv[k] < ymax) g += `<line class="lvl" x1="${L}" x2="${W - R}" y1="${F(Y(lv[k]))}" y2="${F(Y(lv[k]))}" style="stroke:${TURB_COL[k + 1]}"/>`;
+      g += `<text class="ax" x="${L}" y="${T - 9}" text-anchor="start">EDR × 100</text>`;
+      if (!skeleton && S.length > 1) {
+        // Sous FL100 et hors grille : hachures sur toute la hauteur.
+        for (let i = 0, a = -1; i <= S.length; i++) {
+          const off = i < S.length && S[i][7] < 0;
+          if (off && a < 0) a = i;
+          if (!off && a >= 0) { const x1 = X(S[a][0]), x2 = X(S[Math.min(i, S.length - 1)][0]); g += `<rect x="${F(x1)}" y="${T}" width="${F(Math.max(1, x2 - x1))}" height="${PH}" fill="url(#turbHatch)"/>`; a = -1; }
+        }
+        // Montée et descente : un trait fin là où la croisière commence et
+        // finit, un avion au sommet, nez en l'air puis nez en bas.
+        for (const [x, up] of [[xToc, true], [xTod, false]]) {
+          if (x < 0) continue;
+          const px = Math.max(L + 7, Math.min(W - R - 7, x + (up ? -9 : 9)));
+          g += `<line class="toc" x1="${F(x)}" x2="${F(x)}" y1="${T}" y2="${T + PH}"/><path class="plane" d="${TURB_PLANE}" transform="translate(${F(px)} ${planeY(x)}) rotate(${up ? 45 : 135})"/>`;
+        }
+        // L'enveloppe, de lo à hi, en gris ; coupée là où rien n'est lu.
+        let hiP = [], loP = [];
+        const band = () => { if (hiP.length > 1) g += `<path class="band" d="M${hiP.join("L")}L${loP.reverse().join("L")}Z"/>`; hiP = []; loP = []; };
+        for (const p of S) {
+          if (!(p[4] >= 0)) { band(); continue; }
+          hiP.push(`${F(X(p[0]))} ${F(Y(turbY(p[6], res)))}`); loP.push(`${F(X(p[0]))} ${F(Y(turbY(p[5], res)))}`);
+        }
+        band();
+        // La courbe, par tronçons de classe : chaque tronçon reprend au
+        // point précédent, pas de trou au changement de couleur.
+        let run = null, last = null;
+        const close = () => { if (run && run.pts.length > 1) g += `<path class="curve" d="M${run.pts.join("L")}" style="stroke:${TURB_COL[run.c]}"/>`; run = null; };
+        for (const p of S) {
+          if (!(p[4] >= 0)) { close(); last = null; continue; }
+          const pt = `${F(X(p[0]))} ${F(Y(turbY(p[4], res)))}`;
+          if (run && run.c !== p[7]) { close(); run = { c: p[7], pts: [last] }; }
+          if (!run) run = { c: p[7], pts: [] };
+          run.pts.push(pt); last = pt;
+        }
+        close();
+        // Le pic : un point cerclé de la couleur du fond, sa valeur à côté.
+        const pk = res.peak >= 0 && S[res.peak];
+        if (pk && pk[4] >= 0) {
+          const x = X(pk[0]), y = Y(turbY(pk[4], res)), c = Math.max(0, pk[7]), left = x > L + PW * 0.62;
+          g += `<circle class="peak" cx="${F(x)}" cy="${F(y)}" r="4" style="fill:${TURB_COL[c]}"/>`;
+          g += `<text class="ax strong" x="${F(x + (left ? -9 : 9))}" y="${F(Math.max(T + 10, y - 9))}" text-anchor="${left ? "end" : "start"}">EDR ${turbEdrLabel(pk[4], res)} · ${TURB_NAMES[c]}</text>`;
+        }
+      }
+      // L'axe des heures de vol : des repères à des minutes rondes, six au
+      // plus (quatre sur un écran étroit), H+ dessus, heure Z dessous ; les
+      // codes des terrains aux deux bouts.
+      const maxTicks = W < 480 ? 4 : 6;
+      const step = [5, 10, 15, 20, 30, 60, 90, 120, 180, 240, 360].find(s => total / s <= maxTicks) || 480;
+      const tick = (m, anchor) => {
+        const x = X(m);
+        g += `<line class="grid" x1="${F(x)}" x2="${F(x)}" y1="${F(Y(0))}" y2="${F(Y(0) + 4)}"/>`;
+        g += `<text class="ax${anchor === "middle" ? "" : " strong"}" x="${F(x)}" y="${T + PH + 16}" text-anchor="${anchor}">${turbHPlus(m)}</text>`;
+        g += `<text class="ax" x="${F(x)}" y="${T + PH + 29}" text-anchor="${anchor}">${turbHM(t0 + m * 60e3)}Z</text>`;
+      };
+      tick(0, "start");
+      for (let m = step; m < total - step * (W < 480 ? 0.7 : 0.45); m += step) tick(m, "middle");
+      tick(total, "end");
+      g += `<text class="ax strong" x="${L}" y="${T + PH + 43}" text-anchor="start">${esc(res.cfg.dep)}</text><text class="ax strong" x="${W - R}" y="${T + PH + 43}" text-anchor="end">${esc(res.cfg.arr)}</text>`;
+      // Le curseur, caché tant que rien n'est lu, et la zone de saisie.
+      g += `<g class="cur off"><line class="cursor" x1="0" x2="0" y1="${T}" y2="${T + PH}"/><circle class="cursor-dot" r="4.5"/></g><rect x="${L}" y="${T}" width="${PW}" height="${PH}" fill="transparent"/></svg>`;
+      box.querySelectorAll("svg").forEach(s => s.remove());
+      box.insertAdjacentHTML("afterbegin", g);
+      box.__geo = { X, Y, L, PW, T, PH, total, W };
+      if (!skeleton) { turbRenderList(res); if (turbPinned >= 0) turbTipAt(turbPinned, true); }
+    }
+    /* La ligne de résumé au-dessus du graphique — celle que le cartouche de
+       la carte portait : DEP → ARR · distance · durée · TKO hh:mmZ · FL de
+       croisière atteint · pic d'EDR et sa classe, dans sa couleur, et quand.
+       Pendant le calcul (squelette) le pic n'est pas connu : la ligne
+       s'écrit sans lui. */
     function turbRenderHead(res, skeleton) {
       const el = $("#turbHead");
       if (!res) { el.innerHTML = ""; return; }
       const c = res.cfg, A = GEO && GEO[c.dep], B = GEO && GEO[c.arr];
       const dist = res.dist != null ? res.dist : A && B ? gcDistNM(A, B) : null;
       const top = res.top != null ? res.top : c.fl * 100;
+      const pk = res.peak >= 0 && res.ser && res.ser[res.peak];
       const worst = skeleton ? `<span class="muted">reading the grid…</span>`
-        : res.max >= 1 ? `<span class="k${res.max}">worst ${TURB_NAMES[res.max]}</span>`
-        : res.max === 0 ? `<span class="k0">smooth all along</span>`
+        : pk && pk[4] >= 0 ? `<span class="k${Math.max(0, pk[7])}">peak EDR ${turbEdrLabel(pk[4], res)} · ${TURB_NAMES[Math.max(0, pk[7])]}</span> <span class="muted">at ${turbHPlus(pk[0])}</span>`
         : res.max === -1 ? `<span class="muted">below FL100 all along</span>`
         : `<span class="muted">no grid on this route</span>`;
       el.innerHTML = `${esc(c.dep)} → ${esc(c.arr)}${dist != null ? ` · ${Math.round(dist)} NM` : ""} · ${turbDur(res.total)}`
         + ` · TKO ${turbHM(c.t0)}Z · FL${Math.round(top / 100)} · ${worst}`;
     }
-    const turbClsLbl = c => (TURB_NAMES[c] || "no data").replace(/^./, ch => ch.toUpperCase());
-    function turbShowDetail(res, i) {
-      const e = res.events[i], end = i + 1 < res.events.length ? res.events[i + 1].t : res.total, t0 = res.cfg.t0;
-      [...$("#turbBar").children].forEach((el, k) => el.classList.toggle("on", k === i));
-      const lat = `${Math.abs(e.lat).toFixed(1)}°${e.lat >= 0 ? "N" : "S"}`, lon = `${Math.abs(e.lon).toFixed(1)}°${e.lon >= 0 ? "E" : "W"}`;
-      const lvl = e.fl ? `FL${e.fl}` : `${Math.round(e.alt / 100) * 100} ft`;
-      const why = e.cls === -1 ? "the grid starts at FL100 — nothing is said below"
-        : e.cls === -2 ? "outside the area covered by the grid, or file missing"
-        : `GFS grid read at the nearest level, worst of the two forecast hours around each minute`;
-      $("#turbDetail").innerHTML = `<b>${turbHPlus(e.t)} → ${turbHPlus(end)} · ${turbHM(t0 + e.t * 60e3)}Z–${turbHM(t0 + end * 60e3)}Z · ${lvl}</b>`
-        + ` <span class="muted">${lat} ${lon} · ${Math.round(e.d)} NM from ${esc(res.cfg.dep)}</span><br><b>${turbClsLbl(e.cls)}</b> <span class="muted">— ${why}</span>`;
+    /* La minute la plus proche du pointeur (abscisse en pixels de page). */
+    function turbNearestI(box, clientX) {
+      const geo = box.__geo, res = turbLastRes;
+      if (!geo || !res || !res.ser || !res.ser.length) return -1;
+      const rect = box.getBoundingClientRect(), x = (clientX - rect.left) * geo.W / Math.max(1, rect.width);
+      const t = Math.min(geo.total, Math.max(0, (x - geo.L) / geo.PW * geo.total));
+      let best = 0;
+      for (let i = 1; i < res.ser.length; i++) if (Math.abs(res.ser[i][0] - t) < Math.abs(res.ser[best][0] - t)) best = i;
+      return best;
+    }
+    /* La lecture d'une minute : le curseur s'y aligne, la bulle la raconte —
+       heure, niveau, EDR et classe, le pire à côté, position, échéances
+       lues — en texte (textContent, rien d'interpolé dans du HTML). `pin`
+       la recopie dans le cartouche sous le graphique. */
+    function turbTipAt(i, pin) {
+      const box = $("#turbChart"), res = turbLastRes, geo = box.__geo, tip = $("#turbTip"), cur = box.querySelector(".cur");
+      if (!res || !geo || !(i >= 0) || !res.ser || !res.ser[i]) { tip.hidden = true; if (cur) cur.classList.add("off"); return; }
+      turbCursorI = i;
+      const p = res.ser[i], x = geo.X(p[0]), e = turbEdrOf(p[4], res), hi = turbEdrOf(p[6], res), c = p[7];
+      if (cur) {
+        cur.classList.remove("off");
+        const ln = cur.querySelector("line"), dot = cur.querySelector("circle");
+        ln.setAttribute("x1", x); ln.setAttribute("x2", x);
+        if (e >= 0) { dot.setAttribute("cx", x); dot.setAttribute("cy", geo.Y(e * 100)); dot.style.fill = TURB_COL[Math.max(0, c)]; dot.style.display = ""; }
+        else dot.style.display = "none";
+      }
+      tip.replaceChildren();
+      const line = (txt, cls) => { const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = txt; tip.appendChild(d); return d; };
+      line(`${turbHPlus(p[0])} · ${turbHM(res.cfg.t0 + p[0] * 60e3)}Z · ${p[3] ? "FL" + p[3] : Math.round(p[2] / 100) * 100 + " ft"}`, "t");
+      if (c === -1) line("Below FL100 — the grid says nothing here", "v");
+      else if (!(e >= 0)) line("No grid data — outside the covered area, or file missing", "v");
+      else {
+        const v = line("", "v"), dot = document.createElement("span");
+        dot.className = "dot"; dot.style.background = TURB_COL[Math.max(0, c)]; v.appendChild(dot);
+        v.appendChild(document.createTextNode(`EDR ${turbEdrLabel(p[4], res)} — ${TURB_NAMES[c]}`));
+        const ch = turbClassOf(p[6], res.levels);
+        if (ch > c || hi - e >= 0.05) line(`Nearby up to ${turbEdrLabel(p[6], res)} (${TURB_NAMES[ch]}) — a neighbouring cell or the other forecast hour`);
+      }
+      const A = GEO && GEO[res.cfg.dep], B = GEO && GEO[res.cfg.arr];
+      if (A && B && res.dist) { const q = gcPoint(A, B, Math.min(1, p[1] / res.dist)); line(`${Math.abs(q.lat).toFixed(1)}°${q.lat >= 0 ? "N" : "S"} ${Math.abs(q.lon).toFixed(1)}°${q.lon >= 0 ? "E" : "W"} · ${Math.round(p[1])} NM from ${res.cfg.dep}`); }
+      if (p[8] != null && res.run) line(`GFS ${turbP2(new Date(Date.parse(res.run)).getUTCHours())}Z run · forecast ${p[9] == null || p[9] === p[8] ? "+" + p[8] + " h" : "+" + p[8] + " to +" + p[9] + " h"}`);
+      tip.hidden = false;
+      const rect = box.getBoundingClientRect(), px = x * rect.width / geo.W, tw = tip.offsetWidth || 200;
+      tip.style.left = (px + 14 + tw > rect.width - 6 ? Math.max(4, px - 14 - tw) : px + 14) + "px";
+      if (pin) $("#turbDetail").replaceChildren(...[...tip.childNodes].map(n => n.cloneNode(true)));
     }
     /* Les épisodes (turbEpisodes) : une plage continue de turbulence, avec
-       son début, sa durée, sa pire classe, ses niveaux et sa distance. Un
-       light de moins de trois minutes est une case effleurée : sur la barre
-       oui, dans la liste non. */
+       son début, sa durée, sa pire classe, son pic d'EDR, ses niveaux et sa
+       distance. Un light de moins de trois minutes est une case effleurée :
+       sur la courbe oui, dans la liste non. */
     function turbRenderList(res) {
-      const box = $("#turbList"), t0 = res.cfg.t0;
-      const eps = turbEpisodes(res).filter(e => e.cls >= 2 || e.t1 - e.t0 >= 3);
+      const box = $("#turbList"), t0 = res.cfg.t0, S = res.ser || [];
+      const eps = turbEpisodes({ events: res.events, total: res.total, dist: res.dist, pts: S.map(p => ({ t: p[0], v: p[4] })) })
+        .filter(e => e.cls >= 2 || e.t1 - e.t0 >= 3);
       if (!eps.length) {
         box.innerHTML = `<div class="turb-none">${res.max === 0 ? "Smooth all along at this level and time." : res.max === -1 ? "The whole flight stays below FL100: the grid says nothing." : res.max === -2 ? "No grid data along this route (outside the covered area)." : "Only brushes of light turbulence, none longer than three minutes."}</div>`;
         return;
       }
-      box.innerHTML = eps.map((e, i) => `<div class="turb-ev k${e.cls}" data-i="${i}"><span class="t">${turbHPlus(e.t0)} · ${turbHM(t0 + e.t0 * 60e3)}Z</span><span class="k">${TURB_NAMES[e.cls]}</span><span>${e.t1 - e.t0 >= 1.5 ? `for ${Math.round(e.t1 - e.t0)} min · ` : ""}FL${e.flMin}${e.flMax !== e.flMin ? `–${e.flMax}` : ""} · ${Math.round(e.d0)} NM from ${esc(res.cfg.dep)}</span></div>`).join("");
-      // Une ligne touchée éclaire son début sur la barre.
+      box.innerHTML = eps.map((e, i) => `<div class="turb-ev k${e.cls}" data-i="${i}"><span class="t">${turbHPlus(e.t0)} · ${turbHM(t0 + e.t0 * 60e3)}Z</span><span class="k">${TURB_NAMES[e.cls]}</span><span>${e.vMax >= 0 ? `EDR up to ${turbEdrLabel(e.vMax, res)} · ` : ""}${e.t1 - e.t0 >= 1.5 ? `for ${Math.round(e.t1 - e.t0)} min · ` : ""}FL${e.flMin}${e.flMax !== e.flMin ? `–${e.flMax}` : ""} · ${Math.round(e.d0)} NM from ${esc(res.cfg.dep)}</span></div>`).join("");
+      // Une ligne touchée pose le curseur sur le pic de son épisode.
       box.querySelectorAll(".turb-ev").forEach(row => {
         row.onclick = () => {
           const e = eps[+row.dataset.i];
           box.querySelectorAll(".turb-ev").forEach(r => r.classList.toggle("on", r === row));
-          const i = res.events.findIndex(ev => ev.t >= e.t0 - 1e-6 && ev.cls >= 1);
-          if (i >= 0) turbShowDetail(res, i);
+          let best = -1;
+          S.forEach((p, i) => { if (p[0] >= e.t0 && p[0] < e.t1 && p[4] >= 0 && (best < 0 || p[4] > S[best][4])) best = i; });
+          if (best >= 0) { turbPinned = best; turbTipAt(best, true); }
         };
       });
     }
@@ -25989,9 +26224,9 @@ function dtsAUnQfu(icao){
       const st = $("#turbStatus"), token = ++turbToken;
       st.classList.remove("err");
       const A = GEO && GEO[turbCfg.dep], B = GEO && GEO[turbCfg.arr];
-      if (!A || !B) { st.textContent = "Type a departure and an arrival aerodrome."; turbRenderBar(null); return; }
-      if (turbCfg.dep === turbCfg.arr) { st.textContent = "Departure and arrival are the same aerodrome."; turbRenderBar(null); return; }
-      if (!(turbCfg.fl >= 30)) { st.textContent = "Type a cruise flight level."; turbRenderBar(null); return; }
+      if (!A || !B) { st.textContent = "Type a departure and an arrival aerodrome."; turbRenderChart(null); return; }
+      if (turbCfg.dep === turbCfg.arr) { st.textContent = "Departure and arrival are the same aerodrome."; turbRenderChart(null); return; }
+      if (!(turbCfg.fl >= 30)) { st.textContent = "Type a cruise flight level."; turbRenderChart(null); return; }
       const cfg = { ...turbCfg };
       const dist = gcDistNM(A, B);
       const prof = turbProfile(dist, cfg.fl * 100);
@@ -26000,7 +26235,9 @@ function dtsAUnQfu(icao){
       // ce n'est plus un vent, c'est une autre machine.
       const k = Math.max(0.5, Math.min(2, ((cfg.t1 - cfg.t0) / 60e3) / Math.max(prof.total, 1)));
       if (Math.abs(k - 1) > 0.01) { prof.pts = prof.pts.map(([t, d, alt]) => [t * k, d, alt]); prof.total *= k; }
-      turbRenderBar({ events: [{ t: 0, cls: -2 }], total: prof.total, top: prof.top, dist, cfg }, true);
+      turbRenderChart({ events: [], ser: [], total: prof.total, top: prof.top, dist, cfg, peak: -1, max: -2,
+                        levels: mapTurbIndex ? mapTurbLevels(mapTurbIndex) : null,
+                        enc: mapTurbIndex && mapTurbIndex.encoding ? { unit: mapTurbIndex.encoding.unit, per_edr: mapTurbIndex.encoding.per_edr, floor: mapTurbIndex.encoding.floor } : null }, true);
       st.textContent = "Loading the turbulence grid…";
       try {
         const index = await mapTurbIndexGet();
@@ -26016,10 +26253,18 @@ function dtsAUnQfu(icao){
         }
         await Promise.all([...need.values()].map(([fl, fh]) => mapTurbFile(index, fl, fh).catch(() => null)));
         if (token !== turbToken) return;
-        const clsOf = (fl, fh) => mapTurbCache.get(turbKey(fl, fh)) || null;
-        const P = turbSampleProfile(prof, A, B, index, cfg.t0, fls, clsOf);
-        const res = { events: P.events, total: P.total, top: P.top, dist: P.dist, max: P.max, cfg, run: index.run, at: Date.now() };
-        turbRenderBar(res);
+        const entOf = (fl, fh) => mapTurbCache.get(turbKey(fl, fh)) || null;
+        const levels = mapTurbLevels(index);
+        const P = turbSampleProfile(prof, A, B, index, cfg.t0, fls, entOf, levels);
+        // La série par minute, arrondie, pour la courbe et pour le stockage :
+        // [t min, d NM, alt ft, FL, valeur au centre, lo, hi, classe, h0, h1].
+        const r1 = x => x >= 0 ? Math.round(x * 10) / 10 : NaN;
+        const ser = P.pts.map(p => [Math.round(p.t * 100) / 100, Math.round(p.d * 10) / 10, p.alt, p.fl, r1(p.v), r1(p.lo), r1(p.hi), p.cls,
+                                    p.hours ? p.hours[0] : null, p.hours ? p.hours[p.hours.length - 1] : null]);
+        const enc = index.encoding ? { unit: index.encoding.unit, per_edr: index.encoding.per_edr, floor: index.encoding.floor } : null;
+        const res = { events: P.events, ser, total: P.total, top: P.top, dist: P.dist, max: P.max, peak: P.peak, levels, enc, cfg, run: index.run, at: Date.now() };
+        turbPinned = -1;
+        turbRenderChart(res);
         const runMs = Date.parse(index.run), lastMs = runMs + Math.max(...index.hours) * 3600e3;
         const cell = index.grid && index.grid.dlon ? ` · ${index.grid.dlon}° cells` : "";
         st.textContent = `GFS ${turbP2(new Date(runMs).getUTCHours())}Z run${cell} · forecasts to ${turbHM(lastMs)}Z ${turbDateLbl(lastMs)}`
@@ -26034,7 +26279,8 @@ function dtsAUnQfu(icao){
         st.textContent = `Turbulence grid unavailable — ${e.message}.`;
         const saved = store.get(TURB_KEY);
         if (saved && saved.res && saved.cfg && saved.cfg.dep === cfg.dep && saved.cfg.arr === cfg.arr) {
-          turbRenderBar(saved.res);
+          turbPinned = -1;
+          turbRenderChart(saved.res);
           st.textContent += ` Showing the copy stored ${turbHM(saved.res.at)}Z for a ${turbHM(saved.cfg.t0)}Z departure.`;
         }
       }
@@ -26065,6 +26311,29 @@ function dtsAUnQfu(icao){
     $("#turbHome").onclick = () => { closeTurb(); closeWx(); };
     $("#turbThemeBtn").onclick = () => $("#themeBtn").click();
     $("#turbGo").onclick = () => turbCompute();
+    /* Le graphique se lit au pointeur (survol : la bulle suit ; clic ou tap :
+       la lecture s'épingle dans le cartouche), au clavier (flèches : cinq
+       minutes ; Home, End) — et se redessine à la largeur de l'écran. Le
+       doigt qui glisse ne déclenche rien : il fait défiler la page. */
+    {
+      const box = $("#turbChart");
+      box.addEventListener("pointermove", e => { if (e.pointerType !== "touch") turbTipAt(turbNearestI(box, e.clientX), false); });
+      box.addEventListener("pointerleave", () => turbTipAt(turbPinned, false));
+      box.addEventListener("click", e => { const i = turbNearestI(box, e.clientX); if (i >= 0) { turbPinned = i; turbTipAt(i, true); } });
+      box.addEventListener("keydown", e => {
+        const res = turbLastRes;
+        if (!res || !res.ser || !res.ser.length) return;
+        const n = res.ser.length, st = e.key === "ArrowLeft" ? -5 : e.key === "ArrowRight" ? 5 : e.key === "Home" ? -n : e.key === "End" ? n : 0;
+        if (!st) return;
+        e.preventDefault();
+        turbPinned = Math.max(0, Math.min(n - 1, (turbCursorI < 0 ? 0 : turbCursorI) + st));
+        turbTipAt(turbPinned, true);
+      });
+      addEventListener("resize", () => {
+        clearTimeout(turbResizeT);
+        turbResizeT = setTimeout(() => { if (turbLastRes && !$("#turbScreen").hidden) turbRenderChart(turbLastRes, false); }, 150);
+      });
+    }
     ["#turbDep", "#turbArr"].forEach(sel => {
       const el = $(sel);
       el.oninput = () => {

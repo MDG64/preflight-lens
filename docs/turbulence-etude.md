@@ -403,6 +403,9 @@ FL340/h006.png      PNG gris 8 bits, un octet par point, du nord au sud et
                     d'ouest en est ; sa grille dans un chunk tEXt « turb »
 ```
 
+**Depuis le 2026-09-05 l'octet est l'EDR × 100 (voir §9) ; le paragraphe
+qui suit décrit le format du 04/09, remplacé.**
+
 **Depuis le 2026-09-04, le fichier porte la VALEUR de l'indice, plus une
 classe** : l'octet vaut TI1 (en 10⁻⁷ s⁻²) × 16, tronqué au pas de 16
 (1 × 10⁻⁷ : seize niveaux, quatre par classe), plafonné à 240 et mis à
@@ -485,8 +488,123 @@ surcouche (§1) ; profil par type avion (vitesses et taux depuis
 `aircraft-db.js`) et heure de décollage libre ; calibration des
 seuils Ellrod contre quelques journées de SIGMET et de retours pilotes.
 
+## 9. Calibration en EDR et courbe du vol (2026-09-05)
+
+### 9.1 Le constat : du « severe » partout où turbli voit du light
+
+Sur CDG → EWR, turbli titrait « Just some light turbulence, smooth
+flight ! » avec un pic d'EDR × 100 à 18 vers H+3 ; la page Turbulence de
+Preflight Lens annonçait du severe sur la même route. Mesuré le 2026-09-05
+sur la grille publiée (run du 04/09 18Z, h012, couloir 20–70°N) :
+
+| Niveau | light ou plus | moderate ou plus | severe |
+|---|---|---|---|
+| FL340, seuils Ellrod 4/8/12 | 25,6 % | 9,6 % | 4,5 % |
+| Climatologie EDR in situ (Sharman et al. 2014, > 20 kft) | ≈ 4 % (EDR ≥ 0,15) | ≈ 0,8 % (≥ 0,22) | ≈ 0,09 % (≥ 0,34) |
+
+Soit dix fois trop de moderate et cinquante fois trop de severe. Trois
+causes, mesurées :
+
+1. **Les seuils Ellrod de 1992** (4/8/12 × 10⁻⁷ s⁻²) ont été établis sur
+   un modèle à ~80 km de maille. À 0,25° les dérivées horizontales sont
+   bien plus fortes : la médiane de TI1 en croisière est à 1,35 × 10⁻⁷, le
+   99ᵉ centile à 19, le 99,9ᵉ à 44. Une fois calibré (§9.3), l'ancien
+   « severe » de 12 × 10⁻⁷ vaut un EDR de 0,16 : à peine light.
+2. **Le rejeu majorait deux fois** : pire des neuf cases autour du point
+   ET pire des deux échéances encadrantes, en classes. Sur CDG → EWR (run
+   00Z du 05/09, décollage h012), cette lecture donne 24 min de severe,
+   la lecture au centre (bilinéaire, linéaire en temps) 19 min de light,
+   pic 0,18 à H+3:17 — la courbe de turbli.
+3. **Le proxy convectif** (CAPE ≥ 1 000 J/kg et pluie convective ≥ 0,04 mm/h)
+   couvrait 3 à 4 % du couloir 20–70°N, autant que la CAT elle-même ; à
+   1 mm/h il en couvre 0,7 à 1 %, la taille de vraies cellules.
+
+### 9.2 Ce que fait turbli (FAQ, Sources, Turbulence levels — 2026-09-05)
+
+- Données : les prévisions de turbulence, de vent et TAF de la NOAA/NWS
+  (GTG : le GTG à 3 km sur les États-Unis, le GTG mondial du WAFS
+  ailleurs), les orages du Met Office ; mise à jour toutes les 6 h ;
+  « la donnée présentée n'est pas égale à la sortie officielle ».
+- Route : le plan de vol déposé pour les vols américains (disponible
+  ~90 min avant), sinon la route du vol précédent de même numéro, sinon
+  la géodésique avec une altitude estimée. La courbe est l'EDR le long de
+  cette route à l'heure et au niveau de chaque point.
+- Échelle (EDR × 100) : light 0–20, moderate 20–40, mod-sev 40–60, severe
+  60–80, extreme 80–100 ; « calibrée » par masse alaire et vitesse de
+  l'avion. Les orages sont présentés à part et ne relèvent pas l'EDR.
+- Le GTG lui-même (Sharman & Pearson 2017, JAMC 56) : chaque diagnostic D
+  est ramené en EDR par une correspondance log-normale,
+  `ln EDR = C1 + C2 · (ln D − ⟨ln D⟩) / SD(ln D)`, avec C1 = −2,953 et
+  C2 = 0,602 (moyenne et écart-type de ln EDR in situ au-dessus de
+  20 000 ft), puis une moyenne d'ensemble de diagnostics ; seuils pour un
+  avion moyen (B737/A320) : light 0,15, moderate 0,22, severe 0,34.
+
+### 9.3 Ce qui a changé
+
+**Serveur (`tools/turb/build_turb.py`)** : TI1 est converti en EDR par la
+correspondance log-normale ci-dessus. ⟨ln TI1⟩ et SD(ln TI1) sont mesurés
+sur NOTRE grille (0,25°, différences centrées), pondérés par cos(lat),
+|lat| ≤ 85°, sur quatre cycles GFS (03/09 06Z f024, 04/09 12Z f012, 05/09
+00Z f012 et f030 ; dispersion ±0,02 et ±0,012) : −15,82 / 1,169 pour
+FL240–FL450, −16,52 / 1,261 pour FL100–FL180. Ce sont des constantes, pas
+la statistique du cycle courant : normaliser chaque run effacerait la
+différence entre un jour calme et un jour agité. L'octet publié vaut
+EDR × 100 tronqué (15 = EDR ≥ 0,15 exactement), plafonné à 255, zéro sous
+0,10 ; seuils 15/22/34 ; relèvement convectif 18/28/45 sous CAPE ≥ 1 000 /
+2 000 avec pluie convective ≥ 1 mm/h, 45 sous REFC ≥ 40 dBZ. L'index
+publie `encoding.unit = "edr100"`, `floor`, `levels` et la calibration
+(`encoding.calib`). Mesuré après (run 00Z du 05/09, h012, 20–70°N) :
+
+| FL | light ou plus | moderate ou plus | severe | fichier |
+|---|---|---|---|---|
+| FL240 | 3,2 % | 0,7 % | 0,09 % | 88 Ko |
+| FL340 | 6,7 % | 1,7 % | 0,28 % | 142 Ko |
+| FL390 | 5,8 % | 1,3 % | 0,15 % | 128 Ko |
+| FL450 | 0,9 % | 0,06 % | 0,00 % | 76 Ko |
+
+La moyenne FL240–FL450 (≈ 4,8 / 1,0 / 0,13 %) retombe sur la climatologie
+in situ ; les niveaux du jet (FL300–FL360) restent au-dessus, les niveaux
+hauts et bas en dessous — c'est la physique du cisaillement, pas un
+défaut. La calibration se refait avec `tools/turb/calib_ti1.py` (lecteur
+GRIB2 maison `grib2mini.py`, numpy + Pillow, sans eccodes : `fetch` un
+cycle, `stats` sur les cycles gardés).
+
+**Client (`notam-filter.html`)** : le rejeu lit la valeur AU CENTRE
+(`turbValueAt`, bilinéaire entre les quatre points de grille, linéaire en
+temps entre les deux échéances) et en tire la classe ; le pire des neuf
+points autour (`turbValueNear`) et la plus basse des deux échéances font
+l'ENVELOPPE, pas la classe. Le surlignage de la route sur la carte suit la
+même lecture. La page Turbulence trace la **courbe EDR du vol** en SVG
+(`turbRenderChart`) : heures de vol en abscisse (H+ et heure Z, codes des
+terrains aux bouts), EDR × 100 en ordonnée dans ses bandes teintées light /
+moderate / severe (seuils lus dans l'index, réglette de couleur à gauche,
+noms à droite), courbe colorée par la classe traversée, bande grise de
+l'enveloppe, hachures sous FL100, avions à la montée et à la descente,
+pic étiqueté ; survol, tap (épinglé dans le cartouche) et flèches du
+clavier lisent la minute (heure, FL, EDR et classe, pire à côté, position,
+échéances lues). Une valeur sous le plancher se dit « < 0.10 », pas
+« 0.00 ». La série par minute (~12 Ko) remplace les transitions dans la
+copie locale. Tests : `test/turb-grid.test.mjs` (bilinéaire, voisinage,
+rejeu, épisodes avec pic).
+
+### 9.4 Ce qui manque encore
+
+- Un seul diagnostic (TI1) là où le GTG en moyenne une dizaine, et rien
+  pour les ondes orographiques (MWT) : la calibration règle la fréquence,
+  pas la détection.
+- Les seuils sont ceux d'un avion moyen ; le décalage par catégorie
+  (léger, lourd) reste à brancher sur `aircraft-db.js`.
+- La bande grise est un étalement (voisinage, heure d'à côté), pas une
+  probabilité.
+- SIGMET TURB en surcouche (§1), toujours à poser.
+- Vérification : comparer quelques vols par jour à turbli, et le GTG CONUS
+  de l'AWC (public) à notre grille sur les États-Unis.
+
 ## Sources
 
+- Sharman & Pearson 2017, Prediction of Energy Dissipation Rates for Aviation Turbulence, Part I, JAMC 56 : https://doi.org/10.1175/JAMC-D-16-0205.1 (C1 = −2,953, C2 = 0,602 et seuils 0,15/0,22/0,34 cités par Kim et al., AMT 2021, https://amt.copernicus.org/preprints/amt-2021-161/)
+- Kim et al. 2018, Improvements in Nonconvective Aviation Turbulence Prediction for the WAFS, BAMS 99 : https://repository.library.noaa.gov/view/noaa/53661
+- turbli — FAQ, Sources, Turbulence levels : https://turbli.com/frequently-asked-questions/ · https://turbli.com/sources/ · https://turbli.com/turbulence-levels/
 - OpenSky REST API : https://openskynetwork.github.io/opensky-api/rest.html
 - adsb.lol OpenAPI : https://api.adsb.lol/api/openapi.json ; dumps https://github.com/adsblol/globe_history_2026
 - AeroAPI v4 (référence non officielle) : https://wal.sh/research/ads-b/aeroapi-reference.html
