@@ -32,7 +32,7 @@ async function chargerTurb() {
     + "\nexport { turbDecode, turbValFromCls, turbClassOf, turbPngParse, turbPngUnfilter, turbPngDecode, turbPickHour,"
     + " turbCatmull, turbResample, turbMercLat, turbLut, turbColorize,"
     + " gcDistNM, gcPoint, turbProfile, turbBracketHours, turbNearestFl, turbValueAt, turbValueNear, turbSampleProfile, turbEpisodes,"
-    + " sigUnwrap, sigPointIn, sigCovers, sigScan };";
+    + " sigUnwrap, sigPointIn, sigCovers, sigScan, sigRing, sigForLevel };";
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
 
@@ -454,4 +454,38 @@ test("sigScan rend les plages continues traversées, une par SIGMET, triées", a
   assert.deepEqual(sigScan([], pts, tko), []);
   assert.deepEqual(sigScan(null, pts, tko), []);
   assert.deepEqual(sigScan([CARRE], null, tko), []);
+});
+
+test("sigRing déroule le contour et le ramène auprès du centre de la carte", async () => {
+  const { sigRing } = await chargerTurb();
+  // Un carré ordinaire ne bouge pas quand la carte est centrée dessus.
+  assert.deepEqual(sigRing(CARRE.coords, 0), CARRE.coords);
+  // Une zone à cheval sur l'antiméridien : 178E, 178W, … sort en longitudes
+  // CONTINUES (178, 182, …), sinon le tracé barrerait l'écran.
+  const pacifique = [[10, 178], [10, -178], [-10, -178], [-10, 178]];
+  assert.deepEqual(sigRing(pacifique, 180).map(p => p[1]), [178, 182, 182, 178]);
+  // La même zone vue depuis une carte centrée sur −180 : le contour est
+  // translaté d'un tour entier pour tomber du bon côté de l'écran.
+  assert.deepEqual(sigRing(pacifique, -180).map(p => p[1]), [-182, -178, -178, -182]);
+  // Une zone européenne vue depuis une carte centrée sur l'Amérique reste où
+  // elle est : le tour ne se prend que s'il rapproche vraiment.
+  assert.deepEqual(sigRing(CARRE.coords, -70).map(p => p[1]), [-1, 1, 1, -1]);
+  assert.deepEqual(sigRing([], 0), []);
+  assert.deepEqual(sigRing(null, 0), []);
+});
+
+test("sigForLevel garde les bulletins dont la tranche et la validité contiennent le point de vue", async () => {
+  const { sigForLevel } = await chargerTurb();
+  const bas = { ...CARRE, id: "bas", base: 0, top: 10000 };
+  const haut = { ...CARRE, id: "haut", base: 30000, top: null };
+  const tot = { ...CARRE, id: "tot", base: null, top: null };
+  const liste = [CARRE, bas, haut, tot];
+  const t = T12 + 3600e3;
+  const ids = (alt, ms) => sigForLevel(liste, alt, ms).map(s => s.id);
+  assert.deepEqual(ids(34000, t), ["LFFF-B3", "haut", "tot"], "FL340 : le carré FL200-400, le sans-sommet, le sans-bornes");
+  assert.deepEqual(ids(5000, t), ["bas", "tot"]);
+  assert.deepEqual(ids(45000, t), ["haut", "tot"], "au-dessus du carré, mais dans le sans-sommet");
+  assert.deepEqual(ids(34000, T16 + 1), [], "après la validité, plus rien");
+  assert.deepEqual(ids(34000, T12 - 1), [], "avant la validité non plus");
+  assert.deepEqual(sigForLevel(null, 34000, t), []);
 });

@@ -4083,6 +4083,12 @@
     .mleg .sq.t1 { background: linear-gradient(90deg, rgba(255, 230, 80, .8) 50%, rgba(255, 198, 0, .85) 50%) }
     .mleg .sq.t2 { background: linear-gradient(90deg, rgba(255, 140, 0, .85) 50%, rgba(255, 88, 0, .9) 50%) }
     .mleg .sq.t3 { background: linear-gradient(90deg, rgba(236, 32, 44, .9) 50%, rgba(190, 0, 122, .92) 50%) }
+    /* Le SIGMET n'est pas une nuance de la nappe : hachures et contour, comme
+       sur la carte — un bulletin, pas un calcul. */
+    .mleg .sq.ts {
+      background: repeating-linear-gradient(45deg, rgba(255, 45, 64, .85) 0 1.5px, transparent 1.5px 5px);
+      border-color: #ff2d40;
+    }
 
     #mapOv:not(.turb-on) .map-turb-ctl,
     #mapOv.notam-mode .map-turb-ctl,
@@ -7896,7 +7902,8 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           <span class="mleg wx tb"><i class="sq t1"></i>Light turbulence at the chosen FL</span>
           <span class="mleg wx tb"><i class="sq t2"></i>Moderate turbulence</span>
           <span class="mleg wx tb"><i class="sq t3"></i>Severe turbulence</span>
-          <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), smoothed between its ~25 km grid points; darker shade = stronger — not an official aviation product</span>
+          <span class="mleg wx tb"><i class="sq ts"></i>SIGMET TURB in force at that level and hour — outlined and hatched</span>
+          <span class="mleg wx tb tbnote">GFS model index (clear air + convective proxy), smoothed between its ~25 km grid points; darker shade = stronger — not an official aviation product. The hatched areas are turbulence SIGMETs (NOAA/NWS AWC): forecasters' bulletins, drawn over the index and never merged into it.</span>
           <span class="mleg wx wd"><i class="wda f">⇡</i>Dashed — TAF forecast (+1/+2/+3 h)</span>
           <span class="mleg wx src">wx NOAA/NWS Aviation Weather Center</span>
           <span class="mleg nt"><i class="dot mgold"></i>NOTAM downloaded — readable offline</span>
@@ -8343,10 +8350,12 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <div class="hd-note">
           <b>SIGMET TURB</b> — international and US turbulence SIGMETs from the <a href="https://aviationweather.gov/data/api/"
             target="_blank" rel="noopener">NOAA/NWS Aviation Weather Center</a> (public domain), refreshed every few minutes.
-          On the Turbulence page they get <b>their own lane above the curve</b>: a SIGMET is a forecaster's bulletin, and it
-          is never averaged into the computed index — the flight is marked where it enters the polygon, between the
-          bulletin's own levels, during its validity. AIRMETs are deliberately left out: they cover whole regions for hours
-          and would light up every flight. An empty lane means no SIGMET crosses the flight, not that the air is smooth.
+          On the Turbulence page they get <b>their own lane above the curve</b>; on the map they are drawn <b>outlined and
+          hatched over the shading</b>, showing only the bulletins whose levels contain the chosen FL and whose validity
+          contains the displayed hour. A SIGMET is a forecaster's bulletin and is never averaged into the computed index —
+          the flight is marked where it enters the polygon, between the bulletin's own levels, during its validity.
+          AIRMETs are deliberately left out: they cover whole regions for hours and would light up every flight. Nothing
+          drawn means no SIGMET at that level and hour, not that the air is smooth.
         </div>
         <div class="hd-note">
           <b>FIR boundaries</b> — <a href="https://github.com/vatsimnetwork/vatspy-data-project"
@@ -19619,6 +19628,71 @@ function renderInfo(icao) {
         }
       }
 
+      // --- SIGMET de turbulence (même interrupteur, même FL, même heure) ---
+      // Les zones officielles PAR-DESSUS la nappe calculée, jamais fondues
+      // dedans : contour plein et hachures, la nappe et la carte se lisent au
+      // travers. Ne sont dessinés que les bulletins dont la tranche contient
+      // le FL du curseur et dont la validité contient l'heure de la grille
+      // affichée — le même instant que le cartouche, sinon les deux couches
+      // parleraient de deux moments différents. Le nom du bulletin ne s'écrit
+      // que si sa zone est assez large à l'écran pour le porter.
+      if (mapTurbOn && mapMode === "wx" && mapTurbShown && sigCache.list) {
+        const ms = Date.parse(mapTurbShown.run) + mapTurbShown.fh * 3600e3;
+        const vus = sigForLevel(sigCache.list, mapTurbShown.fl * 100, ms);
+        if (vus.length) {
+          ctx.save();
+          ctx.lineJoin = "round";
+          const posees = [];                 // les étiquettes déjà écrites, pour ne pas les empiler
+          for (const s of vus) {
+            const ring = sigRing(s.coords, v.cx);
+            if (ring.length < 3) continue;
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            ctx.beginPath();
+            for (let i = 0; i < ring.length; i++) {
+              const x = X(ring[i][1]), y = Y(ring[i][0]);
+              if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+              if (x < x0) x0 = x; if (x > x1) x1 = x;
+              if (y < y0) y0 = y; if (y > y1) y1 = y;
+            }
+            ctx.closePath();
+            if (x1 < 0 || y1 < 0 || x0 > cv.width || y0 > cv.height) continue;   // hors écran
+            const col = s.sev === "MOD" ? "#ff8a00" : "#ff2d40";
+            ctx.fillStyle = sigHatch(ctx, col, dpr);
+            ctx.fill();
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 2 * dpr;
+            ctx.stroke();
+            // Le nom au centre de la partie VISIBLE de la zone : une zone qui
+            // déborde de l'écran garde son étiquette sous les yeux. Deux
+            // zones qui se recouvrent — c'est fréquent, une FIR voisine
+            // reprend la même masse d'air — n'empilent PAS leurs étiquettes :
+            // la seconde renonce. Le contour, lui, reste dessiné ; c'est lui
+            // qui porte l'information, le nom n'est qu'un confort, et deux
+            // lignes superposées ne se lisent ni l'une ni l'autre.
+            if (x1 - x0 > 92 * dpr && y1 - y0 > 34 * dpr) {
+              const cxp = (Math.max(x0, 0) + Math.min(x1, cv.width)) / 2;
+              const cyp = (Math.max(y0, 0) + Math.min(y1, cv.height)) / 2;
+              ctx.font = "600 " + (11 * dpr) + "px 'Preflight Mono',monospace";
+              const lignes = [`SIGMET ${sigTitle(s)}`, `${sigName(s)} · ${sigBand(s)}`];
+              const larg = Math.max(...lignes.map(t => ctx.measureText(t).width));
+              const boite = { x0: cxp - larg / 2 - 4 * dpr, x1: cxp + larg / 2 + 4 * dpr, y0: cyp - 15 * dpr, y1: cyp + 15 * dpr };
+              if (!posees.some(b => b.x0 < boite.x1 && b.x1 > boite.x0 && b.y0 < boite.y1 && b.y1 > boite.y0)) {
+                posees.push(boite);
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                ctx.lineWidth = 3 * dpr; ctx.strokeStyle = C.halo;
+                for (let k = 0; k < 2; k++) {
+                  const dy = (k ? 7 : -7) * dpr;
+                  ctx.strokeText(lignes[k], cxp, cyp + dy);
+                  ctx.fillStyle = col;
+                  ctx.fillText(lignes[k], cxp, cyp + dy);
+                }
+              }
+            }
+          }
+          ctx.restore();
+        }
+      }
+
       // --- couche mondiale des aérodromes (sous la route) ---
       // Couleur selon le curseur de vue : NOTAM = jaune en cache offline
       // (savedSet), gris non sauvegardé, aucune sévérité ; Weather = la
@@ -21118,8 +21192,99 @@ function renderInfo(icao) {
       }
       return runs.sort((a, b) => a.t0 - b.t0 || a.k - b.k);
     }
+    /* Le contour d'un SIGMET en longitudes CONTINUES, ramené auprès d'une
+       référence (le centre de la carte) : le polygone est déroulé sommet
+       après sommet, puis translaté d'un tour entier s'il le faut. Sans cela,
+       une zone océanique à cheval sur l'antiméridien barre l'écran d'un bout
+       à l'autre, et une zone du Pacifique ne se dessine pas du tout sur une
+       carte centrée sur 179°E. */
+    function sigRing(coords, refLon) {
+      if (!Array.isArray(coords) || !coords.length) return [];
+      const out = [];
+      let prev = null;
+      for (const [lat, lon] of coords) {
+        const u = prev === null ? lon : sigUnwrap(lon, prev);
+        out.push([lat, u]);
+        prev = u;
+      }
+      const moyenne = out.reduce((s, p) => s + p[1], 0) / out.length;
+      const tour = Math.round((refLon - moyenne) / 360) * 360;
+      return tour ? out.map(p => [p[0], p[1] + tour]) : out;
+    }
+    /* Les SIGMET à montrer pour un niveau et un instant : la tranche du
+       bulletin contient le FL affiché, sa validité contient l'heure affichée.
+       C'est le même test que sigCovers, sans le polygone — la carte dessine
+       la zone, elle ne demande pas si un point est dedans. */
+    function sigForLevel(list, altFt, ms) {
+      return (Array.isArray(list) ? list : []).filter(s =>
+        (s.base == null || altFt >= s.base) && (s.top == null || altFt <= s.top) && ms >= s.from && ms <= s.to);
+    }
     // [/turb-sigmet]
 
+    /* Les SIGMET TURB en vigueur, par le backend (l'AWC n'émet pas de CORS,
+       et la politique de sécurité de la page ne laisserait pas passer un
+       appel direct). Un cache mémoire de 5 min, partagé par la CARTE et par
+       la page Turbulence — une seule requête pour les deux lectures. Un
+       échec ne casse rien — la nappe et la courbe du modèle restent —, mais
+       il est DIT : un silence qui passerait pour un ciel sans SIGMET serait
+       pire que pas de couche du tout. */
+    const SIG_TTL_MS = 5 * 60e3;
+    let sigCache = { at: 0, list: null, err: "not fetched yet" };
+    async function sigFetch() {
+      if (sigCache.list && Date.now() - sigCache.at < SIG_TTL_MS) return sigCache;
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/sigmet/turb`);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+        if (!d || !Array.isArray(d.sigmets)) throw new Error("unexpected response");
+        sigCache = { at: Date.now(), list: d.sigmets, err: null, srcAt: Date.parse(d.at) || Date.now() };
+      } catch (e) {
+        sigCache = { at: Date.now(), list: null, err: e.message || String(e) };
+      }
+      return sigCache;
+    }
+    /* Les mots d'un SIGMET à l'écran : ses niveaux (le sol, un FL, ou rien —
+       « and above » quand le bulletin ne pose pas de sommet), son nom (FIR et
+       série, comme il se cite lui-même : « LFFF B3 »), et son intensité. */
+    const sigFl = v => v == null || v <= 0 ? "SFC" : "FL" + String(Math.round(v / 100)).padStart(3, "0");
+    function sigBand(s) {
+      const b = s.base == null || s.base <= 0 ? "SFC" : sigFl(s.base);
+      if (s.top == null) return b === "SFC" ? "all levels" : b + " and above";
+      return `${b}–${sigFl(s.top)}`;
+    }
+    const sigName = s => [s.fir || s.icao || "", s.series || ""].filter(Boolean).join(" ") || "SIGMET";
+    const sigTitle = s => `${s.sev ? s.sev + " " : ""}TURB`;
+
+    /* Les hachures d'un SIGMET sur la carte : un motif de 8 px répété, gardé
+       par couleur et par densité d'écran. Pourquoi des hachures et pas un
+       aplat : la nappe calculée est dessous, la carte aussi — un bulletin
+       officiel doit se voir SANS les effacer, et se distinguer au premier
+       coup d'œil de ce qui est calculé. */
+    const sigHatchCache = new Map();
+    function sigHatch(ctx, col, dpr) {
+      const cle = col + "|" + dpr;
+      let p = sigHatchCache.get(cle);
+      if (p) return p;
+      const n = Math.max(8, Math.round(10 * dpr));
+      const c = document.createElement("canvas");
+      c.width = c.height = n;
+      const g = c.getContext("2d");
+      g.strokeStyle = col;
+      g.lineWidth = Math.max(1, Math.round(dpr));
+      g.globalAlpha = .55;
+      // Trois segments qui se raccordent d'une tuile à l'autre : la diagonale
+      // pleine (x + y = n) et les deux moitiés qui complètent la suivante
+      // (x + y = n/2 et 3n/2). Un segment qui sortirait du carré ne se verrait
+      // pas — c'est ce qui rendait le motif vide.
+      g.beginPath();
+      g.moveTo(0, n); g.lineTo(n, 0);
+      g.moveTo(0, n / 2); g.lineTo(n / 2, 0);
+      g.moveTo(n / 2, n); g.lineTo(n, n / 2);
+      g.stroke();
+      p = ctx.createPattern(c, "repeat");
+      sigHatchCache.set(cle, p);
+      return p;
+    }
     function mapTurbNote(text, warn) {
       const el = $("#mapTurbInfo");
       if (!el) return;
@@ -21155,6 +21320,10 @@ function renderInfo(icao) {
     async function mapTurbRefresh() {
       if (!mapTurbOn) return;
       const seq = ++mapTurbSeq;
+      // Les SIGMET partent avec la grille : ils ne dépendent pas d'elle, et
+      // leur échec ne doit pas retenir la nappe. Le cache de 5 min est partagé
+      // avec la page Turbulence.
+      const sigP = sigFetch();
       try {
         const index = await mapTurbIndexGet();
         const fls = Array.isArray(index.fls) && index.fls.length ? index.fls : TURB_FLS;
@@ -21166,9 +21335,17 @@ function renderInfo(icao) {
         const runMs = Date.parse(index.run), valid = new Date(runMs + fh * 3600e3);
         const hh = d => String(d.getUTCHours()).padStart(2, "0");
         const stale = Date.now() - runMs > TURB_STALE_MS;
+        // Ce que les SIGMET ajoutent au cartouche. Une absence se dit comme
+        // sur la page Turbulence : « aucun » suppose qu'on a regardé, à CE
+        // niveau et à CETTE heure — un bulletin peut exister ailleurs dans la
+        // tranche du dessus, ou une heure plus tard.
+        const sc = await sigP;
+        if (seq !== mapTurbSeq) return;
+        const nSig = sc.err ? -1 : sigForLevel(sc.list, fl * 100, runMs + fh * 3600e3).length;
         mapTurbNote("GFS " + hh(new Date(runMs)) + "Z run · valid " + hh(valid) + "Z (+" + fh + " h)"
           + (index.grid && index.grid.dlon ? " · " + index.grid.dlon + "° grid" : "")
-          + (stale ? " · OLD RUN" : ""), stale);
+          + (stale ? " · OLD RUN" : "")
+          + (nSig < 0 ? " · SIGMET unavailable" : nSig ? " · " + nSig + " SIGMET TURB here" : " · no SIGMET at this level and hour"), stale);
         mapTurbProfile(index, seq);        // le profil H+x suit, sans retenir la carte
       } catch (e) {
         if (seq !== mapTurbSeq) return;
@@ -26080,38 +26257,6 @@ function dtsAUnQfu(icao){
     const TURB_PLANE = "M0-6.2 1.3-1.7 6 1.3v1.2L1.3 1.2 1 4.4l2.2 1.3v.9L0 5.9l-3.2.7v-.9L-1 4.4l-.3-3.2L-6 2.5V1.3l4.7-3z";
     const SIG_LANE = 22;                   // hauteur ajoutée au-dessus du cadre pour la voie des SIGMET
     let turbLastRes = null, turbCursorI = -1;
-    /* Les SIGMET TURB en vigueur, par le backend (l'AWC n'émet pas de CORS,
-       et la politique de sécurité de la page ne laisserait pas passer un
-       appel direct). Un cache mémoire de 5 min : la page recalcule à chaque
-       frappe. Un échec ne casse pas le graphique — la courbe du modèle
-       reste —, mais il est DIT : un silence qui passerait pour un ciel sans
-       SIGMET serait pire que pas de couche du tout. */
-    const SIG_TTL_MS = 5 * 60e3;
-    let sigCache = { at: 0, list: null, err: "not fetched yet" };
-    async function sigFetch() {
-      if (sigCache.list && Date.now() - sigCache.at < SIG_TTL_MS) return sigCache;
-      try {
-        const r = await fetch(`${BACKEND_URL}/api/sigmet/turb`);
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const d = await r.json();
-        if (!d || !Array.isArray(d.sigmets)) throw new Error("unexpected response");
-        sigCache = { at: Date.now(), list: d.sigmets, err: null, srcAt: Date.parse(d.at) || Date.now() };
-      } catch (e) {
-        sigCache = { at: Date.now(), list: null, err: e.message || String(e) };
-      }
-      return sigCache;
-    }
-    /* Les mots d'un SIGMET à l'écran : ses niveaux (le sol, un FL, ou rien —
-       « and above » quand le bulletin ne pose pas de sommet), son nom (FIR et
-       série, comme il se cite lui-même : « LFFF B3 »), et son intensité. */
-    const sigFl = v => v == null || v <= 0 ? "SFC" : "FL" + turbP3(Math.round(v / 100));
-    function sigBand(s) {
-      const b = s.base == null || s.base <= 0 ? "SFC" : sigFl(s.base);
-      if (s.top == null) return b === "SFC" ? "all levels" : b + " and above";
-      return `${b}–${sigFl(s.top)}`;
-    }
-    const sigName = s => [s.fir || s.icao || "", s.series || ""].filter(Boolean).join(" ") || "SIGMET";
-    const sigTitle = s => `${s.sev ? s.sev + " " : ""}TURB`;
     const sigCol = s => s && s.sev === "MOD" ? TURB_COL[2] : TURB_COL[3];
     /* Octet du fichier -> EDR (m^2/3 s^-1) : ÷ 100 quand l'index le dit
        (unit "edr100") ; un ancien fichier (indice × 16, ou classes seules)

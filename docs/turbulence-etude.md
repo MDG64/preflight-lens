@@ -663,12 +663,38 @@ Vérifié le 2026-09-05 sur YPPH → FIMP (Perth → Maurice, FL340) : le SIGMET
 YMMM B10 (SEV TURB, FL200–FL400, valide 08:15–12:15Z) est traversé de H+41
 à H+1:33, 52 minutes, pendant que la courbe du modèle y monte à 0,27.
 
-### 10.4 Ce qui reste
+### 10.4 Sur la carte
 
-- La carte ne porte pas encore les polygones (la couche `fill` hachurée du
-  §3.4) : seule la courbe du vol les lit.
+Même interrupteur, même curseur de FL, même horizon que la nappe : sont
+dessinés les bulletins dont la tranche contient le niveau choisi et dont la
+validité contient **l'heure de la grille affichée** (`run + fh`), pas
+l'heure courante — sinon les deux couches parleraient de deux moments
+différents.
+
+Contour plein de 2 px et **hachures** à 45° (motif de 10 px répété, gardé
+par couleur et par densité d'écran) : la nappe calculée et la carte se
+lisent au travers, et un bulletin ne se confond pas d'un coup d'œil avec un
+calcul. Le nom (`SIGMET SEV TURB` / `LTAA 1 · FL200–FL340`) s'écrit au
+centre de la partie VISIBLE de la zone, seulement si elle mesure plus de
+92 × 34 px à l'écran, et **deux étiquettes ne s'empilent jamais** : quand
+deux zones se recouvrent — fréquent, une FIR voisine reprend la même masse
+d'air —, la seconde renonce à son nom et garde son contour. Le cartouche
+compte ce qui est posé (« 3 SIGMET TURB here ») ou dit qu'il n'y en a pas
+**à ce niveau et à cette heure**.
+
+Les longitudes passent par `sigRing` : le contour est déroulé sommet après
+sommet puis translaté d'un tour entier vers le centre de la carte. Sans
+cela, une zone océanique à cheval sur l'antiméridien (Auckland, Nadi,
+Anchorage) barrerait l'écran d'un bout à l'autre, et resterait invisible sur
+une carte centrée de l'autre côté. Vérifié le 2026-09-05 sur une carte
+centrée à 179°W : le contour NZZC ressort en −188…−187.
+
+### 10.5 Ce qui reste
+
 - `dir`/`spd` (déplacement de la zone) sont servis mais pas exploités : un
   SIGMET valide quatre heures se déplace, et le vol le croise à un instant.
+- Rien n'est cliquable sur la carte : le texte brut du bulletin
+  (`raw`, servi par le backend) n'est montré nulle part.
 - Les SIGMET américains ne sont pris que sous forme SIGMET ; couvrir la
   turbulence de basse couche aux États-Unis demanderait les AIRMET, avec
   une présentation qui ne noie pas le vol.
