@@ -4153,85 +4153,30 @@
       color: var(--amber);
     }
 
-    /* Le profil H+x sous le cartouche : un ruban de la durée du vol, une
-       échelle d'heures, puis la liste des transitions. */
-    .tprof {
-      border-top: 1px solid var(--line2);
-      padding-top: 7px;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-
-    .tprof .tp-head {
-      font: 600 10.5px/1.3 var(--sans);
-      letter-spacing: .06em;
+    /* Le mot vers la page Turbulence, en bas du cartouche : le cyan des mots
+       d'en-tête (ROUTE, WEATHER…), en plus petit — il ouvre une page, il
+       n'en est pas une. Noir en jour, comme eux. */
+    .map-turb-ctl .tgo {
+      align-self: flex-start;
+      background: none;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      font: 600 11px/1.3 var(--sans);
+      letter-spacing: .08em;
       text-transform: uppercase;
-      color: var(--text);
-    }
-
-    .tprof .tp-bar {
-      display: flex;
-      height: 10px;
-      border-radius: 3px;
-      overflow: hidden;
-      border: 1px solid var(--line2);
-      background: var(--panel);
-    }
-
-    .tprof .tp-bar i {
-      display: block;
-      height: 100%;
-      flex: 0 0 auto;
-    }
-
-    .tprof .tp-bar .c0 { background: rgba(52, 211, 154, .22) }
-    .tprof .tp-bar .c1 { background: rgba(255, 198, 0, .85) }
-    .tprof .tp-bar .c2 { background: rgba(255, 110, 0, .9) }
-    .tprof .tp-bar .c3 { background: rgba(230, 30, 44, .92) }
-    .tprof .tp-bar .cl { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line2) 3px 4px) }
-    .tprof .tp-bar .cn { background: var(--line2) }
-
-    .tprof .tp-ticks {
-      position: relative;
-      height: 11px;
-      font: 9px/1 var(--mono, var(--sans));
-      color: var(--muted);
-    }
-
-    .tprof .tp-ticks span {
-      position: absolute;
-      top: 0;
-      transform: translateX(-50%);
-      white-space: nowrap;
-    }
-
-    .tprof .tp-ticks span:first-child { transform: none }
-    .tprof .tp-ticks span:last-child { transform: translateX(-100%) }
-
-    .tprof .tp-list {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      font: 11px/1.3 var(--mono, var(--sans));
-      color: var(--text);
-    }
-
-    .tprof .tp-list .ev {
-      display: flex;
-      gap: 7px;
-      align-items: baseline;
+      color: var(--cyan);
       cursor: pointer;
     }
 
-    .tprof .tp-list .ev:hover { color: var(--green) }
-    .tprof .tp-list .ev .t { min-width: 42px; color: var(--muted) }
-    .tprof .tp-list .ev .k { font-weight: 700; text-transform: uppercase; letter-spacing: .04em }
-    .tprof .tp-list .ev.k1 .k { color: #b8900a }
-    .tprof .tp-list .ev.k2 .k { color: #d9731a }
-    .tprof .tp-list .ev.k3 .k { color: var(--red) }
-    .tprof .tp-list .ev.k0 .k { color: var(--green) }
-    .tprof .tp-list .none { color: var(--muted); font: 10.5px/1.3 var(--sans) }
+    .map-turb-ctl .tgo:hover {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    body.light .map-turb-ctl .tgo {
+      color: #10161b;
+    }
 
     .mleg .wda {
       font: 700 12px/1 var(--mono);
@@ -7214,6 +7159,16 @@ body.light .turb-time input { color-scheme: light }
 .turb-opts input[readonly] { cursor: pointer }
 .turb-opts .btn { margin-left: auto }
 .turb-bar-wrap { margin-top: 18px }
+/* La ligne de résumé, comme l'en-tête du cartouche de la carte d'où elle
+   vient : capitales espacées, la pire classe dans sa couleur. Vide tant
+   qu'aucun vol n'est posé : elle ne prend alors pas de place. */
+.turb-head { font: 600 11px/1.45 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text); margin-bottom: 8px; overflow-wrap: anywhere }
+.turb-head:empty { display: none }
+.turb-head .k0 { color: var(--green) }
+.turb-head .k1 { color: var(--gold) }
+.turb-head .k2 { color: #ef8a2c }
+.turb-head .k3 { color: var(--red) }
+.turb-head .muted { color: var(--muted) }
 .turb-bar { display: flex; height: 36px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line2); background: var(--panel2) }
 .turb-bar:empty { opacity: .5 }
 /* Un morceau par événement du rejeu, large comme sa durée (style width). */
@@ -7785,6 +7740,11 @@ body.light .turb-time input { color-scheme: light }
         <button class="btn" id="turbGo" type="button" title="Compute again">↻ Update</button>
       </div>
       <div class="turb-bar-wrap">
+        <!-- La ligne de résumé du vol, en tête du ruban — celle que le
+             cartouche de la carte portait : terrains, distance, durée, heure
+             de décollage, niveau de croisière atteint et pire classe
+             rencontrée. Remplie par turbRenderHead(). -->
+        <div class="turb-head" id="turbHead" aria-live="polite"></div>
         <div class="turb-bar" id="turbBar" role="img" aria-label="Turbulence along the flight, departure on the left, arrival on the right"></div>
         <div class="turb-ticks" id="turbTicks"></div>
       </div>
@@ -7889,15 +7849,18 @@ body.light .turb-time input { color-scheme: light }
             <button type="button" class="wh" data-h="12" aria-label="Turbulence in 12 hours"><i class="c" aria-hidden="true"></i>+12h</button>
           </div>
           <!-- Cycle et heure de validité de la grille affichée : une prévision
-               sans son heure ne se juge pas. Rempli par mapTurbNote(). -->
+               sans son heure ne se juge pas. Rempli par mapTurbNote(). Le
+               détail du vol — résumé, ruban, heures, épisodes — ne se lit
+               plus dans le cartouche : il est sur la page Turbulence, que le
+               mot ci-dessous ouvre. La carte garde seulement l'orthodromie
+               surlignée là où le rejeu rencontre de la turbulence, dessinée
+               par drawMap(). -->
           <div class="tinfo" id="mapTurbInfo" aria-live="polite">Turbulence — loading…</div>
-          <!-- Profil H+x : la route dep → dest rejouée minute par minute sur
-               l'orthodromie, avec un profil de montée et de descente de jet
-               moyen et la croisière au FL du curseur ; décollage à l'horizon
-               choisi (NOW, +3, +6, +12 h). Ruban coloré par classe, puis la
-               liste des SEULES transitions. Rempli par mapTurbProfRender(),
-               caché tant qu'aucune route n'est calculée. -->
-          <div class="tprof" id="mapTurbProf" hidden></div>
+          <!-- Le mot qui mène au détail : la page Turbulence, ouverte sur le
+               vol que la carte surligne — mêmes terrains, croisière au FL du
+               curseur, décollage à l'horizon choisi. Voir mapOpenTurb(). -->
+          <button type="button" class="tgo" id="mapTurbGo"
+                  title="Open the Turbulence page on this flight — departure to arrival replayed minute by minute against this grid, cruising at the FL of the slider and taking off at the chosen time: summary line, ribbon, hours and the list of the episodes.">Flight profile →</button>
         </div>
         <!-- Le bandeau LEGEND coiffe le cartouche ; son œil le replie et le
              fait revenir — la carte se lit alors sans légende, le bandeau seul
@@ -8092,12 +8055,13 @@ body.light .turb-time input { color-scheme: light }
             severe — for now or <b>+3/+6/+12&nbsp;h</b>; the cartouche names the GFS run and the valid hour.
             It is a clear-air turbulence index computed on the model winds, with a convective proxy under
             storms, on ~50 km cells: <b>guidance, not an official aviation weather product</b>, and not the
-            WAFS EDR charts of the briefing. With a route entered, the same cartouche adds the <b>H+x
-            profile</b>: the great circle from departure to destination replayed minute by minute with a
-            generic medium-jet climb and descent, cruising at the slider FL, taking off at the chosen time —
-            a ribbon of the flight coloured by turbulence class, the list of the changes (<b>H+51 min · FL140 ·
-            light · 332 NM</b>), and the route itself highlighted where they happen; tap a line to centre the map
-            there. Wherever a code is written, <b>every runway QFU</b> of that aerodrome
+            WAFS EDR charts of the briefing. With a route entered, the great circle from departure to
+            destination is <b>highlighted</b> — yellow, orange or red — where a flight taking off at the chosen
+            time and cruising at the slider FL would meet turbulence. The detail of that flight — its summary
+            line, the ribbon, the hours and the list of the episodes (<b>H+51 · FL140 · light · 332 NM</b>)
+            — is on the <b>Turbulence page</b>: the cartouche's <b>Flight profile</b> word opens it on that very
+            flight, same FL and same take-off time; it is also the third tab of the weather page.
+            Wherever a code is written, <b>every runway QFU</b> of that aerodrome
             is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
             together to a side free of the wind arrows and the ⚡; where they cannot travel together the code
             keeps its place and the QFU find one of their own, further round the dot. The <b>weather view</b>
@@ -21169,13 +21133,14 @@ function renderInfo(icao) {
        choisi, croisière au FL du curseur. Lit d'abord tous les fichiers que
        le rejeu va toucher (montée, croisière, descente, deux échéances par
        heure traversée), puis échantillonne. Même anti-croisement que la
-       nappe : seul le dernier appel peint. */
+       nappe : seul le dernier appel peint. La carte n'en montre que
+       l'orthodromie surlignée (drawMap) : le détail du vol — résumé, ruban,
+       heures, épisodes — se lit sur la page Turbulence, qui refait le même
+       rejeu sur les heures du pilote (turbCompute). */
     let mapTurbProf = null;
     async function mapTurbProfile(index, seq) {
-      const el = $("#mapTurbProf");
-      if (!el) return;
       const r = curRoute && curRoute.ok && curRoute.dep && curRoute.arr && GEO[curRoute.dep] && GEO[curRoute.arr] ? curRoute : null;
-      if (!r) { mapTurbProf = null; el.hidden = true; return; }
+      if (!r) { mapTurbProf = null; return; }
       const A = GEO[r.dep], B = GEO[r.arr];
       const fls = Array.isArray(index.fls) && index.fls.length ? index.fls : TURB_FLS;
       const cruise = fls[Math.min(mapTurbFlIdx, fls.length - 1)] * 100;
@@ -21191,57 +21156,10 @@ function renderInfo(icao) {
       if (seq !== mapTurbSeq) return;
       const clsOf = (fl, fh) => mapTurbCache.get(turbKey(fl, fh)) || null;
       mapTurbProf = turbSampleProfile(prof, A, B, index, tko, fls, clsOf);
-      mapTurbProf.dep = r.dep; mapTurbProf.arr = r.arr; mapTurbProf.tko = tko;
-      mapTurbProfRender(el, mapTurbProf);
       drawMap();
     }
+    // Les noms des classes, partagés avec la page Turbulence.
     const TURB_NAMES = { "-2": "no data", "-1": "below FL100", 0: "smooth", 1: "light", 2: "moderate", 3: "severe" };
-    function mapTurbProfRender(el, P) {
-      const hm = m => "H+" + (m >= 60 ? Math.floor(m / 60) + "h" + String(Math.round(m % 60)).padStart(2, "0") : Math.round(m) + " min");
-      const z = ms => { const d = new Date(ms); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + "Z"; };
-      const total = Math.max(P.total, 1);
-      const bar = [], ticks = [];
-      // Le ruban : un morceau par événement, large comme sa durée.
-      for (let i = 0; i < P.events.length; i++) {
-        const e = P.events[i], next = P.events[i + 1], w = ((next ? next.t : P.total) - e.t) / total * 100;
-        const k = e.cls === -1 ? "cl" : e.cls === -2 ? "cn" : "c" + e.cls;
-        bar.push('<i class="' + k + '" style="width:' + w.toFixed(2) + '%" title="' + hm(e.t) + " · " + (TURB_NAMES[e.cls] || "") + '"></i>');
-      }
-      // Échelle : TKO, puis une graduation par heure, puis LDG.
-      ticks.push('<span style="left:0">TKO</span>');
-      for (let h = 60; h < P.total - 20; h += 60) ticks.push('<span style="left:' + (h / total * 100).toFixed(1) + '%">+' + (h / 60) + 'h</span>');
-      ticks.push('<span style="left:100%">LDG</span>');
-      // La liste : les épisodes de turbulence, dans l'ordre du vol — début,
-      // fin, pire classe, niveaux traversés, distance depuis le départ.
-      // Un épisode light de moins de trois minutes, c'est une case effleurée :
-      // il reste sur le ruban et sur la route, pas dans la liste.
-      const eps = turbEpisodes(P).filter(e => e.cls >= 2 || e.t1 - e.t0 >= 3), MAX_ROWS = 8;
-      const rows = eps.slice(0, MAX_ROWS).map((e, i) =>
-        '<div class="ev k' + e.cls + '" data-i="' + i + '"><span class="t">' + hm(e.t0) + '</span>'
-        + '<span class="k">' + TURB_NAMES[e.cls] + '</span>'
-        + '<span>' + (e.t1 - e.t0 >= 1.5 ? "for " + Math.round(e.t1 - e.t0) + " min · " : "")
-        + "FL" + e.flMin + (e.flMax !== e.flMin ? "–" + e.flMax : "") + " · " + Math.round(e.d0) + " NM from " + P.dep + '</span></div>');
-      if (eps.length > MAX_ROWS) rows.push('<div class="none">+ ' + (eps.length - MAX_ROWS) + " more later in the flight</div>");
-      const worst = P.max >= 1 ? "worst " + TURB_NAMES[P.max] : P.max === 0 ? "smooth all along" : "no grid on this route";
-      el.innerHTML = '<div class="tp-head">' + P.dep + " → " + P.arr + " · " + Math.round(P.dist) + " NM · " + hm(P.total).slice(2)
-        + " · TKO " + z(P.tko) + " · FL" + Math.round(P.top / 100) + " · " + worst + "</div>"
-        + '<div class="tp-bar">' + bar.join("") + "</div>"
-        + '<div class="tp-ticks">' + ticks.join("") + "</div>"
-        + '<div class="tp-list">' + (rows.length ? rows.join("")
-          : P.max === 0 ? '<div class="none">Smooth all along at this level and time.</div>'
-          : '<div class="none">No grid data along this route (outside the covered area).</div>') + "</div>";
-      el.hidden = false;
-      // Un tap sur une ligne recentre la carte sur le point le plus dur de l'épisode.
-      el.querySelectorAll(".ev").forEach(row => {
-        row.onclick = () => {
-          const e = eps[+row.dataset.i];
-          if (!e || !mapView) return;
-          if (GL.active && GL.map) GL.map.jumpTo({ center: [e.lon, e.lat] });
-          else { mapView.cx = e.lon; mapView.cy = e.lat; _bg = null; }
-          drawMap();
-        };
-      });
-    }
     function setMapTurbFl(idx) {
       mapTurbFlIdx = Math.max(0, Math.min(TURB_FLS.length - 1, idx));
       const s = $("#mapTurbFl"), o = $("#mapTurbFlOut");
@@ -21267,6 +21185,30 @@ function renderInfo(icao) {
       b.onclick = () => { setMapTurbHour(+b.dataset.h); mapTurbRefresh(); };
     });
     setMapTurbFl(mapTurbFlIdx);
+    /* Le mot du cartouche : la page Turbulence, sur le vol que la carte
+       surligne — les terrains de la route, la croisière au FL du curseur, le
+       décollage à l'horizon choisi (NOW, +3, +6, +12 h). La carte se referme
+       (elle couvre tout, z 60) ; la page météo s'ouvre derrière si elle ne
+       l'est pas déjà — le mot WEATHER de la page Turbulence y ramène, il
+       doit mener quelque part. Sans route sur la carte, la page part des
+       cases de l'accueil, comme depuis son onglet. */
+    function mapOpenTurb() {
+      const r = curRoute && curRoute.ok && curRoute.dep && curRoute.arr ? curRoute : null;
+      $("#mapOv").hidden = true;
+      if ($("#wxScreen").hidden) {
+        // Les trois terrains de la route seulement — pas les dégagements en
+        // route que curRoute.airports porte par dizaines pour la carte.
+        const codes = r ? [{ icao: r.dep, role: "dep" }, { icao: r.arr, role: "arr" }, ...(r.alt ? [{ icao: r.alt, role: "alt" }] : [])] : homeRouteCodes();
+        openWx(codes.length === 1 ? [{ icao: codes[0].icao }] : codes);
+      }
+      const fls = mapTurbIndex && Array.isArray(mapTurbIndex.fls) && mapTurbIndex.fls.length ? mapTurbIndex.fls : TURB_FLS;
+      openTurb({
+        dep: r ? r.dep : "", arr: r ? r.arr : "",
+        fl: fls[Math.min(mapTurbFlIdx, fls.length - 1)],
+        t0: Math.ceil((Date.now() + mapTurbHour * 3600e3) / 60e3) * 60e3
+      });
+    }
+    $("#mapTurbGo").onclick = mapOpenTurb;
     // Une carte laissée ouverte avec la turbulence allumée suit les cycles :
     // l'index est redemandé au pas de la minuterie météo, la grille ne
     // change de fichier que si le cycle ou l'échéance « now » a bougé.
@@ -25922,8 +25864,9 @@ function dtsAUnQfu(icao){
        (mapTurbIndexGet / mapTurbFile), le profil générique de jet moyen
        (turbProfile), la lecture minute par minute au pire des deux
        échéances encadrantes (turbSampleProfile), les épisodes
-       (turbEpisodes). Ce que la carte montre en ruban, cette page le
-       montre seul, avec les heures.
+       (turbEpisodes). La carte, elle, ne garde que l'orthodromie surlignée
+       là où ce rejeu rencontre de la turbulence ; le détail du vol —
+       résumé, ruban, heures, épisodes — se lit ici, et seulement ici.
 
        Les terrains viennent de la page météo (route DEP/DEST), sinon des
        cases de l'accueil, sinon du dernier vol regardé. L'heure de départ
@@ -25936,7 +25879,9 @@ function dtsAUnQfu(icao){
        ligne, il se relit daté. */
     const TURB_KEY = "notam_turb";
     let turbToken = 0, turbTimer = null;
-    const turbCfg = { dep: "", arr: "", fl: null, t0: null, t1: null };
+    // flSet : le FL a été tapé par le pilote — il survit alors aux changements
+    // de terrain, quand le FL posé d'office suit la distance.
+    const turbCfg = { dep: "", arr: "", fl: null, flSet: false, t0: null, t1: null };
 
     const turbP2 = n => String(n).padStart(2, "0"), turbP3 = n => String(n).padStart(3, "0");
     const turbHM = ms => { const d = new Date(ms); return `${turbP2(d.getUTCHours())}:${turbP2(d.getUTCMinutes())}`; };
@@ -25962,18 +25907,32 @@ function dtsAUnQfu(icao){
       return t;
     }
     function turbDefaultFl(dist) { return dist < 150 ? 150 : dist < 300 ? 240 : dist < 600 ? 320 : dist < 1200 ? 360 : 380; }
-    /* Les terrains changent : FL et temps de vol se recalculent, l'heure de
-       départ reste (c'est celle du pilote, pas celle de la route). */
-    function turbSetRoute(dep, arr, resetAll) {
+    /* Trois façons de poser la route :
+       - "new"   : un autre vol, tout repart — FL selon la distance, départ
+                   dans 30 min, arrivée selon le profil ;
+       - "keep"  : le même vol qu'à la dernière visite, ses heures et son FL
+                   tels quels (turbCfg vient d'être rempli depuis le stockage) ;
+       - "route" : les terrains changent sous le pilote — FL et temps de vol
+                   se recalculent, l'heure de départ reste (c'est celle du
+                   pilote, pas celle de la route). Un FL tapé par le pilote
+                   (flSet) reste aussi : il l'a choisi, la distance non.
+       Avant, une page ouverte sans route posait FL150 (distance nulle) et le
+       gardait quand les deux codes arrivaient : LFPO → KLAX à FL150.
+       `pref` (venue de la carte, mapOpenTurb) impose le FL du curseur et le
+       décollage à l'horizon choisi ; l'arrivée en découle. */
+    function turbSetRoute(dep, arr, mode, pref) {
       turbCfg.dep = dep; turbCfg.arr = arr;
       const A = GEO && GEO[dep], B = GEO && GEO[arr];
       const dist = A && B ? gcDist(A, B) : 0;
-      if (resetAll || !turbCfg.fl) turbCfg.fl = turbDefaultFl(dist);
+      if (mode === "new") turbCfg.flSet = false;
+      if (pref && pref.fl) { turbCfg.fl = pref.fl; turbCfg.flSet = true; }
+      else if (mode === "new" || !turbCfg.fl || (mode === "route" && !turbCfg.flSet)) turbCfg.fl = turbDefaultFl(dist);
       // Une visite d'avant la bande a pu laisser un FL sous son premier cran :
       // on le remonte, sinon la case et la bande ne diraient pas la même chose.
       turbCfg.fl = Math.max(90, Math.min(500, Math.round(turbCfg.fl / 10) * 10));
-      if (resetAll || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
-      if (resetAll || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
+      if (pref && pref.t0) turbCfg.t0 = pref.t0;
+      else if (mode === "new" || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
+      if (mode !== "keep" || pref || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
       turbRenderForm();
       turbSchedule();
     }
@@ -26003,10 +25962,12 @@ function dtsAUnQfu(icao){
        classe —, large comme sa durée ; les repères H+ / heure Z dessous, à
        des minutes rondes, six au plus. Sans résultat encore (squelette), un
        seul morceau gris et muet. Un morceau touché s'explique dans le
-       cartouche ; la liste des épisodes suit, comme sous la carte. */
+       cartouche ; la liste des épisodes suit. La ligne de résumé coiffe le
+       tout. */
     function turbRenderBar(res, skeleton) {
       const bar = $("#turbBar"), ticks = $("#turbTicks");
       $("#turbDetail").innerHTML = ""; $("#turbList").innerHTML = "";
+      turbRenderHead(res, skeleton);
       if (!res) { bar.innerHTML = ""; ticks.innerHTML = ""; return; }
       const total = Math.max(res.total, 1), t0 = res.cfg.t0;
       bar.innerHTML = res.events.map((e, i) => {
@@ -26029,6 +25990,25 @@ function dtsAUnQfu(icao){
       bar.querySelectorAll(".turb-seg").forEach(el => { el.onclick = () => turbShowDetail(res, +el.dataset.i); });
       turbRenderList(res);
     }
+    /* La ligne de résumé au-dessus du ruban — celle que le cartouche de la
+       carte portait : DEP → ARR · distance · durée · TKO hh:mmZ · FL de
+       croisière atteint · pire classe rencontrée, dans sa couleur. Pendant
+       le calcul (squelette) la pire classe n'est pas connue : la ligne
+       s'écrit sans elle. */
+    function turbRenderHead(res, skeleton) {
+      const el = $("#turbHead");
+      if (!res) { el.innerHTML = ""; return; }
+      const c = res.cfg, A = GEO && GEO[c.dep], B = GEO && GEO[c.arr];
+      const dist = res.dist != null ? res.dist : A && B ? gcDistNM(A, B) : null;
+      const top = res.top != null ? res.top : c.fl * 100;
+      const worst = skeleton ? `<span class="muted">reading the grid…</span>`
+        : res.max >= 1 ? `<span class="k${res.max}">worst ${TURB_NAMES[res.max]}</span>`
+        : res.max === 0 ? `<span class="k0">smooth all along</span>`
+        : res.max === -1 ? `<span class="muted">below FL100 all along</span>`
+        : `<span class="muted">no grid on this route</span>`;
+      el.innerHTML = `${esc(c.dep)} → ${esc(c.arr)}${dist != null ? ` · ${Math.round(dist)} NM` : ""} · ${turbDur(res.total)}`
+        + ` · TKO ${turbHM(c.t0)}Z · FL${Math.round(top / 100)} · ${worst}`;
+    }
     const turbClsLbl = c => (TURB_NAMES[c] || "no data").replace(/^./, ch => ch.toUpperCase());
     function turbShowDetail(res, i) {
       const e = res.events[i], end = i + 1 < res.events.length ? res.events[i + 1].t : res.total, t0 = res.cfg.t0;
@@ -26044,7 +26024,7 @@ function dtsAUnQfu(icao){
     /* Les épisodes (turbEpisodes) : une plage continue de turbulence, avec
        son début, sa durée, sa pire classe, ses niveaux et sa distance. Un
        light de moins de trois minutes est une case effleurée : sur la barre
-       oui, dans la liste non — même règle que sous la carte. */
+       oui, dans la liste non. */
     function turbRenderList(res) {
       const box = $("#turbList"), t0 = res.cfg.t0;
       const eps = turbEpisodes(res).filter(e => e.cls >= 2 || e.t1 - e.t0 >= 3);
@@ -26078,7 +26058,7 @@ function dtsAUnQfu(icao){
       // ce n'est plus un vent, c'est une autre machine.
       const k = Math.max(0.5, Math.min(2, ((cfg.t1 - cfg.t0) / 60e3) / Math.max(prof.total, 1)));
       if (Math.abs(k - 1) > 0.01) { prof.pts = prof.pts.map(([t, d, alt]) => [t * k, d, alt]); prof.total *= k; }
-      turbRenderBar({ events: [{ t: 0, cls: -2 }], total: prof.total, cfg }, true);
+      turbRenderBar({ events: [{ t: 0, cls: -2 }], total: prof.total, top: prof.top, dist, cfg }, true);
       st.textContent = "Loading the turbulence grid…";
       try {
         const index = await mapTurbIndexGet();
@@ -26117,12 +26097,14 @@ function dtsAUnQfu(icao){
         }
       }
     }
-    async function openTurb() {
+    /* `pref` : la page s'ouvre depuis la carte (mapOpenTurb) — ses terrains,
+       son FL et son heure de décollage priment sur tout le reste. */
+    async function openTurb(pref) {
       try { await loadGeoData(); } catch (e) { }
       wxCloseFavTab();
       $("#turbScreen").hidden = false;
       const byRole = r => (wxList.find(a => a.role === r) || {}).icao || "";
-      let dep = byRole("dep"), arr = byRole("arr");
+      let dep = (pref && pref.dep) || byRole("dep"), arr = (pref && pref.arr) || byRole("arr");
       if (!dep && !arr && wxList.length >= 2) { dep = wxList[0].icao; arr = wxList[1].icao; }
       if (!dep) dep = rVal("#hFrom");
       if (!arr) arr = rVal("#hTo");
@@ -26132,7 +26114,7 @@ function dtsAUnQfu(icao){
       // loin derrière : on reprend ses heures et son FL tels quels.
       const same = saved && saved.cfg && saved.cfg.dep === dep && saved.cfg.arr === arr && saved.cfg.t0 > Date.now() - 6 * 3600e3;
       if (same) Object.assign(turbCfg, saved.cfg);
-      turbSetRoute(dep, arr, !same);
+      turbSetRoute(dep, arr, same ? "keep" : "new", pref);
     }
     function closeTurb() {
       clearTimeout(turbTimer);
@@ -26149,7 +26131,7 @@ function dtsAUnQfu(icao){
         el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
         const other = sel === "#turbDep" ? turbCfg.arr : turbCfg.dep;
         if (sel === "#turbDep") turbCfg.dep = el.value; else turbCfg.arr = el.value;
-        if (el.value.length === 4 && GEO && GEO[el.value] && GEO[other]) turbSetRoute(turbCfg.dep, turbCfg.arr, false);
+        if (el.value.length === 4 && GEO && GEO[el.value] && GEO[other]) turbSetRoute(turbCfg.dep, turbCfg.arr, "route");
         else turbRenderForm();
       };
       el.onkeydown = e => { if (e.key === "Enter") el.blur(); };
@@ -26185,7 +26167,7 @@ function dtsAUnQfu(icao){
     });
     $("#turbFl").onchange = () => {
       const v = Math.round(+$("#turbFl").value / 10) * 10;
-      if (v >= 90 && v <= 500) { turbCfg.fl = v; turbRenderForm(); turbSchedule(); }
+      if (v >= 90 && v <= 500) { turbCfg.fl = v; turbCfg.flSet = true; turbRenderForm(); turbSchedule(); }
       else $("#turbFl").value = turbCfg.fl;
     };
     /* Le niveau de croisière se choisit à la bande, plus au clavier : la case
