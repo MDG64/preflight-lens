@@ -39,7 +39,7 @@ const ASSETS = [
   // Photos des cases d'accueil (19 aout 2026). Meme regle que les icones :
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
   // refonte d'image change le suffixe, on n'ecrase jamais en place.
-  "./home-wx-v8.jpg", "./home-notam-v11.jpg", "./home-map-v3.jpg", "./home-minima-v1.jpg",
+  "./home-wx-v8.jpg", "./home-notam-v12.png", "./home-map-v3.jpg", "./home-minima-v1.jpg",
   // MINIMAS (28 aout 2026) : le module minima (copie déployée de Minima Lens)
   // et ses deux bases embarquées — la page doit s'ouvrir en vol, comme l'hôte.
   // Les bases se régénèrent (recompilation du seed, fiches d'approche) : la

@@ -6148,6 +6148,36 @@ body.light .stat.on {
       background: none
     }
 
+    /* Vignette NOTAM (5 sept. 2026) : ce n'est plus un cliché mais un
+       pictogramme DÉTOURÉ, or sur transparent. Elle perd donc les deux choses
+       qui n'habillaient qu'une photo — le liseré cyan et le fond noir plat du
+       fichier — et reçoit à la place le CARBONE de la page.
+       Carbone SOMBRE dans les deux thèmes, y compris en clair : l'or pâle du
+       dessin ne se lirait pas sur le carbone gris du thème clair. La trame se
+       répète dans la vignette (pas de `fixed` : elle doit tenir dans ses
+       128 px, pas suivre le fond de la fenêtre). */
+    #homeNotamCard img {
+      border: 0;
+      background-color: #040506;
+      background-image:
+        repeating-linear-gradient(135deg,
+          rgba(255,255,255,.20) 0px,
+          rgba(255,255,255,.20) 1px,
+          rgba(0,0,0,.55) 1px,
+          rgba(0,0,0,.55) 3px,
+          transparent 3px,
+          transparent 4px),
+        repeating-linear-gradient(45deg,
+          rgba(0,0,0,.90) 0px,
+          rgba(0,0,0,.90) 2px,
+          rgba(255,255,255,.08) 2px,
+          rgba(255,255,255,.08) 3px,
+          transparent 3px,
+          transparent 6px),
+        linear-gradient(135deg, #20262c 0%, #040506 52%, #0a0e13 100%);
+      background-size: 6px 6px, 6px 6px, auto
+    }
+
     /* Weather a quitte le pictogramme pour un cliche (27 aout 2026) : les
        TROIS vignettes sont desormais des photos, meme traitement pour les
        trois — recadrage carre en cover, liseré cyan, aucun fond a fabriquer.
@@ -7735,7 +7765,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                mais sa LIGNE reste, vide, pour que « FILTERS » tombe à la même
                hauteur que les sous-titres des trois autres cases. Le nom
                continue d'être dit à la voix par l'aria-label du bouton. -->
-          <img src="./home-notam-v11.jpg" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-notam-v12.png" alt="" aria-hidden="true" decoding="async">
           <span class="hc-name" aria-hidden="true">&nbsp;</span>
           <span class="hc-sub">FILTERS</span>
         </button>
