@@ -7642,8 +7642,8 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hFromSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hTime0">Take-off · UTC</label>
-          <input class="home-time" id="hTime0" placeholder="HHMMZ" readonly
+          <label class="home-field-label home-time-label" for="hTime0">Take-off</label>
+          <input class="home-time" id="hTime0" placeholder="HH:MMZ" readonly
             autocomplete="off" spellcheck="false"
             aria-label="Take-off time, UTC — posed at now + 1 h when the departure is set; tap to set it on the clock">
         </div>
@@ -7679,8 +7679,8 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hToSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hTime1">Arrival · UTC</label>
-          <input class="home-time" id="hTime1" placeholder="HHMMZ" readonly
+          <label class="home-field-label home-time-label" for="hTime1">Arrival</label>
+          <input class="home-time" id="hTime1" placeholder="HH:MMZ" readonly
             autocomplete="off" spellcheck="false"
             aria-label="Arrival time, UTC — posed from the route flight time; tap to set it on the clock">
         </div>
@@ -7693,8 +7693,8 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
               aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
             <div class="suggest" id="hAltSuggest" hidden></div>
           </div>
-          <label class="home-field-label home-time-label" for="hTime2">Alternate · UTC</label>
-          <input class="home-time" id="hTime2" placeholder="HHMMZ" readonly
+          <label class="home-field-label home-time-label" for="hTime2">Alternate</label>
+          <input class="home-time" id="hTime2" placeholder="HH:MMZ" readonly
             autocomplete="off" spellcheck="false"
             aria-label="Alternate arrival time, UTC — posed from the diversion time; tap to set it on the clock">
         </div>
@@ -8529,7 +8529,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             one. <b>⇄</b> swaps FROM and TO.</div>
         </div>
         <div class="hd-row">
-          <div class="hd-vis" style="min-width:auto"><span class="hd-chip" style="font-family:var(--mono)">HHMMZ</span></div>
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip" style="font-family:var(--mono)">HH:MMZ</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Under each code, the <b>time in UTC</b>: take-off is posed at <b>now + 1 h</b> as soon as
             the departure is typed, arrival and alternate follow from the <b>flight time observed on that
@@ -24956,11 +24956,15 @@ window.addEventListener("scroll", hidePop, true);
       timesSave();
       wxApplyTimes();
     }
+    /* L'heure telle qu'elle s'AFFICHE dans les trois cases : « 15:20Z ». Le
+       deux-points ne sert qu'à l'œil — HT, le cadran et le stockage partagé
+       ne connaissent que les quatre chiffres. */
+    const withColon = v => /^\d{4}/.test(v || "") ? v.slice(0, 2) + ":" + v.slice(2) : (v || "");
     function renderHomeTimes() {
       [HT.tko, HT.eta, HT.altt].forEach((t, i) => {
         const el = $("#hTime" + i);
         if (!el) return;
-        el.value = t ? t.h + "Z" : "";
+        el.value = t ? withColon(t.h + "Z") : "";
         el.classList.toggle("mine", !!(t && t.mine));
         el.disabled = !HOME_FIELDS.map(homeFieldCode)[i];
       });
