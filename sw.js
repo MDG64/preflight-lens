@@ -324,6 +324,15 @@ self.addEventListener("fetch", e => {
     return;
   }
 
+  // 3 quinquies) CARREAUX RADAR / SATELLITE et statut de la couche Storm
+  //    (/api/storm/) : réseau seul, JAMAIS de copie — une image d'orage
+  //    d'il y a deux heures passerait pour le présent, et le statut date les
+  //    images. Hors ligne, la couche est vide et le dit elle-même.
+  if (url.includes("/api/storm/")) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
   // 3 ter) ZONES DE TURBULENCE (/api/turb/… sur le backend, ou la branche
   //    turb-data sur raw.githubusercontent.com) : réseau d'abord ET dépôt, pour
   //    la même raison que la couche météo mondiale — la dernière grille lue
