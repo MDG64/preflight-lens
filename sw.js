@@ -208,7 +208,8 @@ self.addEventListener("fetch", e => {
   //    générique de fin de fichier, qui lit le cache AVANT le réseau.
   //    Le « / » final compte : il distingue /api/vol/ de /api/vols/, qui a
   //    sa propre règle plus bas (le catalogue VRS, lui, se met en cache).
-  if (url.includes("/api/notams/") || url.includes("/api/vol/")) {
+  if (url.includes("/api/notams/") || url.includes("/api/vol/")
+      || url.includes("/api/volnum/")) {
     e.respondWith(fetch(e.request));
     return;
   }

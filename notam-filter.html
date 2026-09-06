@@ -25974,6 +25974,59 @@ window.addEventListener("scroll", hidePop, true);
       return null;
     }
 
+    /* ---- le repli : le vol par son NUMÉRO, quand VRS ne le connaît pas ----
+       Le catalogue gratuit est INCOMPLET vol par vol, pas seulement par
+       compagnie : mesuré le 2026-09-06, il connaît VLG8828 (LEZL-LFPO) et
+       ignore VLG8827, la patte retour du même avion. Le pilote de ce vol-là
+       n'avait plus qu'à taper ses deux terrains à la main.
+
+       Ce chemin-là coûte 2 unités pour UN vol, là où le tableau d'un terrain
+       en rend des centaines pour le même prix. Il ne s'emprunte donc QUE
+       lorsque le catalogue gratuit a répondu « inconnu », jamais en premier.
+       On ne peut pas faire mieux : c'est justement le terrain de départ qui
+       manque, et sans lui le tableau n'est pas appelable.
+
+       Une seule forme de l'identifiant part, celle que le pilote a TAPÉE :
+       essayer les deux doublerait la note pour un gain incertain. C'est
+       l'inverse de fltHeure ci-dessus, où les deux formes sont gratuites
+       parce que le tableau les indexe toutes les deux.
+
+       Il rend les DEUX terrains ET les deux heures d'un coup : la proposition
+       qui en sort n'aura plus besoin d'appeler /api/vol/ au moment du choix. */
+    const VOLNUM_URL = BACKEND_URL + "/api/volnum/";
+
+    async function fltNumero(num) {
+      for (const n of [0, 1]) {
+        try {
+          const r = await fetch(VOLNUM_URL + fltJour(n) + "/" + encodeURIComponent(num));
+          if (!r.ok) return null;
+          const j = await r.json();
+          if (j && j.ok && j.vols && j.vols.length) return j.vols;
+          if (j && j.raison !== "absent") return null;   // plafond, coupé, panne : on n'insiste pas
+        } catch (e) { return null; }
+      }
+      return null;
+    }
+
+    /* La même proposition que celle de VRS, mais chaque ligne porte DÉJÀ ses
+       heures : le clic pose tout sans un appel de plus. La mention accompagne
+       la proposition et pas seulement le résultat, parce qu'ici ce sont les
+       TERRAINS eux-mêmes qui viennent d'AeroDataBox. */
+    function fltProposalVols(cs, typed, vols) {
+      const rows = vols.map(v => {
+        const h = v.tko
+          ? v.tko.slice(0, 2) + ":" + v.tko.slice(2) + "Z"
+            + (v.eta ? " \u2192 " + v.eta.slice(0, 2) + ":" + v.eta.slice(2) + "Z" : "")
+            + " scheduled"
+          : "";
+        return `<button class="sg-row flt-row" type="button" data-dep="${esc(v.dep)}" data-dest="${esc(v.arr)}"
+          data-tko="${esc(v.tko || "")}" data-eta="${esc(v.eta || "")}"
+          aria-label="Set departure ${esc(v.dep)} and destination ${esc(v.arr)}"><span class="flt-leg">${esc(v.dep)}<span
+            class="flt-ar">\u2192</span>${esc(v.arr)}</span><span class="flt-where">${esc(h)}</span></button>`;
+      }).join("");
+      fltShow(fltHead(cs, typed) + rows + `<div class="flt-msg flt-note">${esc(ADB_MENTION)}</div>`);
+    }
+
     /* Ce qui reste à l'écran une fois le vol posé : ce qu'on a appliqué, d'où
        ça vient, et la mention. La bande remplace la proposition — le pilote
        voit ce qui a été fait, pas seulement le résultat dans les cases. */
@@ -25989,13 +26042,24 @@ window.addEventListener("scroll", hidePop, true);
         + `<div class="flt-msg flt-note">${esc(ADB_MENTION)}</div>`);
     }
 
+    /* `mine: true` non parce que le pilote les a tapées, mais parce que ces
+       heures ne doivent PAS être écrasées par la cascade de la base des temps
+       de vol : un horaire publié vaut mieux qu'une médiane de 2019. Les deux
+       chemins — le tableau du terrain et le repli par numéro — passent par
+       ici, pour qu'il n'y ait qu'un seul endroit où une heure s'écrit. */
+    function fltHeures(r) {
+      HT.tko = { h: r.tko, mine: true };
+      if (r.eta) HT.eta = { h: r.eta, mine: true };
+      renderHomeTimes(); renderHomeDuration(); timesSave(); wxApplyTimes();
+    }
+
     /* ---- poser les deux terrains ----
        Par la porte commune des puces de route (homeApplyRoute) : miroir vers
        la page Route, file de remplissage remise à zéro, étoiles, puces,
        heures et armement de la route suivent. Le dégagement ne survit que si
        la DESTINATION ne bouge pas — choisi pour l'ancienne, il ne veut plus
        rien dire, exactement comme après la double flèche. */
-    function fltApply(dep, dest) {
+    function fltApply(dep, dest, deja) {
       if (!/^[A-Z]{4}$/.test(dep) || !/^[A-Z]{4}$/.test(dest) || dep === dest) return;
       let alt = (rVal("#hTo") === dest) ? rVal("#hAlt") : "";
       if (alt === dep || alt === dest) alt = "";
@@ -26006,6 +26070,14 @@ window.addEventListener("scroll", hidePop, true);
       const cles = [...new Set([n && n.cs, n && n.typed].filter(Boolean))];
       if (!cles.length) { fltHide(); return; }
       const cs = (n && n.cs) || cles[0];
+      /* La proposition du repli porte déjà ses heures : les reposer par un
+         appel serait payer deux fois la même donnée. */
+      if (deja && deja.tko) {
+        fltTok++;                                 // aucune réponse tardive ne doit passer après
+        fltHeures(deja);
+        fltPose(cs, { dep, arr: dest, tko: deja.tko, eta: deja.eta });
+        return;
+      }
       fltPose(cs, null);
       const tok = ++fltTok;
       fltHeure(dep, cles).then(r => {
@@ -26013,12 +26085,7 @@ window.addEventListener("scroll", hidePop, true);
         /* On ne pose l'heure que si le vol trouvé va bien là où le pilote va :
            une rotation peut porter le même numéro sur une autre étape. */
         if (r && r.arr === dest && r.tko && rVal("#hFrom") === dep && rVal("#hTo") === dest) {
-          /* `mine: true` non parce que le pilote l'a tapée, mais parce que
-             cette heure ne doit PAS être écrasée par la cascade de la base des
-             temps de vol : un horaire publié vaut mieux qu'une médiane de 2019. */
-          HT.tko = { h: r.tko, mine: true };
-          if (r.eta) HT.eta = { h: r.eta, mine: true };
-          renderHomeTimes(); renderHomeDuration(); timesSave(); wxApplyTimes();
+          fltHeures(r);
           fltPose(cs, r);
         } else fltPose(cs, null);
       });
@@ -26052,7 +26119,17 @@ window.addEventListener("scroll", hidePop, true);
         let ap = await fltFetch(n.cs);
         if (!ap && n.alt) ap = await fltFetch(n.alt);      // la forme à zéros, si on en avait retiré
         if (tok !== fltTok) return;
-        if (!ap) { fltMsg(n.cs, n.typed, "Flight not in the route database — type the two codes below."); return; }
+        if (!ap) {
+          /* Le catalogue gratuit ne connaît pas ce vol. C'est le SEUL endroit
+             d'où part l'appel payant : après un échec, jamais avant. */
+          fltShow(fltHead(n.cs, n.typed)
+            + `<div class="flt-msg">Not in the route database — looking up today's schedule…</div>`);
+          const vols = await fltNumero(n.typed || n.cs);
+          if (tok !== fltTok) return;
+          if (vols) { fltProposalVols(n.cs, n.typed, vols); return; }
+          fltMsg(n.cs, n.typed, "Flight not found — type the two codes below.");
+          return;
+        }
         fltSeenPut(n.cs, ap);
         fltProposal(n.cs, n.typed, ap);
       } catch (e) {
@@ -26081,7 +26158,8 @@ window.addEventListener("scroll", hidePop, true);
     $("#hFlightOut").addEventListener("click", e => {
       if (e.target.closest("#hFlightX")) { fltHide(); return; }
       const row = e.target.closest(".flt-row");
-      if (row) fltApply(row.dataset.dep, row.dataset.dest);
+      if (row) fltApply(row.dataset.dep, row.dataset.dest,
+        row.dataset.tko ? { tko: row.dataset.tko, eta: row.dataset.eta || null } : null);
     });
 
 
