@@ -6316,35 +6316,23 @@ body.light .stat.on {
        pictogramme Weather est carré par nature, les deux photos s'alignent
        sur lui — trois images de meme gabarit, quelle que soit la largeur de
        la case qui les porte. */
-    /* Liseré MARQUÉ autour de la vignette : sur un fond clair, une photo au
-       ciel pâle se noyait dans la page et la case perdait son bord. Deux
-       pixels de cyan plutôt qu'un trait de séparation — il doit se voir de
-       loin, dans les deux thèmes. box-sizing en border-box : le trait se prend
-       dans les 128 px, le gabarit des trois images ne bouge pas d'un pixel. */
+    /* Liseré cyan retiré des quatre cases (6 sept. 2026) — NOTAM et MAP
+       l'avaient déjà perdu, MINIMA et WEATHER le perdent à leur tour. Il
+       servait à empêcher une photo au ciel pâle de se noyer dans la page ;
+       les vignettes NOTAM, MINIMA et MAP sont des icônes au fond noir
+       dégradé qui portent déjà leur propre bord, et le ciel d'orage de
+       WEATHER se détache assez fort sur le fond de la page pour s'en
+       passer aussi — les encadrer revenait à cercler un cadre. */
     .home-card img {
       width: min(128px, 100%);
       aspect-ratio: 1;
       height: auto;
       object-fit: cover;
-      border: 2px solid var(--cyan);
+      border: 0;
       box-sizing: border-box;
       border-radius: 14px;
       display: block;
       background: none
-    }
-
-    /* Vignettes NOTAM et MAP (5 et 6 sept. 2026) : SANS LISERÉ, deux des
-       quatre. Le trait cyan est là pour empêcher une photo au ciel pâle de se
-       noyer dans la page ; ces deux-là sont des icônes au fond noir dégradé,
-       elles portent déjà leur propre bord et les encadrer revenait à cercler
-       un cadre. Weather et Minima le gardent : ce sont des photos, elles en
-       ont l'usage.
-       Depuis le 6 sept. 2026 les deux PNG sont RECADRÉS à l'intérieur de leur
-       coin arrondi : plus de coins noirs à détourer, le dégradé remplit le
-       carré bord à bord et c'est le border-radius ci-dessus qui arrondit. */
-    #homeNotamCard img,
-    #homeMapCard img {
-      border: 0
     }
 
     /* Weather a quitte le pictogramme pour un cliche (27 aout 2026) : les
