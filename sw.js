@@ -355,6 +355,29 @@ self.addEventListener("fetch", e => {
     return;
   }
 
+  // 3 septies) LOGOS DE COMPAGNIE (/api/cie/AF) : cache d'abord, ET dépôt.
+  //    Un logo ne change pas — le proxy le donne pour un an, immuable —, donc
+  //    une copie en cache est forcément la bonne. Cache d'abord et pas réseau
+  //    d'abord pour deux raisons : c'est la seule façon qu'une liste de départs
+  //    garde ses logos au parking sans réseau, et une soixantaine d'images par
+  //    terrain n'ont aucune raison de repasser par le réseau à chaque ouverture
+  //    de la fenêtre. Comme la règle 5, le dépôt se fait au premier passage en
+  //    ligne : rien n'est pré-caché, on ne paie que les compagnies rencontrées.
+  //    Un 404 (compagnie que la source ne connaît pas) n'est pas déposé : la
+  //    ligne reste simplement sans logo.
+  if (url.includes("/api/cie/")) {
+    e.respondWith(
+      caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
+        if (r && r.ok && r.status === 200) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }))
+    );
+    return;
+  }
+
   // 3 quinquies) CARREAUX RADAR / SATELLITE et statut de la couche Storm
   //    (/api/storm/) : réseau seul, JAMAIS de copie — une image d'orage
   //    d'il y a deux heures passerait pour le présent, et le statut date les

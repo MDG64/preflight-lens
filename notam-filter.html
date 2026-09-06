@@ -18,7 +18,7 @@
        routes par indicatif de vol (Virtual Radar Server, CC0), interrogé en
        direct par la case « Flight » de l'accueil — il sert du JSON avec un
        en-tête CORS ouvert, donc sans passer par le proxy. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org https://raw.githubusercontent.com https://vrs-standing-data.adsb.lol http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://notam-proxy-production.up.railway.app http://127.0.0.1:8787; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org https://raw.githubusercontent.com https://vrs-standing-data.adsb.lol http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Détecteurs de données d'iOS, coupés comme sur minima.html. Sans cela,
        la tablette souligne de son propre trait les suites de chiffres qu'elle
@@ -5418,15 +5418,43 @@ body.light .stat.on {
       font-variant-numeric: tabular-nums
     }
 
-    /* `margin-left:auto` : sans la ville pour prendre le mou — écran étroit —
-       le numéro et les deux heures se rangent quand même à droite. */
+    /* La case du logo, devant le numéro. Elle est TOUJOURS là, même vide :
+       c'est elle qui porte désormais le `margin-left:auto` — sans la ville
+       pour prendre le mou, écran étroit, le bloc « logo + numéro + heures »
+       se range quand même à droite. Si elle ne s'affichait que pour les
+       compagnies reconnues, une ligne sur deux perdrait son alignement.
+       `align-self:center` parce que la ligne aligne ses textes sur la ligne de
+       base : une image, elle, se cale sur son milieu. */
+    .vols-j .vj-c {
+      flex: none;
+      margin-left: auto;
+      align-self: center;
+      width: 46px;
+      height: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end
+    }
+
+    /* Fond blanc et coins arrondis : ces logos sont dessinés en sombre sur
+       transparent — sur le fond nuit de l'app, la moitié d'entre eux seraient
+       invisibles. La pastille les rend lisibles dans les deux thèmes sans
+       toucher à leurs couleurs, ce qu'une marque déposée n'aime pas. */
+    .cie-l {
+      max-width: 100%;
+      max-height: 100%;
+      background: #fff;
+      border-radius: 3px;
+      padding: 1px;
+      box-sizing: border-box
+    }
+
     .vols-j .vj-n {
       font: 500 12px/1 var(--mono);
       letter-spacing: .06em;
       color: var(--text);
       flex: none;
       min-width: 58px;
-      margin-left: auto;
       text-align: right
     }
 
@@ -5467,6 +5495,9 @@ body.light .stat.on {
       .vols-j .vj-v { display: none }
       .vols-j .vj-d { min-width: 46px }
       .vols-j .vj-p, .vols-j .vj-a { min-width: 38px }
+      /* Le logo rétrécit avec le reste plutôt que de disparaître : la ville
+         partie, c'est lui qui identifie le vol le plus vite. */
+      .vols-j .vj-c { width: 36px; height: 13px }
       .vols-j .vj-n { min-width: 0 }
       .vols-j .vj-h { min-width: 48px }
       .vols-j .vj-e { min-width: 44px }
@@ -5541,7 +5572,12 @@ body.light .stat.on {
       background: var(--panel2)
     }
 
+    /* `inline-flex` depuis que la puce porte le logo devant le numéro : la
+       hauteur de l'image ne doit pas décaler le texte de sa ligne de base. */
     .vols-f button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       font: 600 12px/1 var(--mono);
       letter-spacing: .08em;
       color: var(--text);
@@ -5550,6 +5586,13 @@ body.light .stat.on {
       border-radius: 7px;
       padding: 7px 9px;
       cursor: pointer
+    }
+
+    .vols-f button .cie-l {
+      flex: none;
+      width: auto;
+      height: 13px;
+      max-width: 42px
     }
 
     .vols-f button:hover {
@@ -5678,6 +5721,15 @@ body.light .stat.on {
 
     .flt-head .flt-cs {
       color: var(--cyan)
+    }
+
+    /* La bande de proposition n'a qu'un indicatif : le logo y tient sa vraie
+       taille, sans case fixe — il n'y a aucune colonne à aligner ici. */
+    .flt-head .cie-l {
+      flex: none;
+      width: auto;
+      height: 16px;
+      max-width: 54px
     }
 
     /* Ce que le pilote a saisi, quand ce n'est pas ce qu'on est allé
@@ -26153,6 +26205,37 @@ window.addEventListener("scroll", hidePop, true);
     function fltAirline(iata) { fltTables(); return fltAirlineMap.get(iata) || ""; }
     function fltAirlineIata(icao) { fltTables(); return fltAirlineRev.get(icao) || ""; }
 
+    /* ---- le logo de la compagnie, devant le numéro de vol (2026-09-06) ----
+       « VY8019 » ne dit rien à qui ne connaît pas les préfixes ; le logo de
+       Vueling, si. Et le code de compagnie se lit dans l'identifiant lui-même,
+       quelle que soit sa forme : c'est le PRÉFIXE qui la porte — deux
+       caractères en commercial (VY8019), trois en OACI (VLG8019) —, et la
+       table ci-dessus traduit le second dans le premier. Rien de plus à
+       demander au serveur : les entrées déjà en cache chez lui n'ont pas
+       toutes de champ compagnie, le numéro, lui, est toujours là.
+
+       Un préfixe que la table ne connaît d'aucun côté ne donne PAS de logo :
+       mieux vaut rien qu'une requête au hasard sur deux caractères qui ne sont
+       peut-être pas un code de compagnie.
+
+       `alt` vide à dessein. Le numéro de vol est juste à côté et dit déjà la
+       compagnie à qui sait la lire ; l'image n'est qu'un raccourci pour l'œil.
+       Une image qui ne charge pas — hors ligne, ou compagnie que la source ne
+       connaît pas — ne laisse alors rien du tout, et surtout pas un cadre
+       cassé : la colonne garde sa place, la ligne ne s'excuse pas. */
+    const CIE_URL = BACKEND_URL + "/api/cie/";
+    function cieIata(id) {
+      const s = String(id || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const o = /^([A-Z]{3})\d/.exec(s);
+      if (o) return fltAirlineIata(o[1]);
+      const i = /^([A-Z0-9]{2})\d/.exec(s);
+      return (i && fltAirline(i[1])) ? i[1] : "";
+    }
+    function cieLogo(id) {
+      const c = cieIata(id);
+      return c ? `<img class="cie-l" src="${CIE_URL}${c}" alt="" loading="lazy" decoding="async">` : "";
+    }
+
     /* ---- normalisation de la saisie ----
        Quatre formes arrivent dans la case, une seule en sort.
 
@@ -26241,7 +26324,7 @@ window.addEventListener("scroll", hidePop, true);
     function fltClear() { const el = $("#hFlight"); if (el) el.value = ""; fltLast = ""; fltTok++; fltHide(); }
     function fltHead(cs, typed) {
       const from = (typed && typed !== cs) ? `<span class="flt-from">typed ${esc(typed)}</span>` : "";
-      return `<div class="flt-head"><span class="flt-cs">${esc(cs)}</span>${from}
+      return `<div class="flt-head">${cieLogo(cs)}<span class="flt-cs">${esc(cs)}</span>${from}
         <button class="flt-x" type="button" id="hFlightX" aria-label="Close this proposal" title="Close">&times;</button></div>`;
     }
     function fltMsg(cs, typed, msg) { fltShow(fltHead(cs, typed) + `<div class="flt-msg">${esc(msg)}</div>`); }
@@ -26730,7 +26813,8 @@ window.addEventListener("scroll", hidePop, true);
         aria-label="${esc(v.num)}, ${esc(v.dep)} to ${esc(v.arr)}${d ? " on " + esc(d) : ""} at ${esc(vjH(v.tko))}"><span
         class="vj-d">${esc(d)}</span><span class="vj-p">${esc(v.dep)}</span><span
         class="vj-ar">→</span><span class="vj-a">${esc(v.arr)}</span><span
-        class="vj-v">${esc(v.arrn || "")}</span><span class="vj-n">${esc(v.num)}</span><span
+        class="vj-v">${esc(v.arrn || "")}</span><span class="vj-c">${cieLogo(v.num)}</span><span
+        class="vj-n">${esc(v.num)}</span><span
         class="vj-h">${esc(vjH(v.tko))}</span><span class="vj-e">${esc(vjH(v.eta))}</span></button>`;
     }
 
@@ -26814,7 +26898,7 @@ window.addEventListener("scroll", hidePop, true);
           aria-expanded="${ouvert}"><span class="c">${esc(d.d)}</span><span
           class="v">${esc(ville)}</span><span class="n">${d.f.length}</span></button>`;
         if (!ouvert) return tete;
-        const puces = f.map(c => `<button type="button" data-f="${esc(c)}" data-d="${esc(d.d)}">${esc(c)}</button>`).join("");
+        const puces = f.map(c => `<button type="button" data-f="${esc(c)}" data-d="${esc(d.d)}">${cieLogo(c)}${esc(c)}</button>`).join("");
         return tete + `<div class="vols-f">${puces}</div>`;
       }).join("") + `<div class="vols-src">Flight routes: Virtual Radar Server standing data (CC0), mirrored by adsb.lol.</div>`;
     }
