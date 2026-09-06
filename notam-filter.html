@@ -26189,61 +26189,69 @@ window.addEventListener("scroll", hidePop, true);
       }
       if (raw === fltLast && !$("#hFlightOut").hidden) return;   // déjà affiché, on ne redemande pas
       fltLast = raw;
-      const cached = fltSeenGet(n.cs);
-      if (cached) { fltProposal(n.cs, n.typed, cached); return; }
       const tok = ++fltTok;
       const box = $("#hFlightBox");
       box.classList.add("busy");
-      fltShow(fltHead(n.cs, n.typed) + `<div class="flt-msg">Looking up the route database…</div>`);
+      fltShow(fltHead(n.cs, n.typed) + `<div class="flt-msg">Looking up the schedule…</div>`);
+
+      /* ---- L'HORAIRE PUBLIÉ D'ABORD, LE CATALOGUE ENSUITE ----
+         L'ordre inverse a tenu deux versions, et il était mauvais. Le catalogue
+         VRS est gratuit et instantané, mais mesuré le 2026-09-06 sur 114 départs
+         réels d'Oslo (Tools/vrs-couverture.mjs, flux public Avinor) : juste à
+         86,0 %, absent à 11,4 %, et PRÉSENT MAIS FAUX à 2,6 % — il nomme alors
+         des terrains d'où le vol ne part pas. Un vol sur sept manque ou trompe.
+
+         Proposer d'abord le catalogue revenait donc à montrer une route fausse
+         une fois sur sept, et à ne la corriger qu'APRÈS que le pilote l'ait
+         confirmée. Corriger après coup n'est pas la même chose que ne pas se
+         tromper : le pilote a déjà lu « Reus → Orly » et l'a cru.
+
+         L'horaire publié répond juste et rend l'étape ET les heures. Il coûte
+         2 unités par couple (numéro, date), mutualisées côté proxy : le
+         deuxième pilote qui cherche le même vol le même jour ne paie rien. Et
+         ces 2 unités remplacent celles qu'on dépensait de toute façon au tap —
+         le tableau du terrain en coûtait 2 à 8. La recherche revient donc MOINS
+         cher qu'avant, en plus d'être juste.
+
+         Le catalogue garde deux emplois où il est irremplaçable : quand
+         l'horairiste ne connaît pas le vol, et HORS LIGNE, où il est la seule
+         chose que l'app possède. */
       try {
+        const vols = await fltNumero(n.com || n.typed || n.cs);
+        if (tok !== fltTok) return;
+        if (vols) { fltProposalVols(n.cs, n.typed, vols); return; }
+
+        fltShow(fltHead(n.cs, n.typed)
+          + `<div class="flt-msg">No schedule for today or tomorrow — checking the route database…</div>`);
         let ap = await fltFetch(n.cs);
         if (!ap && n.alt) ap = await fltFetch(n.alt);      // la forme à zéros, si on en avait retiré
         if (tok !== fltTok) return;
-        if (!ap) {
-          /* Le catalogue gratuit ne connaît pas ce vol. Mesuré le 2026-09-06 sur
-             114 départs réels d'Oslo (flux public Avinor) : 11,4 % des vols lui
-             manquent, surtout chez Norwegian, Widerøe et Wizz. Ce n'est donc pas
-             un cas rare, et c'est le SEUL endroit d'où part un appel payant :
-             après l'échec du gratuit, jamais avant.
+        if (ap) { fltSeenPut(n.cs, ap); fltProposal(n.cs, n.typed, ap); return; }
 
-             DEUX CHEMINS PAYANTS, ET L'ORDRE COMPTE. Ils coûtent le MÊME prix de
-             2 unités, mais l'un rend un vol et l'autre tout un terrain (487 vols
-             à Roissy, mesuré). Donc : si le pilote a DÉJÀ saisi son terrain de
-             départ, on demande le TABLEAU de ce terrain, et la dépense profite à
-             tous les pilotes qui en partiront le même jour. Ce n'est qu'à défaut
-             qu'on paie le vol seul.
-
-             On n'IMPOSE pas la saisie du terrain pour autant : dans les 89 % de
-             cas où le catalogue connaît le vol, il donne le terrain gratuitement
-             et le tableau appelé ensuite est le même — l'exiger ne rapporterait
-             rien et retirerait à la case Flight sa raison d'être. */
-          const cles = [...new Set([n.cs, n.typed, n.com].filter(Boolean))];
-          const dep0 = rVal("#hFrom");
-          if (/^[A-Z]{4}$/.test(dep0)) {
-            fltShow(fltHead(n.cs, n.typed)
-              + `<div class="flt-msg">Not in the route database — checking ${esc(dep0)} departures…</div>`);
-            const r = await fltHeure(dep0, cles);
-            if (tok !== fltTok) return;
-            if (r && r.arr) {
-              fltProposalVols(n.cs, n.typed,
-                [{ dep: dep0, arr: r.arr, tko: r.tko, eta: r.eta }]);
-              return;
-            }
-          }
+        /* Dernier recours : le tableau du terrain que le pilote a saisi
+           lui-même. On ne l'achète que pour un terrain SÛR, jamais pour un
+           terrain deviné — c'est ce pari-là qui a coûté 8 unités pour rien sur
+           VLG8019, le catalogue ayant nommé Reus quand le vol partait d'Orly. */
+        const dep0 = rVal("#hFrom");
+        if (/^[A-Z]{4}$/.test(dep0)) {
           fltShow(fltHead(n.cs, n.typed)
-            + `<div class="flt-msg">Not in the route database — looking up today's schedule…</div>`);
-          const vols = await fltNumero(n.com || n.typed || n.cs);
+            + `<div class="flt-msg">Checking ${esc(dep0)} departures…</div>`);
+          const r = await fltHeure(dep0, [...new Set([n.cs, n.typed, n.com].filter(Boolean))]);
           if (tok !== fltTok) return;
-          if (vols) { fltProposalVols(n.cs, n.typed, vols); return; }
-          fltMsg(n.cs, n.typed, "Flight not found — type the two codes below.");
-          return;
+          if (r && r.arr) {
+            fltProposalVols(n.cs, n.typed, [{ dep: dep0, arr: r.arr, tko: r.tko, eta: r.eta }]);
+            return;
+          }
         }
-        fltSeenPut(n.cs, ap);
-        fltProposal(n.cs, n.typed, ap);
+        fltMsg(n.cs, n.typed, "Flight not found — type the two codes below.");
       } catch (e) {
         if (tok !== fltTok) return;
+        /* Hors ligne, la copie gardée est tout ce qui reste — et elle vaut
+           mieux que rien, puisqu'un terrain se vérifie sur sa ville. */
+        const garde = fltSeenGet(n.cs);
+        if (garde) { fltProposal(n.cs, n.typed, garde); return; }
         fltMsg(n.cs, n.typed, navigator.onLine
-          ? "Route database unavailable — type the two codes below."
+          ? "Lookup unavailable — type the two codes below."
           : "Offline — a flight looked up before is kept, this one was not.");
       } finally {
         if (tok === fltTok) box.classList.remove("busy");
