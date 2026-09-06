@@ -4176,6 +4176,10 @@
        suffit. */
     #mapOv .map-turb-ctl .turb-hours {
       display: flex;
+      /* Cinq crans depuis le +24 h : sur un téléphone la rangée passe à la
+         ligne plutôt que de pousser le cartouche hors de l'écran. */
+      flex-wrap: wrap;
+      row-gap: 8px;
       background: none;
       border: 0;
       padding: 0;
@@ -8850,8 +8854,13 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              couche TURBULENCE est allumée. Neuf niveaux, ceux de la carte WAFS de
              l'AWC : à 25 km de maille, un pas de 1 000 ft ne dirait rien de
              plus. L'horizon choisit l'échéance de prévision : NOW = l'heure
-             de prévision la plus proche de maintenant, +3/+6/+12 h = celle
-             de maintenant plus ce délai — pour un départ dans la journée. -->
+             de prévision la plus proche de maintenant, +3/+6/+12/+24 h = celle
+             de maintenant plus ce délai. Le cran +24 h (2026-09-06) est venu
+             des heures du vol : la grille couvre le cycle + 36 h, mais on ne
+             pouvait viser qu'à +12 h — un vol posé pour demain soir n'était
+             pas regardable sur la carte. Au-delà de la dernière échéance
+             publiée, le cartouche le DIT au lieu de servir la plus proche en
+             silence. -->
         <div class="map-mode map-turb-ctl" id="mapTurbCtl">
           <div class="tfl">
             <span class="lb">FL</span>
@@ -8859,11 +8868,12 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             <output class="tfl-out" id="mapTurbFlOut" for="mapTurbFl">FL340</output>
           </div>
           <div class="map-wind-hours turb-hours" id="mapTurbHours" role="radiogroup" aria-label="Turbulence forecast time"
-               title="Forecast time — NOW is the model hour nearest to now; +3/+6/+12 h look ahead by that delay.">
+               title="Forecast time — NOW is the model hour nearest to now; +3/+6/+12/+24 h look ahead by that delay. The cartouche names the day whenever the forecast hour is no longer today.">
             <button type="button" class="wh on" data-h="0" aria-label="Turbulence now"><i class="c" aria-hidden="true"></i>now</button>
             <button type="button" class="wh" data-h="3" aria-label="Turbulence in 3 hours"><i class="c" aria-hidden="true"></i>+3h</button>
             <button type="button" class="wh" data-h="6" aria-label="Turbulence in 6 hours"><i class="c" aria-hidden="true"></i>+6h</button>
             <button type="button" class="wh" data-h="12" aria-label="Turbulence in 12 hours"><i class="c" aria-hidden="true"></i>+12h</button>
+            <button type="button" class="wh" data-h="24" aria-label="Turbulence in 24 hours"><i class="c" aria-hidden="true"></i>+24h</button>
           </div>
           <!-- Cycle et heure de validité de la grille affichée : une prévision
                sans son heure ne se juge pas. Rempli par mapTurbNote(). Le
@@ -9102,7 +9112,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             colours, the ⚡ and the QFU step aside, this layer answers about the air en route, not about the
             aerodromes &mdash; and shades the <b>forecast turbulence
             zones</b> at the flight level set by the <b>FL slider</b> — yellow light, orange moderate, red
-            severe — for now or <b>+3/+6/+12&nbsp;h</b>; the cartouche names the GFS run and the valid hour.
+            severe — for now or <b>+3/+6/+12/+24&nbsp;h</b>; the cartouche names the GFS run and the valid hour, with the day whenever it is no longer today.
             It is a clear-air turbulence index computed on the model winds, with a convective proxy under
             storms, on ~50 km cells: <b>guidance, not an official aviation weather product</b>, and not the
             WAFS EDR charts of the briefing. With a route entered, the great circle from departure to
@@ -22625,12 +22635,18 @@ function renderInfo(icao) {
            cas — un cartouche ne répète pas « aujourd'hui ». */
         const jourValid = valid.toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10)
           ? " " + turbDateLbl(valid.getTime()) : "";
+        /* L'échéance servie est la PLUS PROCHE de celle qu'on demande : un
+           cran au-delà de la dernière heure publiée rendrait une grille plus
+           tôt sans le dire. On le dit, et on le dit en jaune. */
+        const ecart = Math.abs(valid.getTime() - (Date.now() + mapTurbHour * 3600e3));
+        const horsGrille = ecart > 90 * 60e3;
         mapTurbNote("GFS " + hh(new Date(runMs)) + "Z run · valid " + hh(valid) + "Z" + jourValid + " (+" + fh + " h)"
           + (index.grid && index.grid.dlon ? " · " + index.grid.dlon + "° grid" : "")
+          + (horsGrille ? " · beyond the last forecast hour — this is the closest published" : "")
           + (stale ? " · OLD RUN" : "")
           + (nSig < 0 ? " · SIGMET unavailable"
             : nSig ? " · " + nSig + " SIGMET TURB here" + (mapTurbSigOn ? "" : " (hidden)")
-            : " · no SIGMET at this level and hour"), stale);
+            : " · no SIGMET at this level and hour"), stale || horsGrille);
         mapTurbProfile(index, seq);        // le profil H+x suit, sans retenir la carte
       } catch (e) {
         if (seq !== mapTurbSeq) return;
