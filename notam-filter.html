@@ -22620,7 +22620,12 @@ function renderInfo(icao) {
         const sc = await sigP;
         if (seq !== mapTurbSeq) return;
         const nSig = sc.err ? -1 : sigForLevel(sc.list, fl * 100, runMs + fh * 3600e3).length;
-        mapTurbNote("GFS " + hh(new Date(runMs)) + "Z run · valid " + hh(valid) + "Z (+" + fh + " h)"
+        /* « valid 09Z » ne dit pas QUEL 09Z : au cran +12 h, la validité
+           tombe souvent le lendemain. Le quantième n'apparaît que dans ce
+           cas — un cartouche ne répète pas « aujourd'hui ». */
+        const jourValid = valid.toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10)
+          ? " " + turbDateLbl(valid.getTime()) : "";
+        mapTurbNote("GFS " + hh(new Date(runMs)) + "Z run · valid " + hh(valid) + "Z" + jourValid + " (+" + fh + " h)"
           + (index.grid && index.grid.dlon ? " · " + index.grid.dlon + "° grid" : "")
           + (stale ? " · OLD RUN" : "")
           + (nSig < 0 ? " · SIGMET unavailable"
@@ -28900,8 +28905,25 @@ function dtsAUnQfu(icao){
       // Une visite d'avant la bande a pu laisser un FL sous son premier cran :
       // on le remonte, sinon la case et la bande ne diraient pas la même chose.
       turbCfg.fl = Math.max(90, Math.min(500, Math.round(turbCfg.fl / 10) * 10));
-      if (mode === "new" || !turbCfg.t0) turbCfg.t0 = Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
-      if (mode !== "keep" || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) turbCfg.t1 = turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
+      /* L'heure du vol vient de l'ACCUEIL quand il en tient une pour cette
+         route — jour compris (dt). Sans elle, cette page étudiait un départ
+         dans 30 minutes, aujourd'hui : un vol posé pour demain matin y était
+         donc jugé sur la mauvaise tranche de prévision, en silence. Les
+         heures du pilote restent les siennes (« keep »), et une route qu'il
+         a retapée ici ne va pas chercher celle de l'accueil. */
+      const surRoute = HT.codes[0] === dep && HT.codes[1] === arr;
+      const htAt = k => {
+        const t = surRoute && HT[k];
+        const c = t ? hhmmDate(t.h, t.dt) : null;
+        return c ? c.getTime() : null;
+      };
+      if (mode === "new" || !turbCfg.t0)
+        turbCfg.t0 = htAt("tko") || Math.ceil((Date.now() + 30 * 60e3) / (5 * 60e3)) * 5 * 60e3;
+      if (mode !== "keep" || !turbCfg.t1 || turbCfg.t1 <= turbCfg.t0) {
+        const eta = htAt("eta");
+        turbCfg.t1 = (eta && eta > turbCfg.t0 && eta - turbCfg.t0 < 24 * 3600e3) ? eta
+          : turbCfg.t0 + Math.round(dist ? turbProfile(dist, turbCfg.fl * 100).total : 0) * 60e3;
+      }
       turbRenderForm();
       turbSchedule();
     }
@@ -29469,7 +29491,11 @@ function dtsAUnQfu(icao){
       el.onkeydown = e => { if (e.key === "Enter") el.blur(); };
     });
     $("#turbDepTime").onchange = () => {
-      const t = turbReadTime("#turbDepTime", Date.now(), 6 * 3600e3, 18 * 3600e3);
+      /* Corrigée autour du départ AFFICHÉ, pas autour de maintenant : sur un
+         vol de demain soir, l'ancre « maintenant » ramenait toute heure tapée
+         au jour même — il n'y avait aucun moyen d'exprimer ce départ-là. Le
+         quantième sous la case dit lequel des deux jours a été retenu. */
+      const t = turbReadTime("#turbDepTime", turbCfg.t0 || Date.now(), 6 * 3600e3, 18 * 3600e3);
       if (t == null) return;
       const ete = turbCfg.t1 - turbCfg.t0;          // le temps de vol suit le départ
       turbCfg.t0 = t; turbCfg.t1 = t + ete;
