@@ -39,7 +39,7 @@ const ASSETS = [
   // Photos des cases d'accueil (19 aout 2026). Meme regle que les icones :
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
   // refonte d'image change le suffixe, on n'ecrase jamais en place.
-  "./home-wx-v8.jpg", "./home-notam-v18.png", "./home-map-v8.png", "./home-minima-v2.png",
+  "./home-wx-v9.png", "./home-notam-v18.png", "./home-map-v8.png", "./home-minima-v2.png",
   // MINIMAS (28 aout 2026) : le module minima (copie déployée de Minima Lens)
   // et ses deux bases embarquées — la page doit s'ouvrir en vol, comme l'hôte.
   // Les bases se régénèrent (recompilation du seed, fiches d'approche) : la
@@ -320,6 +320,27 @@ self.addEventListener("fetch", e => {
         }
         return r;
       }).catch(() => caches.match(e.request))   // hors ligne : la dernière liste
+    );
+    return;
+  }
+
+  // 3 sexies) CATALOGUE DES VOLS AU DÉPART (/api/vols/LFPG) : réseau d'abord,
+  //    copie en filet. C'est un catalogue, pas un tableau des départs : il ne
+  //    porte aucune heure et ne se périme donc pas dans la journée — le proxy
+  //    lui-même ne le reconstruit qu'une fois par jour. Le garder rend la
+  //    liste consultable au parking sans réseau, sur les terrains déjà
+  //    ouverts, ce qui est exactement le moment où l'on prépare le vol.
+  //    Une entrée par terrain : le pilote en consulte deux ou trois, pas
+  //    trois mille, et chaque corps pèse 17 ko gzipé au plus gros.
+  if (url.includes("/api/vols/")) {
+    e.respondWith(
+      fetch(e.request).then(r => {
+        if (r && r.ok) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }).catch(() => caches.match(e.request))   // hors ligne : le dernier catalogue vu
     );
     return;
   }

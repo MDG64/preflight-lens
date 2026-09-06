@@ -5193,6 +5193,177 @@ body.light .stat.on {
       height: var(--code-h)
     }
 
+    /* ---------- les vols au départ (2026-09-06) ----------
+       La fenêtre qu'ouvre la case « Flight ». Reprend .modal-ov / .modal /
+       .modal-x, mais la tête ne défile pas : le titre, l'avertissement et la
+       barre de recherche restent en place pendant qu'on parcourt 433
+       destinations. */
+    .vols-modal {
+      max-width: 560px;
+      display: flex;
+      flex-direction: column;
+      max-height: 86vh
+    }
+
+    .vols-head {
+      flex: none;
+      padding: 20px 52px 12px 20px;
+      border-bottom: 1px solid var(--line)
+    }
+
+    .vols-head .hd-title {
+      margin-bottom: 8px
+    }
+
+    /* Ce que la liste n'est pas. Le ton du texte suffit — pas de cadre rouge,
+       qui est réservé à l'avertissement d'usage de l'aide. */
+    .vols-note {
+      font: 400 11.5px/1.45 var(--sans);
+      color: var(--muted);
+      margin-bottom: 12px
+    }
+
+    .vols-note b {
+      color: var(--text);
+      font-weight: 600
+    }
+
+    .vols-q {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 12px;
+      border: 1px solid var(--line2);
+      border-radius: 9px;
+      background: #06101a;
+      color: var(--text);
+      font: 500 13px/1.2 var(--mono);
+      letter-spacing: .06em;
+      outline: 0
+    }
+
+    body.light .vols-q {
+      background: #f4f7f9
+    }
+
+    .vols-q:focus {
+      border-color: var(--cyan)
+    }
+
+    .vols-q::placeholder {
+      font-family: var(--sans);
+      letter-spacing: 0;
+      color: var(--muted2)
+    }
+
+    .vols-list {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      padding: 6px 0 14px
+    }
+
+    /* Une destination par ligne : le code, la ville, et le nombre de vols.
+       Le bouton porte toute la ligne — on l'ouvre d'un doigt. */
+    .vols-d {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      padding: 11px 20px;
+      color: var(--text);
+      cursor: pointer
+    }
+
+    .vols-d:hover {
+      background: var(--panel2)
+    }
+
+    .vols-d .c {
+      font: 600 13px/1 var(--mono);
+      letter-spacing: .1em;
+      color: var(--cyan);
+      flex: none;
+      min-width: 46px
+    }
+
+    .vols-d .i {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .1em;
+      color: var(--muted2);
+      flex: none
+    }
+
+    .vols-d .v {
+      font: 400 12px/1.3 var(--sans);
+      color: var(--muted);
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .vols-d .n {
+      font: 500 10px/1 var(--mono);
+      color: var(--muted2);
+      flex: none
+    }
+
+    .vols-d.on {
+      background: var(--panel2)
+    }
+
+    .vols-d.on .n {
+      color: var(--cyan)
+    }
+
+    /* Les numéros de vol d'une destination, dépliés sous elle : des puces,
+       pas des lignes — il y en a jusqu'à trente-cinq et elles se lisent d'un
+       coup d'œil en grille. */
+    .vols-f {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 20px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel2)
+    }
+
+    .vols-f button {
+      font: 600 12px/1 var(--mono);
+      letter-spacing: .08em;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--line2);
+      border-radius: 7px;
+      padding: 7px 9px;
+      cursor: pointer
+    }
+
+    .vols-f button:hover {
+      border-color: var(--cyan);
+      color: var(--cyan)
+    }
+
+    .vols-empty {
+      padding: 18px 20px;
+      font: 400 12px/1.5 var(--sans);
+      color: var(--muted)
+    }
+
+    /* Le crédit de la source, au pied de la liste : un seul porteur, comme
+       les autres. */
+    .vols-src {
+      padding: 14px 20px 0;
+      font: 400 10.5px/1.5 var(--sans);
+      color: var(--muted2)
+    }
+
     /* La ligne du haut ne compte pas comme une section de l'accueil : la
        marge négative reprend l'écart de 24 px de `.home-inner` pour que
        l'indicatif et le Clear restent posés sur les cases qu'ils remplissent
@@ -7959,7 +8130,24 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
           <img src="./home-notam-v18.png" alt="" aria-hidden="true" decoding="async">
         </button>
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
-          <img src="./home-wx-v8.jpg" alt="" aria-hidden="true" decoding="async">
+          <!-- Vignette v9 (6 sept. 2026) : le nuage et le soleil d'or
+               remplacent le ciel d'orage — dernière des quatre cases à
+               graver son mot dans l'image, comme MAP, NOTAM et MINIMA.
+               Même méthode que home-minima-v2.png : le mockup source porte
+               un fin biseau lumineux tout le long de son rebord (coins ET
+               côtés droits) — 15 px rognés vers l'intérieur l'éliminent
+               sans jamais approcher le pictogramme (marge utile la plus
+               étroite : 100 px, sous le soleil). Les quatre coins restants
+               sont rebouchés en prolongeant le fond, lissé à grande échelle
+               (le cliché est un JPEG : recopier le pixel le plus proche
+               aurait reconduit ses blocs de compression dans le bouchon).
+               Fond et or calés sur les trois sœurs À LA MESURE : fond
+               neutre à 19,8 sur les trois canaux, or crème à 254/248/213
+               sur les 2000 pixels les plus clairs (repères : MAP
+               255/247/211, NOTAM 254/250/216, MINIMA 254/248/218). Le nom
+               sous la case est retiré comme les trois autres ; il continue
+               d'être dit à la voix par l'aria-label du bouton. -->
+          <img src="./home-wx-v9.png" alt="" aria-hidden="true" decoding="async">
         </button>
         <!-- MINIMAS (28 aout 2026) : le module minima entre à l'accueil —
              la page ./minima.html est la copie déployée de Minima Lens.
@@ -8461,6 +8649,27 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
       </div>
     </div>
   </div>
+
+<!-- LES VOLS AU DÉPART (2026-09-06) — la fenêtre qu'ouvre la case « Flight »
+     quand un terrain de départ est saisi. Les destinations du terrain, et
+     sous chacune ses numéros de vol ; la barre du haut cherche dans les
+     deux, et un numéro de vol complet s'y valide comme dans la case.
+     La bannière dit ce que la liste N'EST PAS : il n'existe aucune source
+     mondiale gratuite donnant l'horaire du jour, la liste n'a donc pas
+     d'heures et n'est pas un tableau des départs. -->
+  <div class="modal-ov" id="volsOv" hidden>
+  <div class="modal vols-modal" role="dialog" aria-modal="true" aria-labelledby="volsTitle">
+    <button class="modal-x" id="volsClose" aria-label="Close">×</button>
+    <div class="vols-head">
+      <h2 class="hd-title" id="volsTitle">Departures</h2>
+      <div class="vols-note" id="volsNote"></div>
+      <input id="volsQ" class="vols-q" type="text" autocomplete="off" spellcheck="false"
+        placeholder="Destination, city or flight number"
+        aria-label="Filter by destination, city or flight number">
+    </div>
+    <div class="vols-list" id="volsList" role="listbox" aria-label="Destinations"></div>
+  </div>
+</div>
 
   <div class="modal-ov" id="helpOv" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-label="How to use">
@@ -25633,6 +25842,181 @@ window.addEventListener("scroll", hidePop, true);
       if (e.target.closest("#hFlightX")) { fltHide(); return; }
       const row = e.target.closest(".flt-row");
       if (row) fltApply(row.dataset.dep, row.dataset.dest);
+    });
+
+
+    /* ---- les vols au départ du terrain saisi (2026-09-06) ----
+       Cliquer dans la case « Flight » avec un départ posé ouvre la liste des
+       destinations de ce terrain, et sous chacune ses numéros de vol. Un
+       numéro choisi remplit la case et pose la route : c'est le même geste
+       que la proposition, par la même porte (fltApply).
+
+       CE QUE LA LISTE N'EST PAS, et l'écran le dit : les départs DU JOUR.
+       Il n'y a ni heure ni jour d'exploitation, parce qu'aucune source
+       mondiale gratuite et utilisable commercialement n'en donne — c'est la
+       conclusion de la recherche du 2026-09-06, détaillée dans l'étude
+       (Weather Lens) et dans l'en-tête de lib/vols.js du proxy. Une liste
+       sans heures qui se présenterait comme un tableau des départs serait un
+       mensonge ; elle se présente donc comme ce qu'elle est, un catalogue.
+
+       La barre du haut cherche dans les codes, les villes ET les numéros de
+       vol. Un numéro complet validé par Entrée referme la fenêtre et part en
+       recherche par indicatif : la fenêtre est un sur-ensemble de la case,
+       jamais un cul-de-sac. */
+    const VOLS_URL = BACKEND_URL + "/api/vols/";
+    let volsData = null;      // le catalogue du terrain ouvert
+    let volsOpen = "";        // destination dépliée
+    let volsTok = 0;
+    const volsCache = new Map();   // OACI -> catalogue, pour la session
+
+    /* volsFerme : l'instant de la fermeture. Le clic qui referme la fenetre
+       retombe sur la case en dessous et la rouvrait aussitot — d'ou le court
+       delai que l'ouverture respecte. */
+    let volsFerme = 0;
+    function volsHide() {
+      $("#volsOv").hidden = true;
+      volsData = null; volsOpen = ""; volsFerme = Date.now();
+    }
+
+    /* Le filtre : un mot suffit, sur le code OACI, le code IATA, la ville ou
+       un numéro de vol. Une destination reste si elle-même correspond, ou si
+       l'un de ses vols correspond — et dans ce dernier cas elle s'ouvre
+       d'elle-même sur les vols qui ont répondu.
+       Les deux côtés passent par le MÊME pliage : majuscules, accents ôtés,
+       espaces ôtés. Sans lui, « new york » ne trouvait rien (la requête était
+       recollée en NEWYORK, la ville non) et « reykjavik » manquait
+       Reykjavík. Ôter les espaces des deux côtés sert aussi le numéro de
+       vol : « AF 6 » cherche AF6. */
+    function volsPli(s) {
+      return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+        .toUpperCase().replace(/[^A-Z0-9]/g, "");
+    }
+    function volsFiltre(q) {
+      const dests = (volsData && volsData.dests) || [];
+      if (!q) return dests.map(d => ({ d, f: d.f }));
+      const t = volsPli(q);
+      if (!t) return dests.map(d => ({ d, f: d.f }));
+      /* Le catalogue est rangé par indicatif OACI (AFR6) ; le pilote tape
+         aussi bien le numéro IATA (AF6). On cherche donc les deux formes —
+         sans quoi « AF6 » ne trouvait rien ici alors qu'Entrée le résolvait
+         très bien. */
+      const n = fltNorm(q), alt = (n && n.cs !== t) ? n.cs : "";
+      const colle = c => c.includes(t) || (alt && c.includes(alt));
+      const out = [];
+      for (const d of dests) {
+        const sur = d.d.includes(t) || (d.i && d.i.includes(t)) || volsPli(d.l).includes(t);
+        const f = sur ? d.f : d.f.filter(colle);
+        if (sur || f.length) out.push({ d, f, force: !sur });
+      }
+      return out;
+    }
+
+    function volsRender() {
+      const box = $("#volsList"), q = ($("#volsQ").value || "").trim();
+      const lignes = volsFiltre(q);
+      if (!lignes.length) {
+        // Un numéro de vol que le catalogue ne connaît pas reste interrogeable
+        // par indicatif : on le dit plutôt que de laisser sur un échec.
+        const suite = fltNorm(q) ? " Press Enter to look it up by callsign." : "";
+        box.innerHTML = `<div class="vols-empty">Nothing matches “${esc(q)}”.${esc(suite)}</div>`;
+        return;
+      }
+      box.innerHTML = lignes.map(({ d, f, force }) => {
+        const ouvert = force || volsOpen === d.d;
+        const ville = [d.l, d.i].filter(Boolean).join(" · ");
+        const tete = `<button class="vols-d ${ouvert ? "on" : ""}" type="button" data-d="${esc(d.d)}"
+          aria-expanded="${ouvert}"><span class="c">${esc(d.d)}</span><span
+          class="v">${esc(ville)}</span><span class="n">${d.f.length}</span></button>`;
+        if (!ouvert) return tete;
+        const puces = f.map(c => `<button type="button" data-f="${esc(c)}" data-d="${esc(d.d)}">${esc(c)}</button>`).join("");
+        return tete + `<div class="vols-f">${puces}</div>`;
+      }).join("") + `<div class="vols-src">Flight routes: Virtual Radar Server standing data (CC0), mirrored by adsb.lol.</div>`;
+    }
+
+    /* La bannière porte le compte réel : « 433 destinations, 3 321 flight
+       numbers » dit d'un coup ce que la liste est, et son silence sur les
+       heures est explicite juste après. */
+    function volsNote() {
+      const d = volsData;
+      const nf = d ? d.dests.reduce((n, x) => n + x.f.length, 0) : 0;
+      $("#volsNote").innerHTML = `<b>${d ? d.n : 0} destinations · ${nf} flight numbers</b> known from this aerodrome.
+        These are <b>not today's departures</b>: no times, no days of operation, no cancellations.
+        Pick a destination to see its flight numbers.`;
+    }
+
+    async function volsOuvrir(dep) {
+      const ov = $("#volsOv");
+      $("#volsTitle").textContent = "Departures from " + dep;
+      $("#volsQ").value = "";
+      volsOpen = "";
+      const tok = ++volsTok;
+      const hit = volsCache.get(dep);
+      if (hit) { volsData = hit; volsNote(); volsRender(); }
+      else {
+        volsData = null;
+        $("#volsNote").textContent = "";
+        $("#volsList").innerHTML = `<div class="vols-empty">Loading the flight catalogue…</div>`;
+      }
+      ov.hidden = false;
+      $("#volsQ").focus();
+      if (hit) return;
+      try {
+        const r = await fetch(VOLS_URL + dep);
+        if (tok !== volsTok) return;
+        if (r.status === 404) {
+          $("#volsList").innerHTML = `<div class="vols-empty">No departure is known from <b>${esc(dep)}</b> in the route database — it only covers scheduled commercial traffic.</div>`;
+          return;
+        }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const j = await r.json();
+        if (tok !== volsTok) return;
+        volsCache.set(dep, j);
+        volsData = j; volsNote(); volsRender();
+      } catch (e) {
+        if (tok !== volsTok) return;
+        $("#volsList").innerHTML = `<div class="vols-empty">${navigator.onLine
+          ? "Flight catalogue unavailable — type the flight number or the two codes instead."
+          : "Offline — the flight catalogue needs a connection."}</div>`;
+      }
+    }
+
+    $("#volsClose").onclick = volsHide;
+    $("#volsOv").addEventListener("click", e => { if (e.target === $("#volsOv")) volsHide(); });
+    $("#volsQ").addEventListener("input", volsRender);
+    /* Entrée sur un numéro de vol complet : on referme et on part en
+       recherche par indicatif, exactement comme depuis la case. */
+    $("#volsQ").addEventListener("keydown", e => {
+      if (e.key === "Escape") { volsHide(); $("#hFlight").focus(); return; }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const q = ($("#volsQ").value || "").trim();
+      if (!fltNorm(q)) return;
+      volsHide();
+      $("#hFlight").value = q.toUpperCase();
+      renderHomeStars();
+      fltGo();
+    });
+    $("#volsList").addEventListener("click", e => {
+      const f = e.target.closest("[data-f]");
+      if (f) {
+        // Un numéro pris dans la liste : la case le porte, la route se pose,
+        // et l'on n'interroge PAS la base — le couple vient d'elle.
+        $("#hFlight").value = f.dataset.f;
+        fltLast = f.dataset.f;
+        volsHide();
+        fltApply(rVal("#hFrom"), f.dataset.d);
+        return;
+      }
+      const d = e.target.closest("[data-d]");
+      if (d) { volsOpen = volsOpen === d.dataset.d ? "" : d.dataset.d; volsRender(); }
+    });
+    /* L'ouverture : un clic dans la case, un depart valide, et pas de
+       fenetre deja ouverte. Sans depart, la case reste ce qu'elle etait —
+       on ne peut pas lister les vols d'un terrain qu'on ne connait pas. */
+    $("#hFlight").addEventListener("click", () => {
+      const dep = homeFieldCode("#hFrom");
+      if (!dep || !$("#volsOv").hidden || Date.now() - volsFerme < 350) return;
+      volsOuvrir(dep);
     });
 
     $("#homeTabAd").onclick = () => homeSetFavTab("ad");
