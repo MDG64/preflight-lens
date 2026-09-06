@@ -6148,13 +6148,14 @@ body.light .stat.on {
       background: none
     }
 
-    /* Vignette NOTAM (5 sept. 2026) : SANS LISERÉ, seule des quatre. Le trait
-       cyan est là pour empêcher une photo au ciel pâle de se noyer dans la
-       page ; celle-ci est une icône au fond noir dégradé, coins arrondis
-       DÉTOURÉS (PNG à fond transparent) — elle porte déjà son propre bord, et
-       l'encadrer revenait à cercler un cadre. Les trois voisines le gardent :
-       elles en ont l'usage. */
-    #homeNotamCard img {
+    /* Vignettes NOTAM et MAP (5 et 6 sept. 2026) : SANS LISERÉ, deux des
+       quatre. Le trait cyan est là pour empêcher une photo au ciel pâle de se
+       noyer dans la page ; ces deux-là sont des icônes au fond noir dégradé,
+       coins arrondis DÉTOURÉS (PNG à fond transparent) — elles portent déjà
+       leur propre bord, et les encadrer revenait à cercler un cadre. Weather
+       et Minima le gardent : ce sont des photos, elles en ont l'usage. */
+    #homeNotamCard img,
+    #homeMapCard img {
       border: 0
     }
 
@@ -7769,16 +7770,17 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              sœurs : même geste, même taille de cible. Depuis l'arrivée de
              MINIMAS (28 aout 2026), elle ne tient plus la ligne du bas à
              elle seule : quatre cases, carré 2 x 2 sur téléphone. -->
-        <!-- Photo v3 (27 aout 2026) : la carte de l'app elle-meme, golfe de
-             Gascogne, plutot que la photo de carte papier au pion jaune. Prise
-             LARGE puis recadree carre sur toute la hauteur — un cadrage serre
-             coupait les etiquettes et ne laissait voir que trois terrains.
-             Meme gabarit que ses trois soeurs : 768 x 768. -->
+        <!-- Vignette v4 (6 sept. 2026) : l'icone au globe d'or, comme la case
+             NOTAM — le cliche de la carte de l'app (v3, golfe de Gascogne)
+             part avec lui. Meme gabarit que ses trois soeurs : 768 x 768.
+             Le pictogramme porte le mot MAP dans l'image elle-meme, donc le
+             nom sous la case est retire comme celui de NOTAM ; ses DEUX
+             lignes restent, vides, pour que la case garde la hauteur exacte
+             des trois autres. Le nom continue d'etre dit a la voix par
+             l'aria-label du bouton. -->
         <button class="home-card" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
-          <img src="./home-map-v3.jpg" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name">Map</span>
-          <!-- Ligne vide : la case n'a pas de sous-titre à dire, mais elle
-               doit faire la hauteur exacte des trois autres. -->
+          <img src="./home-map-v4.png" alt="" aria-hidden="true" decoding="async">
+          <span class="hc-name" aria-hidden="true">&nbsp;</span>
           <span class="hc-sub" aria-hidden="true">&nbsp;</span>
         </button>
       </div>
