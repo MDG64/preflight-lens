@@ -5885,10 +5885,6 @@ function qlvEstimate(icao){
     const m = fromClusters([{trk: h.trk, off: h.off, n: h.n || 1, last: h.at}], d.ref);
     return m ? {h, m} : null;
   };
-  /* Les flux ÉCARTÉS par la configuration tenue : du trafic observé, sur une
-     candidate, qui n'a pas emporté la bascule. Il ne se perd pas — la bande
-     le montre en note. */
-  const chg = [];
   /* La note de queue, quand l'estimation est retombée sur la préférentielle
      ou le vent : la configuration tenue n'y désigne plus de candidate (vent
      tourné, piste fermée), mais elle DATE, et c'est ce qui dit au pilote que
@@ -5924,18 +5920,12 @@ function qlvEstimate(icao){
        ne renverse pas la bande — à Orly, les gros porteurs qui décollent en
        25 laissaient croire à un terrain en 25 quand il partait en 20. */
     const held = heldOf(kind);
-    const borne = (cs, hk, note) => {
+    const borne = (cs, hk) => {
       const h = hk && hk.h, all = cs || [];
       if (!h) return all;
-      const gardes = all.filter(c => cdiff(c.trk, h.trk) <= QLV_MATCH_DEG);
-      if (note) for (const c of all){
-        if (gardes.includes(c)) continue;
-        const m = fromClusters([c], d.ref);
-        if (m) chg.push({kind, ids: m.ids, n: c.n || 1});
-      }
-      return gardes;
+      return all.filter(c => cdiff(c.trk, h.trk) <= QLV_MATCH_DEG);
     };
-    const now = fromClusters(borne(d ? (kind==="to" ? d.dep : d.arr) : null, held, true), d && d.ref);
+    const now = fromClusters(borne(d ? (kind==="to" ? d.dep : d.arr) : null, held), d && d.ref);
     /* L'heure et l'effectif accompagnent TOUTE observation : la fenêtre du
        serveur cumule une heure de passages, l'heure est celle du dernier
        passage, l'effectif dit combien d'avions ont désigné ces pistes — un
@@ -5947,7 +5937,7 @@ function qlvEstimate(icao){
        est sur une piste, dans le sens du QFU — qu'il atterrisse ou décolle, on
        roule dans le sens où l'on se pose. La fenêtre l'a peut-être attrapé
        quand la finale ou la montée lui ont échappé. */
-    const roll = fromClusters(borne(d ? d.gnd : null, heldOf("gnd"), false), d && d.ref);
+    const roll = fromClusters(borne(d ? d.gnd : null, heldOf("gnd")), d && d.ref);
     if (roll) return Object.assign(roll, {how:`rolling ${hhmmZ(roll.last || at)} ×${roll.n || 1}`, fresh:true});
     /* La fenêtre n'a plus rien dans ce sens : la CONFIGURATION TENUE prend le
        relais, et c'est elle, la mémoire — le QFU observé reste en service
@@ -6017,7 +6007,7 @@ function qlvEstimate(icao){
      mémorisée porte déjà son heure dans sa justification, et un rappel d'une
      heure n'est pas du direct. */
   const obsUsed = !!((to && to.fresh) || (ldg && ldg.fresh));
-  return {d, obsDown, to, ldg, obsUsed, cand, closed, cut, hitsOf, chg};
+  return {d, obsDown, to, ldg, obsUsed, cand, closed, cut, hitsOf};
 }
 /* La bande : l'estimation mise en phrases. */
 function qlvState(icao){
@@ -6026,7 +6016,7 @@ function qlvState(icao){
   if (e.allClosed) return { idle: true,
     html: `<div class="wxpop-lbl">Runway in use · estimated</div>`
       + `<div class="qlv idle"><span class="dot"></span><span class="grp">All runways closed per NOTAM switches</span></div>` };
-  const {d, obsDown, to, ldg, obsUsed, cand, closed, cut, hitsOf, chg} = e;
+  const {d, obsDown, to, ldg, obsUsed, cand, closed, cut, hitsOf} = e;
 
   /* La contradiction se montre : du trafic aligné sur une extrémité écartée —
      fermée, ou vent dans le dos — vaut d'être vu. Soit l'écartement est
@@ -6047,13 +6037,10 @@ function qlvState(icao){
       }
   }
 
-  /* Le trafic qui n'a PAS emporté la configuration : montré, jamais tu. Deux
-     avions de suite sur une sécante feraient basculer la bande ; entrelacés
-     dans le trafic tenu, ils resteront cette ligne — c'est le cas d'Orly, où
-     les gros porteurs décollent en 25 pendant que le terrain part en 20. */
-  const chgNote = (chg || []).map(x =>
-    `<span class="grp"><span class="n">⚠ ${x.n} ${x.kind==="to" ? "departure" : "arrival"}${x.n>1?"s":""}`
-    + ` also observed on ${x.ids.join("/")} — a crossing runway takes two in a row to switch</span></span>`).join("");
+  /* Le trafic qui n'a PAS emporté la configuration ne fait plus de ligne
+     (6 sept. 2026) : la bande désigne une piste, elle n'explique pas la règle
+     des deux avions de suite. Le raisonnement est au fichier d'explications
+     personnel, hors dépôt. */
   const grp = (k, p) => p
     ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
     : "";
@@ -6086,7 +6073,7 @@ function qlvState(icao){
      tient qu'à la théorie — vent et déclarations. */
   const rows = (to || ldg) ? `<div class="qlv-rows">${grp("Take off", to)}${grp("Landing", ldg)}</div>` : "";
   return { html: lbl
-    + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${rows}${conflict}${chgNote}${covNote}${down}</div>` };
+    + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${rows}${conflict}${covNote}${down}</div>` };
 }
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */

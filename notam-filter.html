@@ -26247,9 +26247,6 @@ function dtsAUnQfu(icao){
         const m = fromClusters([{ trk: h.trk, off: h.off, n: h.n || 1, last: h.at }], d.ref);
         return m ? { h, m } : null;
       };
-      /* Les flux ÉCARTÉS par la configuration tenue : du trafic observé, sur
-         une candidate, qui n'a pas emporté la bascule. La bande le montre. */
-      const chg = [];
       /* La note de queue, quand l'estimation est retombée sur la
          préférentielle ou le vent : la configuration tenue n'y désigne plus de
          candidate (vent tourné, piste fermée), mais elle DATE. Elle nomme la
@@ -26278,18 +26275,12 @@ function dtsAUnQfu(icao){
            bande — à Orly, les gros porteurs qui décollent en 25 laissaient
            croire à un terrain en 25 quand il partait en 20. */
         const held = heldOf(kind);
-        const borne = (cs, hk, note) => {
+        const borne = (cs, hk) => {
           const h = hk && hk.h, all = cs || [];
           if (!h) return all;
-          const gardes = all.filter(c => cdiff(c.trk, h.trk) <= QLV_MATCH_DEG);
-          if (note) for (const c of all) {
-            if (gardes.includes(c)) continue;
-            const m = fromClusters([c], d.ref);
-            if (m) chg.push({ kind, ids: m.ids, n: c.n || 1 });
-          }
-          return gardes;
+          return all.filter(c => cdiff(c.trk, h.trk) <= QLV_MATCH_DEG);
         };
-        const now = fromClusters(borne(d ? (kind === "to" ? d.dep : d.arr) : null, held, true), d && d.ref);
+        const now = fromClusters(borne(d ? (kind === "to" ? d.dep : d.arr) : null, held), d && d.ref);
         /* L'heure et l'effectif accompagnent TOUTE observation : la fenêtre du
            serveur cumule une heure de passages, l'heure est celle du dernier
            passage, l'effectif dit combien d'avions ont désigné ces pistes. */
@@ -26298,7 +26289,7 @@ function dtsAUnQfu(icao){
         /* Rien en l'air dans ce sens : le SOL. Un avion qui roule à plus de
            40 kt est sur une piste, dans le sens du QFU — qu'il atterrisse ou
            décolle, on roule dans le sens où l'on se pose. */
-        const roll = fromClusters(borne(d ? d.gnd : null, heldOf("gnd"), false), d && d.ref);
+        const roll = fromClusters(borne(d ? d.gnd : null, heldOf("gnd")), d && d.ref);
         if (roll) return Object.assign(roll, { how: `rolling ${hhmmZ(roll.last || at)} ×${roll.n || 1}`, fresh: true });
         /* La fenêtre n'a plus rien dans ce sens : la CONFIGURATION TENUE prend
            le relais, et c'est elle, la mémoire — le QFU observé reste en
@@ -26357,12 +26348,10 @@ function dtsAUnQfu(icao){
             }
           }
       }
-      /* Le trafic qui n'a PAS emporté la configuration : montré, jamais tu.
-         Entrelacés dans le trafic tenu, deux sécants ne prennent jamais la
-         série — c'est le cas d'Orly, et cette ligne est ce qui le dit. */
-      const chgNote = chg.map(x =>
-        `<span class="grp"><span class="n">⚠ ${x.n} ${x.kind === "to" ? "departure" : "arrival"}${x.n > 1 ? "s" : ""}`
-        + ` also observed on ${x.ids.join("/")} — a crossing runway takes two in a row to switch</span></span>`).join("");
+      /* Le trafic qui n'a PAS emporté la configuration ne fait plus de ligne
+         (6 sept. 2026) : la bande désigne une piste, elle n'explique pas la
+         règle des deux avions de suite. Le raisonnement est au fichier
+         d'explications personnel, hors dépôt. */
       const grp = (k, p) => p
         ? `<span class="grp"><span class="k">${k}</span><b><span class="u">QFU</span>${p.ids.join("/")}</b><span class="n">${p.how}</span></span>`
         : "";
@@ -26386,7 +26375,7 @@ function dtsAUnQfu(icao){
       if (!to && !ldg) return { idle: true,
         html: lbl + `<div class="qlv idle"><span class="dot"></span><span class="grp">No basis yet — calm or variable wind, no preferential runway declared, ${covWhy}</span>${down}</div>` };
       return { idle: !obsUsed, html: lbl
-        + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${grp("Take off", to)}${grp("Landing", ldg)}${conflict}${chgNote}${covNote}${down}</div>` };
+        + `<div class="qlv${obsUsed ? "" : " idle"}"><span class="dot"></span>${grp("Take off", to)}${grp("Landing", ldg)}${conflict}${covNote}${down}</div>` };
     }
     /* Le conteneur vit dans la section, sous le code du terrain : on le
        retrouve par data-qlv, et on le repeint sans toucher au reste — un
