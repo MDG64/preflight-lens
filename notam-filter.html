@@ -5434,8 +5434,8 @@ body.light .stat.on {
       flex: none;
       margin-left: auto;
       align-self: center;
-      width: 58px;
-      height: 18px;
+      width: 78px;
+      height: 28px;
       display: flex;
       align-items: center;
       justify-content: flex-end
@@ -5444,18 +5444,26 @@ body.light .stat.on {
     /* Fond blanc et coins arrondis : ces logos sont dessinés en sombre sur
        transparent — sur le fond nuit de l'app, la moitié d'entre eux seraient
        invisibles. La pastille les rend lisibles dans les deux thèmes sans
-       toucher à leurs couleurs, ce qu'une marque déposée n'aime pas.
-       AUCUN padding, et c'est délibéré : une image qui n'a pas chargé — 404 de
-       la source, hors ligne, `loading=lazy` pas encore déclenché — mesure 0×0,
-       et le moindre padding aurait suffi à peindre là un petit carré blanc de
-       2 px. Un logo absent doit ne RIEN laisser. La marge intérieure vient de
-       l'image elle-même, qui arrive déjà cadrée dans son 240×80. */
+       toucher à leurs couleurs, ce qu'une marque déposée n'aime pas. Elle
+       DÉPASSE du dessin, de deux ou trois pixels : un logo posé bord à bord
+       sur son fond a l'air découpé, et les marques les plus claires — un
+       blanc sur blanc, un liseré pâle — se perdaient dans l'arête.
+       Le fond n'arrive qu'AVEC L'IMAGE, sur `.ok` : une image qui n'a pas
+       chargé — 404 de la source, hors ligne, `loading=lazy` pas encore
+       déclenché — mesure 0×0, et le padding aurait alors suffi à peindre là
+       un petit carré blanc de rien du tout. Le padding, lui, est posé dès le
+       départ pour que le chargement ne décale pas la ligne : sans fond, il ne
+       peint rien. Un logo absent doit ne RIEN laisser. */
     .cie-l {
       max-width: 100%;
       max-height: 100%;
-      background: #fff;
-      border-radius: 3px;
+      padding: 3px 4px;
+      border-radius: 4px;
       box-sizing: border-box
+    }
+
+    .cie-l.ok {
+      background: #fff
     }
 
     .vols-j .vj-n {
@@ -5491,8 +5499,10 @@ body.light .stat.on {
          fixe, pas un chiffre rond : c'est le seul moyen que la ligne des deux
          journées — celle qui porte une date, donc une colonne de plus — tienne
          encore dans les 375 px d'un téléphone. Mesuré : 333 px de cadre pour
-         329 px de contenu au pire (« VLG8019 », le numéro le plus long). */
-      .vols-j { gap: 6px; padding: 9px 12px; overflow: hidden }
+         332 px de contenu au pire (« VLG8019 », le numéro le plus long) —
+         il ne reste qu'un pixel et demi de mou, et c'est le logo qui a pris
+         le reste. */
+      .vols-j { gap: 4px; padding: 9px 11px; overflow: hidden }
       /* `.dated` et non `.vols-j` tout court, comme sur l'écran large : la
          colonne de date cale bien le départ de toutes les lignes DÈS QU'UNE
          d'elles en porte une — mais une liste qui n'en porte aucune, le cas
@@ -5511,8 +5521,14 @@ body.light .stat.on {
       .vols-j .vj-p { display: none }
       .vols-j .vj-ar { margin-left: 0 }
       /* Le logo rétrécit avec le reste plutôt que de disparaître : c'est lui
-         qui identifie le vol le plus vite. */
-      .vols-j .vj-c { width: 54px; height: 18px }
+         qui identifie le vol le plus vite. Il grandit quand même, mais moins
+         qu'ailleurs : sur un téléphone la ligne est pleine, et les 10 px de
+         large qu'il prend en plus sont TOUT ce que rendent le resserrement de
+         `gap` (6 → 4 px, six intervalles) et les 2 px de marge du cadre.
+         Mesuré : 332 px de contenu au pire (« VLG8019 ») pour 333 px de
+         cadre — la ligne tient, l'heure d'arrivée avec elle. La hauteur, en
+         revanche, ne coûte rien à personne : c'est elle qui porte le gain. */
+      .vols-j .vj-c { width: 68px; height: 26px }
       .vols-j .vj-n { min-width: 0 }
       .vols-j .vj-h { min-width: 48px }
       .vols-j .vj-e { min-width: 42px }
@@ -5606,8 +5622,8 @@ body.light .stat.on {
     .vols-f button .cie-l {
       flex: none;
       width: auto;
-      height: 17px;
-      max-width: 54px
+      height: 26px;
+      max-width: 78px
     }
 
     .vols-f button:hover {
@@ -5743,8 +5759,8 @@ body.light .stat.on {
     .flt-head .cie-l {
       flex: none;
       width: auto;
-      height: 21px;
-      max-width: 70px
+      height: 30px;
+      max-width: 98px
     }
 
     /* Ce que le pilote a saisi, quand ce n'est pas ce qu'on est allé
@@ -26247,7 +26263,11 @@ window.addEventListener("scroll", hidePop, true);
        compagnie à qui sait la lire ; l'image n'est qu'un raccourci pour l'œil.
        Une image qui ne charge pas — hors ligne, ou compagnie que la source ne
        connaît pas — ne laisse alors rien du tout, et surtout pas un cadre
-       cassé : la colonne garde sa place, la ligne ne s'excuse pas. */
+       cassé : la colonne garde sa place, la ligne ne s'excuse pas.
+       D'où les deux gestes portés par l'image : `onload` pose la classe `ok`,
+       la seule qui allume la pastille blanche — tant que rien n'est arrivé,
+       rien n'est peint —, et `onerror` retire l'image du document, pour que
+       même les quelques pixels de son padding disparaissent. */
     const CIE_URL = BACKEND_URL + "/api/cie/";
     function cieIata(id) {
       const s = String(id || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -26258,7 +26278,7 @@ window.addEventListener("scroll", hidePop, true);
     }
     function cieLogo(id) {
       const c = cieIata(id);
-      return c ? `<img class="cie-l" src="${CIE_URL}${c}" alt="" loading="lazy" decoding="async">` : "";
+      return c ? `<img class="cie-l" src="${CIE_URL}${c}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ok')" onerror="this.remove()">` : "";
     }
 
     /* ---- normalisation de la saisie ----
