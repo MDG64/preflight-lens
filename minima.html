@@ -15460,8 +15460,13 @@ window.RTV = (()=>{
        adresse, le stockage seul. */
     const pick = (key, fromUrl)=>{
       const sv = st && st[key] && ok(st[key].h) ? st[key] : null;
-      if (ok(fromUrl)) return {h:fromUrl, mine: sv && sv.h===fromUrl ? !!sv.mine : true};
-      return sv ? {h:sv.h, mine:!!sv.mine} : null;
+      /* `dt` (le JOUR UTC de l'heure, posé par l'accueil quand un horaire
+         publie sa date) n'est pas lu ici, mais il ne doit pas se PERDRE au
+         passage : Minima le relaie tel quel, sinon un aller-retour par cette
+         page ramenerait le vol de demain a aujourd'hui sur l'accueil. */
+      if (ok(fromUrl)) return {h:fromUrl, mine: sv && sv.h===fromUrl ? !!sv.mine : true,
+                               dt: sv && sv.h===fromUrl ? sv.dt : undefined};
+      return sv ? {h:sv.h, mine:!!sv.mine, dt:sv.dt} : null;
     };
     const tko = pick("tko", p && p.get("tko"));
     if (tko) TKO = tko;
@@ -15472,9 +15477,22 @@ window.RTV = (()=>{
     if (!st || st.codes[2]===RT.icaos[2] || (p && p.get("altt")))
       take(pick("altt", p && p.get("altt")), "DESTINATION_ALTERNATE");
   }
+  /* Le jour de l'heure ecrite par l'accueil, garde tant que l'heure elle-meme
+     n'a pas bouge ici : Minima ne date pas ses heures, il ne fait que ne pas
+     jeter la date de l'autre page. */
+  function dtGarde(role, h){
+    const key = role==="DESTINATION" ? "eta" : "altt";
+    try {
+      const st = JSON.parse(localStorage.getItem(TIMES_KEY) || "null");
+      const sv = st && st[key];
+      if (sv && sv.h===h && /^\d{4}-\d{2}-\d{2}$/.test(sv.dt||"")) return sv.dt;
+    } catch(e){}
+    return undefined;
+  }
   function timesSave(){
     if (!RT.icaos[0]) return;
-    const v = role => state.times[role] && state.slot[role]===-1 ? {h:state.times[role], mine:AUTO[role]===false} : null;
+    const v = role => state.times[role] && state.slot[role]===-1
+      ? {h:state.times[role], mine:AUTO[role]===false, dt:dtGarde(role, state.times[role])} : null;
     const rec = {codes:RT.icaos.slice(), tko:TKO, eta:v("DESTINATION"), altt:v("DESTINATION_ALTERNATE")};
     const key = JSON.stringify(rec);
     if (key===timesLast) return;

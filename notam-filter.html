@@ -25739,6 +25739,36 @@ window.addEventListener("scroll", hidePop, true);
       const t = ((+h.slice(0, 2)) * 60 + (+h.slice(2)) + Math.round(min)) % 1440;
       return P(Math.floor(t / 60)) + P(t % 60);
     }
+    /* ---- la DATE voyage avec l'heure ----
+       Depuis que la fenêtre des départs propose AUSSI demain, une heure nue
+       (HHMM) ne suffit plus : elle doit porter son jour UTC (`dt`), sans quoi
+       la règle glissante de hhmmDate le devine — et le devine aujourd'hui.
+       Un vol de demain 08:10Z choisi ce matin surlignait alors le TAF du
+       mauvais jour. Ces trois fonctions font suivre `dt` partout où une
+       heure naît, se dérive ou se corrige. */
+    const htDay = d => d.toISOString().slice(0, 10);
+    /* Une heure dérivée d'une autre par un temps de vol : le jour suit le
+       passage de minuit au lieu de rester sur place. */
+    function htPlus(from, min) {
+      const h = hhmmPlus(from.h, min);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from.dt || "")) return { h };
+      const base = new Date(from.dt + "T" + from.h.slice(0, 2) + ":" + from.h.slice(2) + ":00Z");
+      if (isNaN(base)) return { h };
+      return { h, dt: htDay(new Date(base.getTime() + Math.round(min) * 60e3)) };
+    }
+    /* Une heure corrigée au cadran garde le JOUR de celle qu'elle remplace ;
+       une correction qui saute plus de douze heures se lit comme un passage
+       de minuit, en avant ou en arrière. */
+    function htSetHour(old, h) {
+      const t = { h, mine: true };
+      if (!old || !/^\d{4}-\d{2}-\d{2}$/.test(old.dt || "")) return t;
+      const m = x => (+x.slice(0, 2)) * 60 + (+x.slice(2));
+      const d = m(h) - m(old.h);
+      const day = new Date(old.dt + "T00:00:00Z");
+      day.setUTCDate(day.getUTCDate() + (d > 720 ? -1 : d < -720 ? 1 : 0));
+      t.dt = htDay(day);
+      return t;
+    }
     /* L'heure HHMM en Date UTC : aujourd'hui, ou demain si elle est déjà
        passée de plus de six heures — un vol se planifie devant soi. */
     /* Une heure nue (HHMM) n'a pas de jour : la règle glissante en devine un,
@@ -25796,7 +25826,7 @@ window.addEventListener("scroll", hidePop, true);
       if (codes[0]) {
         if (!HT.tko) {
           const d = new Date(Date.now() + TAKEOFF_LEAD_MIN * 60e3);
-          HT.tko = { h: P(d.getUTCHours()) + P(d.getUTCMinutes()), mine: false };
+          HT.tko = { h: P(d.getUTCHours()) + P(d.getUTCMinutes()), mine: false, dt: htDay(d) };
         }
       } else HT.tko = null;
       if (codes[0] && codes[1] && !window.ROUTE_SEED) {
@@ -25804,7 +25834,7 @@ window.addEventListener("scroll", hidePop, true);
       }
       const pose = (key, from, t) => {
         if (HT[key] && HT[key].mine) return;
-        HT[key] = (from && t) ? { h: hhmmPlus(from.h, t.min), mine: false } : null;
+        HT[key] = (from && t) ? Object.assign(htPlus(from, t.min), { mine: false }) : null;
       };
       pose("eta", codes[1] ? HT.tko : null, RTDB.time(codes[0], codes[1]));
       pose("altt", codes[2] ? HT.eta : null, RTDB.time(codes[1], codes[2]));
@@ -25849,7 +25879,7 @@ window.addEventListener("scroll", hidePop, true);
         clearable: true,
         read: () => (HT[key] ? HT[key].h : ""),
         write: v => {
-          HT[key] = v ? { h: v, mine: true } : null;
+          HT[key] = v ? htSetHour(HT[key], v) : null;
           /* L'arrivée réglée à la main emporte le dégagement posé par la
              route, le décollage réglé emporte les deux : ils se recalculent. */
           if (key === "tko") { if (HT.eta && !HT.eta.mine) HT.eta = null; if (HT.altt && !HT.altt.mine) HT.altt = null; }
@@ -25872,10 +25902,20 @@ window.addEventListener("scroll", hidePop, true);
     }
     function wxTimeFor(role) { const t = wxHT(role); return t ? t.h : ""; }
     function wxDtFor(role) { const t = wxHT(role); return (t && t.dt) || ""; }
+    /* L'heure du rôle, et son JOUR dès qu'il n'est pas celui d'aujourd'hui :
+       une heure nue de 08:10Z ne dit pas si le TAF surligné est celui de ce
+       matin ou de demain matin. Le jour affiché est celui qui a servi au
+       surlignage — les deux ne peuvent pas diverger. */
     function wxTimeLabel(role) {
       const h = wxTimeFor(role);
       if (!h) return "";
-      return (role === "dep" ? "Take-off " : "ETA ") + h + "Z";
+      const at = hhmmDate(h, wxDtFor(role));
+      const now = new Date();
+      const jour = (at && htDay(at) !== htDay(now))
+        ? " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][at.getUTCMonth()]
+          + " " + at.getUTCDate()
+        : "";
+      return (role === "dep" ? "Take-off " : "ETA ") + h + "Z" + jour;
     }
     function wxApplyTimes() {
       document.querySelectorAll("#wxBody .wx-ap-time").forEach(el => {
