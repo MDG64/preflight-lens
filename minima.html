@@ -10190,7 +10190,17 @@ function roleFor(tab){ return tab.role==="ERA" ? cfg.eraRole : tab.role; }
 /* Heure seule, sans quantième : l'heure saisie est la prochaine occurrence à
    partir de la référence, donc une heure déjà passée bascule au lendemain.
    C'est la lecture naturelle — on règle une échéance devant soi. */
-function utcFromHourMin(ref, hour, min){
+/* `dt` (AAAA-MM-JJ, le jour UTC reel) leve le doute quand on le connait :
+   depuis que la fenetre des departs de l'accueil propose AUSSI demain, une
+   heure nue ne suffit plus. Un jour REVOLU de plus de douze heures est
+   ignore — des heures gardees d'hier ne doivent pas dater un vol dans le
+   passe, la regle de la prochaine occurrence reprend alors la main. */
+function utcFromHourMin(ref, hour, min, dt){
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dt||"")){
+    const e = new Date(dt+"T00:00:00Z");
+    e.setUTCHours(hour, min, 0, 0);
+    if (!isNaN(e) && e.getTime() > Date.now() - 12*3600e3) return e;
+  }
   const d = new Date(ref.getTime());
   d.setUTCHours(hour, min, 0, 0);
   if (d < ref) d.setUTCDate(d.getUTCDate()+1);
@@ -10202,11 +10212,25 @@ function utcFromHourMin(ref, hour, min){
    ne change pas ; `released` = l'heure rendue aux horizons par défaut, la
    route reprend la main. */
 function etaTouched(role, released){ if (window.RTV) RTV.etaTouched(role, released); }
+/* L'ANCRE d'une heure saisie : le point a partir duquel on cherche sa
+   prochaine occurrence. Ce n'etait « maintenant » que faute de mieux, et
+   cela datait une arrivee independamment de son propre decollage — un vol
+   de demain 23:00Z consulte ce soir se retrouvait juge sur le TAF de ce
+   soir. Une arrivee se compte depuis le decollage, un degagement depuis
+   l'arrivee : le jour du vol descend ainsi toute la chaine, y compris quand
+   le pilote corrige une heure ici. */
+function etaAnchor(role){
+  if (role==="DEPARTURE") return refBase();
+  const b = role==="DESTINATION_ALTERNATE" ? etaDate("DESTINATION")
+          : (window.RTV && RTV.takeoffDate && RTV.takeoffDate());
+  return (b instanceof Date && !isNaN(b)) ? b : refBase();
+}
 function etaDate(role){
   const base = refBase();
   const man = state.times[role];
   if (state.slot[role]===-1 && /^\d{4}$/.test(man||""))
-    return utcFromHourMin(base, +man.slice(0,2), +man.slice(2,4));
+    return utcFromHourMin(etaAnchor(role), +man.slice(0,2), +man.slice(2,4),
+                          window.RTV && RTV.dtFor ? RTV.dtFor(role) : null);
   return new Date(base.getTime() + slotsOf(role)[slotIndexOf(role)].min*60000);
 }
 
@@ -15480,6 +15504,28 @@ window.RTV = (()=>{
   /* Le jour de l'heure ecrite par l'accueil, garde tant que l'heure elle-meme
      n'a pas bouge ici : Minima ne date pas ses heures, il ne fait que ne pas
      jeter la date de l'autre page. */
+  /* Le jour d'une heure, pour qui la demande : le decollage le porte
+     lui-meme, les deux autres le tiennent du stockage partage tant que
+     l'heure n'a pas bouge ici. */
+  /* Corriger le decollage ici ne doit pas lui faire perdre son JOUR : on
+     garde celui de l'heure qu'on remplace, et un saut de plus de douze
+     heures se lit comme un passage de minuit. Meme regle qu'a l'accueil. */
+  function tkoSetHour(old, h){
+    const t = {h, mine:true};
+    if (!old || !/^\d{4}-\d{2}-\d{2}$/.test(old.dt||"")) return t;
+    const m = x => (+x.slice(0,2))*60 + (+x.slice(2));
+    const dd = m(h) - m(old.h);
+    const day = new Date(old.dt+"T00:00:00Z");
+    day.setUTCDate(day.getUTCDate() + (dd>720 ? -1 : dd<-720 ? 1 : 0));
+    t.dt = day.toISOString().slice(0,10);
+    return t;
+  }
+  function dtFor(role){
+    if (role==="DEPARTURE")
+      return TKO && /^\d{4}-\d{2}-\d{2}$/.test(TKO.dt||"") ? TKO.dt : null;
+    const h = state.times[role];
+    return (state.slot[role]===-1 && h) ? (dtGarde(role, h) || null) : null;
+  }
   function dtGarde(role, h){
     const key = role==="DESTINATION" ? "eta" : "altt";
     try {
@@ -15500,7 +15546,7 @@ window.RTV = (()=>{
     try { localStorage.setItem(TIMES_KEY, JSON.stringify({...rec, ts:Date.now()})); } catch(e){}
   }
   function takeoffDate(){
-    return TKO ? utcFromHourMin(refBase(), +TKO.h.slice(0,2), +TKO.h.slice(2,4)) : null;
+    return TKO ? utcFromHourMin(refBase(), +TKO.h.slice(0,2), +TKO.h.slice(2,4), TKO.dt) : null;
   }
   function autoReset(i){
     if (i===0) TKO = null;
@@ -15659,7 +15705,7 @@ window.RTV = (()=>{
         const cleared = !d && el.value.trim()==="";
         if (i===0){
           if (cleared) TKO = null;
-          else if (ok) TKO = {h:d, mine:true};
+          else if (ok) TKO = tkoSetHour(TKO, d);
         }
         else if (cleared){ etaTouched(role, true); }
         else if (ok){ state.times[role] = d; state.slot[role] = -1; etaTouched(role); }
@@ -15960,7 +16006,7 @@ window.RTV = (()=>{
   /* inlineOpen / renderDetail / fold : la fiche mobile dépliée sous une carte.
      renderMobile les appelle — c'est lui qui sait quand tout se repeint. */
   return {open, close, pick, boot, retarget, syncPlaceholders, refresh: render,
-          syncEta, etaTouched, routeTime, takeoffDate,
+          syncEta, etaTouched, routeTime, takeoffDate, dtFor,
           openNotam, closeNotam, goHost, inlineOpen, renderDetail, fold,
           /* Le dégagement au décollage : la phase Take off le lit et l'écrit,
              la carte l'ouvre. `toAltRaw` rend le CHOIX (vide = le départ),
