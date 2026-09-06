@@ -5360,9 +5360,12 @@ body.light .stat.on {
        pilote reconnaît, et parce que la liste couvre deux journées : une ligne
        qui commencerait par une heure ne dirait pas de quel jour elle est. La
        date se glisse donc AVANT le terrain de départ, et seulement quand elle
-       n'est pas celle du jour. La ville prend la place qui reste et se coupe
-       proprement ; les deux heures ferment la ligne, départ puis arrivée, en
-       chiffres non proportionnels pour que les colonnes s'alignent. */
+       n'est pas celle du jour. Le NOM de la destination ne figure plus : le
+       code OACI la désigne sans ambiguïté, et la place qu'il prenait revient au
+       logo, qui identifie le vol plus vite qu'un nom de ville coupé au tiers.
+       Il reste cherchable dans la barre de recherche, où il coûte zéro pixel.
+       Les deux heures ferment la ligne, départ puis arrivée, en chiffres non
+       proportionnels pour que les colonnes s'alignent. */
     .vols-j {
       display: flex;
       align-items: baseline;
@@ -5390,8 +5393,10 @@ body.light .stat.on {
       white-space: nowrap
     }
 
+    /* 36 px : la largeur de « 07/09 » en chasse fixe, contre 48 qu'il fallait
+       à « 07 Sept ». La réserve suit le format, sinon elle laisse un trou. */
     .vols-list.dated .vj-d {
-      min-width: 48px
+      min-width: 36px
     }
 
     .vols-j .vj-p {
@@ -5419,10 +5424,10 @@ body.light .stat.on {
     }
 
     /* La case du logo, devant le numéro. Elle est TOUJOURS là, même vide :
-       c'est elle qui porte désormais le `margin-left:auto` — sans la ville
-       pour prendre le mou, écran étroit, le bloc « logo + numéro + heures »
-       se range quand même à droite. Si elle ne s'affichait que pour les
-       compagnies reconnues, une ligne sur deux perdrait son alignement.
+       c'est elle qui porte désormais le `margin-left:auto`, et donc tout le
+       mou de la ligne : le bloc « logo + numéro + heures » se range à droite,
+       l'étape reste à gauche. Si elle ne s'affichait que pour les compagnies
+       reconnues, une ligne sur deux perdrait son alignement.
        `align-self:center` parce que la ligne aligne ses textes sur la ligne de
        base : une image, elle, se cale sur son milieu. */
     .vols-j .vj-c {
@@ -5439,13 +5444,17 @@ body.light .stat.on {
     /* Fond blanc et coins arrondis : ces logos sont dessinés en sombre sur
        transparent — sur le fond nuit de l'app, la moitié d'entre eux seraient
        invisibles. La pastille les rend lisibles dans les deux thèmes sans
-       toucher à leurs couleurs, ce qu'une marque déposée n'aime pas. */
+       toucher à leurs couleurs, ce qu'une marque déposée n'aime pas.
+       AUCUN padding, et c'est délibéré : une image qui n'a pas chargé — 404 de
+       la source, hors ligne, `loading=lazy` pas encore déclenché — mesure 0×0,
+       et le moindre padding aurait suffi à peindre là un petit carré blanc de
+       2 px. Un logo absent doit ne RIEN laisser. La marge intérieure vient de
+       l'image elle-même, qui arrive déjà cadrée dans son 240×80. */
     .cie-l {
       max-width: 100%;
       max-height: 100%;
       background: #fff;
       border-radius: 3px;
-      padding: 1px;
       box-sizing: border-box
     }
 
@@ -5466,16 +5475,6 @@ body.light .stat.on {
       min-width: 42px
     }
 
-    .vols-j .vj-v {
-      font: 400 12px/1.3 var(--sans);
-      color: var(--muted);
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap
-    }
-
     .vols-j .vj-e {
       font: 500 11px/1 var(--mono);
       color: var(--muted2);
@@ -5485,22 +5484,38 @@ body.light .stat.on {
       font-variant-numeric: tabular-nums
     }
 
-    /* Sous 420 px la ville s'efface avant le reste : le code de destination
-       suffit à identifier l'étape, son nom est un confort. Les colonnes se
-       resserrent ensuite jusqu'à ce que la ligne tienne — l'heure d'arrivée
-       est la dernière, et une ligne qui déborde la perd. La date garde sa
-       largeur : c'est elle qui cale le départ de toutes les lignes. */
+    /* Sous 420 px les colonnes se resserrent jusqu'à ce que la ligne tienne —
+       l'heure d'arrivée est la dernière, et une ligne qui déborde la perd. */
     @media (max-width: 420px) {
-      .vols-j { gap: 7px; padding: 9px 14px; overflow: hidden }
-      .vols-j .vj-v { display: none }
-      .vols-j .vj-d { min-width: 46px }
-      .vols-j .vj-p, .vols-j .vj-a { min-width: 38px }
-      /* Le logo rétrécit avec le reste plutôt que de disparaître : la ville
-         partie, c'est lui qui identifie le vol le plus vite. */
-      .vols-j .vj-c { width: 36px; height: 13px }
+      /* Chaque valeur ci-dessous est la largeur JUSTE de son texte en chasse
+         fixe, pas un chiffre rond : c'est le seul moyen que la ligne des deux
+         journées — celle qui porte une date, donc une colonne de plus — tienne
+         encore dans les 375 px d'un téléphone. Mesuré : 333 px de cadre pour
+         329 px de contenu au pire (« VLG8019 », le numéro le plus long). */
+      .vols-j { gap: 6px; padding: 9px 12px; overflow: hidden }
+      /* `.dated` et non `.vols-j` tout court, comme sur l'écran large : la
+         colonne de date cale bien le départ de toutes les lignes DÈS QU'UNE
+         d'elles en porte une — mais une liste qui n'en porte aucune, le cas
+         courant des vols du jour, n'a rien à aligner et ces pixels-là
+         n'étaient alors réservés pour personne. */
+      .vols-list.dated .vj-d { min-width: 34px }
+      .vols-j .vj-a { min-width: 36px }
+      /* Le terrain de DÉPART s'efface, et c'est celui qui se regrette le
+         moins : il est le même sur les 487 lignes, et le titre de la fenêtre
+         le nomme déjà — « Departures from LFPG ». C'est cette place-là que
+         prend le logo ; sans elle, l'heure d'arrivée tombait hors du cadre sur
+         un téléphone de 375 px, et `overflow:hidden` la coupait sans rien
+         dire. La flèche reste : elle désigne la destination aussi bien seule
+         qu'entre deux codes, et le lecteur d'écran garde les deux terrains
+         dans l'aria-label de la ligne. */
+      .vols-j .vj-p { display: none }
+      .vols-j .vj-ar { margin-left: 0 }
+      /* Le logo rétrécit avec le reste plutôt que de disparaître : c'est lui
+         qui identifie le vol le plus vite. */
+      .vols-j .vj-c { width: 54px; height: 18px }
       .vols-j .vj-n { min-width: 0 }
       .vols-j .vj-h { min-width: 48px }
-      .vols-j .vj-e { min-width: 44px }
+      .vols-j .vj-e { min-width: 42px }
     }
 
     .vols-d {
@@ -5591,8 +5606,8 @@ body.light .stat.on {
     .vols-f button .cie-l {
       flex: none;
       width: auto;
-      height: 13px;
-      max-width: 42px
+      height: 17px;
+      max-width: 54px
     }
 
     .vols-f button:hover {
@@ -5728,8 +5743,8 @@ body.light .stat.on {
     .flt-head .cie-l {
       flex: none;
       width: auto;
-      height: 16px;
-      max-width: 54px
+      height: 21px;
+      max-width: 70px
     }
 
     /* Ce que le pilote a saisi, quand ce n'est pas ce qu'on est allé
@@ -26813,8 +26828,13 @@ window.addEventListener("scroll", hidePop, true);
     function vjDate(v, n) {
       const iso = /^\d{4}-\d{2}-\d{2}/.test(v.std || "") ? v.std.slice(0, 10) : fltJour(n);
       if (iso === volsAuj()) return "";
-      return new Date(iso + "T00:00:00Z")
-        .toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+      /* Quantième numérique — « 07/09 » et non « 07 Sept ». C'est une colonne
+         de repère dans une ligne déjà dense, pas une phrase : elle tient en
+         cinq caractères de chasse fixe, s'aligne avec les heures, et le nom du
+         mois n'apportait rien sur une liste qui ne couvre que deux jours.
+         Découpé de l'ISO et non passé à toLocaleDateString : l'ordre jour/mois
+         ne doit dépendre ni de la langue de l'appareil ni du fuseau. */
+      return iso.slice(8, 10) + "/" + iso.slice(5, 7);
     }
 
     function vjLigne(v, n) {
@@ -26826,7 +26846,7 @@ window.addEventListener("scroll", hidePop, true);
         aria-label="${esc(v.num)}, ${esc(v.dep)} to ${esc(v.arr)}${d ? " on " + esc(d) : ""} at ${esc(vjH(v.tko))}"><span
         class="vj-d">${esc(d)}</span><span class="vj-p">${esc(v.dep)}</span><span
         class="vj-ar">→</span><span class="vj-a">${esc(v.arr)}</span><span
-        class="vj-v">${esc(v.arrn || "")}</span><span class="vj-c">${cieLogo(v.num)}</span><span
+        class="vj-c">${cieLogo(v.num)}</span><span
         class="vj-n">${esc(v.num)}</span><span
         class="vj-h">${esc(vjH(v.tko))}</span><span class="vj-e">${esc(vjH(v.eta))}</span></button>`;
     }
