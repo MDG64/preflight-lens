@@ -5265,6 +5265,54 @@ body.light .stat.on {
 
     /* Une destination par ligne : le code, la ville, et le nombre de vols.
        Le bouton porte toute la ligne — on l'ouvre d'un doigt. */
+    /* ---- les deux journées ----
+       Deux boutons, pas un sélecteur : il n'y en aura jamais que deux, et un
+       pilote doit voir d'un coup lequel il regarde. La date en dessous parce
+       que « demain » ne veut rien dire à 23:50 pour un vol de 00:30. */
+    .vols-days {
+      display: flex;
+      gap: 6px;
+      margin: 0 0 8px
+    }
+
+    .vols-days button {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      align-items: flex-start;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 11px;
+      cursor: pointer;
+      font: 600 11px/1 var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted)
+    }
+
+    .vols-days button span {
+      font: 400 10px/1 var(--sans);
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted2)
+    }
+
+    .vols-days button:hover {
+      border-color: var(--cyan);
+      color: var(--text)
+    }
+
+    .vols-days button.on {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: var(--panel2)
+    }
+
+    .vols-days button.on span {
+      color: var(--muted)
+    }
+
     /* ---- une ligne du tableau des départs du jour ----
        L'heure d'abord, parce que c'est par elle qu'un pilote retrouve son vol
        dans trois cents lignes. Le numéro ensuite, en chiffres non
@@ -18859,7 +18907,7 @@ function renderInfo(icao) {
     function timeFilterFromTakeoff() {
       const t = HT.tko && HT.tko.h;
       if (!t || gateBlocked("timeFilter")) return;
-      const c = hhmmDate(t);
+      const c = hhmmDate(t, HT.tko && HT.tko.dt);
       if (!c) return;
       const h = c.getUTCHours(), m = c.getUTCMinutes();
       $("#htime").value = P(h) + ":" + P(m);
@@ -25588,9 +25636,24 @@ window.addEventListener("scroll", hidePop, true);
     }
     /* L'heure HHMM en Date UTC : aujourd'hui, ou demain si elle est déjà
        passée de plus de six heures — un vol se planifie devant soi. */
-    function hhmmDate(h) {
+    /* Une heure nue (HHMM) n'a pas de jour : la règle glissante en devine un,
+       et elle a servi tant que toutes les heures étaient saisies à la main pour
+       le vol qui vient. Depuis que la fenêtre des départs propose AUSSI
+       DEMAIN, deviner ne suffit plus : un vol de demain 08:10Z consulté ce
+       matin serait daté d'aujourd'hui, et le filtre NOTAM comme le TAF en
+       vigueur porteraient sur le mauvais jour. Silencieusement.
+
+       `dt` (AAAA-MM-JJ, la date UTC réelle du créneau) lève le doute quand on
+       la connaît. Une date RÉVOLUE est ignorée : des heures gardées d'hier
+       dans le stockage ne doivent pas filtrer sur un jour passé, la règle
+       glissante reprend alors la main. */
+    function hhmmDate(h, dt) {
       if (!h) return null;
       const now = new Date();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dt || "")) {
+        const e = new Date(dt + "T" + h.slice(0, 2) + ":" + h.slice(2) + ":00Z");
+        if (!isNaN(e) && e.getTime() > now.getTime() - 12 * 3600e3) return e;
+      }
       const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), +h.slice(0, 2), +h.slice(2)));
       if (d.getTime() < now.getTime() - 6 * 3600e3) d.setUTCDate(d.getUTCDate() + 1);
       return d;
@@ -25699,10 +25762,11 @@ window.addEventListener("scroll", hidePop, true);
     }
     /* ---- page Weather : l'heure de chaque rôle en tête de section, et la
        ligne du TAF en vigueur à cette heure surlignée ---- */
-    function wxTimeFor(role) {
-      const t = role === "dep" ? HT.tko : role === "arr" ? HT.eta : role === "alt" ? HT.altt : null;
-      return t ? t.h : "";
+    function wxHT(role) {
+      return role === "dep" ? HT.tko : role === "arr" ? HT.eta : role === "alt" ? HT.altt : null;
     }
+    function wxTimeFor(role) { const t = wxHT(role); return t ? t.h : ""; }
+    function wxDtFor(role) { const t = wxHT(role); return (t && t.dt) || ""; }
     function wxTimeLabel(role) {
       const h = wxTimeFor(role);
       if (!h) return "";
@@ -25721,7 +25785,7 @@ window.addEventListener("scroll", hidePop, true);
     }
     function wxAtFor(icao) {
       const a = wxList.find(x => x.icao === icao);
-      return a ? hhmmDate(wxTimeFor(a.role)) : null;
+      return a ? hhmmDate(wxTimeFor(a.role), wxDtFor(a.role)) : null;
     }
     /* Les groupes du TAF en vigueur à l'instant `at` : la ligne de base ou le
        dernier FM qui la remplace, plus les BECMG déjà entamés et les TEMPO /
@@ -26111,6 +26175,7 @@ window.addEventListener("scroll", hidePop, true);
           : "";
         return `<button class="sg-row flt-row" type="button" data-dep="${esc(v.dep)}" data-dest="${esc(v.arr)}"
           data-tko="${esc(v.tko || "")}" data-eta="${esc(v.eta || "")}"
+          data-std="${esc(v.std || "")}" data-sta="${esc(v.sta || "")}"
           aria-label="Set departure ${esc(v.dep)} and destination ${esc(v.arr)}"><span class="flt-leg">${esc(v.dep)}<span
             class="flt-ar">\u2192</span>${esc(v.arr)}</span><span class="flt-where">${esc(h)}</span></button>`;
       }).join("");
@@ -26140,8 +26205,12 @@ window.addEventListener("scroll", hidePop, true);
        chemins — le tableau du terrain et le repli par numéro — passent par
        ici, pour qu'il n'y ait qu'un seul endroit où une heure s'écrit. */
     function fltHeures(r) {
-      HT.tko = { h: r.tko, mine: true };
-      if (r.eta) HT.eta = { h: r.eta, mine: true };
+      /* `dt` vient de l'horodatage UTC complet rendu par l'horairiste, pas de
+         la date interrogée : un vol de la journée LOCALE du 6 peut décoller le
+         5 à 22:05Z, et c'est cette date-là qui compte. */
+      const jour = x => /^\d{4}-\d{2}-\d{2}/.test(x || "") ? String(x).slice(0, 10) : null;
+      HT.tko = { h: r.tko, mine: true, dt: jour(r.std) };
+      if (r.eta) HT.eta = { h: r.eta, mine: true, dt: jour(r.sta) };
       renderHomeTimes(); renderHomeDuration(); timesSave(); wxApplyTimes();
     }
 
@@ -26302,7 +26371,7 @@ window.addEventListener("scroll", hidePop, true);
              devine pas le tronçon que vole le pilote. */
           if (vols.length === 1 && vols[0].dep !== vols[0].arr) {
             const v = vols[0];
-            fltApply(v.dep, v.arr, v.tko ? { tko: v.tko, eta: v.eta } : null);
+            fltApply(v.dep, v.arr, v.tko ? { tko: v.tko, eta: v.eta, std: v.std, sta: v.sta } : null);
             return;
           }
           fltProposalVols(n.cs, n.typed, vols);
@@ -26363,7 +26432,8 @@ window.addEventListener("scroll", hidePop, true);
       if (e.target.closest("#hFlightX")) { fltHide(); return; }
       const row = e.target.closest(".flt-row");
       if (row) fltApply(row.dataset.dep, row.dataset.dest,
-        row.dataset.tko ? { tko: row.dataset.tko, eta: row.dataset.eta || null } : null);
+        row.dataset.tko ? { tko: row.dataset.tko, eta: row.dataset.eta || null,
+          std: row.dataset.std || null, sta: row.dataset.sta || null } : null);
     });
 
 
@@ -26392,7 +26462,14 @@ window.addEventListener("scroll", hidePop, true);
        montre — le pilote demande « les vols du jour », pas une liste de
        destinations théoriques. */
     const VOLSJOUR_URL = BACKEND_URL + "/api/vols-jour/";
-    let volsJour = null;      // { date, vols:[...] } quand l'horaire a répondu
+    /* Deux journées, indexées par leur écart à aujourd'hui : 0 et 1. DEMAIN NE
+       SE CHARGE QUE SI ON LE DEMANDE — c'est un terrain-jour de plus, donc
+       4 unités de plus, et la plupart des pilotes préparent le vol du jour.
+       Un onglet est un geste explicite, exactement comme le choix d'un vol. */
+    let volsJours = {};       // { 0: {date, vols}, 1: ... } ce qui est chargé
+    let volsJour = null;      // la journée AFFICHÉE, ou null si c'est le catalogue
+    let volsQuand = 0;        // 0 = aujourd'hui, 1 = demain
+    let volsTerrain = "";     // le terrain ouvert, pour charger l'autre journée
     let volsData = null;      // le catalogue du terrain ouvert
     let volsOpen = "";        // destination dépliée
     let volsTok = 0;
@@ -26404,7 +26481,8 @@ window.addEventListener("scroll", hidePop, true);
     let volsFerme = 0;
     function volsHide() {
       $("#volsOv").hidden = true;
-      volsData = null; volsJour = null; volsOpen = ""; volsFerme = Date.now();
+      volsData = null; volsJour = null; volsJours = {}; volsQuand = 0;
+      volsTerrain = ""; volsOpen = ""; volsFerme = Date.now();
     }
 
     /* Le filtre : un mot suffit, sur le code OACI, le code IATA, la ville ou
@@ -26448,6 +26526,20 @@ window.addEventListener("scroll", hidePop, true);
        ressemblerait à une panne. */
     const vjH = t => t ? t.slice(0, 2) + ":" + t.slice(2) + "Z" : "";
 
+    /* Les deux onglets. La date est écrite en toutes lettres à côté : « demain »
+       ne veut rien dire à 23:50 pour un vol de 00:30, et un pilote qui prépare
+       la veille a besoin de lire le quantième. */
+    function volsJourLabel(n) {
+      const d = new Date(Date.now() + n * 864e5);
+      return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+    }
+    function volsOnglets() {
+      return `<div class="vols-days">`
+        + [0, 1].map(n => `<button type="button" data-vquand="${n}"
+            class="${volsQuand === n ? "on" : ""}">${n ? "Tomorrow" : "Today"}<span>${esc(volsJourLabel(n))}</span></button>`).join("")
+        + `</div>`;
+    }
+
     function volsRenderJour() {
       const box = $("#volsList"), q = ($("#volsQ").value || "").trim();
       const tous = volsJour.vols;
@@ -26460,7 +26552,8 @@ window.addEventListener("scroll", hidePop, true);
         l = l.filter(v => volsPli(v.num).includes(t) || volsPli(v.cs).includes(t)
           || volsPli(v.arr).includes(t) || volsPli(v.arrn).includes(t));
       }
-      $("#volsNote").innerHTML = `<b>${tous.length} departures today</b> from this aerodrome`
+      $("#volsNote").innerHTML = volsOnglets()
+        + `<b>${tous.length} departures</b> from this aerodrome`
         + (versDest && versDest.length ? ` · <b>${versDest.length} to ${esc(dest)}</b>` : "")
         + (sansVol ? ` · <b>no flight to ${esc(sansVol)} today</b>, showing them all` : "")
         /* « journée locale » et pas « aujourd'hui » tout court : le tableau
@@ -26515,11 +26608,35 @@ window.addEventListener("scroll", hidePop, true);
         Pick a destination to see its flight numbers.`;
     }
 
+    /* Charge une journée si elle ne l'est pas déjà, et l'affiche. Rend `false`
+       quand l'horairiste n'a rien pour ce terrain ce jour-là — l'appelant
+       décide alors quoi montrer. */
+    async function volsCharger(n) {
+      if (volsJours[n]) { volsQuand = n; volsJour = volsJours[n]; volsRender(); return true; }
+      const tok = volsTok;
+      volsQuand = n;
+      $("#volsNote").innerHTML = volsOnglets();
+      $("#volsList").innerHTML = `<div class="vols-empty">Loading the ${n ? "next day's" : "day's"} departures…</div>`;
+      try {
+        const r = await fetch(VOLSJOUR_URL + volsTerrain + "/" + fltJour(n));
+        if (tok !== volsTok) return true;
+        if (r.ok) {
+          const j = await r.json();
+          if (tok !== volsTok) return true;
+          if (j && j.ok && j.vols && j.vols.length) {
+            volsJours[n] = j; volsJour = j; volsRender(); return true;
+          }
+        }
+      } catch (e) { /* traité comme une absence : le message dit la même chose */ }
+      if (tok !== volsTok) return true;
+      return false;
+    }
+
     async function volsOuvrir(dep) {
       const ov = $("#volsOv");
       $("#volsTitle").textContent = "Departures from " + dep;
       $("#volsQ").value = "";
-      volsOpen = "";
+      volsOpen = ""; volsJours = {}; volsJour = null; volsQuand = 0; volsTerrain = dep;
       const tok = ++volsTok;
       const hit = volsCache.get(dep);
       if (hit) { volsData = hit; volsNote(); volsRender(); }
@@ -26537,17 +26654,9 @@ window.addEventListener("scroll", hidePop, true);
            vol de ce terrain ne paie qu'une fois, dans un sens comme dans
            l'autre. Le catalogue gratuit reste dessous pour les terrains que
            l'horairiste ne couvre pas. */
-        const rj = await fetch(VOLSJOUR_URL + dep + "/" + fltJour(0));
+        if (await volsCharger(0)) return;
         if (tok !== volsTok) return;
-        if (rj.ok) {
-          const jj = await rj.json();
-          if (tok !== volsTok) return;
-          if (jj && jj.ok && jj.vols && jj.vols.length) {
-            volsJour = jj;
-            volsRender();
-            return;
-          }
-        }
+        $("#volsNote").textContent = "";
         $("#volsList").innerHTML = `<div class="vols-empty">No published schedule for <b>${esc(dep)}</b> today — loading the flight catalogue…</div>`;
         const r = await fetch(VOLS_URL + dep);
         if (tok !== volsTok) return;
@@ -26571,6 +26680,19 @@ window.addEventListener("scroll", hidePop, true);
     $("#volsClose").onclick = volsHide;
     $("#volsOv").addEventListener("click", e => { if (e.target === $("#volsOv")) volsHide(); });
     $("#volsQ").addEventListener("input", volsRender);
+    /* Le clic sur un onglet. Passer à demain peut coûter 4 unités, une seule
+       fois par terrain-jour et pour tous les pilotes : c'est un geste, pas un
+       chargement automatique. */
+    $("#volsNote").addEventListener("click", async e => {
+      const b = e.target.closest("[data-vquand]");
+      if (!b) return;
+      const n = +b.dataset.vquand;
+      if (n === volsQuand && volsJours[n]) return;
+      if (!await volsCharger(n)) {
+        $("#volsNote").innerHTML = volsOnglets();
+        $("#volsList").innerHTML = `<div class="vols-empty">No published schedule for <b>${esc(volsTerrain)}</b> on ${esc(volsJourLabel(n))}.</div>`;
+      }
+    });
     /* Entrée sur un numéro de vol complet : on referme et on part en
        recherche par indicatif, exactement comme depuis la case. */
     $("#volsQ").addEventListener("keydown", e => {
@@ -26594,7 +26716,8 @@ window.addEventListener("scroll", hidePop, true);
         volsHide();
         renderHomeStars();
         fltApply(vj.dataset.dep, vj.dataset.dest,
-          vj.dataset.tko ? { tko: vj.dataset.tko, eta: vj.dataset.eta || null } : null);
+          vj.dataset.tko ? { tko: vj.dataset.tko, eta: vj.dataset.eta || null,
+            std: vj.dataset.std || null, sta: vj.dataset.sta || null } : null);
         return;
       }
       const f = e.target.closest("[data-f]");
