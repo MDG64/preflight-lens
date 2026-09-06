@@ -26568,6 +26568,7 @@ window.addEventListener("scroll", hidePop, true);
       box.innerHTML = l.map(v => `<button class="vols-j" type="button" data-vj="1"
         data-num="${esc(v.num)}" data-dep="${esc(v.dep)}" data-dest="${esc(v.arr)}"
         data-tko="${esc(v.tko || "")}" data-eta="${esc(v.eta || "")}"
+        data-std="${esc(v.std || "")}" data-sta="${esc(v.sta || "")}"
         aria-label="${esc(v.num)} to ${esc(v.arr)} at ${esc(vjH(v.tko))}"><span
         class="vj-h">${esc(vjH(v.tko))}</span><span class="vj-n">${esc(v.num)}</span><span
         class="vj-a">${esc(v.arr)}</span><span class="vj-v">${esc(v.arrn || "")}</span><span
