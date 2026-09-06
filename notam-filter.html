@@ -19797,6 +19797,18 @@ function renderInfo(icao) {
     // page Route (rFrom/rTo/rAlt) : chaque frappe se recopie dans le champ
     // jumeau, les deux écrans montrent toujours la même route.
     const RMIRROR = { rFrom: "#hFrom", rTo: "#hTo", rAlt: "#hAlt", hFrom: "#rFrom", hTo: "#rTo", hAlt: "#rAlt" };
+    /* La liste des départs suit la ROUTE, pas une case en particulier. Elle
+       était branchée sur les seules cases de l'accueil (hFrom/hTo) : sur un
+       grand écran, où l'on saisit volontiers la route dans l'écran Route, le
+       code arrivait dans Departure PAR LE MIROIR, sans rien ouvrir — il
+       fallait ensuite cliquer dans la case. Un seul point d'entrée, qui
+       ramène chaque case à son rôle, miroir compris. */
+    const VOLS_ROLE = { hFrom: "dep", rFrom: "dep", hTo: "arr", rTo: "arr" };
+    function volsChamp(fieldId, attendre) {
+      const role = VOLS_ROLE[fieldId];
+      if (role === "dep") volsSaisie(attendre);
+      else if (role === "arr" && volsTerrain) volsRender();
+    }
     // Rendu du menu déroulant pour un champ FROM/TO/ALT donné : mêmes règles
     // de matching/tri que la recherche principale (suggestCodes), le clic sur
     // une ligne remplit le champ et avance au suivant comme la saisie manuelle.
@@ -19820,8 +19832,7 @@ function renderInfo(icao) {
         refreshGo();
         renderHomeChips();          // les puces suivent : la case libérée redevient cible
         renderHomeStars();          // le code choisi peut être FROM/TO/ALT lui-même ou son miroir
-        if (fieldId === "hFrom") volsSaisie();          // un choix arrêté : pas d'attente
-        else if (fieldId === "hTo" && volsTerrain) volsRender();
+        volsChamp(fieldId, false);                      // un choix arrêté : pas d'attente
         const nx = RNEXT[fieldId];
         if (nx) $(nx).focus(); else $("#" + fieldId).blur();
       });
@@ -19839,8 +19850,7 @@ function renderInfo(icao) {
         renderHomeChips();
         /* La saisie du DÉPART ouvre la liste des vols du jour sous les cases ;
            celle de la DESTINATION la refiltre à la frappe, sans rien acheter. */
-        if (e.target.id === "hFrom") volsSaisie(true);
-        else if (e.target.id === "hTo" && volsTerrain) volsRender();
+        volsChamp(e.target.id, true);
         const nx = RNEXT[e.target.id];
         if (nx && e.target.value.length >= 4) $(nx).focus();
       });
@@ -19856,8 +19866,7 @@ function renderInfo(icao) {
           const mir = RMIRROR[el.id]; if (mir) $(mir).value = el.value;
           dropRouteDuplicate(el.id, el.value);
           refreshGo(); renderHomeStars(); renderHomeChips();
-          if (el.id === "hFrom") volsSaisie();          // le code IATA traduit ouvre aussi
-          else if (el.id === "hTo" && volsTerrain) volsRender();
+          volsChamp(el.id, false);                     // le code IATA traduit ouvre aussi
         }
         setTimeout(() => {
           const box = $(RSUGGEST[id.slice(1)]);
