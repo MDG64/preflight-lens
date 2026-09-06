@@ -5800,8 +5800,11 @@ body.light .stat.on {
       background: transparent
     }
 
-    /* La mention obligatoire sous toute donnee AeroDataBox. Discrete mais
-       jamais absente : la source n'est pas officielle, et cela se dit. */
+    /* La mention AeroDataBox. Discrete mais jamais absente la ou le pilote
+       CHOISIT : la source n'est pas officielle, et cela se dit avant qu'il
+       s'appuie dessus. Elle porte donc la liste des vols proposes et le pied
+       du tableau des departs. Elle ne porte plus, depuis le 7 sept. 2026, la
+       bande de ce qui a ete pose : a ce moment-la elle a deja ete lue. */
     .flt-note {
       color: var(--muted2);
       font-style: italic
@@ -26445,9 +26448,13 @@ window.addEventListener("scroll", hidePop, true);
         + rows + `<div class="flt-msg flt-note">${esc(ADB_MENTION)}</div>`);
     }
 
-    /* Ce qui reste à l'écran une fois le vol posé : ce qu'on a appliqué, d'où
-       ça vient, et la mention. La bande remplace la proposition — le pilote
-       voit ce qui a été fait, pas seulement le résultat dans les cases. */
+    /* Ce qui reste à l'écran une fois le vol posé : ce qu'on a appliqué, et
+       rien d'autre. La bande remplace la proposition — le pilote voit ce qui a
+       été fait, pas seulement le résultat dans les cases.
+       Pas de mention ici (7 sept. 2026) : elle a déjà été lue au moment du
+       CHOIX, sur la liste des vols proposés et au pied du tableau des départs.
+       La répéter sous une bande d'une seule ligne ne prévenait plus personne
+       et doublait la hauteur de ce qui reste à l'écran. */
     function fltPose(cs, r) {
       const heures = (r && r.tko)
         ? `<span class="flt-leg">${esc(r.dep)}<span class="flt-ar">→</span>${esc(r.arr)}</span>
@@ -26456,8 +26463,7 @@ window.addEventListener("scroll", hidePop, true);
         + ` scheduled</span>`
         : `<span class="flt-where">No scheduled time available for this flight.</span>`;
       fltShow(fltHead(cs, "")
-        + `<div class="flt-row flt-pose">${heures}</div>`
-        + `<div class="flt-msg flt-note">${esc(ADB_MENTION)}</div>`);
+        + `<div class="flt-row flt-pose">${heures}</div>`);
     }
 
     /* `mine: true` non parce que le pilote les a tapées, mais parce que ces
