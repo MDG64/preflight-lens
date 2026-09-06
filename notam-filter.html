@@ -104,6 +104,12 @@
          la nuit, NOIR le jour (voir body.light). Un jeton partagé aurait fait
          suivre le cadre à chaque retouche des lignes de l'interface. */
       --ssum-edge: #5e656c;
+      /* Fond du groupe TAF en vigueur. De nuit le cyan de la palette
+         (#9fc1d8) est un bleu DELAVE : dilue a 14 % sur le panneau il ne
+         donnait qu'un gris a peine plus clair, invisible a la lumiere du
+         jour dans le cockpit. On prend donc un bleu franc, pose en couleur
+         pleine plutot qu'en dilution. Le jour, voir body.light. */
+      --taf-bg: #21445f;
     }
 
     /* ---------- thème clair (mode jour) ---------- */
@@ -133,6 +139,9 @@
       --elev: 0 1px 2px rgba(20, 40, 60, .05), 0 6px 16px -6px rgba(20, 40, 60, .16);
       --elev-hi: 0 2px 4px rgba(20, 40, 60, .07), 0 12px 26px -8px rgba(20, 40, 60, .2);
       --ssum-edge: #000000;
+      /* Le jour, le cyan se voit tres bien sur le blanc : on garde la teinte
+         d'origine (cyan a 14 % sur le panneau), figee en couleur pleine. */
+      --taf-bg: #ddf1f7;
     }
 
     body.light {
@@ -5617,9 +5626,11 @@ body.light .stat.on {
       color: var(--text);
       white-space: nowrap
     }
+    /* Le TAF en vigueur se dit par son FOND seul (6 sept. 2026) : la barre
+       cyan de 4 px au bord gauche est retiree. Sur un TAF d'une seule ligne
+       elle se lisait comme un curseur de saisie colle au premier mot. */
     .taf-on {
-      background: color-mix(in srgb, var(--cyan) 14%, transparent);
-      box-shadow: -4px 0 0 var(--cyan);
+      background: var(--taf-bg);
       border-radius: 2px
     }
 
