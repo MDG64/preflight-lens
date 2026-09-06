@@ -13,8 +13,12 @@
        'unsafe-inline' est inévitable — l'app est un monofichier de scripts et
        de styles en ligne, et un nonce demanderait un serveur qui l'insère.
        blob: pour worker-src : MapLibre fabrique son worker par createObjectURL.
-       127.0.0.1:8787 : le proxy en développement local, cf. BACKEND_URL. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org https://raw.githubusercontent.com http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+       127.0.0.1:8787 : le proxy en développement local, cf. BACKEND_URL.
+       vrs-standing-data.adsb.lol (2026-09-06) : le miroir de la base des
+       routes par indicatif de vol (Virtual Radar Server, CC0), interrogé en
+       direct par la case « Flight » de l'accueil — il sert du JSON avec un
+       en-tête CORS ouvert, donc sans passer par le proxy. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://notam-proxy-production.up.railway.app https://tiles.openfreemap.org https://raw.githubusercontent.com https://vrs-standing-data.adsb.lol http://127.0.0.1:8787; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Détecteurs de données d'iOS, coupés comme sur minima.html. Sans cela,
        la tablette souligne de son propre trait les suites de chiffres qu'elle
@@ -5189,12 +5193,182 @@ body.light .stat.on {
       height: var(--code-h)
     }
 
-    /* La ligne du Clear ne compte pas comme une section de l'accueil : la
-       marge negative reprend l'ecart de 24 px de `.home-inner` pour que le
-       bouton reste pose sur les cases qu'il efface. */
+    /* La ligne du haut ne compte pas comme une section de l'accueil : la
+       marge négative reprend l'écart de 24 px de `.home-inner` pour que
+       l'indicatif et le Clear restent posés sur les cases qu'ils remplissent
+       et effacent. Elle empile deux étages — la ligne elle-même, puis la
+       proposition de terrains quand il y en a une. */
     .home-route-top {
       display: flex;
+      flex-direction: column;
+      gap: 10px;
       margin-bottom: -18px
+    }
+
+    .home-route-topline {
+      display: flex;
+      align-items: center;
+      gap: 10px
+    }
+
+    /* L'indicatif du vol (2026-09-06). Boîte compacte, étiquette EN LIGNE et
+       non au-dessus comme les trois codes : la ligne du haut doit rester de
+       la hauteur d'un bouton, sinon elle vole la place des cases qu'elle
+       sert. Même fond et même liseré que `.scratch`, en plus court. */
+    .home-flight {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      height: 30px;
+      padding: 0 11px;
+      background: #06101a;
+      border: 1px solid var(--line2);
+      border-radius: 8px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03)
+    }
+
+    body.light .home-flight {
+      background: #f4f7f9;
+      box-shadow: none
+    }
+
+    .home-flight:focus-within {
+      border-color: var(--cyan)
+    }
+
+    /* La case interroge la base : le liseré le dit le temps de la requête. */
+    .home-flight.busy {
+      border-color: var(--gold)
+    }
+
+    .home-flight-lb {
+      font: 500 10px/1 var(--mono);
+      letter-spacing: .16em;
+      color: var(--muted);
+      text-transform: uppercase
+    }
+
+    .home-flight input {
+      width: 78px;
+      padding: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font: 600 13px/1 var(--mono);
+      letter-spacing: .1em
+    }
+
+    .home-flight input::placeholder {
+      color: var(--muted2);
+      font-weight: 400;
+      letter-spacing: .06em
+    }
+
+    body.light .home-flight input::placeholder {
+      color: #9aa6b0
+    }
+
+    /* La proposition : dans le flux, pas en menu flottant. Même boîte que le
+       menu de suggestions (`.suggest`) pour que l'œil la reconnaisse, mais
+       elle POUSSE les cases vers le bas au lieu de les couvrir — on lit une
+       ville avant de poser un code, il ne faut pas que le reste disparaisse.
+       Contrairement à `.suggest`, elle vit en plein jour : elle a donc son
+       fond clair. */
+    .home-flight-out {
+      border: 1px solid var(--line2);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #0b1722
+    }
+
+    body.light .home-flight-out {
+      background: #f4f7f9
+    }
+
+    /* L'en-tête de la proposition : l'indicatif retenu, et le geste pour la
+       refermer. Pas un bouton — on ne pose rien en cliquant dessus. */
+    .flt-head {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 11px 9px 13px;
+      font: 600 11px/1.35 var(--mono);
+      letter-spacing: .1em;
+      color: var(--muted)
+    }
+
+    .flt-head .flt-cs {
+      color: var(--cyan)
+    }
+
+    /* Ce que le pilote a saisi, quand ce n'est pas ce qu'on est allé
+       chercher (AF6 → AFR6) : il doit pouvoir vérifier la traduction. */
+    .flt-head .flt-from {
+      color: var(--muted2);
+      letter-spacing: .06em;
+      font-weight: 400
+    }
+
+    .flt-x {
+      margin-left: auto;
+      flex: none;
+      width: 22px;
+      height: 22px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font: 400 15px/1 var(--sans);
+      cursor: pointer
+    }
+
+    .flt-x:hover {
+      background: rgba(128, 137, 145, .16);
+      color: var(--text)
+    }
+
+    /* Une étape par ligne. Un vol simple n'en a qu'une ; une rotation
+       (LZIB-LGKR-LGPZ-LZIB) en a trois, et c'est au pilote de dire laquelle
+       il vole — on ne devine pas son tronçon. */
+    .flt-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+      padding: 11px 13px
+    }
+
+    .flt-leg {
+      font: 600 13px/1 var(--mono);
+      letter-spacing: .1em;
+      color: var(--text);
+      flex: none
+    }
+
+    .flt-leg .flt-ar {
+      color: var(--muted2);
+      padding: 0 3px
+    }
+
+    .flt-where {
+      font: 400 11px/1.3 var(--sans);
+      color: var(--muted);
+      flex: 1 1 auto;
+      min-width: 0
+    }
+
+    /* Rien à poser : le message tient la place d'une ligne, sans en avoir le
+       comportement. */
+    .flt-msg {
+      border-top: 1px solid var(--line);
+      padding: 11px 13px;
+      font: 400 11px/1.4 var(--sans);
+      letter-spacing: 0;
+      color: var(--muted);
+      text-transform: none
     }
 
     /* Sur l'accueil, le Clear s'annonce par le trait, pas par la couleur :
@@ -7637,14 +7811,36 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         </div>
       </div>
 
-      <!-- Effacer la route d'un geste : trois codes tapes, un seul bouton pour
-           les reprendre a zero. Il se tient AU-DESSUS de la ligne, du cote de
-           Departure — c'est par la que la saisie recommence. Eteint tant qu'il
-           n'y a rien a effacer. -->
+      <!-- LA LIGNE DU HAUT — l'indicatif du vol, puis le Clear.
+
+           L'indicatif (2026-09-06) prend la place que tenait le Clear : c'est
+           par lui que la saisie commence quand on vole une ligne régulière.
+           « AF6 », « AFR006 » ou « EZY46AK » — la base de routes de Virtual
+           Radar Server (CC0, miroir adsb.lol) rend les deux terrains, et ils
+           s'affichent EN PROPOSITION sous la ligne. Jamais d'application
+           muette : la base est communautaire et garde des entrées périmées
+           (AFR1234 y pointait encore sur Tegel, fermé depuis 2020). Le pilote
+           voit la ville avant de poser le code.
+
+           Le Clear passe à droite. Il efface tout ce que la ligne porte,
+           l'indicatif compris : un numéro de vol qui survit à ses terrains ne
+           décrit plus rien. Éteint tant qu'il n'y a rien à effacer. -->
       <div class="home-route-top">
-        <button class="clearRouteBtn home-clear" id="hClearBtn" type="button" disabled
-          aria-label="Clear departure, destination and alternate"
-          title="Clear the three codes — departure, destination and alternate">Clear</button>
+        <div class="home-route-topline">
+          <div class="home-flight" id="hFlightBox">
+            <label class="home-flight-lb" for="hFlight">Flight</label>
+            <input id="hFlight" maxlength="8" placeholder="AF6" autocomplete="off" spellcheck="false"
+              aria-label="Commercial flight number or callsign — proposes the departure and destination"
+              title="Flight number or callsign (AF6, AFR006, EZY46AK) — proposes the two aerodromes">
+          </div>
+          <button class="clearRouteBtn home-clear" id="hClearBtn" type="button" disabled
+            aria-label="Clear the flight number, departure, destination and alternate"
+            title="Clear the line — flight number and the three codes">Clear</button>
+        </div>
+        <!-- La proposition s'installe DANS le flux, entre l'indicatif et les
+             trois cases, au lieu de tomber en menu par-dessus elles : elle
+             reste lisible pendant qu'on la lit, et rien ne se cache. -->
+        <div class="home-flight-out" id="hFlightOut" hidden></div>
       </div>
 
       <div class="home-route">
@@ -8562,6 +8758,15 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
 
         <div class="hd-sec">Route</div>
         <div class="hd-row">
+          <div class="hd-vis"><span class="hd-icao"><span class="l">FLIGHT</span><span class="v">AF6</span></span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Type a <b>flight number or callsign</b> — <b>AF6</b>, <b>AFR006</b>, <b>EZY46AK</b> all
+            work — and the two aerodromes of that flight are <b>proposed</b> under the line, with their cities. Tap the
+            leg to fill <b>FROM</b> and <b>TO</b>; a flight with stops offers one line per leg. Nothing is filled until
+            you tap: the flight database is <b>crowd-sourced and can be out of date</b>, so read the cities before you
+            accept them.</div>
+        </div>
+        <div class="hd-row">
           <div class="hd-vis"><span class="hd-icao"><span class="l">FROM</span><span class="v">LFBO</span></span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Enter <b>FROM</b> and <b>TO</b> — and an <b>ALT</b> destination alternate if you have
@@ -8617,13 +8822,22 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              vendor/weather/LICENSE : rien à afficher. Le domaine public — NOAA,
              OurAirports, Natural Earth — et le service NOTAM n'exigent rien.
              Troisième crédit (2026-09-03) : le CC BY des temps de vol par route
-             (OpenSky sur Zenodo), porté ici et sur la page « ? » de Minima. -->
+             (OpenSky sur Zenodo), porté ici et sur la page « ? » de Minima.
+             La base des routes par indicatif de vol (CC0) n’exige rien
+             non plus : elle est nommée ici non pour la licence mais pour
+             la MISE EN GARDE — elle est tenue par ses utilisateurs et
+             vieillit, et le pilote doit savoir ce qu’il accepte. -->
         <div class="hd-note"><b>Flight times by route</b> — <i>Crowdsourced air traffic data from The OpenSky
           Network 2020</i>, Strohmeier, Olive, Lübbe, Schäfer and Lenders,
           <a href="https://zenodo.org/records/5815448" target="_blank" rel="noopener">Zenodo</a>, licensed
           <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>;
           median over the year 2019, first to last ADS-B contact. Aerodrome positions from OurAirports (public
           domain).</div>
+        <div class="hd-note"><b>Flight number to aerodromes</b> — routes database of
+          <a href="https://github.com/vradarserver/standing-data" target="_blank" rel="noopener">Virtual Radar
+          Server</a> (public domain, CC0), mirrored by adsb.lol. It is <b>maintained by its users</b>: a route can
+          lag behind a timetable change or an airport closure, which is why the two aerodromes are proposed for you
+          to accept and never filled in on their own.</div>
         <div class="hd-note">
           <b>Weather pictograms and day forecast</b> — <a href="https://www.met.no/en" target="_blank"
             rel="noopener">MET Norway</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/"
@@ -24477,7 +24691,7 @@ window.addEventListener("scroll", hidePop, true);
          déjà une météo à montrer, là où l'étoile attend une vraie route. */
       $("#hRouteWx").disabled = routeSlotsFilled(codes).length < 1;
       // Rien dans les cases : rien a effacer, le bouton s'eteint.
-      $("#hClearBtn").disabled = !HOME_FIELDS.some(id => rVal(id));
+      $("#hClearBtn").disabled = !HOME_FIELDS.some(id => rVal(id)) && !($("#hFlight").value || "").trim();
       homeTimesSync();
     }
 
@@ -25147,8 +25361,289 @@ window.addEventListener("scroll", hidePop, true);
     $("#hClearBtn").onclick = () => {
       if (preloading) return;          // jamais pendant un telechargement en cours
       clearRouteUI();                  // route calculee, route rangee, page Route, globe
+      fltClear();                      // l'indicatif, qui ne dit plus rien sans ses terrains
       homeApplyRoute(["", "", ""]);    // ... et la file de remplissage de l'accueil
     };
+
+    /* ============================================================
+       L'INDICATIF DU VOL (2026-09-06) — la case « Flight » de la ligne du
+       haut, là où se tenait le Clear (qui passe à sa droite).
+
+       CE QU'ELLE FAIT. Le pilote de ligne connaît son numéro de vol, pas
+       toujours les deux codes OACI. Il saisit « AF6 », « AFR006 » ou
+       « EZY46AK » ; la base des routes de Virtual Radar Server — 620 000
+       indicatifs, licence CC0, entretenue par ses utilisateurs, miroir
+       adsb.lol rafraîchi toutes les heures — rend les terrains du vol, et
+       ils s'affichent EN PROPOSITION. Un geste de plus les pose dans
+       Departure et Destination, par le chemin normal : de là, les heures,
+       la route, la carte et la météo suivent sans rien savoir d'ici.
+
+       POURQUOI UNE PROPOSITION ET PAS UN REMPLISSAGE. La base est
+       communautaire et vieillit : AFR1234 y a longtemps pointé sur Tegel,
+       fermé en 2020. Un code posé tout seul se serait fondu dans la saisie
+       du pilote, qui l'aurait relu comme le sien. La proposition porte donc
+       la VILLE à côté du code — c'est elle qui se vérifie d'un coup d'œil,
+       pas quatre lettres — et le pilote confirme. Même règle que les minimas
+       et le QFU : ce qu'affirme une base tierce se propose, ne s'applique
+       pas.
+
+       EN DIRECT, SANS LE PROXY. Le miroir sert du JSON avec un en-tête CORS
+       ouvert (vérifié le 2026-09-06) : la page l'interroge elle-même. Le
+       domaine est donc dans le connect-src de la CSP, en tête de fichier.
+       Rien à mettre dans notam-proxy tant qu'on n'a pas de secours payant à
+       lui confier.
+
+       LA TABLE DES COMPAGNIES, EMBARQUÉE. La base est rangée par indicatif
+       OACI (AFR6) ; le pilote saisit aussi bien le numéro IATA (AF6). La
+       traduction IATA → OACI tient dans 4,4 ko compilés depuis
+       airlines.csv du même dépôt (880 codes, 96,5 % des routes de la base) :
+       embarquée plutôt que téléchargée, elle marche hors ligne et ne coûte
+       rien à charger. Format : des groupes de cinq caractères, deux pour le
+       code IATA puis trois pour l'OACI.
+
+       CE QUI N'EST PAS ICI. L'indicatif ne part pas encore vers Minima :
+       la page d'en face n'en fait rien pour l'instant, et un paramètre que
+       personne ne lit pourrit. Il ne survit pas non plus à un rechargement,
+       comme les trois codes et les trois heures — la ligne se repose à
+       chaque ouverture. Voir l'étude « Indicatif de vol et route sur la
+       carte » (Weather Lens) pour la suite : vols du jour sur une paire,
+       puis tracé réellement volé sur la carte.
+       ============================================================ */
+    const FLT_BASE = "https://vrs-standing-data.adsb.lol/routes/";
+    const FLT_SEEN_KEY = "pl-flight-seen";   // les 20 derniers vols résolus, pour le hors-ligne
+    const FLT_SEEN_MAX = 20;
+    /* IATA (2) → OACI (3), par groupes de cinq. Compilé le 2026-09-06 depuis
+       vradarserver/standing-data (airlines.csv), restreint aux compagnies qui
+       ont au moins une route dans la base et, en cas d'homonymie IATA, à
+       celle qui en a le plus. */
+    const FLT_AIRLINES_PACKED =
+      "0BBMS0DDWT0ENWC0VVFC1IAMB2AAWA2BAWT2CCMA2DDYA2FACN2GAGU2ICSB2JVBW2KGLG2LOAW2MMYD2NNTJ2PGAP2QSNC2RRLB"
+      + "2SSTW2TBMA2UFKH2WWFL2YMYU2ZPTB3BBCV3FFIE3GWCM3KJSA3LADY3NURG3OMAC3SBOX3TTQQ3UCSC3VTAY3WMWI3ZTVP4BTUP"
+      + "4CARE4DDIR4GGZP4HDRC4IKES4LLAU4MMGH4NANT4RHHI4SRSX4TBHP4UGWI4VSQY4WAJK4YOCN4ZLNK5AAIP5CICL5DSLI5FFIA"
+      + "5GSSV5JCEB5KHFY5NAUL5OFPO5PUZP5QHES5RRUC5TAKT5UTGU5WAEU5XUPS5YGTI5ZKEM6AAMW6BBLX6DTVQ6EIGO6GRER6HISR"
+      + "6IMMD6JSNJ6KTAH6MMXM6OOBS6PPRX6QSAW6RDRU6SSGQ6TLGT6UACX6VVGA6WFBS6YART7AXRC7BBNE7CJJA7FFAB7GSFJ7HRVF"
+      + "7ITLR7KKGL7LAZG7NCNA7OTVL7PPST7QAUV7RRLU7TAGV7WWRC7YMYP8BTNU8CATN8DEXV8EBRG8FSTP8GDTL8HHFR8IIPM8JKMV"
+      + "8KKMI8LLKE8MMMA8PPCO8QOHY8RAIA8SGTR8UAAW8VACP8YAAV8ZCGA9AGCA9CCQH9DNMG9EEDV9GSPQ9HCGN9ILLR9KKAP9LCJC"
+      + "9PFJL9RNSE9SSOO9TRUN9VROI9WJAI9XFDY9YFGEA0EFWA2AWGA3AEEA4AZOA5HOPA6OTCA7WINA8AMFA9TGZAAAALABBNZACACA"
+      + "ADAZUAEMDAAFAFRAGARUAHDAHAIAICAJNIGAKAXMALAPPAMAMXANRLAAPLAVAQJYHARARGASASAATRAMAUCJLAVAVAAWVNEAXLOF"
+      + "AYFINAZITYB0DJTB2BRUB3BTNB4BCFB5BBTB6JBUB7UIAB8ERTB9IRBBABAWBBSBSBCSKYBDBGNBFBBDBGBBCBIRBABJLBTBKOKA"
+      + "BLPICBMMNSBNLWGBOBOUBPBOTBQSWUBREVABSUBGBTBTIBUDBPBVBPABWBWABXABLBYTOMBZBBGC2CELC3TDRC5UCAC6MFXC8ICV"
+      + "CACCACBKIICCABDCDCNDCECLGCFCYZCGTOKCHBMJCICALCJCFECKCKKCLCLHCMCMPCNGDCCOCOACPCPZCRABCCSCSWCTAAECUCUB"
+      + "CVCLXCWCCCCXCPACYCYPCZCSND0DHKD2SSFD3DAOD4GELD5DAED6ILND7XAXD8NSZD9DNVDBBZHDDNOKDECFGDGSRQDHDVADIMBU"
+      + "DJSRRDKVKGDLDALDMDWIDNDNADOSHHDPFCADRRLHDSEZSDTDTADUHMSDVVSVDXDTRDYNOZDZEPAE4ENTE5RBGE7ESFE8BESE9CXS"
+      + "EAEAIEBPLMECEJUEDABQEEESTEGERNEHAKXEIEINEKUAEELELBEMCFSENDLAEOKAREPIRCEQTAEERDHLESDHXETETHEUUEAEVASQ"
+      + "EWEWGEXAVREYETDEZSUSF0FJRF3FADF5ATGF7BBOF8FLEF9FFTFASFRFBLZBFCWBAFDAIQFEFEAFGAFGFHFHYFIICEFJFJIFLTRS"
+      + "FMCSHFNFJWFOFBZFPFREFQCWNFRRYRFSAYNFTFEGFUFZAFVSDMFWIBXFXFDXFYFFMFZFDBG2GBGG3GLOG4AAYG5HXAG6GXAG7GJS"
+      + "G8GOWG9ABYGAGIAGBABXGDAHAGEGBBGFGFAGGGUYGHGLPGILHAGJCDCGKJJPGLGRLGOKZUGRAURGSGCRGTCGHGWGJTGXCBGGYCGZ"
+      + "H2SKUH3HLJH4HYSH5RSYH6BUCH7HYMH8SKXH9HIMHAHALHBHGBHCSZNHDADOHEHGOHFVREHGNLYHHQNTHJTMNHKFSCHMSEYHNHST"
+      + "HODKHHPAPFHRHHNHTCTJHUCHHHVTRAHXCRKHYUZBHZSOZI2IBSI3TBZI4FWAI7IOAI8IZAI9HLFIAIAWIBIBEICGOAIDBTKIESOL"
+      + "IFFBAIICSQIJSJOIKITXINLKNIOIAEIPJOLIQQAZIRIRAISSHIITTTWIUSJVIVGPXIWWONIXAXBIYIYEIZAIZJ2AHYJ4BDRJ7ABS"
+      + "J8BVTJ9JZRJAJATJBJBAJCJEXJDCBJJEMNOJFJAAJGJDLJIMRJJJTAMJKACLJLJALJMJMAJNNLVJOJAZJPADRJQJSTJRJOYJSKOR"
+      + "JTLNIJUASLJWAPWJXSJXJZJAPK2ELOK4CKSK6KHVK7KBZKAANKKBDRKKCKZRKDWGNKEKALKFBLFKHKHKKISSJKJAIHKKNGNKLKLM"
+      + "KMKMMKNCUAKOAERKPSKKKQKQAKRKMEKSKONKTKTCKUKACKVMVDKWWANKXCAYKYKNAKZNCAL3JOSL5REAL6MAIL7LAEL9LWILALAN"
+      + "LCVLOLDAHKLFVTELGLGLLHDLHLILIALJJNALLLVLLMLOGLNLAALOLOTLPLPELQMKRLRLRCLSEXSLTSNGLULXPLVMEGLWJMRLXSWR"
+      + "LYELYM0MNGM3TUSM4MSAM5KENM6AJTM7MAAM8MSJMAMAHMBMNBMDMDGMEMEAMFCXAMGEZAMHMASMIFHMMKMAUMLFMLMMAPJMNCAW"
+      + "MOCAVMPMPHMQENYMRMMLMSMSRMUCESMVMARMXMXYMYMWAMZAHXN0NBTN2DAGN3VOSN4NWSN5KGZN7FCMN8HGKN9NVRNANAONBBNL"
+      + "NCNACNENMANFAVNNGLDANHANANJNGBNLAEHNMNZMNNMOVNONOSNPNIANQAJXNRMAVNSHBHNTIBBNUJTANVKRUNXAMUNYFXINZANZ"
+      + "O3CSSO6ONEO9NOVOAOALOBBOVOCORCODMXDOEFOEOFFIFOGSDGOHJIAOJFJMOKCSAOLPAOOMMGLONRONOOSKWOPDIGOQCQNORTFL"
+      + "OSAUAOTPELOUCTNOVOMSOWSEWOYANSOZAARP0PFZP3PTRP4APOP5RPBP6PVGP7ESLP9PVNPBPVLPCPGTPDPOEPEPEVPFPRWPGBKP"
+      + "PHPHAPJSPMPKPIAPMCNFPNCHBPOPACPRPALPSAUIPTPDTPUPUAPVSBUPWPRFPXANGPYSLMPZLAPQ2DQAQ4TLKQ6VOCQ7DHAQ9GWG"
+      + "QBQSMQCCRCQDQCLQFQFAQGCTVQHBAVQICIMQKJZAQLLERQNSKPQOOGNQPAKJQQUTYQRQTRQSTVSQTTPAQUUTNQVLAOQWQDAQXQXE"
+      + "QYBCSQZAWQR0RPKR2ORBR3SYLR4RANR5JAVR6DNUR7OCARARNARBSYRRCFLIRDRYNRESTKRFEOKRHHKCRIOEYRJRJARKRUKRLABG"
+      + "RMNGTROROTRPCHQRQKMFRRRYSRSASVRUABWRVROURWRYLRXRXIRYCJXS2RSHS3BBRS4RZOS5TCFS6KSZS7SBIS8SDAS9FLGSASAA"
+      + "SBACISCCDGSDSUDSEXLFSFDTHSGSEJSIBCISJSJYSKSASSLTLMSMMSCSNBELSPSATSQSIASRSDRSSCRLSTGMISUAFLSVSVASYSCX"
+      + "SZSMRT0TPUT2TCGT3EZET4TIBT5TUAT6ATXT7TJTT8TVRT9VTUTATAITBJAFTCATCTEIGATFBRXTGTHATHRMYTITWITKTHYTLANO"
+      + "TMLAMTNTHTTOTVFTPTAPTQTDMTRTGWTSTSCTTTGGTUTARTVTBATWTWBTXFWITYTPCTZTDSU0ULSU2EZYU4BHAU5GWYU6SVRU7UCG"
+      + "U8CYFU9TAKUAUALUBUBAUCLCOUDUBDUENASUFPERUGTUXUJLMUULALKUMAZWUNTSOUOHKEUPBHSUQCUHURUGDUSAWEUTUTAUUREU"
+      + "UWUTPUXAEAUZBRQV0VCVV2TWNV4VECV5DAPV7VOEV8VASVAVOZVBVIVVCVALVEEFYVFTKJVHALVVIVDAVJVJCVKFOOVLLHXVMNGL"
+      + "VNHVNVOUVLVPVQIVRTCVVSVIRVTVTAVUVAGVVVPEVXVRDVYVLGVZTVJW1WDLW2CWAW3ARAW4WMTW5IRMW6WZZW8CJTW9WUKWAKLC"
+      + "WBRWDWCISVWDMWMWEPTAWFWIFWGSWGWHWEBWIWHTWJJESWKEDWWLWALWNSWAWOJTEWQSWQWRWENWSWJAWTSWTWUWAUWWKXPWXBCY"
+      + "WYOMAWZRWZX3TUIX5OVAX6CHZX7CHGX9NVDXCCAIXEJSXXFVLKXGSXDXJTAXXKCCMXLLNEXMIMXXNXARXPVXPXQSXSXRCXIXSSIT"
+      + "XTIDXXWNCTXYKNEXZAEZY2CEYY4VOIY5GMRY7TYAY8YZRY9DATYEANRYGHYTYIOYAYKAVJYLLLMYMMGXYPAPZYSRAEYVASHYWANE"
+      + "YXRPAZ0UBTZ2APGZ7CMSZ8AZNZ9BEKZASWMZBABNZDEWRZEESRZFAZVZGTZPZHCSZZLRXAZNAZBZPAZQZQGERZTAWCZWAWIZYSHY";
+    let fltAirlineMap = null;
+    function fltAirline(iata) {
+      if (!fltAirlineMap) {
+        fltAirlineMap = new Map();
+        const s = FLT_AIRLINES_PACKED;
+        for (let i = 0; i + 5 <= s.length; i += 5) fltAirlineMap.set(s.slice(i, i + 2), s.slice(i + 2, i + 5));
+      }
+      return fltAirlineMap.get(iata) || "";
+    }
+
+    /* ---- normalisation de la saisie ----
+       Quatre formes arrivent dans la case, une seule en sort.
+
+         AFR6      OACI, déjà bon
+         AFR006    OACI zéro-remplie : l'ADS-B garde les zéros, pas la base
+         AF6       IATA : la compagnie se traduit
+         EZY46AK   indicatif ATC alphanumérique : tel quel
+
+       Le partage tient à une seule observation : un indicatif de compagnie
+       OACI fait TROIS LETTRES, un IATA DEUX caractères, et le numéro de vol
+       commence toujours par un chiffre. « TOM123 » est donc TUI (TOM + 123)
+       et non Transavia (TO + M123), puisque « M » n'est pas un chiffre ;
+       « TO123 » est bien Transavia. Aucune des deux lectures n'est possible
+       en même temps.
+       `alt` garde la forme à zéros quand on en a retiré : si la base ignore
+       AFR6 on retentera AFR006 avant de dire qu'on ne sait pas. */
+    function fltNum(n) { const t = n.replace(/^0+/, ""); return t || "0"; }
+    function fltNorm(raw) {
+      const s = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (s.length < 3 || s.length > 8) return null;
+      let m = /^([A-Z]{3})(\d[A-Z0-9]*)$/.exec(s);
+      if (!m) {
+        const i = /^([A-Z0-9]{2})(\d[A-Z0-9]*)$/.exec(s);
+        const ic = i && fltAirline(i[1]);
+        if (!ic) return null;
+        m = [s, ic, i[2]];
+      }
+      const num = fltNum(m[2]);
+      return { cs: m[1] + num, alt: num === m[2] ? null : m[1] + m[2], typed: s };
+    }
+
+    /* ---- mémoire des vols déjà résolus ----
+       Le même vol se prépare plusieurs fois, et souvent là où le réseau
+       manque. Les vingt derniers restent en boîte : une réponse immédiate,
+       et surtout une réponse hors ligne. On ne garde que ce qui s'affiche —
+       les codes et les villes —, jamais la réponse entière. */
+    let fltMem = null;
+    function fltSeen() {
+      if (!fltMem) fltMem = (store.get(FLT_SEEN_KEY) || {});
+      return fltMem;
+    }
+    function fltSeenGet(cs) { const e = fltSeen()[cs]; return (e && Array.isArray(e.ap) && e.ap.length > 1) ? e.ap : null; }
+    function fltSeenPut(cs, ap) {
+      const all = fltSeen();
+      all[cs] = { ap, ts: Date.now() };
+      const keys = Object.keys(all).sort((a, b) => (all[b].ts || 0) - (all[a].ts || 0));
+      keys.slice(FLT_SEEN_MAX).forEach(k => delete all[k]);
+      store.set(FLT_SEEN_KEY, all);
+    }
+
+    /* ---- la requête ----
+       Le miroir range les fichiers par les deux premiers caractères de
+       l'indicatif : /routes/AF/AFR6.json. Un 404 dit « inconnu », ce n'est
+       pas une panne. On ne retient que ce qui s'affiche : [code, ville] par
+       escale. */
+    async function fltFetch(cs) {
+      const r = await fetch(FLT_BASE + cs.slice(0, 2) + "/" + encodeURIComponent(cs) + ".json");
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      const ap = (j && Array.isArray(j._airports) ? j._airports : [])
+        .map(a => [String(a && a.icao || "").toUpperCase(), String(a && (a.location || a.name) || "")])
+        .filter(a => /^[A-Z]{4}$/.test(a[0]));
+      return ap.length > 1 ? ap : null;
+    }
+
+    /* ---- la proposition ----
+       Une ligne par ÉTAPE. Un vol simple n'en a qu'une, une rotation en a
+       trois (LZIB-LGKR-LGPZ-LZIB) : le pilote dit laquelle il vole, on ne
+       devine pas son tronçon. Deux escales identiques bout à bout, s'il y en
+       a, ne font pas une étape. */
+    function fltShow(html) {
+      const out = $("#hFlightOut");
+      out.innerHTML = html || "";
+      out.hidden = !html;
+    }
+    function fltHide() { fltShow(""); }
+    /* Le Clear de la ligne du haut passe par ici : l'indicatif s'en va avec
+       les codes, il ne décrit plus rien sans eux. */
+    function fltClear() { const el = $("#hFlight"); if (el) el.value = ""; fltLast = ""; fltTok++; fltHide(); }
+    function fltHead(cs, typed) {
+      const from = (typed && typed !== cs) ? `<span class="flt-from">typed ${esc(typed)}</span>` : "";
+      return `<div class="flt-head"><span class="flt-cs">${esc(cs)}</span>${from}
+        <button class="flt-x" type="button" id="hFlightX" aria-label="Close this proposal" title="Close">&times;</button></div>`;
+    }
+    function fltMsg(cs, typed, msg) { fltShow(fltHead(cs, typed) + `<div class="flt-msg">${esc(msg)}</div>`); }
+    function fltProposal(cs, typed, ap) {
+      const legs = [];
+      for (let i = 0; i + 1 < ap.length; i++) if (ap[i][0] !== ap[i + 1][0]) legs.push([ap[i], ap[i + 1]]);
+      if (!legs.length) { fltMsg(cs, typed, "This flight has no usable leg in the route database."); return; }
+      const rows = legs.map(([a, b]) => {
+        const where = [a[1], b[1]].filter(Boolean).join(" → ");
+        return `<button class="sg-row flt-row" type="button" data-dep="${esc(a[0])}" data-dest="${esc(b[0])}"
+          aria-label="Set departure ${esc(a[0])} and destination ${esc(b[0])}"><span class="flt-leg">${esc(a[0])}<span
+            class="flt-ar">→</span>${esc(b[0])}</span><span class="flt-where">${esc(where)}</span></button>`;
+      }).join("");
+      fltShow(fltHead(cs, typed) + rows);
+    }
+
+    /* ---- poser les deux terrains ----
+       Par la porte commune des puces de route (homeApplyRoute) : miroir vers
+       la page Route, file de remplissage remise à zéro, étoiles, puces,
+       heures et armement de la route suivent. Le dégagement ne survit que si
+       la DESTINATION ne bouge pas — choisi pour l'ancienne, il ne veut plus
+       rien dire, exactement comme après la double flèche. */
+    function fltApply(dep, dest) {
+      if (!/^[A-Z]{4}$/.test(dep) || !/^[A-Z]{4}$/.test(dest) || dep === dest) return;
+      let alt = (rVal("#hTo") === dest) ? rVal("#hAlt") : "";
+      if (alt === dep || alt === dest) alt = "";
+      homeApplyRoute([dep, dest, alt]);
+      fltHide();
+    }
+
+    /* ---- la recherche ----
+       Elle part sur Entrée ou en quittant la case, jamais à la frappe : une
+       requête chez un tiers se demande, elle ne se devine pas à la troisième
+       lettre. Un jeton écarte les réponses dépassées quand la saisie a changé
+       entre-temps. */
+    let fltTok = 0, fltLast = "";
+    async function fltGo() {
+      const el = $("#hFlight"), raw = (el.value || "").toUpperCase().trim();
+      el.value = raw;
+      if (!raw) { fltLast = ""; fltHide(); return; }
+      const n = fltNorm(raw);
+      if (!n) {
+        fltLast = raw;
+        fltShow(fltHead(raw, "") + `<div class="flt-msg">Not a flight number. Type the airline and the number — AF6, AFR006, EZY46AK.</div>`);
+        return;
+      }
+      if (raw === fltLast && !$("#hFlightOut").hidden) return;   // déjà affiché, on ne redemande pas
+      fltLast = raw;
+      const cached = fltSeenGet(n.cs);
+      if (cached) { fltProposal(n.cs, n.typed, cached); return; }
+      const tok = ++fltTok;
+      const box = $("#hFlightBox");
+      box.classList.add("busy");
+      fltShow(fltHead(n.cs, n.typed) + `<div class="flt-msg">Looking up the route database…</div>`);
+      try {
+        let ap = await fltFetch(n.cs);
+        if (!ap && n.alt) ap = await fltFetch(n.alt);      // la forme à zéros, si on en avait retiré
+        if (tok !== fltTok) return;
+        if (!ap) { fltMsg(n.cs, n.typed, "Flight not in the route database — type the two codes below."); return; }
+        fltSeenPut(n.cs, ap);
+        fltProposal(n.cs, n.typed, ap);
+      } catch (e) {
+        if (tok !== fltTok) return;
+        fltMsg(n.cs, n.typed, navigator.onLine
+          ? "Route database unavailable — type the two codes below."
+          : "Offline — a flight looked up before is kept, this one was not.");
+      } finally {
+        if (tok === fltTok) box.classList.remove("busy");
+      }
+    }
+
+    $("#hFlight").addEventListener("input", e => {
+      e.target.value = e.target.value.toUpperCase();
+      fltHide();                       // la proposition ne survit pas à une saisie qui bouge
+      renderHomeStars();               // ... et le Clear s'allume dès la première lettre
+    });
+    $("#hFlight").addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); fltGo(); }
+      else if (e.key === "Escape") { fltHide(); e.target.blur(); }
+    });
+    $("#hFlight").addEventListener("blur", () => fltGo());
+    selectAllOnFocus($("#hFlight"));
+    /* Un seul écouteur pour toute la proposition : elle est refaite à chaque
+       fois, les boutons avec elle — les recâbler un à un se serait oublié. */
+    $("#hFlightOut").addEventListener("click", e => {
+      if (e.target.closest("#hFlightX")) { fltHide(); return; }
+      const row = e.target.closest(".flt-row");
+      if (row) fltApply(row.dataset.dep, row.dataset.dest);
+    });
+
     $("#homeTabAd").onclick = () => homeSetFavTab("ad");
     $("#homeTabRoute").onclick = () => homeSetFavTab("route");
 
