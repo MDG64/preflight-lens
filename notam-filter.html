@@ -26120,8 +26120,36 @@ window.addEventListener("scroll", hidePop, true);
         if (!ap && n.alt) ap = await fltFetch(n.alt);      // la forme à zéros, si on en avait retiré
         if (tok !== fltTok) return;
         if (!ap) {
-          /* Le catalogue gratuit ne connaît pas ce vol. C'est le SEUL endroit
-             d'où part l'appel payant : après un échec, jamais avant. */
+          /* Le catalogue gratuit ne connaît pas ce vol. Mesuré le 2026-09-06 sur
+             114 départs réels d'Oslo (flux public Avinor) : 11,4 % des vols lui
+             manquent, surtout chez Norwegian, Widerøe et Wizz. Ce n'est donc pas
+             un cas rare, et c'est le SEUL endroit d'où part un appel payant :
+             après l'échec du gratuit, jamais avant.
+
+             DEUX CHEMINS PAYANTS, ET L'ORDRE COMPTE. Ils coûtent le MÊME prix de
+             2 unités, mais l'un rend un vol et l'autre tout un terrain (487 vols
+             à Roissy, mesuré). Donc : si le pilote a DÉJÀ saisi son terrain de
+             départ, on demande le TABLEAU de ce terrain, et la dépense profite à
+             tous les pilotes qui en partiront le même jour. Ce n'est qu'à défaut
+             qu'on paie le vol seul.
+
+             On n'IMPOSE pas la saisie du terrain pour autant : dans les 89 % de
+             cas où le catalogue connaît le vol, il donne le terrain gratuitement
+             et le tableau appelé ensuite est le même — l'exiger ne rapporterait
+             rien et retirerait à la case Flight sa raison d'être. */
+          const cles = [...new Set([n.cs, n.typed].filter(Boolean))];
+          const dep0 = rVal("#hFrom");
+          if (/^[A-Z]{4}$/.test(dep0)) {
+            fltShow(fltHead(n.cs, n.typed)
+              + `<div class="flt-msg">Not in the route database — checking ${esc(dep0)} departures…</div>`);
+            const r = await fltHeure(dep0, cles);
+            if (tok !== fltTok) return;
+            if (r && r.arr) {
+              fltProposalVols(n.cs, n.typed,
+                [{ dep: dep0, arr: r.arr, tko: r.tko, eta: r.eta }]);
+              return;
+            }
+          }
           fltShow(fltHead(n.cs, n.typed)
             + `<div class="flt-msg">Not in the route database — looking up today's schedule…</div>`);
           const vols = await fltNumero(n.typed || n.cs);
