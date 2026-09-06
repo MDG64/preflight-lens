@@ -5583,11 +5583,20 @@ body.light .stat.on {
     }
 
     .home-field-label {
+      display: block;
+      text-align: center;
       font: 500 10px/1 var(--mono);
       letter-spacing: .16em;
       color: var(--muted);
       text-transform: uppercase;
       padding-left: 2px
+    }
+
+    /* Les libellés au-dessus des cases d'horaire (Take-off / Arrival /
+       Alternate) sont retirés : l'heure sous la case suffit, la case de code
+       porte déjà son propre libellé centré au-dessus. */
+    .home-time-label {
+      display: none
     }
 
     /* `min-width: 0` lève la largeur intrinsèque d'un <input>, qui refuse
