@@ -5265,6 +5265,78 @@ body.light .stat.on {
 
     /* Une destination par ligne : le code, la ville, et le nombre de vols.
        Le bouton porte toute la ligne — on l'ouvre d'un doigt. */
+    /* ---- une ligne du tableau des départs du jour ----
+       L'heure d'abord, parce que c'est par elle qu'un pilote retrouve son vol
+       dans trois cents lignes. Le numéro ensuite, en chiffres non
+       proportionnels pour que les colonnes s'alignent d'elles-mêmes. La ville
+       prend la place qui reste et se coupe proprement ; l'heure d'arrivée
+       ferme la ligne, plus discrète, parce qu'elle se lit après. */
+    .vols-j {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      padding: 9px 20px;
+      color: var(--text);
+      cursor: pointer
+    }
+
+    .vols-j:hover {
+      background: var(--panel2)
+    }
+
+    .vols-j .vj-h {
+      font: 600 13px/1 var(--mono);
+      color: var(--cyan);
+      flex: none;
+      min-width: 52px;
+      font-variant-numeric: tabular-nums
+    }
+
+    .vols-j .vj-n {
+      font: 500 12px/1 var(--mono);
+      letter-spacing: .06em;
+      color: var(--text);
+      flex: none;
+      min-width: 58px
+    }
+
+    .vols-j .vj-a {
+      font: 600 12px/1 var(--mono);
+      letter-spacing: .1em;
+      color: var(--muted);
+      flex: none;
+      min-width: 42px
+    }
+
+    .vols-j .vj-v {
+      font: 400 12px/1.3 var(--sans);
+      color: var(--muted);
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .vols-j .vj-e {
+      font: 500 11px/1 var(--mono);
+      color: var(--muted2);
+      flex: none;
+      font-variant-numeric: tabular-nums
+    }
+
+    /* Sous 420 px la ville s'efface avant le reste : le code de destination
+       suffit à identifier l'étape, son nom est un confort. */
+    @media (max-width: 420px) {
+      .vols-j { gap: 7px; padding: 9px 14px }
+      .vols-j .vj-v { display: none }
+    }
+
     .vols-d {
       display: flex;
       align-items: baseline;
@@ -26219,7 +26291,23 @@ window.addEventListener("scroll", hidePop, true);
       try {
         const vols = await fltNumero(n.com || n.typed || n.cs);
         if (tok !== fltTok) return;
-        if (vols) { fltProposalVols(n.cs, n.typed, vols); return; }
+        if (vols) {
+          /* UN seul vol sous ce numéro : on pose tout, terrains et heures,
+             sans faire confirmer. La règle « jamais de remplissage muet »
+             visait le catalogue communautaire, qui vieillit et se trompe de
+             terrain une fois sur quarante ; elle ne vaut pas pour l'horaire
+             publié du jour. Et le remplissage n'est pas muet : la bande dit
+             l'étape, les deux heures et la source, et le Clear est à côté.
+             PLUSIEURS étapes sous le même numéro restent une question : on ne
+             devine pas le tronçon que vole le pilote. */
+          if (vols.length === 1 && vols[0].dep !== vols[0].arr) {
+            const v = vols[0];
+            fltApply(v.dep, v.arr, v.tko ? { tko: v.tko, eta: v.eta } : null);
+            return;
+          }
+          fltProposalVols(n.cs, n.typed, vols);
+          return;
+        }
 
         fltShow(fltHead(n.cs, n.typed)
           + `<div class="flt-msg">No schedule for today or tomorrow — checking the route database…</div>`);
@@ -26298,6 +26386,13 @@ window.addEventListener("scroll", hidePop, true);
        recherche par indicatif : la fenêtre est un sur-ensemble de la case,
        jamais un cul-de-sac. */
     const VOLS_URL = BACKEND_URL + "/api/vols/";
+    /* Les vols DU JOUR, avec leurs heures. Le catalogue ci-dessus reste en
+       dessous : il est gratuit, mondial, et il répond quand l'horairiste ne
+       couvre pas le terrain. Mais quand l'horaire existe, c'est lui qu'on
+       montre — le pilote demande « les vols du jour », pas une liste de
+       destinations théoriques. */
+    const VOLSJOUR_URL = BACKEND_URL + "/api/vols-jour/";
+    let volsJour = null;      // { date, vols:[...] } quand l'horaire a répondu
     let volsData = null;      // le catalogue du terrain ouvert
     let volsOpen = "";        // destination dépliée
     let volsTok = 0;
@@ -26309,7 +26404,7 @@ window.addEventListener("scroll", hidePop, true);
     let volsFerme = 0;
     function volsHide() {
       $("#volsOv").hidden = true;
-      volsData = null; volsOpen = ""; volsFerme = Date.now();
+      volsData = null; volsJour = null; volsOpen = ""; volsFerme = Date.now();
     }
 
     /* Le filtre : un mot suffit, sur le code OACI, le code IATA, la ville ou
@@ -26345,7 +26440,45 @@ window.addEventListener("scroll", hidePop, true);
       return out;
     }
 
+    /* ---- la liste du jour ----
+       Rangée par heure, pas par destination : c'est un tableau de départs,
+       et un pilote y cherche son créneau. Si la case Destination porte déjà
+       un terrain, la liste s'y restreint d'elle-même — mais si AUCUN vol n'y
+       va, on rend la liste entière en le disant, plutôt qu'un écran vide qui
+       ressemblerait à une panne. */
+    const vjH = t => t ? t.slice(0, 2) + ":" + t.slice(2) + "Z" : "";
+
+    function volsRenderJour() {
+      const box = $("#volsList"), q = ($("#volsQ").value || "").trim();
+      const tous = volsJour.vols;
+      const dest = homeFieldCode("#hTo");
+      const versDest = /^[A-Z]{4}$/.test(dest) ? tous.filter(v => v.arr === dest) : null;
+      const sansVol = versDest && !versDest.length ? dest : "";
+      let l = (versDest && versDest.length) ? versDest : tous;
+      if (q) {
+        const t = volsPli(q);
+        l = l.filter(v => volsPli(v.num).includes(t) || volsPli(v.cs).includes(t)
+          || volsPli(v.arr).includes(t) || volsPli(v.arrn).includes(t));
+      }
+      $("#volsNote").innerHTML = `<b>${tous.length} departures today</b> from this aerodrome`
+        + (versDest && versDest.length ? ` · <b>${versDest.length} to ${esc(dest)}</b>` : "")
+        + (sansVol ? ` · <b>no flight to ${esc(sansVol)} today</b>, showing them all` : "")
+        + `. Scheduled times, UTC. ${esc(ADB_MENTION)}.`;
+      if (!l.length) {
+        box.innerHTML = `<div class="vols-empty">Nothing matches “${esc(q)}”.</div>`;
+        return;
+      }
+      box.innerHTML = l.map(v => `<button class="vols-j" type="button" data-vj="1"
+        data-num="${esc(v.num)}" data-dep="${esc(v.dep)}" data-dest="${esc(v.arr)}"
+        data-tko="${esc(v.tko || "")}" data-eta="${esc(v.eta || "")}"
+        aria-label="${esc(v.num)} to ${esc(v.arr)} at ${esc(vjH(v.tko))}"><span
+        class="vj-h">${esc(vjH(v.tko))}</span><span class="vj-n">${esc(v.num)}</span><span
+        class="vj-a">${esc(v.arr)}</span><span class="vj-v">${esc(v.arrn || "")}</span><span
+        class="vj-e">${esc(vjH(v.eta))}</span></button>`).join("");
+    }
+
     function volsRender() {
+      if (volsJour) return volsRenderJour();
       const box = $("#volsList"), q = ($("#volsQ").value || "").trim();
       const lignes = volsFiltre(q);
       if (!lignes.length) {
@@ -26395,6 +26528,23 @@ window.addEventListener("scroll", hidePop, true);
       $("#volsQ").focus();
       if (hit) return;
       try {
+        /* L'HORAIRE DU JOUR D'ABORD. Mêmes fenêtres, même cache et même clé
+           que la recherche par numéro : ouvrir cette fenêtre puis chercher un
+           vol de ce terrain ne paie qu'une fois, dans un sens comme dans
+           l'autre. Le catalogue gratuit reste dessous pour les terrains que
+           l'horairiste ne couvre pas. */
+        const rj = await fetch(VOLSJOUR_URL + dep + "/" + fltJour(0));
+        if (tok !== volsTok) return;
+        if (rj.ok) {
+          const jj = await rj.json();
+          if (tok !== volsTok) return;
+          if (jj && jj.ok && jj.vols && jj.vols.length) {
+            volsJour = jj;
+            volsRender();
+            return;
+          }
+        }
+        $("#volsList").innerHTML = `<div class="vols-empty">No published schedule for <b>${esc(dep)}</b> today — loading the flight catalogue…</div>`;
         const r = await fetch(VOLS_URL + dep);
         if (tok !== volsTok) return;
         if (r.status === 404) {
@@ -26431,6 +26581,18 @@ window.addEventListener("scroll", hidePop, true);
       fltGo();
     });
     $("#volsList").addEventListener("click", e => {
+      /* Une ligne du tableau du jour porte DÉJÀ ses heures : le clic pose
+         terrains et heures sans un appel de plus. */
+      const vj = e.target.closest("[data-vj]");
+      if (vj) {
+        $("#hFlight").value = vj.dataset.num;
+        fltLast = vj.dataset.num;
+        volsHide();
+        renderHomeStars();
+        fltApply(vj.dataset.dep, vj.dataset.dest,
+          vj.dataset.tko ? { tko: vj.dataset.tko, eta: vj.dataset.eta || null } : null);
+        return;
+      }
       const f = e.target.closest("[data-f]");
       if (f) {
         // Un numéro pris dans la liste : la case le porte, la route se pose,
