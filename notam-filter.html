@@ -5429,8 +5429,8 @@ body.light .stat.on {
       flex: none;
       margin-left: auto;
       align-self: center;
-      width: 46px;
-      height: 15px;
+      width: 58px;
+      height: 18px;
       display: flex;
       align-items: center;
       justify-content: flex-end
@@ -8815,19 +8815,6 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
       <div class="turb-detail" id="turbDetail"></div>
       <div class="turb-list" id="turbList"></div>
       <div class="turb-status" id="turbStatus"></div>
-      <div class="wx-src">Estimate: the Ellrod clear-air turbulence index computed on the NOAA/NCEP GFS model winds
-        (~25 km grid), converted to EDR — eddy dissipation rate, the ICAO unit of turbulence, shown × 100 — with the
-        lognormal calibration of the GTG forecasts (Sharman &amp; Pearson 2017), plus a convective proxy under model
-        storms; thresholds for a medium jet (A320/B737): light 0.15, moderate 0.22, severe 0.34. The same field as the
-        Turbulence layer of the map, read minute by minute along the great circle with a generic medium-jet profile.
-        Below FL100 the index does not apply and is not computed: the CLOUD band and the values at FL030 and FL050 come
-        from the model's convective cloud (its own base and top, graded cumulus / towering cumulus / cumulonimbus) and
-        from the depth of the convective boundary layer. A 25 km model does not resolve one cumulus: it says its box is
-        convectively active between those levels, not that a cloud stands at that spot — near the aerodrome the METAR and
-        TAF are worth more.
-        Above the curve, in its own lane, the turbulence SIGMETs in force (NOAA/NWS Aviation Weather Center): official
-        bulletins, never merged into the computed index. Decision support only — not the WAFS forecast, blind to
-        mountain waves, and it does not replace the SIGWX charts of your official briefing.</div>
     </div>
   </div>
 
