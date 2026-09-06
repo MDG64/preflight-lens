@@ -26463,7 +26463,11 @@ window.addEventListener("scroll", hidePop, true);
       $("#volsNote").innerHTML = `<b>${tous.length} departures today</b> from this aerodrome`
         + (versDest && versDest.length ? ` · <b>${versDest.length} to ${esc(dest)}</b>` : "")
         + (sansVol ? ` · <b>no flight to ${esc(sansVol)} today</b>, showing them all` : "")
-        + `. Scheduled times, UTC. ${esc(ADB_MENTION)}.`;
+        /* « journée locale » et pas « aujourd'hui » tout court : le tableau
+           couvre minuit à minuit À L'HEURE DU TERRAIN, et les heures sont en
+           UTC. À Roissy la liste commence donc à 22:05Z, qui est 00:05 locale.
+           L'ordre est bon, il fallait juste le dire. */
+        + `. The aerodrome's local day, times in UTC. ${esc(ADB_MENTION)}.`;
       if (!l.length) {
         box.innerHTML = `<div class="vols-empty">Nothing matches “${esc(q)}”.</div>`;
         return;
