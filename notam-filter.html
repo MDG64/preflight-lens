@@ -7986,11 +7986,27 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              la page ./minima.html est la copie déployée de Minima Lens.
              Photo v1 : approche de nuit dans la brume, la rampe au centre du
              cliché — le recadrage carré d'object-fit garde l'axe de piste.
+             Vignette v2 (6 sept. 2026) : le trait d'or de MAP et de NOTAM
+             gagne la case — court final vu de trois quarts, rampe et seuil
+             au sol, le mot dans l'image comme chez ses sœurs. Le dessin va
+             BORD À BORD (saumon d'aile et ligne d'horizon touchent le
+             cadre) : impossible de recadrer un carré à l'intérieur du coin
+             arrondi du cliché sans couper l'aile, les quatre coins ont donc
+             été rebouchés en prolongeant le fond — ils ne portaient que du
+             fond. Fond et or calés sur les deux sœurs À LA MESURE : fond
+             neutre à 19,9 sur les trois canaux (MAP 20,0 · NOTAM 19,6) et
+             or crème à 254/248/218 sur les 2000 pixels les plus clairs
+             (MAP 255/247/211 · NOTAM 254/250/216).
              La case part avec la route saisie ci-dessus dans l'adresse
              (?dep&dest&altn) : le contrat d'entrée documenté de la page. -->
         <button class="home-card" id="homeMinimaCard" aria-label="Minima — compare METAR and TAF with the aerodrome minima of the route typed">
-          <img src="./home-minima-v1.jpg" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name">Minima</span>
+          <img src="./home-minima-v2.png" alt="" aria-hidden="true" decoding="async">
+          <!-- Le pictogramme porte le mot MINIMA dans l'image, comme MAP et
+               NOTAM : le nom sous la case est donc retiré et sa LIGNE reste,
+               vide, pour que « DA/DH · RVR » tombe à la hauteur des
+               sous-titres voisins. Le nom continue d'être dit à la voix par
+               l'aria-label du bouton. -->
+          <span class="hc-name" aria-hidden="true">&nbsp;</span>
           <span class="hc-sub">DA/DH · RVR</span>
         </button>
         <!-- La carte a quitté le bandeau du haut pour rejoindre ses trois
