@@ -25824,15 +25824,27 @@ window.addEventListener("scroll", hidePop, true);
       + "WYOMAWZRWZX3TUIX5OVAX6CHZX7CHGX9NVDXCCAIXEJSXXFVLKXGSXDXJTAXXKCCMXLLNEXMIMXXNXARXPVXPXQSXSXRCXIXSSIT"
       + "XTIDXXWNCTXYKNEXZAEZY2CEYY4VOIY5GMRY7TYAY8YZRY9DATYEANRYGHYTYIOYAYKAVJYLLLMYMMGXYPAPZYSRAEYVASHYWANE"
       + "YXRPAZ0UBTZ2APGZ7CMSZ8AZNZ9BEKZASWMZBABNZDEWRZEESRZFAZVZGTZPZHCSZZLRXAZNAZBZPAZQZQGERZTAWCZWAWIZYSHY";
-    let fltAirlineMap = null;
-    function fltAirline(iata) {
+    let fltAirlineMap = null, fltAirlineRev = null;
+    /* La table se lit dans LES DEUX SENS, et le second sens n'est pas un
+       confort. AeroDataBox indexe ses tableaux par le numéro COMMERCIAL
+       (VY8019) ; un pilote qui tape la forme OACI (VLG8019) ne trouvait donc
+       rien, alors que son vol était bien dans le tableau déjà payé. Constaté
+       le 2026-09-06 sur ce vol précis. En cas d'homonymie OACI, la première
+       entrée gagne : la table est déjà filtrée à une compagnie par code. */
+    function fltTables() {
       if (!fltAirlineMap) {
         fltAirlineMap = new Map();
+        fltAirlineRev = new Map();
         const s = FLT_AIRLINES_PACKED;
-        for (let i = 0; i + 5 <= s.length; i += 5) fltAirlineMap.set(s.slice(i, i + 2), s.slice(i + 2, i + 5));
+        for (let i = 0; i + 5 <= s.length; i += 5) {
+          const iata = s.slice(i, i + 2), icao = s.slice(i + 2, i + 5);
+          fltAirlineMap.set(iata, icao);
+          if (!fltAirlineRev.has(icao)) fltAirlineRev.set(icao, iata);
+        }
       }
-      return fltAirlineMap.get(iata) || "";
     }
+    function fltAirline(iata) { fltTables(); return fltAirlineMap.get(iata) || ""; }
+    function fltAirlineIata(icao) { fltTables(); return fltAirlineRev.get(icao) || ""; }
 
     /* ---- normalisation de la saisie ----
        Quatre formes arrivent dans la case, une seule en sort.
@@ -25862,7 +25874,13 @@ window.addEventListener("scroll", hidePop, true);
         m = [s, ic, i[2]];
       }
       const num = fltNum(m[2]);
-      return { cs: m[1] + num, alt: num === m[2] ? null : m[1] + m[2], typed: s };
+      /* `com` est la forme COMMERCIALE (VY8019), celle par laquelle les
+         horaires publiés désignent le vol. On ne la fabrique que si le numéro
+         est purement chiffré : « EZY46AK » est un indicatif ATC, pas un
+         numéro de vol, et « U246AK » ne désignerait rien. */
+      const iata = /^\d+$/.test(num) ? fltAirlineIata(m[1]) : "";
+      return { cs: m[1] + num, alt: num === m[2] ? null : m[1] + m[2], typed: s,
+        com: iata ? iata + num : (/^[A-Z0-9]{2}\d+$/.test(s) ? s : null) };
     }
 
     /* ---- mémoire des vols déjà résolus ----
@@ -26012,7 +26030,7 @@ window.addEventListener("scroll", hidePop, true);
        heures : le clic pose tout sans un appel de plus. La mention accompagne
        la proposition et pas seulement le résultat, parce qu'ici ce sont les
        TERRAINS eux-mêmes qui viennent d'AeroDataBox. */
-    function fltProposalVols(cs, typed, vols) {
+    function fltProposalVols(cs, typed, vols, note) {
       const rows = vols.map(v => {
         const h = v.tko
           ? v.tko.slice(0, 2) + ":" + v.tko.slice(2) + "Z"
@@ -26024,7 +26042,9 @@ window.addEventListener("scroll", hidePop, true);
           aria-label="Set departure ${esc(v.dep)} and destination ${esc(v.arr)}"><span class="flt-leg">${esc(v.dep)}<span
             class="flt-ar">\u2192</span>${esc(v.arr)}</span><span class="flt-where">${esc(h)}</span></button>`;
       }).join("");
-      fltShow(fltHead(cs, typed) + rows + `<div class="flt-msg flt-note">${esc(ADB_MENTION)}</div>`);
+      fltShow(fltHead(cs, typed)
+        + (note ? `<div class="flt-msg">${esc(note)}</div>` : "")
+        + rows + `<div class="flt-msg flt-note">${esc(ADB_MENTION)}</div>`);
     }
 
     /* Ce qui reste à l'écran une fois le vol posé : ce qu'on a appliqué, d'où
@@ -26067,7 +26087,7 @@ window.addEventListener("scroll", hidePop, true);
       /* Les terrains sont posés tout de suite, les heures suivent quand elles
          arrivent : le pilote n'attend pas le réseau pour voir sa route. */
       const n = fltNorm($("#hFlight").value);
-      const cles = [...new Set([n && n.cs, n && n.typed].filter(Boolean))];
+      const cles = [...new Set([n && n.cs, n && n.typed, n && n.com].filter(Boolean))];
       if (!cles.length) { fltHide(); return; }
       const cs = (n && n.cs) || cles[0];
       /* La proposition du repli porte déjà ses heures : les reposer par un
@@ -26080,15 +26100,41 @@ window.addEventListener("scroll", hidePop, true);
       }
       fltPose(cs, null);
       const tok = ++fltTok;
-      fltHeure(dep, cles).then(r => {
+      (async () => {
+        const r = await fltHeure(dep, cles);
         if (tok !== fltTok) return;                 // la ligne a bougé entre-temps
         /* On ne pose l'heure que si le vol trouvé va bien là où le pilote va :
            une rotation peut porter le même numéro sur une autre étape. */
         if (r && r.arr === dest && r.tko && rVal("#hFrom") === dep && rVal("#hTo") === dest) {
           fltHeures(r);
           fltPose(cs, r);
-        } else fltPose(cs, null);
-      });
+          return;
+        }
+        /* Le tableau du terrain ne contient pas ce vol. La cause la plus
+           fréquente n'est pas un trou du fournisseur : c'est que le CATALOGUE
+           VRS s'est trompé de terrain. Il vieillit, et il décrit une rotation
+           qui n'est plus celle du jour. Constaté le 2026-09-06 sur VLG8019 :
+           le catalogue annonçait Reus vers Orly, l'horaire du soir disait
+           Orly vers Barcelone.
+
+           On redemande donc le vol par son NUMÉRO, qui cherche partout au lieu
+           d'un seul terrain. 2 unités, seulement dans ce cas-là, et la réponse
+           vide se met en cache côté proxy. */
+        const vols = await fltNumero(n.com || n.typed || n.cs);
+        if (tok !== fltTok) return;
+        if (!vols) { fltPose(cs, null); return; }
+        const bon = vols.find(v => v.dep === dep && v.arr === dest);
+        if (bon && bon.tko && rVal("#hFrom") === dep && rVal("#hTo") === dest) {
+          fltHeures(bon);
+          fltPose(cs, bon);
+          return;
+        }
+        /* L'horaire du jour dit une AUTRE étape que celle du catalogue. On ne
+           rectifie SURTOUT pas dans le dos du pilote : il vient de confirmer
+           deux terrains, on lui montre ce que dit l'horaire et il tranche. */
+        fltProposalVols(cs, (n && n.typed) || "", vols,
+          "Today's schedule shows a different leg for this flight.");
+      })();
     }
 
     /* ---- la recherche ----
@@ -26137,7 +26183,7 @@ window.addEventListener("scroll", hidePop, true);
              cas où le catalogue connaît le vol, il donne le terrain gratuitement
              et le tableau appelé ensuite est le même — l'exiger ne rapporterait
              rien et retirerait à la case Flight sa raison d'être. */
-          const cles = [...new Set([n.cs, n.typed].filter(Boolean))];
+          const cles = [...new Set([n.cs, n.typed, n.com].filter(Boolean))];
           const dep0 = rVal("#hFrom");
           if (/^[A-Z]{4}$/.test(dep0)) {
             fltShow(fltHead(n.cs, n.typed)
@@ -26152,7 +26198,7 @@ window.addEventListener("scroll", hidePop, true);
           }
           fltShow(fltHead(n.cs, n.typed)
             + `<div class="flt-msg">Not in the route database — looking up today's schedule…</div>`);
-          const vols = await fltNumero(n.typed || n.cs);
+          const vols = await fltNumero(n.com || n.typed || n.cs);
           if (tok !== fltTok) return;
           if (vols) { fltProposalVols(n.cs, n.typed, vols); return; }
           fltMsg(n.cs, n.typed, "Flight not found — type the two codes below.");
