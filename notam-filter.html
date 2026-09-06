@@ -5194,25 +5194,58 @@ body.light .stat.on {
     }
 
     /* ---------- les vols au départ (2026-09-06) ----------
-       La fenêtre qu'ouvre la case « Flight ». Reprend .modal-ov / .modal /
-       .modal-x, mais la tête ne défile pas : le titre, l'avertissement et la
-       barre de recherche restent en place pendant qu'on parcourt 433
-       destinations. */
-    .vols-modal {
-      max-width: 560px;
+       Une fenêtre À ELLE, SOUS les trois cases ICAO — elle ne dépend plus de
+       la case « Flight », qui ne l'ouvrait que par accident d'histoire. Elle
+       s'installe DANS le flux, sous les codes : rien ne se cache derrière
+       elle, et la case Destination reste juste au-dessus, à portée, puisque
+       c'est elle qui filtre la liste.
+
+       La tête ne défile pas : le titre, l'avertissement et la barre de
+       recherche restent en place pendant qu'on parcourt trois cents vols. */
+    .home-deps {
       display: flex;
       flex-direction: column;
-      max-height: 86vh
+      max-height: 46vh;
+      margin: 12px 0 2px;
+      border: 1px solid var(--line2);
+      border-radius: 12px;
+      background: var(--panel);
+      overflow: hidden
     }
 
     .vols-head {
+      position: relative;
       flex: none;
-      padding: 20px 52px 12px 20px;
+      padding: 14px 46px 12px 16px;
       border-bottom: 1px solid var(--line)
     }
 
     .vols-head .hd-title {
       margin-bottom: 8px
+    }
+
+    /* La croix referme la liste sans toucher au départ : on la rouvre d'un
+       clic dans la case Departure. */
+    .vols-x {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      font: 400 16px/1 var(--sans);
+      cursor: pointer
+    }
+
+    .vols-x:hover {
+      border-color: var(--cyan);
+      color: var(--text)
     }
 
     /* Ce que la liste n'est pas. Le ton du texte suffit — pas de cadre rouge,
@@ -5257,6 +5290,7 @@ body.light .stat.on {
 
     .vols-list {
       flex: 1 1 auto;
+      min-height: 0;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
@@ -5380,12 +5414,15 @@ body.light .stat.on {
       font-variant-numeric: tabular-nums
     }
 
+    /* `margin-left:auto` : sans la ville pour prendre le mou — écran étroit —
+       le numéro et les deux heures se rangent quand même à droite. */
     .vols-j .vj-n {
       font: 500 12px/1 var(--mono);
       letter-spacing: .06em;
       color: var(--text);
       flex: none;
       min-width: 58px;
+      margin-left: auto;
       text-align: right
     }
 
@@ -5417,10 +5454,18 @@ body.light .stat.on {
     }
 
     /* Sous 420 px la ville s'efface avant le reste : le code de destination
-       suffit à identifier l'étape, son nom est un confort. */
+       suffit à identifier l'étape, son nom est un confort. Les colonnes se
+       resserrent ensuite jusqu'à ce que la ligne tienne — l'heure d'arrivée
+       est la dernière, et une ligne qui déborde la perd. La date garde sa
+       largeur : c'est elle qui cale le départ de toutes les lignes. */
     @media (max-width: 420px) {
-      .vols-j { gap: 7px; padding: 9px 14px }
+      .vols-j { gap: 7px; padding: 9px 14px; overflow: hidden }
       .vols-j .vj-v { display: none }
+      .vols-j .vj-d { min-width: 46px }
+      .vols-j .vj-p, .vols-j .vj-a { min-width: 38px }
+      .vols-j .vj-n { min-width: 0 }
+      .vols-j .vj-h { min-width: 48px }
+      .vols-j .vj-e { min-width: 44px }
     }
 
     .vols-d {
@@ -8286,6 +8331,23 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         </div>
       </div>
 
+      <!-- ================= LES DÉPARTS DU TERRAIN =================
+           Sous les trois codes, dans le flux, et non plus en menu de la case
+           « Flight » : quatre lettres dans Departure et la liste s'ouvre ici.
+           La case Destination, juste au-dessus, la filtre à la frappe. -->
+      <div class="home-deps" id="volsOv" hidden>
+        <div class="vols-head">
+          <h2 class="hd-title" id="volsTitle">Departures</h2>
+          <button class="vols-x" id="volsClose" type="button"
+            aria-label="Close the departure list">×</button>
+          <div class="vols-note" id="volsNote"></div>
+          <input id="volsQ" class="vols-q" type="text" autocomplete="off" spellcheck="false"
+            placeholder="Destination, city or flight number"
+            aria-label="Filter by destination, city or flight number">
+        </div>
+        <div class="vols-list" id="volsList" role="listbox" aria-label="Departures"></div>
+      </div>
+
       <div>
         <!-- Deux onglets sur la même liste : les terrains un à un, ou les
              routes entières. Repliée au départ, comme sur la page NOTAM. -->
@@ -8967,20 +9029,6 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
      La bannière dit ce que la liste N'EST PAS : il n'existe aucune source
      mondiale gratuite donnant l'horaire du jour, la liste n'a donc pas
      d'heures et n'est pas un tableau des départs. -->
-  <div class="modal-ov" id="volsOv" hidden>
-  <div class="modal vols-modal" role="dialog" aria-modal="true" aria-labelledby="volsTitle">
-    <button class="modal-x" id="volsClose" aria-label="Close">×</button>
-    <div class="vols-head">
-      <h2 class="hd-title" id="volsTitle">Departures</h2>
-      <div class="vols-note" id="volsNote"></div>
-      <input id="volsQ" class="vols-q" type="text" autocomplete="off" spellcheck="false"
-        placeholder="Destination, city or flight number"
-        aria-label="Filter by destination, city or flight number">
-    </div>
-    <div class="vols-list" id="volsList" role="listbox" aria-label="Destinations"></div>
-  </div>
-</div>
-
   <div class="modal-ov" id="helpOv" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-label="How to use">
       <button class="modal-x" id="helpClose" aria-label="Close">×</button>
@@ -9279,11 +9327,13 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <div class="hd-row">
           <div class="hd-vis" style="min-width:auto"><span class="hd-chip">LFBO · 33</span></div>
           <div class="hd-arr">→</div>
-          <div class="hd-desc">With a <b>departure</b> already typed, tapping the <b>FLIGHT</b> box opens the
-            <b>destinations served from that aerodrome</b>; tap one to see its flight numbers, tap a number to fill the
-            route. Search by destination, city or flight number. These are <b>not today’s departures</b>: the list
-            carries <b>no times and no days of operation</b>, because no worldwide open source publishes them — it
-            says what flies this route, not what flies today.</div>
+          <div class="hd-desc">Type a <b>departure</b> and the <b>departures of the day</b> open below the codes:
+            aerodromes, flight number and the two scheduled times, in UTC, over the aerodrome's local day. Keep
+            scrolling past the last one and <b>tomorrow follows</b>, each line carrying its date. A
+            <b>destination</b> typed above narrows the list to the flights going there. Tap a line to fill the route
+            and its times. Close it with <b>×</b>; tap the departure box to bring it back. Where no schedule is
+            published, the list falls back to the <b>catalogue of destinations</b> served from that aerodrome — flight
+            numbers only, <b>no times and no days of operation</b>.</div>
         </div>
         <div class="hd-row">
           <div class="hd-vis"><span class="hd-icao"><span class="l">FROM</span><span class="v">LFBO</span></span></div>
@@ -19770,6 +19820,8 @@ function renderInfo(icao) {
         refreshGo();
         renderHomeChips();          // les puces suivent : la case libérée redevient cible
         renderHomeStars();          // le code choisi peut être FROM/TO/ALT lui-même ou son miroir
+        if (fieldId === "hFrom") volsSaisie();          // un choix arrêté : pas d'attente
+        else if (fieldId === "hTo" && volsTerrain) volsRender();
         const nx = RNEXT[fieldId];
         if (nx) $(nx).focus(); else $("#" + fieldId).blur();
       });
@@ -19785,6 +19837,10 @@ function renderInfo(icao) {
         renderRouteSuggest(e.target.id, e.target.value);
         renderHomeStars();
         renderHomeChips();
+        /* La saisie du DÉPART ouvre la liste des vols du jour sous les cases ;
+           celle de la DESTINATION la refiltre à la frappe, sans rien acheter. */
+        if (e.target.id === "hFrom") volsSaisie(true);
+        else if (e.target.id === "hTo" && volsTerrain) volsRender();
         const nx = RNEXT[e.target.id];
         if (nx && e.target.value.length >= 4) $(nx).focus();
       });
@@ -19800,6 +19856,8 @@ function renderInfo(icao) {
           const mir = RMIRROR[el.id]; if (mir) $(mir).value = el.value;
           dropRouteDuplicate(el.id, el.value);
           refreshGo(); renderHomeStars(); renderHomeChips();
+          if (el.id === "hFrom") volsSaisie();          // le code IATA traduit ouvre aussi
+          else if (el.id === "hTo" && volsTerrain) volsRender();
         }
         setTimeout(() => {
           const box = $(RSUGGEST[id.slice(1)]);
@@ -25884,6 +25942,10 @@ window.addEventListener("scroll", hidePop, true);
       });
       syncRouteAfterSwap(from, to);
       refreshGo(); renderHomeChips(); renderHomeStars();
+      /* La liste des departs parlait de l'ancien depart. On la referme au lieu
+         d'en acheter une autre : le nouveau depart est a un clic dans sa case,
+         et l'echange se defait aussi vite qu'il se fait. */
+      volsHide();
     };
     /* ---- effacement des trois cases ----
        Une route entiere posee a vide : c'est exactement ce que fait une puce de
@@ -25899,6 +25961,7 @@ window.addEventListener("scroll", hidePop, true);
       if (preloading) return;          // jamais pendant un telechargement en cours
       clearRouteUI();                  // route calculee, route rangee, page Route, globe
       fltClear();                      // l'indicatif, qui ne dit plus rien sans ses terrains
+      volsHide();                      // ... la liste des departs, qui n'a plus de terrain
       homeApplyRoute(["", "", ""]);    // ... et la file de remplissage de l'accueil
     };
 
@@ -26517,14 +26580,16 @@ window.addEventListener("scroll", hidePop, true);
     let volsTok = 0;
     const volsCache = new Map();   // OACI -> catalogue, pour la session
 
-    /* volsFerme : l'instant de la fermeture. Le clic qui referme la fenetre
-       retombe sur la case en dessous et la rouvrait aussitot — d'ou le court
-       delai que l'ouverture respecte. */
-    let volsFerme = 0;
-    function volsHide() {
+    /* volsFerme : le terrain que le pilote a refermé À LA MAIN. La liste ne se
+       rouvre jamais d'elle-même sur celui-là — refermer est une réponse, et on
+       ne la contredit pas à la frappe suivante. Un clic dans la case Departure
+       la rappelle ; un autre terrain l'ouvre de lui-même. */
+    let volsFerme = "";
+    function volsHide(main) {
+      if (main) volsFerme = volsTerrain;
       $("#volsOv").hidden = true;
       volsData = null; volsJour = null; volsJours = {}; volsDemain = 0;
-      volsTerrain = ""; volsOpen = ""; volsFerme = Date.now();
+      volsTerrain = ""; volsOpen = "";
     }
 
     /* Le filtre : un mot suffit, sur le code OACI, le code IATA, la ville ou
@@ -26718,7 +26783,10 @@ window.addEventListener("scroll", hidePop, true);
       volsRender();
     }
 
-    async function volsOuvrir(dep) {
+    /* `curseur` : la barre de recherche ne prend le curseur que si l'ouverture
+       vient d'un GESTE sur la liste. Ouverte à la saisie du départ, elle le
+       laisserait où il est — dans la case qu'on est en train de remplir. */
+    async function volsOuvrir(dep, curseur) {
       const ov = $("#volsOv");
       $("#volsTitle").textContent = "Departures from " + dep;
       $("#volsQ").value = "";
@@ -26733,7 +26801,7 @@ window.addEventListener("scroll", hidePop, true);
         $("#volsList").innerHTML = `<div class="vols-empty">Loading the flight catalogue…</div>`;
       }
       ov.hidden = false;
-      $("#volsQ").focus();
+      if (curseur) $("#volsQ").focus();
       if (hit) return;
       try {
         /* L'HORAIRE DU JOUR D'ABORD. Mêmes fenêtres, même cache et même clé
@@ -26765,8 +26833,7 @@ window.addEventListener("scroll", hidePop, true);
       }
     }
 
-    $("#volsClose").onclick = volsHide;
-    $("#volsOv").addEventListener("click", e => { if (e.target === $("#volsOv")) volsHide(); });
+    $("#volsClose").onclick = () => volsHide(true);
     $("#volsQ").addEventListener("input", volsRender);
     /* Le bout de la liste appelle demain. Passer à demain peut coûter 4 unités,
        une seule fois par terrain-jour et pour tous les pilotes : c'est un
@@ -26782,7 +26849,7 @@ window.addEventListener("scroll", hidePop, true);
     /* Entrée sur un numéro de vol complet : on referme et on part en
        recherche par indicatif, exactement comme depuis la case. */
     $("#volsQ").addEventListener("keydown", e => {
-      if (e.key === "Escape") { volsHide(); $("#hFlight").focus(); return; }
+      if (e.key === "Escape") { volsHide(true); $("#hFrom").focus(); return; }
       if (e.key !== "Enter") return;
       e.preventDefault();
       const q = ($("#volsQ").value || "").trim();
@@ -26821,12 +26888,34 @@ window.addEventListener("scroll", hidePop, true);
       const d = e.target.closest("[data-d]");
       if (d) { volsOpen = volsOpen === d.dataset.d ? "" : d.dataset.d; volsRender(); }
     });
-    /* L'ouverture : un clic dans la case, un depart valide, et pas de
-       fenetre deja ouverte. Sans depart, la case reste ce qu'elle etait —
-       on ne peut pas lister les vols d'un terrain qu'on ne connait pas. */
-    $("#hFlight").addEventListener("click", () => {
+    /* ---- l'ouverture : la saisie du départ, et rien d'autre ----
+       Quatre lettres dans la case Departure et la liste s'ouvre dessous. Elle
+       n'est plus attachée à la case « Flight » : celle-ci retrouve son seul
+       emploi, chercher un vol par son numéro.
+
+       Le délai n'est pas un confort : chaque terrain ouvert achète une journée
+       chez l'horairiste (4 unités, partagées entre tous les pilotes du même
+       terrain-jour). Taper LFPG puis se corriger en LFPO en aurait acheté
+       deux ; une demi-seconde de silence après la dernière touche n'en achète
+       qu'une. Le choix dans le menu de suggestions, lui, est déjà un geste
+       arrêté : il ouvre sans attendre. */
+    let volsSaisieT = 0;
+    function volsSaisie(attendre) {
+      clearTimeout(volsSaisieT);
+      const go = () => {
+        const dep = homeFieldCode("#hFrom");
+        if (!dep) { if (volsTerrain) volsHide(); return; }
+        if (dep === volsTerrain || dep === volsFerme) return;
+        volsOuvrir(dep);
+      };
+      if (attendre) volsSaisieT = setTimeout(go, 500); else go();
+    }
+    /* Le clic dans la case Departure rappelle une liste refermée à la main :
+       la refermer n'est pas s'en passer pour la journée. */
+    $("#hFrom").addEventListener("click", () => {
       const dep = homeFieldCode("#hFrom");
-      if (!dep || !$("#volsOv").hidden || Date.now() - volsFerme < 350) return;
+      if (!dep || !$("#volsOv").hidden) return;
+      volsFerme = "";
       volsOuvrir(dep);
     });
 
