@@ -6377,19 +6377,14 @@ body.light .stat.on {
       }
     }
 
-    .hc-name {
-      font: 700 14px/1 var(--sans);
-      letter-spacing: .16em;
-      text-transform: uppercase
-    }
-
-    /* Le sous-titre se lit d'aussi loin que le nom : encre pleine plutôt que
-       gris, et deux points de plus. */
-    .hc-sub {
-      font: 600 12px/1 var(--mono);
-      letter-spacing: .12em;
-      color: var(--text)
-    }
+    /* PLUS AUCUN TEXTE sous les cases (6 sept. 2026). Les règles .hc-name et
+       .hc-sub sont parties avec leurs quatre lignes : trois vignettes portent
+       leur mot dans l'image, la quatrième est un ciel d'orage qui se lit sans
+       légende. Les sous-titres — FILTERS, METAR · TAF, DA/DH · RVR — disaient
+       ce que la case ouvre, pas ce qu'elle est ; la page les redit en entier
+       une fois ouverte. Les quatre noms restent dits À LA VOIX par
+       l'aria-label de chaque bouton : rien n'a été retiré au lecteur d'écran,
+       seulement à l'œil. */
 
     /* Case CHOISIE parmi les trois : elle garde le liseré cyan du focus même
        quand le doigt part ailleurs — sur une puce de favori, par exemple. Sans
@@ -7969,18 +7964,14 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                et le mot regravé dans la MÊME police, le MÊME or et le MÊME
                corps que celui de MAP, tous deux agrandis (capitale de 62 px
                sur les 768 du carré, ligne de pied commune). Le pictogramme
-               porte le mot NOTAM dans l'image elle-même. Le nom sous la case est donc retiré —
-               mais sa LIGNE reste, vide, pour que « FILTERS » tombe à la même
-               hauteur que les sous-titres des trois autres cases. Le nom
-               continue d'être dit à la voix par l'aria-label du bouton. -->
+               porte le mot NOTAM dans l'image elle-même. Le nom sous la case
+               est donc retiré — et depuis le 6 sept. 2026 « FILTERS » l'a
+               suivi, comme les trois autres légendes. Le nom continue d'être
+               dit à la voix par l'aria-label du bouton. -->
           <img src="./home-notam-v18.png" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name" aria-hidden="true">&nbsp;</span>
-          <span class="hc-sub">FILTERS</span>
         </button>
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
           <img src="./home-wx-v8.jpg" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name">Weather</span>
-          <span class="hc-sub">METAR · TAF</span>
         </button>
         <!-- MINIMAS (28 aout 2026) : le module minima entre à l'accueil —
              la page ./minima.html est la copie déployée de Minima Lens.
@@ -8002,12 +7993,10 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <button class="home-card" id="homeMinimaCard" aria-label="Minima — compare METAR and TAF with the aerodrome minima of the route typed">
           <img src="./home-minima-v2.png" alt="" aria-hidden="true" decoding="async">
           <!-- Le pictogramme porte le mot MINIMA dans l'image, comme MAP et
-               NOTAM : le nom sous la case est donc retiré et sa LIGNE reste,
-               vide, pour que « DA/DH · RVR » tombe à la hauteur des
-               sous-titres voisins. Le nom continue d'être dit à la voix par
-               l'aria-label du bouton. -->
-          <span class="hc-name" aria-hidden="true">&nbsp;</span>
-          <span class="hc-sub">DA/DH · RVR</span>
+               NOTAM : le nom sous la case est retiré, et « DA/DH · RVR »
+               avec lui depuis le 6 sept. 2026 — plus une ligne de texte sous
+               aucune des quatre cases. Le nom continue d'être dit à la voix
+               par l'aria-label du bouton. -->
         </button>
         <!-- La carte a quitté le bandeau du haut pour rejoindre ses trois
              sœurs : même geste, même taille de cible. Depuis l'arrivée de
@@ -8023,14 +8012,12 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
              NOTAM — le cliche de la carte de l'app (v3, golfe de Gascogne)
              part avec lui. Meme gabarit que ses trois soeurs : 768 x 768.
              Le pictogramme porte le mot MAP dans l'image elle-meme, donc le
-             nom sous la case est retire comme celui de NOTAM ; ses DEUX
-             lignes restent, vides, pour que la case garde la hauteur exacte
-             des trois autres. Le nom continue d'etre dit a la voix par
-             l'aria-label du bouton. -->
+             nom sous la case est retire comme celui de NOTAM ; depuis le
+             6 sept. 2026 ses deux lignes vides sont parties aussi, en meme
+             temps que les legendes des trois autres cases. Le nom continue
+             d'etre dit a la voix par l'aria-label du bouton. -->
         <button class="home-card" id="homeMapCard" aria-label="Map — draw the route and the aerodromes on the map">
           <img src="./home-map-v8.png" alt="" aria-hidden="true" decoding="async">
-          <span class="hc-name" aria-hidden="true">&nbsp;</span>
-          <span class="hc-sub" aria-hidden="true">&nbsp;</span>
         </button>
       </div>
 
