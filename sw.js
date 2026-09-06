@@ -200,8 +200,15 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = e.request.url;
 
-  // 1) Appels API (proxy NOTAM) : toujours le réseau, jamais de cache.
-  if (url.includes("/api/notams/")) {
+  // 1) Appels API qui ne se mettent JAMAIS en cache : le réseau, ou rien.
+  //    Les NOTAM, parce qu'ils changent à tout moment. L'heure programmée
+  //    d'un vol (/api/vol/), parce que le proxy la garde déjà sept jours de
+  //    son côté : la remettre ici servirait une heure révisée périmée sans
+  //    jamais rien économiser. Sans cette ligne elle tomberait dans la règle
+  //    générique de fin de fichier, qui lit le cache AVANT le réseau.
+  //    Le « / » final compte : il distingue /api/vol/ de /api/vols/, qui a
+  //    sa propre règle plus bas (le catalogue VRS, lui, se met en cache).
+  if (url.includes("/api/notams/") || url.includes("/api/vol/")) {
     e.respondWith(fetch(e.request));
     return;
   }

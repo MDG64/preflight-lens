@@ -5531,6 +5531,23 @@ body.light .stat.on {
       min-width: 0
     }
 
+    /* Ce qui a ete pose, une fois le vol choisi : la ligne ne se clique plus,
+       elle rend compte. Meme boite qu'une etape, sans le curseur ni le survol. */
+    .flt-pose {
+      cursor: default
+    }
+
+    .flt-pose:hover {
+      background: transparent
+    }
+
+    /* La mention obligatoire sous toute donnee AeroDataBox. Discrete mais
+       jamais absente : la source n'est pas officielle, et cela se dit. */
+    .flt-note {
+      color: var(--muted2);
+      font-style: italic
+    }
+
     /* Rien à poser : le message tient la place d'une ligne, sans en avoir le
        comportement. */
     .flt-msg {
@@ -25916,6 +25933,62 @@ window.addEventListener("scroll", hidePop, true);
       fltShow(fltHead(cs, typed) + rows);
     }
 
+    /* ---- l'heure programmée du vol (2026-09-06) ----
+       Le catalogue VRS a donné les deux terrains, gratuitement. L'heure, elle,
+       vient d'AeroDataBox par le proxy — et SEULEMENT quand le pilote a choisi
+       son vol, jamais à la frappe ni à l'affichage de la proposition. Un vol
+       qu'on regarde sans le prendre ne coûte donc rien.
+
+       Le proxy appelle le TABLEAU du terrain de départ, pas le vol seul : même
+       prix pour tous les vols du terrain au lieu d'un. Le deuxième pilote au
+       départ du même terrain est servi sans un appel de plus.
+
+       On envoie TOUTES les formes de l'identifiant. L'indicatif ATC ne se
+       déduit pas du numéro : AF1006 vole sous AFR23TC, AF1680 n'a aucun
+       indicatif. La table IATA→OACI fabrique bien AFR1680, mais ce n'est pas
+       ce que porte le vol — d'où les deux formes, et c'est le tableau qui
+       tranche.
+
+       Échec = silence. Les terrains restent, les heures reviennent à
+       l'estimation de la base des temps de vol. Jamais de panne. */
+    const VOL_URL = BACKEND_URL + "/api/vol/";
+    const ADB_MENTION = "Information only — check your official source";
+
+    function fltJour(n) {
+      return new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+    }
+
+    /* Aujourd'hui d'abord, demain ensuite : un pilote prépare son vol du jour
+       ou du lendemain. On ne va pas au-delà — chaque journée nouvelle coûte,
+       et deviner plus loin serait dépenser pour rien. */
+    async function fltHeure(dep, cles) {
+      for (const n of [0, 1]) {
+        try {
+          const r = await fetch(VOL_URL + dep + "/" + fltJour(n) + "/" + cles.join(","));
+          if (!r.ok) return null;
+          const j = await r.json();
+          if (j && j.ok) return j;
+          if (j && j.raison !== "absent") return null;   // plafond, coupé, panne : on n'insiste pas
+        } catch (e) { return null; }
+      }
+      return null;
+    }
+
+    /* Ce qui reste à l'écran une fois le vol posé : ce qu'on a appliqué, d'où
+       ça vient, et la mention. La bande remplace la proposition — le pilote
+       voit ce qui a été fait, pas seulement le résultat dans les cases. */
+    function fltPose(cs, r) {
+      const heures = (r && r.tko)
+        ? `<span class="flt-leg">${esc(r.dep)}<span class="flt-ar">→</span>${esc(r.arr)}</span>
+           <span class="flt-where">${esc(r.tko.slice(0, 2) + ":" + r.tko.slice(2))}Z`
+        + (r.eta ? ` → ${esc(r.eta.slice(0, 2) + ":" + r.eta.slice(2))}Z` : "")
+        + ` scheduled</span>`
+        : `<span class="flt-where">No scheduled time available for this flight.</span>`;
+      fltShow(fltHead(cs, "")
+        + `<div class="flt-row flt-pose">${heures}</div>`
+        + `<div class="flt-msg flt-note">${esc(ADB_MENTION)}</div>`);
+    }
+
     /* ---- poser les deux terrains ----
        Par la porte commune des puces de route (homeApplyRoute) : miroir vers
        la page Route, file de remplissage remise à zéro, étoiles, puces,
@@ -25927,7 +26000,28 @@ window.addEventListener("scroll", hidePop, true);
       let alt = (rVal("#hTo") === dest) ? rVal("#hAlt") : "";
       if (alt === dep || alt === dest) alt = "";
       homeApplyRoute([dep, dest, alt]);
-      fltHide();
+      /* Les terrains sont posés tout de suite, les heures suivent quand elles
+         arrivent : le pilote n'attend pas le réseau pour voir sa route. */
+      const n = fltNorm($("#hFlight").value);
+      const cles = [...new Set([n && n.cs, n && n.typed].filter(Boolean))];
+      if (!cles.length) { fltHide(); return; }
+      const cs = (n && n.cs) || cles[0];
+      fltPose(cs, null);
+      const tok = ++fltTok;
+      fltHeure(dep, cles).then(r => {
+        if (tok !== fltTok) return;                 // la ligne a bougé entre-temps
+        /* On ne pose l'heure que si le vol trouvé va bien là où le pilote va :
+           une rotation peut porter le même numéro sur une autre étape. */
+        if (r && r.arr === dest && r.tko && rVal("#hFrom") === dep && rVal("#hTo") === dest) {
+          /* `mine: true` non parce que le pilote l'a tapée, mais parce que
+             cette heure ne doit PAS être écrasée par la cascade de la base des
+             temps de vol : un horaire publié vaut mieux qu'une médiane de 2019. */
+          HT.tko = { h: r.tko, mine: true };
+          if (r.eta) HT.eta = { h: r.eta, mine: true };
+          renderHomeTimes(); renderHomeDuration(); timesSave(); wxApplyTimes();
+          fltPose(cs, r);
+        } else fltPose(cs, null);
+      });
     }
 
     /* ---- la recherche ----
