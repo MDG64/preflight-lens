@@ -26083,6 +26083,10 @@ window.addEventListener("scroll", hidePop, true);
       if (!/^[A-Z]{4}$/.test(dep) || !/^[A-Z]{4}$/.test(dest) || dep === dest) return;
       let alt = (rVal("#hTo") === dest) ? rVal("#hAlt") : "";
       if (alt === dep || alt === dest) alt = "";
+      /* AVANT d'écraser la ligne : le pilote avait-il déjà posé ce terrain
+         lui-même ? De la réponse dépend lequel des deux appels payants on
+         prend, et ce n'est pas un détail (voir plus bas). */
+      const sur = rVal("#hFrom") === dep;
       homeApplyRoute([dep, dest, alt]);
       /* Les terrains sont posés tout de suite, les heures suivent quand elles
          arrivent : le pilote n'attend pas le réseau pour voir sa route. */
@@ -26100,8 +26104,32 @@ window.addEventListener("scroll", hidePop, true);
       }
       fltPose(cs, null);
       const tok = ++fltTok;
+
+      /* ---- LEQUEL DES DEUX APPELS PAYANTS, ET DANS QUEL ORDRE ----
+         Ils coûtent le même prix unitaire. Le TABLEAU d'un terrain rend des
+         centaines de vols et sert tous les pilotes qui en partiront le même
+         jour ; le VOL PAR NUMÉRO n'en rend qu'un, mais il cherche partout et
+         ne peut pas se tromper de terrain.
+
+         Le départage n'est donc pas le prix, c'est SAVOIR OU CHERCHER.
+
+         Mesuré le 2026-09-06 sur 114 départs réels d'Oslo (flux public
+         Avinor, gratuit) : le catalogue VRS est juste à 86 %, absent à 11,4 %,
+         et PRÉSENT MAIS FAUX à 2,6 % — il cite alors des terrains dont le vol
+         ne part pas. Un terrain venu du catalogue est donc un PARI.
+
+         Et un pari perdu coûte cher : le tableau se demande par tranche de
+         12 h sur deux jours, soit jusqu'à quatre fenêtres. Sur VLG8019, dont
+         le catalogue annonçait Reus quand le vol partait d'Orly, cela a fait
+         8 unités achetées à Reus pour rien, PUIS 2 pour la récupération.
+
+         D'où la règle : on n'achète un tableau que pour un terrain dont on
+         est SûR, c'est-à-dire celui que le pilote a posé lui-même. Sinon on
+         demande le vol par son numéro, qui coûte 2 unités et ne se trompe
+         pas. On renonce ainsi au partage du tableau sur un terrain deviné :
+         c'est exactement ce pari-là qui vient de coûter 8 unités pour rien. */
       (async () => {
-        const r = await fltHeure(dep, cles);
+        let r = sur ? await fltHeure(dep, cles) : null;
         if (tok !== fltTok) return;                 // la ligne a bougé entre-temps
         /* On ne pose l'heure que si le vol trouvé va bien là où le pilote va :
            une rotation peut porter le même numéro sur une autre étape. */
@@ -26110,30 +26138,36 @@ window.addEventListener("scroll", hidePop, true);
           fltPose(cs, r);
           return;
         }
-        /* Le tableau du terrain ne contient pas ce vol. La cause la plus
-           fréquente n'est pas un trou du fournisseur : c'est que le CATALOGUE
-           VRS s'est trompé de terrain. Il vieillit, et il décrit une rotation
-           qui n'est plus celle du jour. Constaté le 2026-09-06 sur VLG8019 :
-           le catalogue annonçait Reus vers Orly, l'horaire du soir disait
-           Orly vers Barcelone.
-
-           On redemande donc le vol par son NUMÉRO, qui cherche partout au lieu
-           d'un seul terrain. 2 unités, seulement dans ce cas-là, et la réponse
-           vide se met en cache côté proxy. */
         const vols = await fltNumero(n.com || n.typed || n.cs);
         if (tok !== fltTok) return;
-        if (!vols) { fltPose(cs, null); return; }
-        const bon = vols.find(v => v.dep === dep && v.arr === dest);
-        if (bon && bon.tko && rVal("#hFrom") === dep && rVal("#hTo") === dest) {
-          fltHeures(bon);
-          fltPose(cs, bon);
+        if (vols) {
+          const bon = vols.find(v => v.dep === dep && v.arr === dest);
+          if (bon && bon.tko && rVal("#hFrom") === dep && rVal("#hTo") === dest) {
+            fltHeures(bon);
+            fltPose(cs, bon);
+            return;
+          }
+          /* L'horaire du jour dit une AUTRE étape que celle du catalogue. On ne
+             rectifie SURTOUT pas dans le dos du pilote : il vient de confirmer
+             deux terrains, on lui montre ce que dit l'horaire et il tranche. */
+          fltProposalVols(cs, (n && n.typed) || "", vols,
+            "Today's schedule shows a different leg for this flight.");
           return;
         }
-        /* L'horaire du jour dit une AUTRE étape que celle du catalogue. On ne
-           rectifie SURTOUT pas dans le dos du pilote : il vient de confirmer
-           deux terrains, on lui montre ce que dit l'horaire et il tranche. */
-        fltProposalVols(cs, (n && n.typed) || "", vols,
-          "Today's schedule shows a different leg for this flight.");
+        /* Le vol par numéro n'a rien rendu — hors couverture, ou n'opérant ni
+           aujourd'hui ni demain. Il reste le tableau du terrain proposé : le
+           pari devient raisonnable maintenant qu'il est le DERNIER recours et
+           non le premier. */
+        if (!sur) {
+          r = await fltHeure(dep, cles);
+          if (tok !== fltTok) return;
+          if (r && r.arr === dest && r.tko && rVal("#hFrom") === dep && rVal("#hTo") === dest) {
+            fltHeures(r);
+            fltPose(cs, r);
+            return;
+          }
+        }
+        fltPose(cs, null);
       })();
     }
 
