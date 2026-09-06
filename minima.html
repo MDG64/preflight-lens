@@ -6090,7 +6090,10 @@ function qlvState(icao){
 }
 /* Le conteneur est TOUJOURS rendu (caché tant qu'il n'a rien) : c'est lui que
    qlvNotify retrouve quand la réponse arrive après le rendu. */
-const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic the backend keeps observing within 8 NM of the major commercial airports (one-hour window, finals, initial climbs and fast ground rolls). An observed runway is then held until the wind turns behind it, and a switch to a crossing runway takes two aircraft in a row; with none of that, the ILS runway for landing, or the best headwind. The minima below are computed on this runway — unless your aircraft's limits or the minima themselves rule it out, and only a declared or observed runway holds even then. An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
+/* Pas d'infobulle sur cette bande (6 sept. 2026) : le detail du calcul du
+   QFU en service vit dans le fichier d'explications personnel, hors du
+   depot. La bande dit ce qu'elle designe et pourquoi, une ligne par QFU ;
+   le reste n'a pas a s'ouvrir au survol. */
 /* Le bloc entier : la bande estimée, puis la case D-ATIS sous elle. Les deux
    vont ensemble — l'une estime la piste, l'autre porte ce que le contrôle en
    dit — et le conteneur ne se cache que si NI l'une NI l'autre n'a de quoi
@@ -6105,7 +6108,7 @@ function qfuLiveHtml(icao){
   if (!/^[A-Z]{4}$/.test(icao || "")) return "";
   qlvLoad(icao);
   const h = qlvBlockHtml(icao);
-  return `<div class="qlv-main" data-qlv="${icao}"${h?"":" hidden"} title="${QLV_TIP}">${h}</div>`;
+  return `<div class="qlv-main" data-qlv="${icao}"${h?"":" hidden"}>${h}</div>`;
 }
 function qlvNotify(icao){
   document.querySelectorAll(`[data-qlv="${icao}"]`).forEach(el=>{
@@ -6134,7 +6137,6 @@ function mountQfuLive(){
     el.hidden = true; el.removeAttribute("data-qlv"); el.innerHTML = ""; return;
   }
   el.setAttribute("data-qlv", icao);
-  el.title = QLV_TIP;
   qlvLoad(icao);
   qlvNotify(icao);
 }

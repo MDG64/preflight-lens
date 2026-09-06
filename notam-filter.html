@@ -26380,7 +26380,10 @@ function dtsAUnQfu(icao){
     /* Le conteneur vit dans la section, sous le code du terrain : on le
        retrouve par data-qlv, et on le repeint sans toucher au reste — un
        relevé qu'on lit ne doit pas sauter parce qu'une observation arrive. */
-    const QLV_TIP = "Estimated runway in use, one per use: NOTAM-closed pairs excluded, QFU with more than 8 kt mean tailwind eliminated, then preferential runways from the airfield card, confirmed or overridden by ADS-B traffic the backend keeps observing within 8 NM of the major commercial airports (one-hour window, finals, initial climbs and fast ground rolls). An observed runway is then held until the wind turns behind it, and a switch to a crossing runway takes two aircraft in a row. An estimate, not the ATIS, not a clearance: the declared runway in use prevails.";
+    /* Pas d'infobulle sur cette bande (6 sept. 2026) : le detail du calcul
+       du QFU en service vit dans le fichier d'explications personnel, hors
+       du depot. La bande dit ce qu'elle designe et pourquoi ; le reste n'a
+       pas a s'ouvrir au survol. */
     function qlvPaint(icao) {
       document.querySelectorAll(`[data-qlv="${icao}"]`).forEach(el => {
         if (!qlvSeedReady(icao)) { el.hidden = true; return; }
@@ -26388,7 +26391,6 @@ function dtsAUnQfu(icao){
         const w = rwxWinds(raw)[0] || null;
         const s = qlvHtml(icao, w);
         el.hidden = !s;
-        el.title = QLV_TIP;
         el.innerHTML = s ? s.html : "";
       });
     }
