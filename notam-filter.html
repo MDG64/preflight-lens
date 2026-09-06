@@ -6337,10 +6337,19 @@ body.light .stat.on {
       color: var(--muted)
     }
 
+    /* TÉLÉPHONE : deux colonnes. Cinq cases depuis TURBULENCE (6 sept. 2026),
+       donc 2 + 2 + 1 — et la cinquième prend la ligne entière plutôt que de
+       pendre dans une colonne, sa vignette centrée au même gabarit que les
+       quatre autres (.hc-solo). Une case seule et centrée se lit comme un
+       choix à part, pas comme un reste. */
     .home-cards {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 14px
+    }
+
+    .home-card.hc-solo {
+      grid-column: 1 / -1
     }
 
     /* Les fiches d'approche qui attendent d'être lues. VISIBLE DU SEUL
@@ -6526,18 +6535,24 @@ body.light .stat.on {
        carte sur sa ligne est partie avec son cas d'usage, chaque case a la
        taille de toutes les autres. */
 
-    /* ---------- version tablette : les quatre cases sur UNE ligne ----------
-       Des que la page atteint sa largeur pleine (560 px), Weather, NOTAM,
-       Map et Minimas se lisent de gauche a droite, dans l'ordre ou on les
-       ouvre. Chacune prend le QUART exact de la grille et sa vignette remplit
-       sa colonne : la bande des images se cale au pixel sur la ligne des
-       codes et sur la case des favoris, au-dessus — une seule largeur pour
-       toute la page. Le telephone garde ses deux colonnes, deux cases par
-       ligne : a moins de 560 px, quatre vignettes cote a cote seraient des
-       timbres. */
+    /* ---------- version tablette : les cinq cases sur UNE ligne ----------
+       Des que la page atteint sa largeur pleine (560 px), NOTAM, Weather,
+       Minimas, Map et Turbulence se lisent de gauche a droite, dans l'ordre ou
+       on les ouvre. Chacune prend le CINQUIEME exact de la grille et sa
+       vignette remplit sa colonne : la bande des images se cale au pixel sur
+       la ligne des codes et sur la case des favoris, au-dessus — une seule
+       largeur pour toute la page. Le telephone garde ses deux colonnes, deux
+       cases par ligne et la cinquieme centree dessous : a moins de 560 px,
+       cinq vignettes cote a cote seraient des timbres. */
     @media (min-width: 560px) {
       .home-cards {
-        grid-template-columns: repeat(4, 1fr)
+        grid-template-columns: repeat(5, 1fr)
+      }
+
+      /* La cinquième reprend sa colonne : sur une seule ligne, plus rien à
+         centrer. */
+      .home-card.hc-solo {
+        grid-column: auto
       }
 
       .home-card img {
@@ -8274,6 +8289,46 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                sont désormais réglées sur le même modèle. -->
           <img src="./home-map-v10.png" alt="" aria-hidden="true" decoding="async">
         </button>
+        <!-- TURBULENCE (6 sept. 2026) : la cinquième case. La page existait
+             déjà, mais elle ne s'atteignait que par un onglet de la page
+             Weather — une lecture du vol entier rangée derrière une lecture
+             de terrain. Elle rejoint ses sœurs à l'accueil et l'onglet part :
+             une porte par lecture, toutes sur la même page.
+             Elle part avec la route saisie ci-dessus comme les quatre autres ;
+             sans route, la page Turbulence reprend le dernier vol qu'elle a
+             retenu — c'est son propre repli, inchangé. -->
+        <button class="home-card hc-solo" id="homeTurbCard"
+          aria-label="Turbulence — estimated turbulence along the route typed">
+          <!-- Vignette v1 (6 sept. 2026) : réglée sur WEATHER comme les trois
+               sœurs recalées le matin même, et par la même méthode. Le mockup
+               source est une case noire à coins très arrondis posée sur une
+               marge noire : le carré est découpé À L'INTÉRIEUR du bord biseauté
+               (bords relevés à x 108-1143, y 99-1143 sur les 1254 px de la
+               source), puis les quatre coins arrondis sont retirés au masque —
+               leur biseau, lui, n'est pas du dessin.
+               Les quatre repères de WEATHER sont reproduits À LA MESURE :
+                 · fond   — dégradé diagonal ajusté sur les pixels sans dessin
+                            de home-wx-v9.png, coin haut-gauche 42, coin
+                            bas-droit 4 ; c'est ce plan qui est reposé ici ;
+                 · or     — la rampe de WEATHER relevée tranche d'alpha par
+                            tranche d'alpha (B/R 0,51 dans les basses à 0,83
+                            dans les hautes, sommet 254/248/212) et rejouée
+                            sur le dessin : aucune teinte n'est choisie ;
+                 · trait  — le tirage source est un trait FIN (4 px sur 1254,
+                            soit 2,5 px au gabarit) ; il est épaissi d'un pas
+                            jusqu'à 6,0 px, l'épaisseur médiane du modèle. Les
+                            hublots du fuselage sont le passage le plus serré :
+                            un pas de plus les refermait en pâté ;
+                 · mot    — regravé, pas repris de la source : Bodoni MT corps
+                            50 px (capitale 34), interlettrage 23,5 px, ligne
+                            de pied 674, centré à 384,5, crème 248/232/196 —
+                            les valeurs mêmes de WEATHER. Dix lettres tiennent
+                            à cet interlettrage (562 px de large), il n'a donc
+                            pas eu à être resserré.
+               Le dessin n'est ni redimensionné ni redessiné ; il est seulement
+               recentré sur la boîte du pictogramme de WEATHER. -->
+          <img src="./home-turb-v1.png" alt="" aria-hidden="true" decoding="async">
+        </button>
       </div>
 
       <!-- Le curseur de simulation — appareils certifiés seulement, comme
@@ -8366,10 +8421,11 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
               class="star">★</span> Favorites <span id="wxFavCount">(0)</span></button>
           <button class="fav-tab" id="wxTabRoute" type="button" aria-expanded="false" aria-controls="wxChips"><span
               class="star">★</span> Route <span id="wxRouteCount">(0)</span></button>
-          <!-- Troisième onglet, d'une autre nature : il ne déplie pas une liste,
-               il OUVRE la page Turbulence — le vol du départ à l'arrivée sur
-               une barre de couleurs. Sans étoile : ce n'est pas un signet. -->
-          <button class="fav-tab" id="wxTabTurb" type="button" title="Turbulence along the flight">Turbulence</button>
+          <!-- L'onglet Turbulence est parti d'ici le 6 sept. 2026 : il était
+               d'une autre nature que ses deux voisins — il n'ouvrait pas une
+               liste de signets, il ouvrait une PAGE, et une page qui lit le vol
+               entier alors que celle qui le portait lit un terrain. Cette page
+               a maintenant sa case à l'accueil, comme les quatre autres. -->
         </div>
         <div class="chips fav-chips" id="wxChips" hidden></div>
       </div>
@@ -8576,7 +8632,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                sans son heure ne se juge pas. Rempli par mapTurbNote(). Le
                cartouche s'arrête là — niveau, heure, validité : le détail du
                vol (résumé, ruban, heures, épisodes) se lit sur la page
-               Turbulence, troisième onglet de Weather. La carte garde
+               Turbulence, la cinquième case de l'accueil. La carte garde
                seulement l'orthodromie surlignée là où le rejeu rencontre de
                la turbulence, dessinée par drawMap(). -->
           <!-- Les SIGMET TURB, allumés ou éteints. Ils ne se fondent jamais
@@ -8830,7 +8886,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
             destination is <b>highlighted</b> — yellow, orange or red — where a flight taking off at the chosen
             time and cruising at the slider FL would meet turbulence. The detail of that flight — its summary
             line, the ribbon, the hours and the list of the episodes (<b>H+51 · FL140 · light · 332 NM</b>)
-            — is on the <b>Turbulence page</b>, the third tab of the weather page; the cartouche itself keeps
+            — is on the <b>Turbulence page</b>, the fifth card of the start page; the cartouche itself keeps
             only the level, the time and the validity of the grid.
             Wherever a code is written, <b>every runway QFU</b> of that aerodrome
             is written under it — <b>08/26</b>, longest runway first, none left out. The code and its QFU move
@@ -26298,6 +26354,12 @@ window.addEventListener("scroll", hidePop, true);
     }
     $("#homeMinimaCard").onclick = () => openMinima(homeRouteCodes());
 
+    /* Turbulence : la route de l'accueil, telle qu'elle vient d'être tapée.
+       Sans route exploitable, la page s'ouvre sur le dernier vol qu'elle a
+       retenu — son repli d'origine, celui qu'elle avait déjà depuis l'onglet
+       de la page météo. */
+    $("#homeTurbCard").onclick = () => openTurb(homeRouteCodes());
+
     /* ============================================================
        LE CURSEUR CERTIFIÉ / NON CERTIFIÉ — la simulation de l'accueil
        anonyme, pour l'exploitant.
@@ -26498,6 +26560,7 @@ window.addEventListener("scroll", hidePop, true);
       if (view === "notam") { if (homeRouteCodes().length) $("#homeNotamCard").click(); return; }
       if (view === "map") { openHomeMap(); return; }
       if (view === "wx" || view === "weather") { $("#homeWxCard").click(); return; }
+      if (view === "turb" || view === "turbulence") { $("#homeTurbCard").click(); return; }
     }
 
     /* ============================================================
@@ -27952,10 +28015,9 @@ function dtsAUnQfu(icao){
     }
     $("#wxTabFav").onclick = () => wxSetFavTab("ad");
     $("#wxTabRoute").onclick = () => wxSetFavTab("route");
-    $("#wxTabTurb").onclick = () => openTurb();
 
     /* ============================================================
-       PAGE TURBULENCE — troisième onglet de la page Weather. Le vol du
+       PAGE TURBULENCE — cinquième case de l'accueil. Le vol du
        départ à l'arrivée sur une barre de couleurs : chaque morceau porte
        la turbulence ESTIMÉE au point et au niveau où l'avion se trouve
        alors. La MÊME source et le MÊME rejeu que la couche Turbulence de
@@ -28516,13 +28578,19 @@ function dtsAUnQfu(icao){
         }
       }
     }
-    async function openTurb() {
+    /* La page s'ouvre sur une route : celle de l'accueil quand la case
+       TURBULENCE la lui passe, celle de l'écran météo quand le mot WEATHER de
+       son en-tête l'y ramène. `list` est donné, jamais deviné — depuis
+       l'accueil, `wxList` porterait la dernière route CONSULTÉE, pas celle
+       qu'on vient de taper. */
+    async function openTurb(list) {
       try { await loadGeoData(); } catch (e) { }
       wxCloseFavTab();
       $("#turbScreen").hidden = false;
-      const byRole = r => (wxList.find(a => a.role === r) || {}).icao || "";
+      const src = list || wxList;
+      const byRole = r => (src.find(a => a.role === r) || {}).icao || "";
       let dep = byRole("dep"), arr = byRole("arr");
-      if (!dep && !arr && wxList.length >= 2) { dep = wxList[0].icao; arr = wxList[1].icao; }
+      if (!dep && !arr && src.length >= 2) { dep = src[0].icao; arr = src[1].icao; }
       if (!dep) dep = rVal("#hFrom");
       if (!arr) arr = rVal("#hTo");
       const saved = store.get(TURB_KEY);
@@ -28538,7 +28606,19 @@ function dtsAUnQfu(icao){
       turbToken++;
       $("#turbScreen").hidden = true;
     }
-    $("#turbWxBtn").onclick = closeTurb;
+    /* WEATHER : la page météo des MÊMES terrains. Elle est déjà là quand on
+       vient d'elle — la refermer suffit ; venu de l'accueil, où la page
+       Turbulence s'atteint désormais en direct, il faut l'ouvrir, sans quoi le
+       mot ramènerait à l'accueil au lieu de la météo qu'il annonce. */
+    $("#turbWxBtn").onclick = () => {
+      const wasOpen = !$("#wxScreen").hidden;
+      closeTurb();
+      if (!wasOpen) {
+        const dep = turbCfg.dep, arr = turbCfg.arr;
+        const list = [dep && { icao: dep, role: "dep" }, arr && { icao: arr, role: "arr" }].filter(Boolean);
+        openWx(list.length ? list : homeRouteCodes());
+      }
+    };
     $("#turbHome").onclick = () => { closeTurb(); closeWx(); };
     $("#turbThemeBtn").onclick = () => $("#themeBtn").click();
     $("#turbGo").onclick = () => turbCompute();
