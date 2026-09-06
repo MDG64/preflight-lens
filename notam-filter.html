@@ -5265,60 +5265,66 @@ body.light .stat.on {
 
     /* Une destination par ligne : le code, la ville, et le nombre de vols.
        Le bouton porte toute la ligne — on l'ouvre d'un doigt. */
-    /* ---- les deux journées ----
-       Deux boutons, pas un sélecteur : il n'y en aura jamais que deux, et un
-       pilote doit voir d'un coup lequel il regarde. La date en dessous parce
-       que « demain » ne veut rien dire à 23:50 pour un vol de 00:30. */
-    .vols-days {
-      display: flex;
-      gap: 6px;
-      margin: 0 0 8px
+    /* ---- la coupure entre les deux journées ----
+       Plus d'onglets : la liste est CONTINUE, on descend d'aujourd'hui à
+       demain. Le trait porte la date en toutes lettres et reste collé en haut
+       tant qu'on est dans sa journée — « demain » ne veut rien dire à 23:50
+       pour un vol de 00:30, le quantième si. */
+    .vols-sep {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 7px 20px 6px;
+      font: 600 11px/1 var(--mono);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--cyan)
     }
 
-    .vols-days button {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      align-items: flex-start;
+    .vols-sep span {
+      font: 400 11px/1 var(--sans);
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted2);
+      margin-left: 8px
+    }
+
+    /* Le pied de liste : ce qu'on trouve en continuant à descendre. Il est
+       cliquable autant qu'il se déclenche au défilement — le doigt qui
+       s'arrête juste avant ne doit pas rester bloqué. */
+    .vols-more {
+      display: block;
+      width: 100%;
+      text-align: left;
       background: transparent;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      padding: 6px 11px;
+      border: 0;
+      padding: 14px 20px 18px;
       cursor: pointer;
-      font: 600 11px/1 var(--mono);
-      letter-spacing: .08em;
-      text-transform: uppercase;
+      font: 500 12px/1.4 var(--sans);
       color: var(--muted)
     }
 
-    .vols-days button span {
-      font: 400 10px/1 var(--sans);
-      letter-spacing: 0;
-      text-transform: none;
-      color: var(--muted2)
-    }
-
-    .vols-days button:hover {
-      border-color: var(--cyan);
+    .vols-more:hover {
       color: var(--text)
     }
 
-    .vols-days button.on {
-      border-color: var(--cyan);
-      color: var(--cyan);
-      background: var(--panel2)
-    }
-
-    .vols-days button.on span {
-      color: var(--muted)
+    .vols-more b {
+      font: 600 11px/1 var(--mono);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--cyan)
     }
 
     /* ---- une ligne du tableau des départs du jour ----
-       L'heure d'abord, parce que c'est par elle qu'un pilote retrouve son vol
-       dans trois cents lignes. Le numéro ensuite, en chiffres non
-       proportionnels pour que les colonnes s'alignent d'elles-mêmes. La ville
-       prend la place qui reste et se coupe proprement ; l'heure d'arrivée
-       ferme la ligne, plus discrète, parce qu'elle se lit après. */
+       L'ÉTAPE d'abord — départ, flèche, arrivée — parce que c'est elle que le
+       pilote reconnaît, et parce que la liste couvre deux journées : une ligne
+       qui commencerait par une heure ne dirait pas de quel jour elle est. La
+       date se glisse donc AVANT le terrain de départ, et seulement quand elle
+       n'est pas celle du jour. La ville prend la place qui reste et se coupe
+       proprement ; les deux heures ferment la ligne, départ puis arrivée, en
+       chiffres non proportionnels pour que les colonnes s'alignent. */
     .vols-j {
       display: flex;
       align-items: baseline;
@@ -5337,11 +5343,40 @@ body.light .stat.on {
       background: var(--panel2)
     }
 
+    /* La colonne de date n'existe que si la liste en porte une : sur la seule
+       journée du jour, elle ne prendrait pas la place pour rien. */
+    .vols-j .vj-d {
+      font: 500 11px/1 var(--mono);
+      color: var(--amber, var(--muted2));
+      flex: none;
+      white-space: nowrap
+    }
+
+    .vols-list.dated .vj-d {
+      min-width: 48px
+    }
+
+    .vols-j .vj-p {
+      font: 600 12px/1 var(--mono);
+      letter-spacing: .1em;
+      color: var(--muted);
+      flex: none;
+      min-width: 42px
+    }
+
+    .vols-j .vj-ar {
+      font: 400 11px/1 var(--mono);
+      color: var(--muted2);
+      flex: none;
+      margin: 0 -4px
+    }
+
     .vols-j .vj-h {
       font: 600 13px/1 var(--mono);
       color: var(--cyan);
       flex: none;
       min-width: 52px;
+      text-align: right;
       font-variant-numeric: tabular-nums
     }
 
@@ -5350,13 +5385,14 @@ body.light .stat.on {
       letter-spacing: .06em;
       color: var(--text);
       flex: none;
-      min-width: 58px
+      min-width: 58px;
+      text-align: right
     }
 
     .vols-j .vj-a {
       font: 600 12px/1 var(--mono);
       letter-spacing: .1em;
-      color: var(--muted);
+      color: var(--text);
       flex: none;
       min-width: 42px
     }
@@ -5375,6 +5411,8 @@ body.light .stat.on {
       font: 500 11px/1 var(--mono);
       color: var(--muted2);
       flex: none;
+      min-width: 50px;
+      text-align: right;
       font-variant-numeric: tabular-nums
     }
 
@@ -26463,12 +26501,16 @@ window.addEventListener("scroll", hidePop, true);
        destinations théoriques. */
     const VOLSJOUR_URL = BACKEND_URL + "/api/vols-jour/";
     /* Deux journées, indexées par leur écart à aujourd'hui : 0 et 1. DEMAIN NE
-       SE CHARGE QUE SI ON LE DEMANDE — c'est un terrain-jour de plus, donc
+       SE CHARGE QUE SI ON VA LE CHERCHER — c'est un terrain-jour de plus, donc
        4 unités de plus, et la plupart des pilotes préparent le vol du jour.
-       Un onglet est un geste explicite, exactement comme le choix d'un vol. */
+       Descendre jusqu'au bout de la journée du jour EST ce geste-là : la liste
+       est continue, on tombe sur demain en défilant. Une réserve : tant que le
+       pilote n'a pas fait défiler lui-même, le pied de liste ne se déclenche
+       pas tout seul — sur un petit terrain de dix vols il est visible dès
+       l'ouverture, et la journée de demain se serait achetée sans un geste. */
     let volsJours = {};       // { 0: {date, vols}, 1: ... } ce qui est chargé
-    let volsJour = null;      // la journée AFFICHÉE, ou null si c'est le catalogue
-    let volsQuand = 0;        // 0 = aujourd'hui, 1 = demain
+    let volsJour = null;      // la journée du jour, ou null si c'est le catalogue
+    let volsDemain = 0;       // 0 pas demandé, 1 en cours, 2 chargé, 3 rien à charger
     let volsTerrain = "";     // le terrain ouvert, pour charger l'autre journée
     let volsData = null;      // le catalogue du terrain ouvert
     let volsOpen = "";        // destination dépliée
@@ -26481,7 +26523,7 @@ window.addEventListener("scroll", hidePop, true);
     let volsFerme = 0;
     function volsHide() {
       $("#volsOv").hidden = true;
-      volsData = null; volsJour = null; volsJours = {}; volsQuand = 0;
+      volsData = null; volsJour = null; volsJours = {}; volsDemain = 0;
       volsTerrain = ""; volsOpen = ""; volsFerme = Date.now();
     }
 
@@ -26526,53 +26568,88 @@ window.addEventListener("scroll", hidePop, true);
        ressemblerait à une panne. */
     const vjH = t => t ? t.slice(0, 2) + ":" + t.slice(2) + "Z" : "";
 
-    /* Les deux onglets. La date est écrite en toutes lettres à côté : « demain »
-       ne veut rien dire à 23:50 pour un vol de 00:30, et un pilote qui prépare
-       la veille a besoin de lire le quantième. */
+    /* La date en toutes lettres : « demain » ne veut rien dire à 23:50 pour un
+       vol de 00:30, et un pilote qui prépare la veille lit le quantième. */
     function volsJourLabel(n) {
       const d = new Date(Date.now() + n * 864e5);
       return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
     }
-    function volsOnglets() {
-      return `<div class="vols-days">`
-        + [0, 1].map(n => `<button type="button" data-vquand="${n}"
-            class="${volsQuand === n ? "on" : ""}">${n ? "Tomorrow" : "Today"}<span>${esc(volsJourLabel(n))}</span></button>`).join("")
-        + `</div>`;
+    const volsAuj = () => new Date().toISOString().slice(0, 10);
+    /* La date PORTÉE PAR LA LIGNE vient de l'horodatage du vol, pas de la
+       journée demandée : le tableau couvre la journée LOCALE du terrain, si
+       bien qu'un départ de Roissy à 00:05 locale est daté de la veille en UTC.
+       Les heures affichées étant en UTC, c'est la date UTC qui va avec. */
+    function vjDate(v, n) {
+      const iso = /^\d{4}-\d{2}-\d{2}/.test(v.std || "") ? v.std.slice(0, 10) : fltJour(n);
+      if (iso === volsAuj()) return "";
+      return new Date(iso + "T00:00:00Z")
+        .toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
     }
 
+    function vjLigne(v, n) {
+      const d = vjDate(v, n);
+      return `<button class="vols-j" type="button" data-vj="1"
+        data-num="${esc(v.num)}" data-dep="${esc(v.dep)}" data-dest="${esc(v.arr)}"
+        data-tko="${esc(v.tko || "")}" data-eta="${esc(v.eta || "")}"
+        data-std="${esc(v.std || "")}" data-sta="${esc(v.sta || "")}"
+        aria-label="${esc(v.num)}, ${esc(v.dep)} to ${esc(v.arr)}${d ? " on " + esc(d) : ""} at ${esc(vjH(v.tko))}"><span
+        class="vj-d">${esc(d)}</span><span class="vj-p">${esc(v.dep)}</span><span
+        class="vj-ar">→</span><span class="vj-a">${esc(v.arr)}</span><span
+        class="vj-v">${esc(v.arrn || "")}</span><span class="vj-n">${esc(v.num)}</span><span
+        class="vj-h">${esc(vjH(v.tko))}</span><span class="vj-e">${esc(vjH(v.eta))}</span></button>`;
+    }
+
+    /* Une seule liste pour les deux journées : on descend d'aujourd'hui à
+       demain sans changer d'écran, et la coupure porte la date. Le filtre de
+       destination et la barre de recherche s'appliquent aux deux. */
     function volsRenderJour() {
       const box = $("#volsList"), q = ($("#volsQ").value || "").trim();
-      const tous = volsJour.vols;
       const dest = homeFieldCode("#hTo");
-      const versDest = /^[A-Z]{4}$/.test(dest) ? tous.filter(v => v.arr === dest) : null;
-      const sansVol = versDest && !versDest.length ? dest : "";
-      let l = (versDest && versDest.length) ? versDest : tous;
-      if (q) {
-        const t = volsPli(q);
-        l = l.filter(v => volsPli(v.num).includes(t) || volsPli(v.cs).includes(t)
+      const cible = /^[A-Z]{4}$/.test(dest) ? dest : "";
+      const t = q ? volsPli(q) : "";
+      const jours = [0, 1].filter(n => volsJours[n]);
+      /* Le filtre par destination ne s'applique que s'il laisse quelque chose :
+         sinon la liste entière revient, et l'écran dit pourquoi. */
+      const vers = cible
+        ? jours.reduce((n, j) => n + volsJours[j].vols.filter(v => v.arr === cible).length, 0) : 0;
+      const tri = n => {
+        let l = volsJours[n].vols;
+        if (cible && vers) l = l.filter(v => v.arr === cible);
+        if (t) l = l.filter(v => volsPli(v.num).includes(t) || volsPli(v.cs).includes(t)
           || volsPli(v.arr).includes(t) || volsPli(v.arrn).includes(t));
-      }
-      $("#volsNote").innerHTML = volsOnglets()
-        + `<b>${tous.length} departures</b> from this aerodrome`
-        + (versDest && versDest.length ? ` · <b>${versDest.length} to ${esc(dest)}</b>` : "")
-        + (sansVol ? ` · <b>no flight to ${esc(sansVol)} today</b>, showing them all` : "")
+        return l;
+      };
+
+      $("#volsNote").innerHTML =
+        `<b>${volsJours[0] ? volsJours[0].vols.length : 0} departures</b> today`
+        + (volsJours[1] ? ` · <b>${volsJours[1].vols.length}</b> tomorrow` : "")
+        + (cible && vers ? ` · <b>${vers} to ${esc(cible)}</b>` : "")
+        + (cible && !vers ? ` · <b>no flight to ${esc(cible)}</b>, showing them all` : "")
         /* « journée locale » et pas « aujourd'hui » tout court : le tableau
            couvre minuit à minuit À L'HEURE DU TERRAIN, et les heures sont en
            UTC. À Roissy la liste commence donc à 22:05Z, qui est 00:05 locale.
            L'ordre est bon, il fallait juste le dire. */
         + `. The aerodrome's local day, times in UTC. ${esc(ADB_MENTION)}.`;
-      if (!l.length) {
-        box.innerHTML = `<div class="vols-empty">Nothing matches “${esc(q)}”.</div>`;
-        return;
+
+      let html = "", vus = 0, datee = false;
+      for (const n of jours) {
+        const l = tri(n);
+        vus += l.length;
+        if (!l.length) continue;
+        if (n) html += `<div class="vols-sep">Tomorrow<span>${esc(volsJourLabel(1))}</span></div>`;
+        if (l.some(v => vjDate(v, n))) datee = true;
+        html += l.map(v => vjLigne(v, n)).join("");
       }
-      box.innerHTML = l.map(v => `<button class="vols-j" type="button" data-vj="1"
-        data-num="${esc(v.num)}" data-dep="${esc(v.dep)}" data-dest="${esc(v.arr)}"
-        data-tko="${esc(v.tko || "")}" data-eta="${esc(v.eta || "")}"
-        data-std="${esc(v.std || "")}" data-sta="${esc(v.sta || "")}"
-        aria-label="${esc(v.num)} to ${esc(v.arr)} at ${esc(vjH(v.tko))}"><span
-        class="vj-h">${esc(vjH(v.tko))}</span><span class="vj-n">${esc(v.num)}</span><span
-        class="vj-a">${esc(v.arr)}</span><span class="vj-v">${esc(v.arrn || "")}</span><span
-        class="vj-e">${esc(vjH(v.eta))}</span></button>`).join("");
+      /* Le pied : ce qu'on trouve en descendant encore. Il dit son prix en
+         disant ce qu'il est — une journée de plus, demandée. */
+      if (volsDemain === 1) html += `<div class="vols-empty">Loading tomorrow's departures…</div>`;
+      else if (volsDemain === 3) html += `<div class="vols-empty">No published schedule for
+        <b>${esc(volsTerrain)}</b> on ${esc(volsJourLabel(1))}.</div>`;
+      else if (!volsDemain) html += `<button class="vols-more" type="button" data-more="1"><b>Tomorrow</b>
+        — ${esc(volsJourLabel(1))} · keep scrolling, or tap to load it.</button>`;
+      box.classList.toggle("dated", datee);
+      box.innerHTML = vus ? html
+        : `<div class="vols-empty">Nothing matches “${esc(q)}”.</div>` + html;
     }
 
     function volsRender() {
@@ -26609,35 +26686,44 @@ window.addEventListener("scroll", hidePop, true);
         Pick a destination to see its flight numbers.`;
     }
 
-    /* Charge une journée si elle ne l'est pas déjà, et l'affiche. Rend `false`
-       quand l'horairiste n'a rien pour ce terrain ce jour-là — l'appelant
-       décide alors quoi montrer. */
+    /* Charge une journée si elle ne l'est pas déjà. Rend `false` quand
+       l'horairiste n'a rien pour ce terrain ce jour-là — ou quand la fenêtre a
+       changé de terrain entre-temps, et l'appelant le voit à son jeton. */
     async function volsCharger(n) {
-      if (volsJours[n]) { volsQuand = n; volsJour = volsJours[n]; volsRender(); return true; }
+      if (volsJours[n]) { if (!n) volsJour = volsJours[n]; return true; }
       const tok = volsTok;
-      volsQuand = n;
-      $("#volsNote").innerHTML = volsOnglets();
-      $("#volsList").innerHTML = `<div class="vols-empty">Loading the ${n ? "next day's" : "day's"} departures…</div>`;
       try {
         const r = await fetch(VOLSJOUR_URL + volsTerrain + "/" + fltJour(n));
-        if (tok !== volsTok) return true;
-        if (r.ok) {
-          const j = await r.json();
-          if (tok !== volsTok) return true;
-          if (j && j.ok && j.vols && j.vols.length) {
-            volsJours[n] = j; volsJour = j; volsRender(); return true;
-          }
+        if (tok !== volsTok || !r.ok) return false;
+        const j = await r.json();
+        if (tok !== volsTok) return false;
+        if (j && j.ok && j.vols && j.vols.length) {
+          volsJours[n] = j; if (!n) volsJour = j;
+          return true;
         }
       } catch (e) { /* traité comme une absence : le message dit la même chose */ }
-      if (tok !== volsTok) return true;
       return false;
+    }
+
+    /* Demain, quand on arrive au bout d'aujourd'hui. Un seul appel possible :
+       l'état passe à « en cours » avant le réseau, et n'y revient jamais. */
+    async function volsPlus() {
+      if (volsDemain || !volsJour) return;
+      volsDemain = 1;
+      volsRender();
+      const tok = volsTok;
+      const ok = await volsCharger(1);
+      if (tok !== volsTok) return;
+      volsDemain = ok ? 2 : 3;
+      volsRender();
     }
 
     async function volsOuvrir(dep) {
       const ov = $("#volsOv");
       $("#volsTitle").textContent = "Departures from " + dep;
       $("#volsQ").value = "";
-      volsOpen = ""; volsJours = {}; volsJour = null; volsQuand = 0; volsTerrain = dep;
+      volsOpen = ""; volsJours = {}; volsJour = null; volsDemain = 0;
+      volsTerrain = dep;
       const tok = ++volsTok;
       const hit = volsCache.get(dep);
       if (hit) { volsData = hit; volsNote(); volsRender(); }
@@ -26655,7 +26741,8 @@ window.addEventListener("scroll", hidePop, true);
            vol de ce terrain ne paie qu'une fois, dans un sens comme dans
            l'autre. Le catalogue gratuit reste dessous pour les terrains que
            l'horairiste ne couvre pas. */
-        if (await volsCharger(0)) return;
+        $("#volsList").innerHTML = `<div class="vols-empty">Loading the day's departures…</div>`;
+        if (await volsCharger(0)) { volsRender(); return; }
         if (tok !== volsTok) return;
         $("#volsNote").textContent = "";
         $("#volsList").innerHTML = `<div class="vols-empty">No published schedule for <b>${esc(dep)}</b> today — loading the flight catalogue…</div>`;
@@ -26681,19 +26768,17 @@ window.addEventListener("scroll", hidePop, true);
     $("#volsClose").onclick = volsHide;
     $("#volsOv").addEventListener("click", e => { if (e.target === $("#volsOv")) volsHide(); });
     $("#volsQ").addEventListener("input", volsRender);
-    /* Le clic sur un onglet. Passer à demain peut coûter 4 unités, une seule
-       fois par terrain-jour et pour tous les pilotes : c'est un geste, pas un
-       chargement automatique. */
-    $("#volsNote").addEventListener("click", async e => {
-      const b = e.target.closest("[data-vquand]");
-      if (!b) return;
-      const n = +b.dataset.vquand;
-      if (n === volsQuand && volsJours[n]) return;
-      if (!await volsCharger(n)) {
-        $("#volsNote").innerHTML = volsOnglets();
-        $("#volsList").innerHTML = `<div class="vols-empty">No published schedule for <b>${esc(volsTerrain)}</b> on ${esc(volsJourLabel(n))}.</div>`;
-      }
-    });
+    /* Le bout de la liste appelle demain. Passer à demain peut coûter 4 unités,
+       une seule fois par terrain-jour et pour tous les pilotes : c'est un
+       geste, pas un chargement automatique. Et c'est bien le défilement qui
+       l'ouvre, jamais la simple visibilité du pied : sur un terrain de dix
+       vols, dont le bas est à l'écran dès l'ouverture, un observateur de
+       visibilité aurait acheté la journée du lendemain sans qu'on la demande. */
+    $("#volsList").addEventListener("scroll", () => {
+      if (volsDemain || !volsJour) return;
+      const el = $("#volsList");
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) volsPlus();
+    }, { passive: true });
     /* Entrée sur un numéro de vol complet : on referme et on part en
        recherche par indicatif, exactement comme depuis la case. */
     $("#volsQ").addEventListener("keydown", e => {
@@ -26708,6 +26793,8 @@ window.addEventListener("scroll", hidePop, true);
       fltGo();
     });
     $("#volsList").addEventListener("click", e => {
+      // Le pied de liste, pour le doigt qui s'arrête juste avant le bout.
+      if (e.target.closest("[data-more]")) { volsPlus(); return; }
       /* Une ligne du tableau du jour porte DÉJÀ ses heures : le clic pose
          terrains et heures sans un appel de plus. */
       const vj = e.target.closest("[data-vj]");
