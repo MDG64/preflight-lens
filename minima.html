@@ -13392,7 +13392,7 @@ function refreshAdPanel(force){
     const srcs = [eff.dh.src, eff.rvr.src];
     const vcat = srcs.includes("verified") ? adVerifiedCat(icao, a.end, a.type) : null;
     const badge = srcs.includes("verified")
-      ? `<span class="ad-badge verified" title="Value entered by you${vcat?` for aircraft category ${vcat}`:" for every aircraft category"} — trusted as verified and applied immediately">verified ✓${vcat?" "+vcat:""}</span>`
+      ? `<span class="ad-badge verified" title="High-confidence value — cross-check it against the official chart before use">verified ✓${vcat?" "+vcat:""}</span>`
       : srcs.includes("consensus")
       ? `<span class="ad-badge consensus" title="At least 3 identical user entries — this value is now the application default">user ✓</span>`
       /* PAS DE STANDARD N'EST PAS UN STANDARD. Une manœuvre — sidestep, et le
