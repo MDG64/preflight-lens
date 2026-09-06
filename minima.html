@@ -15184,8 +15184,10 @@ window.RTV = (()=>{
      les trois cartes en ont chacune d'autres. */
   function rtQlvHtml(p){
     if (!p) return "";
-    return `<span class="rt-qlv${p.obs ? "" : " idle"}"
-        title="Estimated runway in use for this phase — ${escapeHtmlText(p.how)}. An estimate, not the ATIS, not a clearance: the declared runway in use prevails.">
+    /* Pas d'infobulle (6 sept. 2026), comme la bande large : la carte porte
+       deja le QFU et sa justification, et le detail du calcul vit dans le
+       fichier d'explications personnel, hors depot. */
+    return `<span class="rt-qlv${p.obs ? "" : " idle"}">
       <span class="dot"></span><b><span class="u">QFU</span>${p.ids.join("/")}</b>
       <span class="n">${escapeHtmlText(p.how)}</span></span>`;
   }
