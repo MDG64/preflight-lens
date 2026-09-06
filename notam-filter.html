@@ -26720,7 +26720,16 @@ window.addEventListener("scroll", hidePop, true);
     function volsRender() {
       if (volsJour) return volsRenderJour();
       const box = $("#volsList"), q = ($("#volsQ").value || "").trim();
-      const lignes = volsFiltre(q);
+      /* Comme la liste du jour : la case Destination filtre le catalogue à la
+         frappe, et si elle n'y laisse rien on rend tout plutôt qu'un écran
+         vide qui ressemblerait à une panne. */
+      const dest = homeFieldCode("#hTo");
+      const cible = /^[A-Z]{4}$/.test(dest) ? dest : "";
+      let lignes = volsFiltre(q);
+      if (cible) {
+        const vers = lignes.filter(x => x.d.d === cible);
+        if (vers.length) lignes = vers;
+      }
       if (!lignes.length) {
         // Un numéro de vol que le catalogue ne connaît pas reste interrogeable
         // par indicatif : on le dit plutôt que de laisser sur un échec.
