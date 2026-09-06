@@ -8416,6 +8416,22 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
         <div class="chips fav-chips" id="homeChips" hidden></div>
       </div>
 
+      <!-- 7 sept. 2026 : le mot gravé dans les cinq images grandit — capitale
+           de 34 à 43 px sur les 768 du carré (Bodoni MT corps 50 -> 66,
+           interlettrage 23,5 -> 31). Il grandit VERS LE BAS : sa ligne de tête
+           reste à 641, là où elle était, et c'est la marge basse — 94 px de
+           fond vide — qui paie l'agrandissement. L'inverse aurait fait monter
+           le mot vers le dessin, et MINIMA, qui descend le plus bas (y 613),
+           n'a que 28 px devant lui.
+           TURBULENCE, dix lettres, ne tient pas à 31 d'interlettrage (742 px
+           de large sur 768) : le sien se resserre jusqu'à rentrer dans 620 px,
+           la règle du tirage v1.
+           Ni les dessins ni le fond ne bougent : sous l'ancien mot, la bande
+           basse est repeinte au dégradé propre à CHAQUE image — ajusté sur ses
+           propres pixels sans dessin — avant que le mot ne soit regravé. Les
+           cinq fichiers changent donc de nom (v23, v10, v5, v11, v2) : la
+           règle 5 du service worker les sert en cache d'abord, écraser en
+           place ne serait jamais arrivé jusqu'aux appareils installés. -->
       <div class="home-cards">
         <!-- Ordre des cases (2 sept. 2026) : NOTAM d'abord — c'est la porte
              d'entrée de l'app et le geste le plus fréquent — puis Weather,
@@ -8466,7 +8482,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                fond plat 15/15/15 remplacé par le dégradé de WEATHER, et le
                mot regravé au corps de WEATHER (cap 50 -> 34, pied 678 -> 674).
                Le dessin lui-même n'est ni déplacé ni redimensionné. -->
-          <img src="./home-notam-v22.png" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-notam-v23.png" alt="" aria-hidden="true" decoding="async">
         </button>
         <button class="home-card" id="homeWxCard" aria-label="Weather — METAR and TAF of the aerodromes typed">
           <!-- Vignette v9 (6 sept. 2026) : le nuage et le soleil d'or
@@ -8510,8 +8526,12 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                             à ±4 px sur chaque lettre, ce qui identifie la
                             police et le corps du modèle. Les trois soeurs
                             portaient une capitale de 50 à 54 px, deux fois
-                            plus basse (pied 678 à 717) et plus ambrée. -->
-          <img src="./home-wx-v9.png" alt="" aria-hidden="true" decoding="async">
+                            plus basse (pied 678 à 717) et plus ambrée.
+               Le corps de ce mot est passé à 66 (capitale 43), son
+               interlettrage à 31 et son pied à 684 le 7 sept. 2026 — sur les
+               CINQ cases à la fois, voir la note de la grille plus haut. Les
+               trois autres repères, eux, n'ont pas bougé. -->
+          <img src="./home-wx-v10.png" alt="" aria-hidden="true" decoding="async">
         </button>
         <!-- MINIMAS (28 aout 2026) : le module minima entre à l'accueil —
              la page ./minima.html est la copie déployée de Minima Lens.
@@ -8544,7 +8564,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                doubles lignes de l'avion se refermaient en pâtés. Le dessin
                reste donc bord à bord, plus grand que celui des trois autres,
                et c'est la seule chose qui distingue encore cette case. -->
-          <img src="./home-minima-v4.png" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-minima-v5.png" alt="" aria-hidden="true" decoding="async">
           <!-- Le pictogramme porte le mot MINIMA dans l'image, comme MAP et
                NOTAM : le nom sous la case est retiré, et « DA/DH · RVR »
                avec lui depuis le 6 sept. 2026 — plus une ligne de texte sous
@@ -8580,7 +8600,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                n'est ni déplacé ni redimensionné. La règle des deux cases
                jumelles avec NOTAM n'a plus à être tenue à part : les QUATRE
                sont désormais réglées sur le même modèle. -->
-          <img src="./home-map-v10.png" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-map-v11.png" alt="" aria-hidden="true" decoding="async">
         </button>
         <!-- TURBULENCE (6 sept. 2026) : la cinquième case. La page existait
              déjà, mais elle ne s'atteignait que par un onglet de la page
@@ -8620,7 +8640,7 @@ body.light .turb-chart .sig-tint { fill-opacity: .13 }
                             pas eu à être resserré.
                Le dessin n'est ni redimensionné ni redessiné ; il est seulement
                recentré sur la boîte du pictogramme de WEATHER. -->
-          <img src="./home-turb-v1.png" alt="" aria-hidden="true" decoding="async">
+          <img src="./home-turb-v2.png" alt="" aria-hidden="true" decoding="async">
         </button>
       </div>
 

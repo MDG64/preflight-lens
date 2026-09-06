@@ -40,8 +40,11 @@ const ASSETS = [
   // servies "cache d'abord" par la regle 6, donc le nom porte la version — une
   // refonte d'image change le suffixe, on n'ecrase jamais en place.
   // TURBULENCE (6 sept. 2026) : cinquième case, même règle que les quatre.
-  "./home-wx-v9.png", "./home-notam-v22.png", "./home-map-v10.png", "./home-minima-v4.png",
-  "./home-turb-v1.png",
+  // 7 sept. 2026 : le mot gravé dans les cinq images est agrandi, donc les
+  // cinq noms avancent d'un cran — la règle 5 sert ces images en cache
+  // d'abord, écraser en place n'aurait pas atteint les appareils installés.
+  "./home-wx-v10.png", "./home-notam-v23.png", "./home-map-v11.png", "./home-minima-v5.png",
+  "./home-turb-v2.png",
   // MINIMAS (28 aout 2026) : le module minima (copie déployée de Minima Lens)
   // et ses deux bases embarquées — la page doit s'ouvrir en vol, comme l'hôte.
   // Les bases se régénèrent (recompilation du seed, fiches d'approche) : la
