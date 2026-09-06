@@ -13394,7 +13394,7 @@ function refreshAdPanel(force){
     const badge = srcs.includes("verified")
       ? `<span class="ad-badge verified" title="High-confidence value — cross-check it against the official chart before use">verified ✓${vcat?" "+vcat:""}</span>`
       : srcs.includes("consensus")
-      ? `<span class="ad-badge consensus" title="At least 3 identical user entries — this value is now the application default">user ✓</span>`
+      ? `<span class="ad-badge consensus" title="Value from matching user entries — cross-check it against the official chart before use">user ✓</span>`
       /* PAS DE STANDARD N'EST PAS UN STANDARD. Une manœuvre — sidestep, et le
          circling d'une catégorie que la table ne couvre pas — n'a aucun
          minimum réglementaire : adStdMinima rend null, les deux cases sont
